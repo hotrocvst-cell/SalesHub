@@ -9,9 +9,14 @@ import {
     Target,
     TrendingUp,
     ArrowRight,
-    Sparkles
+    Sparkles,
+    Zap,
+    Award,
+    Store,
+    Users,
+    Building2,
+    Database
 } from 'lucide-react';
-import { useAuth } from '../../../shared/contexts/AuthContext';
 import { usePermissions } from '../../../shared/contexts/PermissionContext';
 
 interface QuickCard {
@@ -24,14 +29,34 @@ interface QuickCard {
     gradient: string;
     iconBg: string;
     iconColor: string;
-    minRole?: 'ADMIN' | 'QUAN_LY' | 'TRUONG_CA' | 'ALL';
 }
 
 export default function QuickNavigationGrid() {
-    const { currentUser, isActualAdmin } = useAuth();
     const { canAccessPage } = usePermissions();
 
     const CARDS: QuickCard[] = [
+        {
+            title: 'Báo Cáo Ngày (Realtime)',
+            path: '/bc-ngay/tong-quan',
+            badge: '⚡ Realtime',
+            badgeColor: 'bg-amber-100 text-amber-800 border-amber-200',
+            description: 'Báo cáo doanh thu & sản lượng theo thời gian thực trong ngày, so sánh tiến độ & giờ bán',
+            icon: Zap,
+            gradient: 'from-amber-500/10 via-yellow-500/5 to-transparent hover:border-amber-300',
+            iconBg: 'bg-amber-100 text-amber-700',
+            iconColor: 'text-amber-600'
+        },
+        {
+            title: 'Doanh Thu Nhân Viên Ngày',
+            path: '/bc-ngay-nhan-vien',
+            badge: '⚡ Mới',
+            badgeColor: 'bg-blue-100 text-blue-800 border-blue-200',
+            description: 'Theo dõi xếp hạng doanh số nhân viên trong ngày, Top 30% và cảnh báo tăng tốc',
+            icon: UserCheck,
+            gradient: 'from-blue-500/10 via-cyan-500/5 to-transparent hover:border-blue-300',
+            iconBg: 'bg-blue-100 text-blue-700',
+            iconColor: 'text-blue-600'
+        },
         {
             title: 'Báo Cáo Tháng (Lũy Kế)',
             path: '/bc-thang/tong-quan',
@@ -44,17 +69,6 @@ export default function QuickNavigationGrid() {
             iconColor: 'text-indigo-600'
         },
         {
-            title: 'Doanh Thu Nhân Viên Ngày',
-            path: '/bc-ngay-nhan-vien',
-            badge: '⚡ Mới',
-            badgeColor: 'bg-amber-100 text-amber-800 border-amber-200',
-            description: 'Theo dõi xếp hạng doanh số nhân viên trong ngày, Top 30% và cảnh báo tăng tốc',
-            icon: UserCheck,
-            gradient: 'from-amber-500/10 via-orange-500/5 to-transparent hover:border-amber-300',
-            iconBg: 'bg-amber-100 text-amber-700',
-            iconColor: 'text-amber-600'
-        },
-        {
             title: 'Hiệu Quả Nhân Viên Lũy Kế',
             path: '/bao-cao-hieu-qua-nhan-vien',
             badge: '⭐ Thi Đua',
@@ -64,6 +78,28 @@ export default function QuickNavigationGrid() {
             gradient: 'from-purple-500/10 via-pink-500/5 to-transparent hover:border-purple-300',
             iconBg: 'bg-purple-100 text-purple-700',
             iconColor: 'text-purple-600'
+        },
+        {
+            title: 'Tổng Hợp Thi Đua',
+            path: '/tong-hop-thi-dua',
+            badge: '🔥 Hot',
+            badgeColor: 'bg-rose-100 text-rose-800 border-rose-200',
+            description: 'Tổng hợp tiến độ hoàn thành các chương trình thi đua trọng điểm toàn hệ thống',
+            icon: Award,
+            gradient: 'from-rose-500/10 via-pink-500/5 to-transparent hover:border-rose-300',
+            iconBg: 'bg-rose-100 text-rose-700',
+            iconColor: 'text-rose-600'
+        },
+        {
+            title: 'Nhịp Doanh Thu',
+            path: '/nhip-doanh-thu',
+            badge: 'Biểu Đồ',
+            badgeColor: 'bg-teal-100 text-teal-800 border-teal-200',
+            description: 'Biểu đồ nhịp tăng trưởng doanh thu theo ngày và so sánh tiến độ các mốc thời gian',
+            icon: TrendingUp,
+            gradient: 'from-teal-500/10 via-emerald-500/5 to-transparent hover:border-teal-300',
+            iconBg: 'bg-teal-100 text-teal-700',
+            iconColor: 'text-teal-600'
         },
         {
             title: 'Cập Nhật Số Liệu LK',
@@ -88,16 +124,26 @@ export default function QuickNavigationGrid() {
             iconColor: 'text-emerald-600'
         },
         {
-            title: 'Phân Quyền Siêu Thị',
-            path: '/phan-quyen-sieu-thi',
-            badge: '🔑 Quản Trị',
-            badgeColor: 'bg-rose-100 text-rose-800 border-rose-200',
-            description: 'Cấu hình danh sách siêu thị được phép xem của Quản lý / Trưởng ca phụ trách đa shop',
-            icon: ShieldCheck,
-            gradient: 'from-rose-500/10 via-red-500/5 to-transparent hover:border-rose-300',
-            iconBg: 'bg-rose-100 text-rose-700',
-            iconColor: 'text-rose-600',
-            minRole: 'QUAN_LY'
+            title: 'Phiên Dữ Liệu NV',
+            path: '/quan-ly-phien-nhan-vien',
+            badge: 'Phiên NV',
+            badgeColor: 'bg-violet-100 text-violet-800 border-violet-200',
+            description: 'Lịch sử và danh sách các phiên cập nhật dữ liệu nhân sự kinh doanh theo ngày',
+            icon: History,
+            gradient: 'from-violet-500/10 via-purple-500/5 to-transparent hover:border-violet-300',
+            iconBg: 'bg-violet-100 text-violet-700',
+            iconColor: 'text-violet-600'
+        },
+        {
+            title: 'Quản Lý Bản Ghi ST',
+            path: '/quan-ly-du-lieu',
+            badge: 'Dữ Liệu',
+            badgeColor: 'bg-cyan-100 text-cyan-800 border-cyan-200',
+            description: 'Tra cứu, tìm kiếm lọc và dọn dẹp các bản ghi số liệu siêu thị trên hệ thống',
+            icon: Database,
+            gradient: 'from-cyan-500/10 via-blue-500/5 to-transparent hover:border-cyan-300',
+            iconBg: 'bg-cyan-100 text-cyan-700',
+            iconColor: 'text-cyan-600'
         },
         {
             title: 'Mục Tiêu & Sức Khỏe NV',
@@ -111,17 +157,57 @@ export default function QuickNavigationGrid() {
             iconColor: 'text-blue-600'
         },
         {
-            title: 'Nhịp Doanh Thu',
-            path: '/nhip-doanh-thu',
-            badge: 'Biểu Đồ',
-            badgeColor: 'bg-teal-100 text-teal-800 border-teal-200',
-            description: 'Biểu đồ nhịp tăng trưởng doanh thu theo ngày và so sánh tiến độ các mốc thời gian',
-            icon: TrendingUp,
-            gradient: 'from-teal-500/10 via-emerald-500/5 to-transparent hover:border-teal-300',
-            iconBg: 'bg-teal-100 text-teal-700',
-            iconColor: 'text-teal-600'
+            title: 'Cấu Hình Siêu Thị & NV',
+            path: '/cau-hinh-sieu-thi-nhan-vien',
+            badge: '👑 Boss',
+            badgeColor: 'bg-amber-100 text-amber-800 border-amber-200',
+            description: 'Khai báo danh mục siêu thị, nhân sự và phân ca làm việc của đội ngũ bán hàng',
+            icon: Store,
+            gradient: 'from-amber-500/10 via-orange-500/5 to-transparent hover:border-amber-300',
+            iconBg: 'bg-amber-100 text-amber-700',
+            iconColor: 'text-amber-600'
+        },
+        {
+            title: 'Phân Quyền Siêu Thị',
+            path: '/phan-quyen-sieu-thi',
+            badge: '🔑 Phân Quyền',
+            badgeColor: 'bg-rose-100 text-rose-800 border-rose-200',
+            description: 'Cấu hình danh sách siêu thị được phép xem của Quản lý / Trưởng ca phụ trách đa shop',
+            icon: Building2,
+            gradient: 'from-rose-500/10 via-red-500/5 to-transparent hover:border-rose-300',
+            iconBg: 'bg-rose-100 text-rose-700',
+            iconColor: 'text-rose-600'
+        },
+        {
+            title: 'Quản Lý Tài Khoản',
+            path: '/quan-ly-tai-khoan',
+            badge: '🛡️ Admin',
+            badgeColor: 'bg-slate-100 text-slate-800 border-slate-200',
+            description: 'Quản trị danh sách người dùng, đặt lại mật khẩu và duyệt đăng ký tài khoản',
+            icon: Users,
+            gradient: 'from-slate-500/10 via-zinc-500/5 to-transparent hover:border-slate-300',
+            iconBg: 'bg-slate-100 text-slate-700',
+            iconColor: 'text-slate-600'
+        },
+        {
+            title: 'Quản Trị Hệ Thống',
+            path: '/quan-tri-he-thong',
+            badge: '⚙️ Hệ Thống',
+            badgeColor: 'bg-red-100 text-red-800 border-red-200',
+            description: 'Quản lý trạng thái hoạt động & phân quyền các trang tiện ích toàn hệ thống',
+            icon: ShieldCheck,
+            gradient: 'from-red-500/10 via-rose-500/5 to-transparent hover:border-red-300',
+            iconBg: 'bg-red-100 text-red-700',
+            iconColor: 'text-red-600'
         }
     ];
+
+    // Lọc chỉ hiển thị các trang mà người dùng hiện tại được phép truy cập theo phân quyền
+    const visibleCards = CARDS.filter(card => canAccessPage(card.path).allowed);
+
+    if (visibleCards.length === 0) {
+        return null;
+    }
 
     return (
         <div className="space-y-4">
@@ -131,19 +217,18 @@ export default function QuickNavigationGrid() {
                     <h2 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
                         Lối Tắt Phân Hệ Nhanh
                     </h2>
+                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200/60">
+                        {visibleCards.length} lối tắt khả dụng
+                    </span>
                 </div>
-                <span className="text-xs text-slate-400 font-semibold">
-                    Truy cập nhanh vào các màn hình làm việc
+                <span className="text-xs text-slate-400 font-semibold hidden sm:inline">
+                    Truy cập nhanh vào các màn hình làm việc được phân quyền
                 </span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-                {CARDS.map((card) => {
+                {visibleCards.map((card) => {
                     const IconComponent = card.icon;
-                    const access = canAccessPage(card.path);
-                    const isVisible = !card.minRole || isActualAdmin || currentUser.role === 'ADMIN' || currentUser.role === 'QUAN_LY';
-
-                    if (!isVisible) return null;
 
                     return (
                         <Link
