@@ -1,0 +1,130 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Fix lỗi html2canvas tính sai baseline do Tailwind CSS Preflight ép img { display: block; } */
+@layer base {
+    img {
+        display: inline-block !important;
+    }
+}
+
+/* ==========================================================================
+   FONT UTM-AVO CHO BÁO CÁO KẾT QUẢ VÀ BẢNG BIỂU SALES HUB
+   ========================================================================== */
+@font-face {
+    font-family: 'UTM Avo';
+    src: local('UTM Avo'), local('UTM-Avo'), local('UTMAvo'),
+         url('/fonts/UTM-Avo.ttf') format('truetype');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'UTM Avo';
+    src: local('UTM Avo Bold'), local('UTM-AvoBold'), local('UTMAvo-Bold'),
+         url('/fonts/UTM-AvoBold.ttf') format('truetype');
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'UTM Avo';
+    src: local('UTM Avo Italic'), local('UTM-AvoItalic'),
+         url('/fonts/UTM-AvoItalic.ttf') format('truetype');
+    font-weight: 400;
+    font-style: italic;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'UTM Avo';
+    src: local('UTM Avo Bold Italic'), local('UTM-AvoBold_Italic'),
+         url('/fonts/UTM-AvoBold_Italic.ttf') format('truetype');
+    font-weight: 700;
+    font-style: italic;
+    font-display: swap;
+}
+
+/* Định danh alias UTM-Avo để tương thích mọi cú pháp viết tắt */
+@font-face {
+    font-family: 'UTM-Avo';
+    src: local('UTM Avo'), local('UTM-Avo'), local('UTMAvo'),
+         url('/fonts/UTM-Avo.ttf') format('truetype');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'UTM-Avo';
+    src: local('UTM Avo Bold'), local('UTM-AvoBold'), local('UTMAvo-Bold'),
+         url('/fonts/UTM-AvoBold.ttf') format('truetype');
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'UTM-Avo';
+    src: local('UTM Avo Italic'), local('UTM-AvoItalic'),
+         url('/fonts/UTM-AvoItalic.ttf') format('truetype');
+    font-weight: 400;
+    font-style: italic;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'UTM-Avo';
+    src: local('UTM Avo Bold Italic'), local('UTM-AvoBold_Italic'),
+         url('/fonts/UTM-AvoBold_Italic.ttf') format('truetype');
+    font-weight: 700;
+    font-style: italic;
+    font-display: swap;
+}
+
+@layer utilities {
+    .no-scrollbar::-webkit-scrollbar {
+        display: none;
+    }
+
+    .no-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+    }
+
+    /* Tiện ích class font-avo */
+    .font-avo {
+        font-family: 'UTM Avo', 'UTM-Avo', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+    }
+}
+
+/* ==========================================================================
+   ÁP DỤNG FONT UTM-AVO CHO TẤT CẢ CÁC BẢNG BÁO CÁO KẾT QUẢ
+   ========================================================================== */
+.report-table,
+.report-table table,
+.report-table th,
+.report-table td,
+[data-report-table="true"],
+[data-report-table="true"] table,
+[data-report-table="true"] th,
+[data-report-table="true"] td,
+.font-avo,
+.font-avo table,
+.font-avo th,
+.font-avo td {
+    font-family: 'UTM Avo', 'UTM-Avo', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Đảm bảo bên trong bảng báo cáo, các phần tử font-mono vẫn dùng font UTM-Avo để số liệu đồng bộ tuyệt đối */
+.report-table .font-mono,
+[data-report-table="true"] .font-mono,
+.font-avo .font-mono {
+    font-family: 'UTM Avo', 'UTM-Avo', monospace, sans-serif !important;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+}
