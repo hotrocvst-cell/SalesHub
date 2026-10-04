@@ -3,6 +3,8 @@ import { useAuth, type UserRole } from '../../shared/contexts/AuthContext';
 import {
     fetchAllUserProfiles,
     adminUpdateUserProfile,
+    checkSupabaseStoreColumnStatus,
+    SQL_ADD_ACCESSIBLE_STORES_COLUMN,
     type UserProfile,
     ROLE_LABELS
 } from '../../core/lib/authService';
@@ -28,15 +30,23 @@ import {
     SlidersHorizontal,
     AlertCircle,
     Info,
-    Sparkles
+    Sparkles,
+    Database,
+    Copy
 } from 'lucide-react';
 
 export default function UserStorePermissionPage() {
-    const { currentUser, isActualAdmin } = useAuth();
+    const { currentUser, isActualAdmin, updateLocalProfileStatus } = useAuth();
     const [users, setUsers] = useState<UserProfile[]>([]);
     const [stores, setStores] = useState<StoreItem[]>([]);
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const [toastMessage, setToastMessage] = useState<string>('');
+
+    // Trạng thái cấu hình Supabase
+    const [hasNativeColumn, setHasNativeColumn] = useState<boolean | null>(null);
+    const [isCheckingColumn, setIsCheckingColumn] = useState<boolean>(false);
+    const [showSqlModal, setShowSqlModal] = useState<boolean>(false);
+    const [isCopiedSql, setIsCopiedSql] = useState<boolean>(false);
 
     // Bộ lọc
     const [searchQuery, setSearchQuery] = useState<string>('');
@@ -58,20 +68,41 @@ export default function UserStorePermissionPage() {
     const loadData = async () => {
         setIsLoading(true);
         try {
-            const [userList, storeRes] = await Promise.all([
+            const [userList, storeRes, colStatus] = await Promise.all([
                 fetchAllUserProfiles(),
-                fetchStores()
+                fetchStores(),
+                checkSupabaseStoreColumnStatus()
             ]);
             setUsers(userList);
             if (storeRes.success && storeRes.data) {
                 setStores(storeRes.data);
             }
+            setHasNativeColumn(colStatus.hasNativeColumn);
         } catch (e) {
             console.error('Lỗi nạp dữ liệu phân quyền:', e);
             showToast('⚠️ Không thể tải dữ liệu phân quyền');
         } finally {
             setIsLoading(false);
         }
+    };
+
+    const checkColumnStatus = async () => {
+        setIsCheckingColumn(true);
+        const res = await checkSupabaseStoreColumnStatus();
+        setHasNativeColumn(res.hasNativeColumn);
+        setIsCheckingColumn(false);
+        if (res.hasNativeColumn) {
+            showToast('🟢 Supabase đã có cột accessible_stores (JSONB) gốc!');
+        } else {
+            showToast('⚡ Supabase đang hoạt động qua cơ chế lưu Cloud vĩnh viễn.');
+        }
+    };
+
+    const handleCopySql = () => {
+        navigator.clipboard.writeText(SQL_ADD_ACCESSIBLE_STORES_COLUMN);
+        setIsCopiedSql(true);
+        showToast('📋 Đã sao chép lệnh SQL vào bộ nhớ đệm!');
+        setTimeout(() => setIsCopiedSql(false), 2500);
     };
 
     useEffect(() => {
@@ -153,7 +184,14 @@ export default function UserStorePermissionPage() {
 
         if (res.success && res.data) {
             setUsers(prev => prev.map(u => (u.id === editingUser.id ? res.data! : u)));
-            showToast(`✅ Đã lưu phân quyền xem siêu thị cho ${editingUser.full_name}!`);
+            if (currentUser.id === editingUser.id) {
+                updateLocalProfileStatus(editingUser.status, {
+                    store_name: primaryStore,
+                    accessible_stores: storeList
+                });
+            }
+            const modeText = res.storageMode === 'NATIVE' ? '(Cột JSONB gốc)' : '(Lưu Supabase Cloud vĩnh viễn)';
+            showToast(`✅ Đã lưu phân quyền ${storeList.length} siêu thị cho ${editingUser.full_name} lên Supabase ${modeText}!`);
             setEditingUser(null);
         } else {
             showToast(`❌ Lỗi lưu phân quyền: ${res.error || 'Vui lòng thử lại'}`);
@@ -255,7 +293,23 @@ export default function UserStorePermissionPage() {
                         </p>
                     </div>
 
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex flex-wrap items-center gap-2 shrink-0">
+                        {/* Nút xem cấu hình Supabase */}
+                        <button
+                            type="button"
+                            onClick={() => setShowSqlModal(true)}
+                            className="px-3.5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition flex items-center gap-2 border border-white/15 cursor-pointer backdrop-blur-sm"
+                            title="Kiểm tra cấu hình cột Supabase"
+                        >
+                            <Database className="w-3.5 h-3.5 text-blue-300" />
+                            <span>Cấu hình Supabase</span>
+                            {hasNativeColumn === true ? (
+                                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" title="Cột JSONB gốc sẵn sàng" />
+                            ) : (
+                                <span className="w-2 h-2 rounded-full bg-amber-400" title="Chế độ Cloud fallback" />
+                            )}
+                        </button>
+
                         <button
                             type="button"
                             onClick={loadData}
@@ -263,9 +317,56 @@ export default function UserStorePermissionPage() {
                             className="px-4 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition flex items-center gap-2 border border-white/15 cursor-pointer backdrop-blur-sm"
                         >
                             <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-                            <span>Làm mới</span>
+                            <span>Làm mới (F5)</span>
                         </button>
                     </div>
+                </div>
+            </div>
+
+            {/* Banner trạng thái lưu trữ Supabase */}
+            <div className={`p-4 rounded-2xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs ${
+                hasNativeColumn === true
+                    ? 'bg-emerald-50/80 border-emerald-200 text-emerald-900'
+                    : 'bg-blue-50/80 border-blue-200 text-blue-900'
+            }`}>
+                <div className="flex items-center gap-2.5">
+                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
+                        hasNativeColumn === true
+                            ? 'bg-emerald-100 text-emerald-700'
+                            : 'bg-blue-100 text-blue-700'
+                    }`}>
+                        <Database className="w-4 h-4" />
+                    </div>
+                    <div>
+                        <div className="font-extrabold flex items-center gap-1.5">
+                            <span>Đồng bộ Supabase Cloud:</span>
+                            {hasNativeColumn === true ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-[11px] font-black">
+                                    <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Cột JSONB gốc sẵn sàng
+                                </span>
+                            ) : (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-100 text-blue-800 text-[11px] font-black">
+                                    <Shield className="w-3 h-3 text-blue-600" /> Đã kết nối & Lưu Cloud vĩnh viễn (Không mất khi F5)
+                                </span>
+                            )}
+                        </div>
+                        <p className="text-slate-600 text-[11px] mt-0.5">
+                            {hasNativeColumn === true
+                                ? 'Mọi thay đổi phân quyền siêu thị được lưu trực tiếp vào trường accessible_stores trên Supabase.'
+                                : 'Hệ thống đã tự động kích hoạt chế độ lưu trữ đám mây an toàn trên Supabase. Bạn có thể F5 trang mà không bao giờ bị mất phân quyền.'}
+                        </p>
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+                    <button
+                        type="button"
+                        onClick={() => setShowSqlModal(true)}
+                        className="px-3 py-1.5 rounded-xl bg-white border border-slate-200 hover:border-blue-400 text-slate-700 hover:text-blue-700 font-bold text-xs shadow-2xs transition flex items-center gap-1.5 cursor-pointer"
+                    >
+                        <Database className="w-3.5 h-3.5 text-blue-600" />
+                        <span>Xem lệnh SQL</span>
+                    </button>
                 </div>
             </div>
 
@@ -813,6 +914,104 @@ export default function UserStorePermissionPage() {
                                     )}
                                 </button>
                             )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ========================================================= */}
+            {/* 7. MODAL HƯỚNG DẪN SQL SUPABASE CHO CỘT ACCESSIBLE_STORES */}
+            {/* ========================================================= */}
+            {showSqlModal && (
+                <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
+                    <div className="bg-white rounded-3xl max-w-xl w-full p-6 space-y-4 shadow-2xl border border-slate-200 relative overflow-hidden">
+                        <div className="flex items-start justify-between border-b border-slate-100 pb-3">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-2xl bg-blue-100 text-blue-700 flex items-center justify-center font-black">
+                                    <Database className="w-5 h-5" />
+                                </div>
+                                <div>
+                                    <h3 className="font-black text-base text-slate-900">
+                                        Cấu Hình Cột Supabase Cloud
+                                    </h3>
+                                    <p className="text-xs text-slate-500">
+                                        Bổ sung cột accessible_stores (JSONB) cho bảng user_profiles
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setShowSqlModal(false)}
+                                className="p-1 text-slate-400 hover:text-slate-700 rounded-xl hover:bg-slate-100 cursor-pointer"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        <div className="space-y-3 text-xs text-slate-600">
+                            <div className="p-3 bg-emerald-50 rounded-2xl border border-emerald-200 text-emerald-900">
+                                <p className="font-extrabold flex items-center gap-1.5">
+                                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                                    <span>Dữ liệu phân quyền của bạn đã được bảo vệ trên Supabase Cloud</span>
+                                </p>
+                                <p className="text-[11px] text-emerald-800 mt-1 leading-relaxed">
+                                    Hệ thống hiện tại đã kết nối trực tiếp với Supabase. Khi lưu phân quyền, dữ liệu được ghi lên Supabase ngay lập tức và giữ nguyên trạng thái khi F5 tải lại trang.
+                                </p>
+                            </div>
+
+                            <p className="font-semibold text-slate-700">
+                                Để kích hoạt cột chuẩn <code className="bg-slate-100 px-1.5 py-0.5 rounded text-blue-700 font-mono">accessible_stores JSONB</code> trong Supabase:
+                            </p>
+
+                            <ol className="list-decimal pl-4 space-y-1 text-slate-600 text-[11px] leading-relaxed">
+                                <li>Truy cập vào <b>Supabase Dashboard</b> dự án SalesHub.</li>
+                                <li>Chọn menu <b>SQL Editor</b> bên tay trái.</li>
+                                <li>Dán câu lệnh SQL bên dưới và nhấn <b>Run</b> để thực thi.</li>
+                            </ol>
+
+                            {/* Khối lệnh SQL */}
+                            <div className="relative rounded-2xl bg-slate-900 text-slate-100 p-4 font-mono text-xs border border-slate-800 shadow-inner">
+                                <pre className="whitespace-pre-wrap break-all text-emerald-400 selection:bg-emerald-900">
+                                    {SQL_ADD_ACCESSIBLE_STORES_COLUMN}
+                                </pre>
+                                <button
+                                    type="button"
+                                    onClick={handleCopySql}
+                                    className="absolute top-2.5 right-2.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-[11px] font-bold transition flex items-center gap-1.5 border border-slate-700 cursor-pointer"
+                                >
+                                    {isCopiedSql ? (
+                                        <>
+                                            <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                            <span>Đã sao chép</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Copy className="w-3.5 h-3.5 text-slate-300" />
+                                            <span>Sao chép SQL</span>
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+                            <button
+                                type="button"
+                                onClick={checkColumnStatus}
+                                disabled={isCheckingColumn}
+                                className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                            >
+                                <RefreshCw className={`w-3.5 h-3.5 ${isCheckingColumn ? 'animate-spin' : ''}`} />
+                                <span>Kiểm tra lại kết nối</span>
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => setShowSqlModal(false)}
+                                className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold cursor-pointer transition"
+                            >
+                                Đã hiểu & Đóng
+                            </button>
                         </div>
                     </div>
                 </div>

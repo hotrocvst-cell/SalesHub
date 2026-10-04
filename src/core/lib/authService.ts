@@ -59,7 +59,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
     ADMIN: 'Quản trị viên (Admin)',
     QUAN_LY: 'Quản lý Siêu thị (QL)',
     TRUONG_CA: 'Trưởng Ca (TC)',
-    NHAN_VIEN: 'Nhân viên kinh doanh (NV)'
+    NHAN_VIEN: 'Nhân viên (NV)'
 };
 
 const LOCAL_STORAGE_PROFILES_KEY = 'saleshub_user_profiles_v1';
@@ -138,6 +138,93 @@ CREATE POLICY "Allow all user_approval_requests" ON public.user_approval_request
 DROP POLICY IF EXISTS "Allow all system_notifications" ON public.system_notifications;
 CREATE POLICY "Allow all system_notifications" ON public.system_notifications FOR ALL USING (true);
 `;
+
+export const SQL_ADD_ACCESSIBLE_STORES_COLUMN = `ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS accessible_stores JSONB DEFAULT '[]'::jsonb;`;
+
+/**
+ * Kiểm tra xem bảng user_profiles trên Supabase đã có cột accessible_stores (JSONB) chưa
+ */
+export async function checkSupabaseStoreColumnStatus(): Promise<{
+    hasNativeColumn: boolean;
+    error?: string;
+}> {
+    try {
+        const { error } = await supabase
+            .from('user_profiles')
+            .select('accessible_stores')
+            .limit(1);
+
+        if (error) {
+            return { hasNativeColumn: false, error: error.message };
+        }
+        return { hasNativeColumn: true };
+    } catch (err: any) {
+        return { hasNativeColumn: false, error: err.message || String(err) };
+    }
+}
+
+/**
+ * Helper phân tích dữ liệu UserProfile thô từ Supabase hoặc LocalStorage,
+ * giải mã danh sách accessible_stores cả dạng mảng JSONB gốc lẫn chuỗi fallback __STORES__:[...]
+ */
+export function parseRawUserProfile(item: any): UserProfile {
+    let accessibleStores: string[] = [];
+
+    // 1. Nếu có cột accessible_stores dạng mảng hoặc chuỗi JSON
+    if (Array.isArray(item.accessible_stores) && item.accessible_stores.length > 0) {
+        accessibleStores = item.accessible_stores;
+    } else if (typeof item.accessible_stores === 'string' && item.accessible_stores.trim()) {
+        try {
+            const parsed = JSON.parse(item.accessible_stores);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+                accessibleStores = parsed;
+            }
+        } catch {
+            accessibleStores = [item.accessible_stores];
+        }
+    }
+
+    // 2. Nếu chưa có, giải mã fallback từ rejection_reason (__STORES__:[...])
+    if (accessibleStores.length === 0 && typeof item.rejection_reason === 'string' && item.rejection_reason.startsWith('__STORES__:')) {
+        try {
+            const parsed = JSON.parse(item.rejection_reason.slice(11));
+            if (Array.isArray(parsed) && parsed.length > 0) {
+                accessibleStores = parsed;
+            }
+        } catch (e) {
+            console.warn('Lỗi phân tích fallback __STORES__:', e);
+        }
+    }
+
+    // 3. Nếu vẫn rỗng, mặc định là siêu thị đăng ký gốc
+    if (accessibleStores.length === 0 && item.store_name) {
+        accessibleStores = [item.store_name];
+    }
+
+    // Làm sạch rejection_reason (không để lộ chuỗi __STORES__: ra ngoài giao diện)
+    let cleanRejection = item.rejection_reason;
+    if (typeof cleanRejection === 'string' && cleanRejection.startsWith('__STORES__:')) {
+        cleanRejection = undefined;
+    }
+
+    return {
+        id: item.id,
+        auth_user_id: item.auth_user_id,
+        email: item.email,
+        employee_id: item.employee_id || '',
+        full_name: item.full_name,
+        phone: item.phone || '',
+        store_name: item.store_name || '',
+        accessible_stores: accessibleStores,
+        role: item.role as UserRole,
+        role_title: ROLE_LABELS[item.role as UserRole] || 'Người dùng',
+        status: item.status as UserAccountStatus,
+        password: item.password,
+        rejection_reason: cleanRejection,
+        created_at: item.created_at || new Date().toISOString(),
+        updated_at: item.updated_at || new Date().toISOString()
+    };
+}
 
 // ==========================================
 // TÀI KHOẢN MẪU ĐỂ TEST NHANH (DEMO ACCOUNTS)
@@ -283,28 +370,7 @@ export async function getUserProfile(userIdOrEmail: string): Promise<UserProfile
             .limit(1);
 
         if (!error && data && data.length > 0) {
-            const item = data[0];
-            return {
-                id: item.id,
-                auth_user_id: item.auth_user_id,
-                email: item.email,
-                employee_id: item.employee_id || '',
-                full_name: item.full_name,
-                phone: item.phone || '',
-                store_name: item.store_name || '',
-                accessible_stores: Array.isArray(item.accessible_stores)
-                    ? item.accessible_stores
-                    : (typeof item.accessible_stores === 'string' && item.accessible_stores.trim()
-                        ? (() => { try { return JSON.parse(item.accessible_stores); } catch { return [item.accessible_stores]; } })()
-                        : (item.store_name ? [item.store_name] : [])),
-                role: item.role as UserRole,
-                role_title: ROLE_LABELS[item.role as UserRole] || 'Người dùng',
-                status: item.status as UserAccountStatus,
-                password: item.password,
-                rejection_reason: item.rejection_reason,
-                created_at: item.created_at,
-                updated_at: item.updated_at
-            };
+            return parseRawUserProfile(data[0]);
         }
     } catch {
         // Fallback sang local cache
@@ -780,8 +846,8 @@ export async function fetchSystemNotifications(params: {
         }
         if (params.role === 'QUAN_LY') {
             return (n.target_role === 'QUAN_LY' && (!n.target_store_name || n.target_store_name === params.storeName)) ||
-                   n.target_role === 'ALL' ||
-                   n.target_user_id === params.userId;
+                n.target_role === 'ALL' ||
+                n.target_user_id === params.userId;
         }
         return n.target_role === 'ALL' || n.target_user_id === params.userId;
     });
@@ -945,27 +1011,42 @@ export async function syncLocalProfilesToCloud(): Promise<{ success: boolean; co
         const locals = getLocalProfiles();
         if (locals.length === 0) return { success: true, count: 0 };
 
-        const payloads = locals.map(p => ({
-            id: p.id,
-            auth_user_id: p.auth_user_id || null,
-            email: p.email.toLowerCase(),
-            employee_id: p.employee_id || '',
-            full_name: p.full_name,
-            phone: p.phone || '',
-            store_name: p.store_name || '',
-            role: p.role,
-            status: p.status,
-            password: p.password || '123456',
-            rejection_reason: p.rejection_reason || null,
-            created_at: p.created_at || new Date().toISOString(),
-            updated_at: new Date().toISOString()
-        }));
+        const payloads = locals.map(p => {
+            const hasStores = p.accessible_stores && p.accessible_stores.length > 0;
+            const storesJson = JSON.stringify(hasStores ? p.accessible_stores : (p.store_name ? [p.store_name] : []));
+            const isFallback = p.status !== 'REJECTED' && hasStores;
+            return {
+                id: p.id,
+                auth_user_id: p.auth_user_id || null,
+                email: p.email.toLowerCase(),
+                employee_id: p.employee_id || '',
+                full_name: p.full_name,
+                phone: p.phone || '',
+                store_name: p.store_name || '',
+                accessible_stores: hasStores ? p.accessible_stores : (p.store_name ? [p.store_name] : []),
+                role: p.role,
+                status: p.status,
+                password: p.password || '123456',
+                rejection_reason: isFallback ? `__STORES__:${storesJson}` : (p.rejection_reason || null),
+                created_at: p.created_at || new Date().toISOString(),
+                updated_at: new Date().toISOString()
+            };
+        });
 
+        // 1. Thử upsert có cột accessible_stores
         const { error } = await supabase
             .from('user_profiles')
             .upsert(payloads, { onConflict: 'email' });
 
-        if (error) throw error;
+        // 2. Nếu lỗi cột accessible_stores chưa có trong Supabase, bỏ trường này và dùng fallback rejection_reason
+        if (error) {
+            const fallbackPayloads = payloads.map(({ accessible_stores, ...rest }) => rest);
+            const { error: fallbackErr } = await supabase
+                .from('user_profiles')
+                .upsert(fallbackPayloads, { onConflict: 'email' });
+            if (fallbackErr) throw fallbackErr;
+        }
+
         return { success: true, count: payloads.length };
     } catch (err: any) {
         console.error('Lỗi syncLocalProfilesToCloud:', err);
@@ -985,27 +1066,7 @@ export async function fetchAllUserProfiles(): Promise<UserProfile[]> {
             .order('created_at', { ascending: false });
 
         if (!error && data && data.length > 0) {
-            const mapped: UserProfile[] = data.map((item: any) => ({
-                id: item.id,
-                auth_user_id: item.auth_user_id,
-                email: item.email,
-                employee_id: item.employee_id || '',
-                full_name: item.full_name,
-                phone: item.phone || '',
-                store_name: item.store_name || '',
-                accessible_stores: Array.isArray(item.accessible_stores)
-                    ? item.accessible_stores
-                    : (typeof item.accessible_stores === 'string' && item.accessible_stores.trim()
-                        ? (() => { try { return JSON.parse(item.accessible_stores); } catch { return [item.accessible_stores]; } })()
-                        : (item.store_name ? [item.store_name] : [])),
-                role: item.role as UserRole,
-                role_title: ROLE_LABELS[item.role as UserRole] || 'Người dùng',
-                status: item.status as UserAccountStatus,
-                password: item.password,
-                rejection_reason: item.rejection_reason,
-                created_at: item.created_at || new Date().toISOString(),
-                updated_at: item.updated_at || new Date().toISOString()
-            }));
+            const mapped: UserProfile[] = data.map((item: any) => parseRawUserProfile(item));
 
             // Hợp nhất với local cache (tránh ghi đè làm mất tài khoản tạo lúc offline)
             const locals = getLocalProfiles();
@@ -1193,16 +1254,23 @@ export async function adminResetPassword(
 export async function adminUpdateUserProfile(
     userId: string,
     updates: Partial<UserProfile>
-): Promise<{ success: boolean; data?: UserProfile; error?: string }> {
+): Promise<{ success: boolean; data?: UserProfile; storageMode?: 'NATIVE' | 'FALLBACK'; error?: string }> {
     try {
         const profiles = getLocalProfiles();
         const idx = profiles.findIndex(p => p.id === userId);
 
+        let current: UserProfile;
         if (idx === -1) {
-            throw new Error(`Không tìm thấy tài khoản ID: ${userId}`);
+            const cloudUser = await getUserProfile(userId);
+            if (!cloudUser) {
+                throw new Error(`Không tìm thấy tài khoản ID: ${userId}`);
+            }
+            current = cloudUser;
+            profiles.push(current);
+        } else {
+            current = profiles[idx];
         }
 
-        const current = profiles[idx];
         const newRole = updates.role || current.role;
         const updated: UserProfile = {
             ...current,
@@ -1212,10 +1280,16 @@ export async function adminUpdateUserProfile(
             updated_at: new Date().toISOString()
         };
 
-        profiles[idx] = updated;
+        const targetIdx = profiles.findIndex(p => p.id === userId);
+        if (targetIdx >= 0) {
+            profiles[targetIdx] = updated;
+        } else {
+            profiles.push(updated);
+        }
         saveLocalProfiles(profiles);
 
         // Đồng bộ Supabase
+        let storageMode: 'NATIVE' | 'FALLBACK' = 'NATIVE';
         try {
             const updatePayload: Record<string, any> = {
                 full_name: updated.full_name,
@@ -1226,8 +1300,12 @@ export async function adminUpdateUserProfile(
                 status: updated.status,
                 updated_at: new Date().toISOString()
             };
+
             if (updated.accessible_stores !== undefined) {
                 updatePayload.accessible_stores = updated.accessible_stores;
+            }
+            if (updated.rejection_reason !== undefined) {
+                updatePayload.rejection_reason = updated.rejection_reason;
             }
 
             const { error: updateErr } = await supabase
@@ -1235,19 +1313,44 @@ export async function adminUpdateUserProfile(
                 .update(updatePayload)
                 .eq('id', userId);
 
-            // Nếu lỗi do cột accessible_stores chưa tồn tại trong Supabase -> thử lại bỏ cột đó
-            if (updateErr && updated.accessible_stores !== undefined) {
+            // Nếu lỗi do cột accessible_stores chưa tồn tại trong Supabase (42703) -> lưu fallback qua rejection_reason
+            if (updateErr) {
+                console.warn('Supabase chưa có cột accessible_stores, tự động lưu fallback qua Cloud:', updateErr.message);
                 delete updatePayload.accessible_stores;
-                await supabase
+                storageMode = 'FALLBACK';
+
+                if (updated.status !== 'REJECTED' && updated.accessible_stores !== undefined) {
+                    updatePayload.rejection_reason = '__STORES__:' + JSON.stringify(updated.accessible_stores);
+                }
+
+                const { error: fallbackErr } = await supabase
                     .from('user_profiles')
                     .update(updatePayload)
                     .eq('id', userId);
+
+                if (fallbackErr) {
+                    console.error('Lỗi khi ghi fallback lên Supabase:', fallbackErr);
+                    throw fallbackErr;
+                }
+            } else {
+                // Đã lưu native thành công! Nếu trước đây từng lưu fallback trong rejection_reason thì dọn dẹp
+                if (current.rejection_reason && current.rejection_reason.startsWith('__STORES__:')) {
+                    await supabase
+                        .from('user_profiles')
+                        .update({ rejection_reason: null })
+                        .eq('id', userId);
+                }
             }
-        } catch {
-            // Safe fallback
+        } catch (cloudErr: any) {
+            console.error('Lỗi đồng bộ Supabase Cloud:', cloudErr);
+            return {
+                success: false,
+                data: updated,
+                error: `Không thể đồng bộ lên Supabase: ${cloudErr.message || String(cloudErr)}`
+            };
         }
 
-        return { success: true, data: updated };
+        return { success: true, data: updated, storageMode };
     } catch (err: any) {
         console.error('Lỗi adminUpdateUserProfile:', err);
         return { success: false, error: err.message || String(err) };
