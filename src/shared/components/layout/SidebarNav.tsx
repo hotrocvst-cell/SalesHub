@@ -77,7 +77,7 @@ export const NAVIGATION_GROUPS: NavGroup[] = [
         groupTitle: 'DỮ LIỆU & PHIÊN LÀM VIỆC',
         items: [
             {
-                name: 'Cập nhật số liệu',
+                name: 'Cập nhật số liệu LK',
                 path: '/cap-nhat',
                 icon: UploadCloud
             },
