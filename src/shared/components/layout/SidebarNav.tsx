@@ -17,7 +17,8 @@ import {
     History,
     Award,
     ShieldCheck,
-    Users
+    Users,
+    Building2
 } from 'lucide-react';
 
 export interface NavItem {
@@ -122,6 +123,12 @@ export const NAVIGATION_GROUPS: NavGroup[] = [
                 path: '/quan-ly-tai-khoan',
                 icon: Users,
                 badge: '🛡️ Admin'
+            },
+            {
+                name: 'Phân quyền siêu thị',
+                path: '/phan-quyen-sieu-thi',
+                icon: Building2,
+                badge: '🏢 Mới'
             },
             {
                 name: 'Quản trị hệ thống',

@@ -29,8 +29,10 @@ import {
     FileText,
     Download,
     Copy,
-    Sparkles
+    Sparkles,
+    Lock
 } from "lucide-react";
+import { useAuth } from "../../shared/contexts/AuthContext";
 
 interface EmulationRowItem {
     id: string;
@@ -44,6 +46,7 @@ interface EmulationRowItem {
 
 export default function MonthlyReportPage() {
     const navigate = useNavigate();
+    const { currentUser, isAdmin, canAccessStore } = useAuth();
     // Ref chỉ bọc khu vực Summary + Bảng thi đua để xuất ảnh
     const reportRef = useRef<HTMLDivElement | null>(null);
 
@@ -96,7 +99,7 @@ export default function MonthlyReportPage() {
     }, [selectedMonth, selectedYear]);
 
     // 2. DANH SÁCH SIÊU THỊ THÀNH VIÊN ĐỘC LẬP
-    const storeList = useMemo(() => {
+    const allStoreList = useMemo(() => {
         const s = new Set<string>();
         records.forEach(r => {
             const sName = getShortStoreName(r.storeName);
@@ -106,6 +109,34 @@ export default function MonthlyReportPage() {
         });
         return Array.from(s).sort();
     }, [records]);
+
+    // Lọc siêu thị theo phân quyền tài khoản (Nhân viên chỉ xem shop mình, Quản lý xem các shop được phân quyền)
+    const storeList = useMemo(() => {
+        if (isAdmin) return allStoreList;
+        return allStoreList.filter(s => canAccessStore(s));
+    }, [allStoreList, isAdmin, canAccessStore]);
+
+    const isLockedToSingleStore = !isAdmin && (currentUser?.role === 'NHAN_VIEN' || storeList.length <= 1);
+    const canViewAllStores = isAdmin || (!isLockedToSingleStore && currentUser?.role !== 'NHAN_VIEN' && storeList.length > 1);
+
+    // Tự động điều chỉnh siêu thị được chọn cho nhân viên hoặc quản lý
+    useEffect(() => {
+        if (isAdmin) return;
+        if (currentUser?.role === 'NHAN_VIEN') {
+            const myStore = storeList[0] || (currentUser.store_name ? getShortStoreName(currentUser.store_name) : '');
+            if (myStore && selectedStore !== myStore) {
+                setSelectedStore(myStore);
+            }
+            return;
+        }
+        if (!canViewAllStores && storeList.length === 1 && selectedStore === 'all') {
+            setSelectedStore(storeList[0]);
+            return;
+        }
+        if (selectedStore !== 'all' && !storeList.includes(selectedStore) && storeList.length > 0) {
+            setSelectedStore(storeList[0]);
+        }
+    }, [currentUser, isAdmin, storeList, selectedStore, canViewAllStores]);
 
     // 3. DANH SÁCH NGÀY BÁO CÁO CÓ SỐ LIỆU
     const availableDates = useMemo(() => {
@@ -507,19 +538,43 @@ export default function MonthlyReportPage() {
 
                     {/* Bộ lọc lựa chọn dữ liệu */}
                     <div className="flex items-center gap-2 flex-wrap">
-                        <select
-                            value={selectedStore}
-                            onChange={(e) => {
-                                setSelectedStore(e.target.value);
-                                setSelectedDate("latest");
-                            }}
-                            className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer"
-                        >
-                            <option value="all">🏢 TỔNG TOÀN CỤM ({storeList.length} siêu thị)</option>
-                            {storeList.map(s => (
-                                <option key={s} value={s}>{s}</option>
-                            ))}
-                        </select>
+                        <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all ${
+                            isLockedToSingleStore
+                                ? 'bg-amber-50/90 border-amber-200 text-amber-900 shadow-2xs'
+                                : 'bg-slate-50 border-slate-300 text-slate-700'
+                        }`}>
+                            {isLockedToSingleStore ? (
+                                <Lock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                            ) : (
+                                <Store className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                            )}
+                            <select
+                                value={selectedStore}
+                                onChange={(e) => {
+                                    setSelectedStore(e.target.value);
+                                    setSelectedDate("latest");
+                                }}
+                                disabled={isLockedToSingleStore}
+                                title={isLockedToSingleStore ? 'Tài khoản nhân viên được cố định theo siêu thị đã đăng ký' : undefined}
+                                className={`bg-transparent outline-none font-bold ${
+                                    isLockedToSingleStore
+                                        ? 'cursor-not-allowed text-amber-900 font-black'
+                                        : 'cursor-pointer text-slate-700'
+                                }`}
+                            >
+                                {canViewAllStores && (
+                                    <option value="all">🏢 TỔNG TOÀN CỤM ({allStoreList.length} siêu thị)</option>
+                                )}
+                                {storeList.map(s => (
+                                    <option key={s} value={s}>{s}</option>
+                                ))}
+                            </select>
+                            {isLockedToSingleStore && (
+                                <span className="text-[10px] bg-amber-200/80 text-amber-800 px-1 py-0.5 rounded font-bold uppercase tracking-wider hidden sm:inline">
+                                    Đã khóa
+                                </span>
+                            )}
+                        </div>
 
                         <select
                             value={selectedMonth}

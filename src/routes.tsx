@@ -18,6 +18,7 @@ const EmployeeSessionManagerPage = lazy(() => import('./features/employee-cumula
 const CampaignSummaryPage = lazy(() => import('./features/campaign-summary/CampaignSummaryPage'));
 const SystemAdminPage = lazy(() => import('./features/admin-config/SystemAdminPage'));
 const UserManagementPage = lazy(() => import('./features/admin-config/UserManagementPage'));
+const UserStorePermissionPage = lazy(() => import('./features/admin-config/UserStorePermissionPage'));
 
 const LoginPage = lazy(() => import('./features/auth/LoginPage'));
 const RegisterPage = lazy(() => import('./features/auth/RegisterPage'));
@@ -72,6 +73,7 @@ export function AppRoutes() {
                     <Route path="/cau-hinh-sieu-thi-nhan-vien" element={<StoreEmployeeConfigPage />} />
 
                     <Route path="/quan-ly-tai-khoan" element={<UserManagementPage />} />
+                    <Route path="/phan-quyen-sieu-thi" element={<UserStorePermissionPage />} />
                     <Route path="/quan-tri-he-thong" element={<SystemAdminPage />} />
 
                     {/* Tuyến đường dự phòng */}

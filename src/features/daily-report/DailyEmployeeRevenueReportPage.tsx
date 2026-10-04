@@ -45,8 +45,10 @@ import {
     Users,
     UserCheck,
     Table as TableIcon,
-    LayoutGrid
+    LayoutGrid,
+    Lock
 } from 'lucide-react';
+import { useUserStoreFilter } from '../../shared/hooks/useUserStoreFilter';
 
 const DRAFT_STORE_KEY = 'saleshub_daily_emp_revenue_store_v1';
 const DRAFT_DATE_KEY = 'saleshub_daily_emp_revenue_date_v1';
@@ -64,6 +66,13 @@ export default function DailyEmployeeRevenueReportPage() {
             return 'all';
         }
     });
+
+    // Phân quyền phạm vi siêu thị theo vai trò người dùng (Nhân viên bị khóa shop, Quản lý đa shop, Admin toàn quyền)
+    const { allowedStores, isLockedToSingleStore, canViewAllStores } = useUserStoreFilter(
+        stores,
+        selectedStore,
+        setSelectedStore
+    );
 
     // 2. DỮ LIỆU BÁO CÁO DÁN (Mặc định để trống)
     const [rawText, setRawText] = useState<string>('');
@@ -134,14 +143,14 @@ export default function DailyEmployeeRevenueReportPage() {
             const detected = detectStoreFromRawText(rawText);
             if (detected) {
                 setDetectedStoreName(detected);
-                // Khớp thử với danh sách stores
-                const matched = stores.find(s => isStoreMatch(s.name, detected, stores));
-                if (matched && selectedStore === 'all') {
+                // Khớp thử với danh sách siêu thị được phép truy cập
+                const matched = allowedStores.find(s => isStoreMatch(s.name, detected, stores));
+                if (matched && selectedStore === 'all' && canViewAllStores) {
                     setSelectedStore(matched.name);
                 }
             }
         }
-    }, [rawText, stores]);
+    }, [rawText, stores, allowedStores, selectedStore, canViewAllStores]);
 
     // Lưu nháp bộ lọc vào localStorage (không lưu dữ liệu dán để mặc định luôn sạch sẽ)
     useEffect(() => {
@@ -558,22 +567,43 @@ export default function DailyEmployeeRevenueReportPage() {
 
                         {/* Dropdown chọn siêu thị và ngày */}
                         <div className="flex items-center gap-3 pt-1 flex-wrap">
-                            {/* 1. Chọn Siêu thị (Tổng cụm hoặc từng siêu thị) */}
-                            <div className="flex items-center gap-1.5 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-bold">
-                                <Store className="w-3.5 h-3.5 text-slate-500" />
+                            {/* 1. Chọn Siêu thị (Tổng cụm hoặc từng siêu thị theo phân quyền) */}
+                            <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all ${
+                                isLockedToSingleStore
+                                    ? 'bg-amber-50/90 border-amber-200 text-amber-900 shadow-xs'
+                                    : 'bg-slate-100 border-slate-200 text-slate-800'
+                            }`}>
+                                {isLockedToSingleStore ? (
+                                    <Lock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                ) : (
+                                    <Store className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                                )}
                                 <span className="text-slate-500 hidden sm:inline">Siêu thị:</span>
                                 <select
                                     value={selectedStore}
                                     onChange={e => setSelectedStore(e.target.value)}
-                                    className="bg-transparent text-slate-800 font-extrabold outline-hidden cursor-pointer"
+                                    disabled={isLockedToSingleStore}
+                                    title={isLockedToSingleStore ? 'Tài khoản nhân viên được cố định theo siêu thị đã đăng ký' : undefined}
+                                    className={`bg-transparent font-extrabold outline-hidden ${
+                                        isLockedToSingleStore
+                                            ? 'cursor-not-allowed text-amber-900 font-black'
+                                            : 'cursor-pointer text-slate-800'
+                                    }`}
                                 >
-                                    <option value="all">🌐 Toàn Cụm Siêu Thị</option>
-                                    {stores.map(s => (
+                                    {canViewAllStores && (
+                                        <option value="all">🌐 Toàn Cụm Siêu Thị</option>
+                                    )}
+                                    {allowedStores.map(s => (
                                         <option key={s.id || s.name} value={s.name}>
                                             {s.code ? `[${s.code}] ` : ''}{s.name}
                                         </option>
                                     ))}
                                 </select>
+                                {isLockedToSingleStore && (
+                                    <span className="text-[10px] bg-amber-200/80 text-amber-800 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider hidden md:inline">
+                                        Đã khóa
+                                    </span>
+                                )}
                             </div>
 
                             {/* 2. Chọn ngày báo cáo */}

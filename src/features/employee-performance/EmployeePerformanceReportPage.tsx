@@ -35,9 +35,11 @@ import {
     Target,
     Clock,
     Settings,
-    CheckCircle2
+    CheckCircle2,
+    Lock
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useUserStoreFilter } from '../../shared/hooks/useUserStoreFilter';
 import ExcelJS from 'exceljs';
 import html2canvas from 'html2canvas';
 
@@ -47,6 +49,14 @@ export default function EmployeePerformanceReportPage() {
 
     const [stores, setStores] = useState<StoreItem[]>([]);
     const [selectedStore, setSelectedStore] = useState<string>('all');
+
+    // Phân quyền siêu thị theo tài khoản người dùng
+    const { allowedStores, isLockedToSingleStore, canViewAllStores } = useUserStoreFilter(
+        stores,
+        selectedStore,
+        setSelectedStore
+    );
+
     const [selectedMonth, setSelectedMonth] = useState<number>(() => new Date().getMonth() + 1);
     const [selectedYear, setSelectedYear] = useState<number>(() => new Date().getFullYear());
     const [searchQuery, setSearchQuery] = useState<string>('');
@@ -834,19 +844,40 @@ export default function EmployeePerformanceReportPage() {
             {/* Thanh Bộ Lọc & Tìm Kiếm & Sắp Xếp */}
             <div className="bg-white rounded-2xl p-3.5 border border-slate-200 shadow-2xs flex flex-wrap items-center justify-between gap-3 text-xs">
                 <div className="flex flex-wrap items-center gap-2">
-                    {/* 1. Chọn Siêu Thị */}
-                    <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl">
-                        <Store className="w-4 h-4 text-amber-600" />
+                    {/* 1. Chọn Siêu Thị (Theo phân quyền tài khoản) */}
+                    <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all ${
+                        isLockedToSingleStore
+                            ? 'bg-amber-50/90 border-amber-200 text-amber-900 shadow-2xs'
+                            : 'bg-slate-50 border-slate-200 text-slate-800'
+                    }`}>
+                        {isLockedToSingleStore ? (
+                            <Lock className="w-4 h-4 text-amber-600 shrink-0" />
+                        ) : (
+                            <Store className="w-4 h-4 text-amber-600 shrink-0" />
+                        )}
                         <select
                             value={selectedStore}
                             onChange={e => setSelectedStore(e.target.value)}
-                            className="bg-transparent text-xs font-bold text-slate-800 outline-hidden cursor-pointer"
+                            disabled={isLockedToSingleStore}
+                            title={isLockedToSingleStore ? 'Tài khoản nhân viên được cố định theo siêu thị đã đăng ký' : undefined}
+                            className={`bg-transparent text-xs font-bold outline-hidden ${
+                                isLockedToSingleStore
+                                    ? 'cursor-not-allowed text-amber-900 font-black'
+                                    : 'cursor-pointer text-slate-800'
+                            }`}
                         >
-                            <option value="all">🏢 Toàn Cụm Siêu Thị</option>
-                            {stores.map(s => (
+                            {canViewAllStores && (
+                                <option value="all">🏢 Toàn Cụm Siêu Thị</option>
+                            )}
+                            {allowedStores.map(s => (
                                 <option key={s.id || s.code} value={s.name}>{s.name} ({s.code})</option>
                             ))}
                         </select>
+                        {isLockedToSingleStore && (
+                            <span className="text-[10px] bg-amber-200/80 text-amber-800 px-1 py-0.5 rounded font-bold uppercase tracking-wider hidden sm:inline">
+                                Đã khóa
+                            </span>
+                        )}
                     </div>
 
                     {/* 2. Chọn Tháng / Năm */}

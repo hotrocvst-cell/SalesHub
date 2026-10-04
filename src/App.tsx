@@ -22,6 +22,7 @@ const EmployeeSessionManagerPage = lazy(() => import('./features/employee-cumula
 const CampaignSummaryPage = lazy(() => import('./features/campaign-summary/CampaignSummaryPage'));
 const SystemAdminPage = lazy(() => import('./features/admin-config/SystemAdminPage'));
 const UserManagementPage = lazy(() => import('./features/admin-config/UserManagementPage'));
+const UserStorePermissionPage = lazy(() => import('./features/admin-config/UserStorePermissionPage'));
 
 // Các trang Định danh, Đăng ký & Onboarding
 const LoginPage = lazy(() => import('./features/auth/LoginPage'));
@@ -138,6 +139,12 @@ export default function App() {
                                 <Route path="/quan-ly-tai-khoan" element={
                                     <ProtectedRoute path="/quan-ly-tai-khoan">
                                         <UserManagementPage />
+                                    </ProtectedRoute>
+                                } />
+
+                                <Route path="/phan-quyen-sieu-thi" element={
+                                    <ProtectedRoute path="/phan-quyen-sieu-thi">
+                                        <UserStorePermissionPage />
                                     </ProtectedRoute>
                                 } />
 

@@ -153,10 +153,20 @@ export const DEFAULT_PAGE_PERMISSIONS: SystemPagePermission[] = [
         page_name: 'Quản lý Tài khoản (User)',
         path: '/quan-ly-tai-khoan',
         group_title: 'HỆ THỐNG & CẤU HÌNH',
-        description: 'Quản trị danh sách người dùng, đặt lại mật khẩu và phân quyền siêu thị',
+        description: 'Quản trị danh sách người dùng, đặt lại mật khẩu và duyệt đăng ký',
         is_enabled: true,
         allowed_roles: ['ADMIN'],
         order_index: 13
+    },
+    {
+        page_key: 'phan_quyen_sieu_thi',
+        page_name: 'Phân quyền Siêu thị',
+        path: '/phan-quyen-sieu-thi',
+        group_title: 'HỆ THỐNG & CẤU HÌNH',
+        description: 'Theo dõi & phân quyền danh sách siêu thị được phép xem của các tài khoản',
+        is_enabled: true,
+        allowed_roles: ['ADMIN', 'QUAN_LY'],
+        order_index: 14
     },
     {
         page_key: 'quan_tri_he_thong',
@@ -166,7 +176,7 @@ export const DEFAULT_PAGE_PERMISSIONS: SystemPagePermission[] = [
         description: 'Quản lý trạng thái hoạt động & phân quyền các trang tiện ích',
         is_enabled: true,
         allowed_roles: ['ADMIN'],
-        order_index: 14
+        order_index: 15
     }
 ];
 

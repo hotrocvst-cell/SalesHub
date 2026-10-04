@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth, type UserRole, type UserAccountStatus } from '../../shared/contexts/AuthContext';
 import {
     fetchAllUserProfiles,
@@ -379,6 +380,15 @@ export default function UserManagementPage() {
                         </button>
                     )}
 
+                    <Link
+                        to="/phan-quyen-sieu-thi"
+                        className="px-3.5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition flex items-center gap-1.5 border border-slate-200 cursor-pointer"
+                        title="Theo dõi và phân quyền xem dữ liệu siêu thị cho các tài khoản"
+                    >
+                        <Building2 className="w-4 h-4 text-blue-600" />
+                        <span className="hidden sm:inline">Phân Quyền Siêu Thị</span>
+                    </Link>
+
                     <button
                         type="button"
                         onClick={() => setIsCreateModalOpen(true)}
@@ -637,12 +647,23 @@ export default function UserManagementPage() {
                                             </span>
                                         </td>
 
-                                        {/* SIÊU THỊ CÔNG TÁC */}
+                                        {/* SIÊU THỊ CÔNG TÁC & PHẠM VI XEM */}
                                         <td className="py-3 px-3">
                                             {u.store_name ? (
-                                                <div className="flex items-center gap-1.5 text-slate-700 font-semibold max-w-[220px] truncate" title={u.store_name}>
-                                                    <Store className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                                                    <span className="truncate">{u.store_name}</span>
+                                                <div className="space-y-0.5">
+                                                    <div className="flex items-center gap-1.5 text-slate-700 font-semibold max-w-[220px] truncate" title={u.store_name}>
+                                                        <Store className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                                                        <span className="truncate">{u.store_name}</span>
+                                                    </div>
+                                                    {u.accessible_stores && u.accessible_stores.length > 1 && (
+                                                        <Link
+                                                            to="/phan-quyen-sieu-thi"
+                                                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 text-[10px] font-bold hover:bg-amber-200 transition"
+                                                            title={`Được xem ${u.accessible_stores.length} siêu thị: ${u.accessible_stores.join(', ')}`}
+                                                        >
+                                                            <span>🏢 Phụ trách {u.accessible_stores.length} shop</span>
+                                                        </Link>
+                                                    )}
                                                 </div>
                                             ) : (
                                                 <span className="text-slate-400 italic text-[11px]">Chưa gắn ST</span>

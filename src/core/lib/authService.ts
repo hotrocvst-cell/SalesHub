@@ -11,6 +11,7 @@ export interface UserProfile {
     full_name: string;
     phone?: string;
     store_name: string;
+    accessible_stores?: string[];
     role: UserRole;
     role_title: string;
     status: UserAccountStatus;
@@ -75,6 +76,7 @@ CREATE TABLE IF NOT EXISTS public.user_profiles (
     full_name TEXT NOT NULL,
     phone TEXT,
     store_name TEXT NOT NULL DEFAULT '',
+    accessible_stores JSONB DEFAULT '[]'::jsonb,
     role TEXT NOT NULL DEFAULT 'NHAN_VIEN',
     status TEXT NOT NULL DEFAULT 'PENDING_ONBOARDING',
     password TEXT,
@@ -82,6 +84,9 @@ CREATE TABLE IF NOT EXISTS public.user_profiles (
     created_at TIMESTAMPTZ DEFAULT now(),
     updated_at TIMESTAMPTZ DEFAULT now()
 );
+
+-- Tự động thêm cột accessible_stores nếu bảng đã tồn tại từ trước
+ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS accessible_stores JSONB DEFAULT '[]'::jsonb;
 
 -- Bảng 2: Yêu cầu xét duyệt tài khoản & siêu thị
 CREATE TABLE IF NOT EXISTS public.user_approval_requests (
@@ -287,6 +292,11 @@ export async function getUserProfile(userIdOrEmail: string): Promise<UserProfile
                 full_name: item.full_name,
                 phone: item.phone || '',
                 store_name: item.store_name || '',
+                accessible_stores: Array.isArray(item.accessible_stores)
+                    ? item.accessible_stores
+                    : (typeof item.accessible_stores === 'string' && item.accessible_stores.trim()
+                        ? (() => { try { return JSON.parse(item.accessible_stores); } catch { return [item.accessible_stores]; } })()
+                        : (item.store_name ? [item.store_name] : [])),
                 role: item.role as UserRole,
                 role_title: ROLE_LABELS[item.role as UserRole] || 'Người dùng',
                 status: item.status as UserAccountStatus,
@@ -983,6 +993,11 @@ export async function fetchAllUserProfiles(): Promise<UserProfile[]> {
                 full_name: item.full_name,
                 phone: item.phone || '',
                 store_name: item.store_name || '',
+                accessible_stores: Array.isArray(item.accessible_stores)
+                    ? item.accessible_stores
+                    : (typeof item.accessible_stores === 'string' && item.accessible_stores.trim()
+                        ? (() => { try { return JSON.parse(item.accessible_stores); } catch { return [item.accessible_stores]; } })()
+                        : (item.store_name ? [item.store_name] : [])),
                 role: item.role as UserRole,
                 role_title: ROLE_LABELS[item.role as UserRole] || 'Người dùng',
                 status: item.status as UserAccountStatus,
@@ -1202,18 +1217,32 @@ export async function adminUpdateUserProfile(
 
         // Đồng bộ Supabase
         try {
-            await supabase
+            const updatePayload: Record<string, any> = {
+                full_name: updated.full_name,
+                phone: updated.phone,
+                employee_id: updated.employee_id,
+                store_name: updated.store_name,
+                role: updated.role,
+                status: updated.status,
+                updated_at: new Date().toISOString()
+            };
+            if (updated.accessible_stores !== undefined) {
+                updatePayload.accessible_stores = updated.accessible_stores;
+            }
+
+            const { error: updateErr } = await supabase
                 .from('user_profiles')
-                .update({
-                    full_name: updated.full_name,
-                    phone: updated.phone,
-                    employee_id: updated.employee_id,
-                    store_name: updated.store_name,
-                    role: updated.role,
-                    status: updated.status,
-                    updated_at: new Date().toISOString()
-                })
+                .update(updatePayload)
                 .eq('id', userId);
+
+            // Nếu lỗi do cột accessible_stores chưa tồn tại trong Supabase -> thử lại bỏ cột đó
+            if (updateErr && updated.accessible_stores !== undefined) {
+                delete updatePayload.accessible_stores;
+                await supabase
+                    .from('user_profiles')
+                    .update(updatePayload)
+                    .eq('id', userId);
+            }
         } catch {
             // Safe fallback
         }

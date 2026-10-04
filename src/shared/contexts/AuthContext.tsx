@@ -1,6 +1,7 @@
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
 import type { EmployeeItem } from '../../core/lib/storage';
 import { supabase } from '../../core/lib/supabase';
+import { isStoreMatch } from '../../core/lib/formatters';
 import {
     type UserProfile,
     type UserRole,
@@ -20,6 +21,7 @@ export interface CurrentUser {
     employee_id: string;
     full_name: string;
     store_name: string;
+    accessible_stores?: string[];
     role: UserRole;
     actual_role?: UserRole;
     role_title: string;
@@ -38,6 +40,8 @@ interface AuthContextType {
     isActualAdmin: boolean;
     isManager: boolean;
     isShiftLeader: boolean;
+    accessibleStores: string[];
+    canAccessStore: (storeName: string) => boolean;
     login: (emailOrEmployeeId: string, password?: string) => Promise<{ success: boolean; error?: string }>;
     register: (params: {
         email: string;
@@ -76,6 +80,27 @@ export const ANONYMOUS_USER: CurrentUser = {
     status: 'PENDING_ONBOARDING'
 };
 
+function profileToCurrentUser(profile: UserProfile, authUserId?: string, actualRole?: UserRole): CurrentUser {
+    const accessible = profile.accessible_stores && profile.accessible_stores.length > 0
+        ? profile.accessible_stores
+        : (profile.store_name ? [profile.store_name] : []);
+    return {
+        id: profile.id,
+        auth_user_id: authUserId || profile.auth_user_id,
+        email: profile.email,
+        employee_id: profile.employee_id,
+        full_name: profile.full_name,
+        store_name: profile.store_name,
+        accessible_stores: accessible,
+        role: profile.role,
+        actual_role: actualRole || profile.role,
+        role_title: profile.role_title,
+        status: profile.status,
+        phone: profile.phone,
+        rejection_reason: profile.rejection_reason
+    };
+}
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -88,6 +113,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 if (parsed && parsed.id && parsed.email) {
                     return {
                         ...parsed,
+                        accessible_stores: parsed.accessible_stores || (parsed.store_name ? [parsed.store_name] : []),
                         actual_role: parsed.actual_role || parsed.role || 'NHAN_VIEN',
                         status: parsed.status || 'ACTIVE'
                     };
@@ -115,6 +141,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return true;
     });
 
+    // Danh sách siêu thị được phép xem của tài khoản hiện tại
+    const accessibleStores = useMemo<string[]>(() => {
+        if (!currentUser || !currentUser.id) return [];
+        if (currentUser.role === 'ADMIN') return ['all'];
+        if (currentUser.accessible_stores && currentUser.accessible_stores.length > 0) {
+            return currentUser.accessible_stores;
+        }
+        return currentUser.store_name ? [currentUser.store_name] : [];
+    }, [currentUser]);
+
+    // Kiểm tra xem user hiện tại có quyền xem một siêu thị cụ thể không
+    const canAccessStore = useCallback((storeName: string): boolean => {
+        if (!currentUser || !currentUser.id) return false;
+        if (currentUser.role === 'ADMIN') return true;
+        if (currentUser.role === 'NHAN_VIEN') {
+            if (storeName === 'all') return false;
+            return currentUser.store_name ? isStoreMatch(currentUser.store_name, storeName) : false;
+        }
+        // Quản lý hoặc Trưởng ca
+        if (storeName === 'all') return true;
+        const myStores = currentUser.accessible_stores && currentUser.accessible_stores.length > 0
+            ? currentUser.accessible_stores
+            : (currentUser.store_name ? [currentUser.store_name] : []);
+        return myStores.some(s => isStoreMatch(s, storeName));
+    }, [currentUser]);
+
     // Chỉ lưu vào LocalStorage khi người dùng THỰC SỰ đã xác thực (có id và email)
     useEffect(() => {
         try {
@@ -137,20 +189,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 if (session?.user?.email) {
                     const profile = await getUserProfile(session.user.email);
                     if (profile) {
-                        setCurrentUser({
-                            id: profile.id,
-                            auth_user_id: session.user.id,
-                            email: profile.email,
-                            employee_id: profile.employee_id,
-                            full_name: profile.full_name,
-                            store_name: profile.store_name,
-                            role: profile.role,
-                            actual_role: profile.role,
-                            role_title: profile.role_title,
-                            status: profile.status,
-                            phone: profile.phone,
-                            rejection_reason: profile.rejection_reason
-                        });
+                        setCurrentUser(profileToCurrentUser(profile, session.user.id));
                     }
                 }
             } catch {
@@ -166,21 +205,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (session?.user?.email) {
                 const profile = await getUserProfile(session.user.email);
                 if (profile) {
-                    setCurrentUser(prev => ({
-                        ...prev,
-                        id: profile.id,
-                        auth_user_id: session.user.id,
-                        email: profile.email,
-                        employee_id: profile.employee_id,
-                        full_name: profile.full_name,
-                        store_name: profile.store_name,
-                        role: profile.role,
-                        actual_role: profile.role,
-                        role_title: profile.role_title,
-                        status: profile.status,
-                        phone: profile.phone,
-                        rejection_reason: profile.rejection_reason
-                    }));
+                    setCurrentUser(profileToCurrentUser(profile, session.user.id));
                 }
             } else if (_event === 'SIGNED_OUT') {
                 setCurrentUser(ANONYMOUS_USER);
@@ -224,20 +249,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                             });
                         }
 
-                        setCurrentUser({
-                            id: profile.id,
-                            auth_user_id: data.user.id,
-                            email: profile.email,
-                            employee_id: profile.employee_id,
-                            full_name: profile.full_name,
-                            store_name: profile.store_name,
-                            role: profile.role,
-                            actual_role: profile.role,
-                            role_title: profile.role_title,
-                            status: profile.status,
-                            phone: profile.phone,
-                            rejection_reason: profile.rejection_reason
-                        });
+                        setCurrentUser(profileToCurrentUser(profile, data.user.id));
                         setIsLoading(false);
                         return { success: true };
                     }
@@ -260,20 +272,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     }
                 }
 
-                setCurrentUser({
-                    id: profile.id,
-                    auth_user_id: profile.auth_user_id,
-                    email: profile.email,
-                    employee_id: profile.employee_id,
-                    full_name: profile.full_name,
-                    store_name: profile.store_name,
-                    role: profile.role,
-                    actual_role: profile.role,
-                    role_title: profile.role_title,
-                    status: profile.status,
-                    phone: profile.phone,
-                    rejection_reason: profile.rejection_reason
-                });
+                setCurrentUser(profileToCurrentUser(profile));
                 setIsLoading(false);
                 return { success: true };
             }
@@ -421,6 +420,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     employee_id: profile.employee_id,
                     full_name: profile.full_name,
                     store_name: profile.store_name,
+                    accessible_stores: profile.accessible_stores && profile.accessible_stores.length > 0
+                        ? profile.accessible_stores
+                        : (profile.store_name ? [profile.store_name] : []),
                     role: profile.role,
                     actual_role: profile.role || prev.actual_role,
                     role_title: profile.role_title,
@@ -523,6 +525,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 isActualAdmin,
                 isManager,
                 isShiftLeader,
+                accessibleStores,
+                canAccessStore,
                 login,
                 register,
                 loginAsDemoUser,
