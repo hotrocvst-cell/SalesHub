@@ -70,9 +70,14 @@ export default function MainLayout() {
             return 'Trang Chủ';
         }
         for (const group of NAVIGATION_GROUPS) {
+            // 1. Ưu tiên khớp chính xác trước
+            const exact = group.items.find(item => item.path === location.pathname);
+            if (exact) return exact.name;
+
+            // 2. Khớp sub-route hợp lệ với dấu '/'
             const found = group.items.find(item => {
-                if (item.path === '/') return location.pathname === '/';
-                return location.pathname.startsWith(item.path);
+                if (item.path === '/') return false;
+                return location.pathname.startsWith(item.path + '/');
             });
             if (found) return found.name;
         }

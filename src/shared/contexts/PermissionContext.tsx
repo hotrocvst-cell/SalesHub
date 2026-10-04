@@ -81,8 +81,20 @@ export function PermissionProvider({ children }: { children: ReactNode }) {
             return { allowed: true, isEnabled: true, roleAllowed: true, page: permissions.find(p => p.path === '/') };
         }
 
-        // Tìm trang khớp chính xác hoặc bắt đầu bằng path
-        const page = permissions.find(p => p.path === path || (p.path !== '/' && path.startsWith(p.path)));
+        // 1. Ưu tiên TUYỆT ĐỐI tìm trang khớp chính xác path trước
+        let page = permissions.find(p => p.path === path);
+
+        // 2. Nếu không tìm thấy khớp chính xác, chỉ khớp tiền tố nếu là sub-path hợp lệ (phân tách bởi '/')
+        // Ví dụ: '/cap-nhat/abc' sẽ khớp với '/cap-nhat',
+        // nhưng '/cap-nhat-luy-ke-nhan-vien' TUYỆT ĐỐI KHÔNG khớp với '/cap-nhat' vì không có dấu '/' phân tách!
+        if (!page) {
+            page = permissions.find(p => p.path !== '/' && path.startsWith(p.path + '/'));
+        }
+
+        // 3. Hỗ trợ route cha chuyển hướng đến route con trong permissions (ví dụ: '/bc-thang' -> '/bc-thang/tong-quan')
+        if (!page) {
+            page = permissions.find(p => p.path !== '/' && p.path.startsWith(path + '/'));
+        }
 
         // Trang Quản trị hệ thống: ĐẶC BIỆT CHỈ DÀNH CHO ADMIN
         if (path === '/quan-tri-he-thong' || (page && page.path === '/quan-tri-he-thong')) {

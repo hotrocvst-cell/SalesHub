@@ -189,7 +189,7 @@ export default function SidebarNav({ isCollapsed, onToggleCollapse, onItemClick 
                                         <NavLink
                                             key={item.path}
                                             to={item.path}
-                                            end={item.path === '/'}
+                                            end={true}
                                             onClick={onItemClick}
                                             title={isCollapsed ? item.name : undefined}
                                             className={({ isActive }) => `
