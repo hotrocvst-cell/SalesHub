@@ -290,7 +290,7 @@ export default function RegisterPage() {
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div>
                                     <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                                        Mã nhân viên (nếu có):
+                                        Mã nhân viên:
                                     </label>
                                     <div className="relative">
                                         <BadgeHelp className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
@@ -348,8 +348,8 @@ export default function RegisterPage() {
                                         type="button"
                                         onClick={() => setRole('QUAN_LY')}
                                         className={`p-3 rounded-2xl border-2 text-left transition flex flex-col justify-between gap-2 cursor-pointer ${role === 'QUAN_LY'
-                                                ? 'bg-amber-50/90 border-amber-500 shadow-md ring-2 ring-amber-400/30'
-                                                : 'bg-slate-50 border-slate-200 hover:border-amber-300'
+                                            ? 'bg-amber-50/90 border-amber-500 shadow-md ring-2 ring-amber-400/30'
+                                            : 'bg-slate-50 border-slate-200 hover:border-amber-300'
                                             }`}
                                     >
                                         <div className="flex items-center justify-between">
@@ -371,8 +371,8 @@ export default function RegisterPage() {
                                         type="button"
                                         onClick={() => setRole('TRUONG_CA')}
                                         className={`p-3 rounded-2xl border-2 text-left transition flex flex-col justify-between gap-2 cursor-pointer ${role === 'TRUONG_CA'
-                                                ? 'bg-blue-50/90 border-blue-500 shadow-md ring-2 ring-blue-400/30'
-                                                : 'bg-slate-50 border-slate-200 hover:border-blue-300'
+                                            ? 'bg-blue-50/90 border-blue-500 shadow-md ring-2 ring-blue-400/30'
+                                            : 'bg-slate-50 border-slate-200 hover:border-blue-300'
                                             }`}
                                     >
                                         <div className="flex items-center justify-between">
@@ -394,8 +394,8 @@ export default function RegisterPage() {
                                         type="button"
                                         onClick={() => setRole('NHAN_VIEN')}
                                         className={`p-3 rounded-2xl border-2 text-left transition flex flex-col justify-between gap-2 cursor-pointer ${role === 'NHAN_VIEN'
-                                                ? 'bg-emerald-50/90 border-emerald-500 shadow-md ring-2 ring-emerald-400/30'
-                                                : 'bg-slate-50 border-slate-200 hover:border-emerald-300'
+                                            ? 'bg-emerald-50/90 border-emerald-500 shadow-md ring-2 ring-emerald-400/30'
+                                            : 'bg-slate-50 border-slate-200 hover:border-emerald-300'
                                             }`}
                                     >
                                         <div className="flex items-center justify-between">
