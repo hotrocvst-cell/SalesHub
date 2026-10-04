@@ -15,6 +15,17 @@ export interface SystemPagePermission {
 }
 
 export const DEFAULT_PAGE_PERMISSIONS: SystemPagePermission[] = [
+    // TỔNG QUAN
+    {
+        page_key: 'trang_chu',
+        page_name: 'Trang Chủ',
+        path: '/',
+        group_title: 'TỔNG QUAN',
+        description: 'Trang chủ tổng quan hệ thống, lịch tháng âm dương, đồng hồ & thời tiết',
+        is_enabled: true,
+        allowed_roles: ['ADMIN', 'QUAN_LY', 'TRUONG_CA', 'NHAN_VIEN'],
+        order_index: 0
+    },
     // BÁO CÁO KINH DOANH
     {
         page_key: 'bc_ngay',

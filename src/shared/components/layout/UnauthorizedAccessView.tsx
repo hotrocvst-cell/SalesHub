@@ -24,7 +24,7 @@ export default function UnauthorizedAccessView({
     message,
     allowedRoleLabels,
     countdownSeconds = 5,
-    homePath = '/bc-thang/tong-quan',
+    homePath = '/',
     showAdminUnlock = false,
     onOpenRoleModal,
 }: UnauthorizedAccessProps) {

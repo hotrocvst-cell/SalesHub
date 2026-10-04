@@ -55,7 +55,7 @@ export default function ProtectedRoute({ path, children }: Props) {
                 path={path}
                 message={`Phân hệ [${pageName}] hiện đang được Quản trị viên (Admin) tạm dừng hoạt động để nâng cấp và bảo trì hệ thống. Vui lòng quay lại sau!`}
                 countdownSeconds={5}
-                homePath="/bc-thang/tong-quan"
+                homePath="/"
             />
         );
     }
@@ -76,7 +76,7 @@ export default function ProtectedRoute({ path, children }: Props) {
                     path={path}
                     allowedRoleLabels={allowedRoleLabels}
                     countdownSeconds={5}
-                    homePath="/bc-thang/tong-quan"
+                    homePath="/"
                     showAdminUnlock={isActualAdmin}
                     onOpenRoleModal={() => setIsRoleModalOpen(true)}
                 />

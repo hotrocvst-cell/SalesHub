@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Outlet, useLocation, Navigate, useNavigate } from 'react-router-dom';
+import { Outlet, useLocation, Navigate, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import RolePermissionModal from '../../../features/store-management/components/RolePermissionModal';
 import NotificationBell from '../../../features/auth/components/NotificationBell';
@@ -11,7 +11,8 @@ import {
     PanelLeftOpen,
     Menu,
     X,
-    LogOut
+    LogOut,
+    LogIn
 } from 'lucide-react';
 
 export default function MainLayout() {
@@ -29,8 +30,9 @@ export default function MainLayout() {
         );
     }
 
-    // 2. Chặn toàn bộ truy cập nếu chưa đăng nhập
-    if (!isAuthenticated || !currentUser?.email || !currentUser?.id) {
+    // 2. Chặn toàn bộ truy cập nếu chưa đăng nhập (ngoại trừ trang chủ mở cho mọi người)
+    const isPublicHome = location.pathname === '/' || location.pathname === '/trang-chu';
+    if ((!isAuthenticated || !currentUser?.email || !currentUser?.id) && !isPublicHome) {
         return <Navigate to="/dang-nhap" replace />;
     }
 
@@ -64,6 +66,9 @@ export default function MainLayout() {
 
     // Tiêu đề trang động theo URL
     const getPageTitle = () => {
+        if (location.pathname === '/' || location.pathname === '/trang-chu') {
+            return 'Trang Chủ';
+        }
         for (const group of NAVIGATION_GROUPS) {
             const found = group.items.find(item => {
                 if (item.path === '/') return location.pathname === '/';
@@ -107,14 +112,14 @@ export default function MainLayout() {
                     </button>
 
                     {/* Logo Brand */}
-                    <div className="flex items-center gap-2 pl-1 sm:pl-0">
-                        <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-xs font-black">
+                    <Link to="/" className="flex items-center gap-2 pl-1 sm:pl-0 hover:opacity-90 transition group cursor-pointer" title="Trở về Trang Chủ">
+                        <div className="w-8 h-8 rounded-xl bg-blue-600 group-hover:bg-blue-700 flex items-center justify-center text-white shadow-xs font-black transition">
                             <Store className="w-4 h-4" />
                         </div>
                         <span className="font-extrabold text-slate-900 tracking-tight text-base sm:text-lg">
                             SALES<span className="text-blue-600">HUB</span>
                         </span>
-                    </div>
+                    </Link>
 
                     {/* Breadcrumb Tên phân hệ */}
                     <div className="hidden sm:flex items-center gap-2 pl-3 border-l border-slate-200 text-xs font-bold text-slate-500">
@@ -125,107 +130,127 @@ export default function MainLayout() {
 
                 {/* Phía bên phải: Badge Siêu thị, Badge Hệ thống, Chuông Thông Báo & Badge Người Dùng */}
                 <div className="flex items-center gap-2">
-                    {/* Badge Siêu thị hiện tại */}
-                    {currentUser.store_name && (
-                        <div className="hidden xl:inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold max-w-xs truncate" title={`Siêu thị hiện tại: ${currentUser.store_name}`}>
-                            <Store className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                            <span className="truncate">{currentUser.store_name}</span>
-                        </div>
-                    )}
-
-                    {/* Badge Hệ thống */}
-                    <div className="hidden md:inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-xs font-bold">
-                        <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse"></span>
-                        <span>Trực tuyến</span>
-                    </div>
-
-                    {/* Chuông Thông Báo & Xét Duyệt */}
-                    <NotificationBell />
-
-                    {/* Badge Vai trò Người dùng & Nút Phân Quyền (Chỉ dành riêng cho Admin) */}
-                    {isActualAdmin ? (
-                        <div className="flex items-center gap-1.5">
-                            {/* Nút thoát chế độ mô phỏng nếu Admin đang xem vai trò khác */}
-                            {currentUser.role !== 'ADMIN' && (
-                                <button
-                                    type="button"
-                                    onClick={() => switchRole('ADMIN')}
-                                    className="px-2.5 py-1 rounded-full bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shadow-xs transition cursor-pointer"
-                                    title="Đang mô phỏng vai trò khác. Bấm để trở về vai trò Admin tối cao."
-                                >
-                                    <span>Về Admin</span>
-                                    <span>🛡️</span>
-                                </button>
+                    {isAuthenticated && currentUser?.email && currentUser?.id ? (
+                        <>
+                            {/* Badge Siêu thị hiện tại */}
+                            {currentUser.store_name && (
+                                <div className="hidden xl:inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold max-w-xs truncate" title={`Siêu thị hiện tại: ${currentUser.store_name}`}>
+                                    <Store className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                                    <span className="truncate">{currentUser.store_name}</span>
+                                </div>
                             )}
 
+                            {/* Badge Hệ thống */}
+                            <div className="hidden md:inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-xs font-bold">
+                                <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse"></span>
+                                <span>Trực tuyến</span>
+                            </div>
+
+                            {/* Chuông Thông Báo & Xét Duyệt */}
+                            <NotificationBell />
+
+                            {/* Badge Vai trò Người dùng & Nút Phân Quyền (Chỉ dành riêng cho Admin) */}
+                            {isActualAdmin ? (
+                                <div className="flex items-center gap-1.5">
+                                    {/* Nút thoát chế độ mô phỏng nếu Admin đang xem vai trò khác */}
+                                    {currentUser.role !== 'ADMIN' && (
+                                        <button
+                                            type="button"
+                                            onClick={() => switchRole('ADMIN')}
+                                            className="px-2.5 py-1 rounded-full bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shadow-xs transition cursor-pointer"
+                                            title="Đang mô phỏng vai trò khác. Bấm để trở về vai trò Admin tối cao."
+                                        >
+                                            <span>Về Admin</span>
+                                            <span>🛡️</span>
+                                        </button>
+                                    )}
+
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsRoleModalOpen(true)}
+                                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-bold transition shadow-2xs cursor-pointer ${
+                                            currentUser.role === 'ADMIN'
+                                                ? 'bg-rose-50 border-rose-300 text-rose-900 hover:bg-rose-100'
+                                                : currentUser.role === 'QUAN_LY'
+                                                ? 'bg-amber-50 border-amber-300 text-amber-900 hover:bg-amber-100'
+                                                : currentUser.role === 'TRUONG_CA'
+                                                ? 'bg-blue-50 border-blue-300 text-blue-900 hover:bg-blue-100'
+                                                : 'bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200'
+                                        }`}
+                                        title="Admin: Bấm để chuyển đổi vai trò kiểm thử hoặc mở khóa quyền"
+                                    >
+                                        <span className="text-sm">
+                                            {currentUser.role === 'ADMIN' ? '🛡️' : currentUser.role === 'QUAN_LY' ? '👑' : currentUser.role === 'TRUONG_CA' ? '⭐' : '👤'}
+                                        </span>
+                                        <div className="flex flex-col text-left">
+                                            <span className="text-[10px] leading-tight opacity-75 font-semibold hidden sm:inline">
+                                                {currentUser.role_title}
+                                            </span>
+                                            <span className="text-xs font-black truncate max-w-[120px]">
+                                                {currentUser.full_name}
+                                            </span>
+                                        </div>
+                                    </button>
+                                </div>
+                            ) : (
+                                /* Người dùng thông thường: Chỉ hiển thị tĩnh, KHÔNG thể click đổi vai trò */
+                                <div
+                                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-bold shadow-2xs select-none ${
+                                        currentUser.role === 'QUAN_LY'
+                                            ? 'bg-amber-50 border-amber-300 text-amber-900'
+                                            : currentUser.role === 'TRUONG_CA'
+                                            ? 'bg-blue-50 border-blue-300 text-blue-900'
+                                            : 'bg-slate-100 border-slate-300 text-slate-700'
+                                    }`}
+                                    title={`${currentUser.role_title}: ${currentUser.full_name}`}
+                                >
+                                    <span className="text-sm">
+                                        {currentUser.role === 'QUAN_LY' ? '👑' : currentUser.role === 'TRUONG_CA' ? '⭐' : '👤'}
+                                    </span>
+                                    <div className="flex flex-col text-left">
+                                        <span className="text-[10px] leading-tight opacity-75 font-semibold hidden sm:inline">
+                                            {currentUser.role_title}
+                                        </span>
+                                        <span className="text-xs font-black truncate max-w-[120px]">
+                                            {currentUser.full_name}
+                                        </span>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Nút Đăng xuất */}
                             <button
                                 type="button"
-                                onClick={() => setIsRoleModalOpen(true)}
-                                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-bold transition shadow-2xs cursor-pointer ${
-                                    currentUser.role === 'ADMIN'
-                                        ? 'bg-rose-50 border-rose-300 text-rose-900 hover:bg-rose-100'
-                                        : currentUser.role === 'QUAN_LY'
-                                        ? 'bg-amber-50 border-amber-300 text-amber-900 hover:bg-amber-100'
-                                        : currentUser.role === 'TRUONG_CA'
-                                        ? 'bg-blue-50 border-blue-300 text-blue-900 hover:bg-blue-100'
-                                        : 'bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200'
-                                }`}
-                                title="Admin: Bấm để chuyển đổi vai trò kiểm thử hoặc mở khóa quyền"
+                                onClick={() => {
+                                    if (window.confirm('Bạn có chắc chắn muốn đăng xuất khỏi hệ thống?')) {
+                                        logout();
+                                        navigate('/dang-nhap');
+                                    }
+                                }}
+                                className="p-2 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition border border-transparent hover:border-rose-200 cursor-pointer"
+                                title="Đăng xuất khỏi hệ thống"
+                                aria-label="Đăng xuất"
                             >
-                                <span className="text-sm">
-                                    {currentUser.role === 'ADMIN' ? '🛡️' : currentUser.role === 'QUAN_LY' ? '👑' : currentUser.role === 'TRUONG_CA' ? '⭐' : '👤'}
-                                </span>
-                                <div className="flex flex-col text-left">
-                                    <span className="text-[10px] leading-tight opacity-75 font-semibold hidden sm:inline">
-                                        {currentUser.role_title}
-                                    </span>
-                                    <span className="text-xs font-black truncate max-w-[120px]">
-                                        {currentUser.full_name}
-                                    </span>
-                                </div>
+                                <LogOut className="w-4 h-4" />
                             </button>
-                        </div>
+                        </>
                     ) : (
-                        /* Người dùng thông thường: Chỉ hiển thị tĩnh, KHÔNG thể click đổi vai trò */
-                        <div
-                            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-bold shadow-2xs select-none ${
-                                currentUser.role === 'QUAN_LY'
-                                    ? 'bg-amber-50 border-amber-300 text-amber-900'
-                                    : currentUser.role === 'TRUONG_CA'
-                                    ? 'bg-blue-50 border-blue-300 text-blue-900'
-                                    : 'bg-slate-100 border-slate-300 text-slate-700'
-                            }`}
-                            title={`${currentUser.role_title}: ${currentUser.full_name}`}
-                        >
-                            <span className="text-sm">
-                                {currentUser.role === 'QUAN_LY' ? '👑' : currentUser.role === 'TRUONG_CA' ? '⭐' : '👤'}
-                            </span>
-                            <div className="flex flex-col text-left">
-                                <span className="text-[10px] leading-tight opacity-75 font-semibold hidden sm:inline">
-                                    {currentUser.role_title}
-                                </span>
-                                <span className="text-xs font-black truncate max-w-[120px]">
-                                    {currentUser.full_name}
-                                </span>
-                            </div>
+                        <div className="flex items-center gap-2">
+                            <Link
+                                to="/dang-nhap"
+                                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition shadow-xs cursor-pointer"
+                            >
+                                <LogIn className="w-3.5 h-3.5" />
+                                <span>Đăng nhập</span>
+                            </Link>
+                            <Link
+                                to="/dang-ky"
+                                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition cursor-pointer"
+                            >
+                                <span>Đăng ký</span>
+                            </Link>
                         </div>
                     )}
-
-                    {/* Nút Đăng xuất */}
-                    <button
-                        type="button"
-                        onClick={() => {
-                            if (window.confirm('Bạn có chắc chắn muốn đăng xuất khỏi hệ thống?')) {
-                                logout();
-                                navigate('/dang-nhap');
-                            }
-                        }}
-                        className="p-2 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition border border-transparent hover:border-rose-200 cursor-pointer"
-                        title="Đăng xuất khỏi hệ thống"
-                        aria-label="Đăng xuất"
-                    >
-                        <LogOut className="w-4 h-4" />
-                    </button>
                 </div>
             </header>
 

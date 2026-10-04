@@ -7,6 +7,7 @@ import MainLayout from './shared/components/layout/MainLayout';
 import ProtectedRoute from './shared/components/layout/ProtectedRoute';
 import UnauthorizedAccessView from './shared/components/layout/UnauthorizedAccessView';
 
+const HomePage = lazy(() => import('./features/home/HomePage'));
 const MonthlyReportPage = lazy(() => import('./features/monthly-report/MonthlyReportPage'));
 const DailyReportPage = lazy(() => import('./features/daily-report/DailyReportPage'));
 const DailyEmployeeRevenueReportPage = lazy(() => import('./features/daily-report/DailyEmployeeRevenueReportPage'));
@@ -50,8 +51,9 @@ export default function App() {
                             <Route path="/cho-xet-duyet" element={<PendingApprovalPage />} />
 
                             <Route element={<MainLayout />}>
-                                {/* Chuyển hướng mặc định */}
-                                <Route path="/" element={<Navigate to="/bc-thang/tong-quan" replace />} />
+                                {/* Trang Chủ Hệ Thống (Khả dụng với tất cả user) */}
+                                <Route path="/" element={<HomePage />} />
+                                <Route path="/trang-chu" element={<HomePage />} />
 
                                 {/* Phân hệ BC Tháng */}
                                 <Route path="/bc-thang" element={<Navigate to="/bc-thang/tong-quan" replace />} />

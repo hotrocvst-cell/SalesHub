@@ -2,6 +2,7 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { usePermissions } from '../../contexts/PermissionContext';
 import {
+    Home,
     Zap,
     CalendarDays,
     TrendingUp,
@@ -34,6 +35,17 @@ export interface NavGroup {
 }
 
 export const NAVIGATION_GROUPS: NavGroup[] = [
+    {
+        groupTitle: 'TỔNG QUAN',
+        items: [
+            {
+                name: 'Trang Chủ',
+                path: '/',
+                icon: Home,
+                badge: '✨ Home'
+            }
+        ]
+    },
     {
         groupTitle: 'BÁO CÁO KINH DOANH',
         items: [

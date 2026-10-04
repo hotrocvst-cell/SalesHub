@@ -76,6 +76,11 @@ export function PermissionProvider({ children }: { children: ReactNode }) {
     }, []);
 
     const canAccessPage = (path: string): PageAccessResult => {
+        // Trang chủ luôn mở khả dụng cho tất cả user
+        if (path === '/' || path === '/trang-chu') {
+            return { allowed: true, isEnabled: true, roleAllowed: true, page: permissions.find(p => p.path === '/') };
+        }
+
         // Tìm trang khớp chính xác hoặc bắt đầu bằng path
         const page = permissions.find(p => p.path === path || (p.path !== '/' && path.startsWith(p.path)));
 
