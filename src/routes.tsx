@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import MainLayout from './shared/components/layout/MainLayout';
+import UnauthorizedAccessView from './shared/components/layout/UnauthorizedAccessView';
 
 const MonthlyReportPage = lazy(() => import('./features/monthly-report/MonthlyReportPage'));
 const DailyReportPage = lazy(() => import('./features/daily-report/DailyReportPage'));
@@ -74,7 +75,15 @@ export function AppRoutes() {
                     <Route path="/quan-tri-he-thong" element={<SystemAdminPage />} />
 
                     {/* Tuyến đường dự phòng */}
-                    <Route path="*" element={<Navigate to="/bc-thang/tong-quan" replace />} />
+                    <Route path="*" element={
+                        <UnauthorizedAccessView
+                            title="Đường Dẫn Không Tồn Tại Hoặc Chưa Được Phân Quyền"
+                            badgeText="404 / 403"
+                            message="Đường dẫn bạn vừa truy cập không tồn tại trên hệ thống hoặc tài khoản của bạn chưa được cấp phép truy cập vào khu vực này."
+                            countdownSeconds={5}
+                            homePath="/bc-thang/tong-quan"
+                        />
+                    } />
                 </Route>
             </Routes>
         </Suspense>
