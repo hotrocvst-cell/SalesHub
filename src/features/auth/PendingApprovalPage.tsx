@@ -69,7 +69,7 @@ export default function PendingApprovalPage() {
         }
     }, [currentUser.status, navigate]);
 
-    const isApproved = currentUser.status === 'ACTIVE';
+    const isApproved = (currentUser.status as string) === 'ACTIVE';
     const isRejected = currentUser.status === 'REJECTED';
     const approverText = (currentUser.role === 'NHAN_VIEN' && !requestDetails?.is_new_store)
         ? `Quản lý Siêu thị (${currentUser.store_name || 'Đã đăng ký'})`

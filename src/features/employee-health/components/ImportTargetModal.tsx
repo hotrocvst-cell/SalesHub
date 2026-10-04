@@ -269,7 +269,9 @@ export default function ImportTargetModal({
                                                         {matchedEmp ? (
                                                             <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
                                                         ) : (
-                                                            <AlertCircle className="w-3 h-3 text-amber-500 shrink-0" title="Mã NV chưa có trong danh mục" />
+                                                            <span title="Mã NV chưa có trong danh mục">
+                                                                <AlertCircle className="w-3 h-3 text-amber-500 shrink-0" />
+                                                            </span>
                                                         )}
                                                     </td>
                                                     <td className="p-2 font-semibold text-slate-800">
