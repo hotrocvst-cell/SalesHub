@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import {
     Calendar as CalendarIcon,
     ChevronLeft,
@@ -9,42 +9,82 @@ import {
     CheckCircle2,
     CalendarDays,
     Clock,
-    Tag,
-    Bookmark,
-    Check
+    Target,
+    Trophy,
+    Flame,
+    Store,
+    Bookmark
 } from 'lucide-react';
 import { getLunarDate } from '../utils/lunarCalendar';
-
-interface DayNote {
-    dateKey: string; // YYYY-MM-DD
-    text: string;
-}
-
-const LOCAL_NOTES_KEY = 'saleshub_homepage_calendar_notes_v1';
+import { useAuth } from '../../../shared/contexts/AuthContext';
+import { fetchStores, type StoreItem } from '../../../core/lib/storage';
+import {
+    type DailyWorkTarget,
+    ALL_ASSIGNED_STORE_KEY,
+    getLocalDailyTargets,
+    syncDailyTargets,
+    getMonthTargetStatsMap
+} from '../services/dailyNotesService';
+import DailyNotesTargetSection from './DailyNotesTargetSection';
 
 export default function CalendarWidget() {
+    const { currentUser, isAuthenticated, isAdmin } = useAuth();
     const today = useMemo(() => new Date(), []);
     const [viewDate, setViewDate] = useState<Date>(new Date(today.getFullYear(), today.getMonth(), 1));
     const [selectedDate, setSelectedDate] = useState<Date>(today);
-    const [notes, setNotes] = useState<Record<string, string>>(() => {
-        try {
-            const raw = localStorage.getItem(LOCAL_NOTES_KEY);
-            return raw ? JSON.parse(raw) : {};
-        } catch {
-            return {};
+
+    // 1. Quản lý danh sách Siêu thị
+    const [stores, setStores] = useState<StoreItem[]>([]);
+    useEffect(() => {
+        let isMounted = true;
+        fetchStores().then(res => {
+            if (isMounted && res.success && res.data) {
+                setStores(res.data);
+            }
+        });
+        return () => { isMounted = false; };
+    }, []);
+
+    // Danh sách siêu thị người dùng được phân quyền phụ trách
+    const userAccessibleStores = useMemo<string[]>(() => {
+        if (isAdmin) {
+            return stores.map(s => s.name);
         }
+        if (currentUser.accessible_stores && currentUser.accessible_stores.length > 0) {
+            return currentUser.accessible_stores;
+        }
+        return currentUser.store_name ? [currentUser.store_name] : [];
+    }, [isAdmin, currentUser, stores]);
+
+    // 2. Siêu thị đang được chọn lọc dữ liệu
+    const [selectedStore, setSelectedStore] = useState<string>(() => {
+        if (currentUser.role === 'NHAN_VIEN' && currentUser.store_name) {
+            return currentUser.store_name;
+        }
+        return ALL_ASSIGNED_STORE_KEY;
     });
-    const [currentNoteText, setCurrentNoteText] = useState<string>('');
-    const [isSavedNoteToast, setIsSavedNoteToast] = useState<boolean>(false);
+
+    // Đồng bộ lại selectedStore nếu tài khoản là Nhân Viên
+    useEffect(() => {
+        if (currentUser.role === 'NHAN_VIEN' && currentUser.store_name) {
+            setSelectedStore(currentUser.store_name);
+        }
+    }, [currentUser]);
+
+    // 3. Dữ liệu mục tiêu ngày (Targets)
+    const [targets, setTargets] = useState<DailyWorkTarget[]>(() => getLocalDailyTargets());
+
+    const refreshTargets = useCallback(async () => {
+        const synced = await syncDailyTargets();
+        setTargets(synced);
+    }, []);
+
+    useEffect(() => {
+        refreshTargets();
+    }, [refreshTargets]);
 
     const year = viewDate.getFullYear();
     const month = viewDate.getMonth(); // 0 - 11
-
-    // Khi chọn ngày mới, nạp note tương ứng
-    useEffect(() => {
-        const key = formatDateKey(selectedDate);
-        setCurrentNoteText(notes[key] || '');
-    }, [selectedDate, notes]);
 
     function formatDateKey(d: Date): string {
         return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -65,25 +105,6 @@ export default function CalendarWidget() {
         const now = new Date();
         setViewDate(new Date(now.getFullYear(), now.getMonth(), 1));
         setSelectedDate(now);
-    };
-
-    // Lưu ghi chú cho ngày đang chọn
-    const handleSaveNote = () => {
-        const key = formatDateKey(selectedDate);
-        const newNotes = { ...notes };
-        if (currentNoteText.trim()) {
-            newNotes[key] = currentNoteText.trim();
-        } else {
-            delete newNotes[key];
-        }
-        setNotes(newNotes);
-        try {
-            localStorage.setItem(LOCAL_NOTES_KEY, JSON.stringify(newNotes));
-        } catch (e) {
-            console.warn('Lỗi lưu ghi chú lịch:', e);
-        }
-        setIsSavedNoteToast(true);
-        setTimeout(() => setIsSavedNoteToast(false), 2000);
     };
 
     // Tính toán các ngày trong bảng lịch
@@ -143,24 +164,35 @@ export default function CalendarWidget() {
         return days;
     }, [year, month]);
 
+    // Bản đồ thống kê số lượng mục tiêu từng ngày theo Nhóm siêu thị đang chọn
+    const monthTargetStatsMap = useMemo(() => {
+        return getMonthTargetStatsMap(
+            targets,
+            year,
+            month,
+            selectedStore,
+            userAccessibleStores,
+            currentUser.role || 'NHAN_VIEN',
+            currentUser.store_name
+        );
+    }, [targets, year, month, selectedStore, userAccessibleStores, currentUser]);
+
+    // Thống kê tổng hợp toàn bộ tháng theo Nhóm siêu thị đang chọn
+    const monthSummary = useMemo(() => {
+        let total = 0;
+        let completed = 0;
+        for (const stats of Object.values(monthTargetStatsMap)) {
+            total += stats.total;
+            completed += stats.completed;
+        }
+        const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+        return { total, completed, pct };
+    }, [monthTargetStatsMap]);
+
     // Thông tin ngày đang chọn
     const selectedLunar = useMemo(() => {
         return getLunarDate(selectedDate.getDate(), selectedDate.getMonth() + 1, selectedDate.getFullYear());
     }, [selectedDate]);
-
-    const isTodaySelected = useMemo(() => {
-        return (
-            selectedDate.getDate() === today.getDate() &&
-            selectedDate.getMonth() === today.getMonth() &&
-            selectedDate.getFullYear() === today.getFullYear()
-        );
-    }, [selectedDate, today]);
-
-    const diffDaysFromToday = useMemo(() => {
-        const t1 = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
-        const t2 = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate()).getTime();
-        return Math.round((t2 - t1) / (1000 * 60 * 60 * 24));
-    }, [selectedDate, today]);
 
     const WEEKDAY_NAMES = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
 
@@ -176,22 +208,12 @@ export default function CalendarWidget() {
 
     const lastDayInMonth = new Date(year, month + 1, 0).getDate();
 
-    // Số lượng ghi chú trong tháng hiện tại
-    const notesCountInMonth = useMemo(() => {
-        let count = 0;
-        const prefix = `${year}-${String(month + 1).padStart(2, '0')}`;
-        for (const k of Object.keys(notes)) {
-            if (k.startsWith(prefix) && notes[k]?.trim()) count++;
-        }
-        return count;
-    }, [notes, year, month]);
-
     return (
         <div className="bg-white rounded-3xl p-5 sm:p-7 border border-slate-200/90 shadow-sm space-y-6">
             {/* Header: Tiêu đề, chọn tháng/năm, điều hướng */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
                 <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-black shadow-md shadow-blue-500/20">
+                    <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-black shadow-md shadow-blue-500/20 shrink-0">
                         <CalendarIcon className="w-6 h-6" />
                     </div>
                     <div>
@@ -204,7 +226,7 @@ export default function CalendarWidget() {
                             </span>
                         </div>
                         <p className="text-xs text-slate-500">
-                            Theo dõi lịch dương & âm lịch song hành, mốc kỳ chốt doanh số và ghi chú ngày làm việc
+                            Theo dõi mục tiêu kinh doanh theo nhóm siêu thị, mốc chốt số và ghi chú công việc ngày
                         </p>
                     </div>
                 </div>
@@ -288,22 +310,24 @@ export default function CalendarWidget() {
                 </div>
 
                 <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100 flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 font-bold">
-                        <Clock className="w-4 h-4" />
+                    <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 font-bold">
+                        <Target className="w-4 h-4" />
                     </div>
                     <div>
-                        <div className="text-[10px] text-slate-400 font-semibold">Năm Âm Lịch</div>
-                        <div className="font-black text-emerald-800 text-xs truncate max-w-[120px]">{selectedLunar.canChiYear}</div>
+                        <div className="text-[10px] text-slate-400 font-semibold">Mục tiêu tháng này</div>
+                        <div className="font-mono font-black text-amber-800 text-sm">{monthSummary.total} mục tiêu</div>
                     </div>
                 </div>
 
                 <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100 flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 font-bold">
-                        <Bookmark className="w-4 h-4" />
+                    <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 font-bold">
+                        <CheckCircle2 className="w-4 h-4" />
                     </div>
                     <div>
-                        <div className="text-[10px] text-slate-400 font-semibold">Ghi chú đã tạo</div>
-                        <div className="font-mono font-black text-amber-800 text-sm">{notesCountInMonth} ngày</div>
+                        <div className="text-[10px] text-slate-400 font-semibold">Tiến độ hoàn thành</div>
+                        <div className="font-mono font-black text-emerald-800 text-sm">
+                            {monthSummary.completed}/{monthSummary.total} ({monthSummary.pct}%)
+                        </div>
                     </div>
                 </div>
             </div>
@@ -348,7 +372,10 @@ export default function CalendarWidget() {
                         const dayOfWeek = item.date.getDay(); // 0 is Sunday, 6 is Saturday
                         const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
                         const dateKey = formatDateKey(item.date);
-                        const hasNote = Boolean(notes[dateKey]?.trim());
+                        const dayStats = monthTargetStatsMap[dateKey];
+                        const hasTargets = dayStats && dayStats.total > 0;
+                        const isAllDone = hasTargets && dayStats.completed === dayStats.total;
+                        const hasUrgent = hasTargets && dayStats.hasUrgent && !isAllDone;
                         const specialBadge = getSpecialDayBadge(item.dayNumber, item.isCurrentMonth, lastDayInMonth);
 
                         return (
@@ -384,9 +411,22 @@ export default function CalendarWidget() {
                                     </span>
 
                                     <div className="flex items-center gap-1">
-                                        {hasNote && (
-                                            <span className="w-2 h-2 rounded-full bg-blue-600" title="Có ghi chú công việc" />
+                                        {/* Huy hiệu mục tiêu công việc */}
+                                        {hasTargets && (
+                                            <span
+                                                className={`px-1.5 py-0.2 rounded-md text-[9px] font-black font-mono flex items-center gap-0.5 shadow-2xs ${
+                                                    isAllDone
+                                                        ? 'bg-emerald-500 text-white'
+                                                        : hasUrgent
+                                                        ? 'bg-rose-500 text-white animate-pulse'
+                                                        : 'bg-blue-600 text-white'
+                                                }`}
+                                                title={`Ngày có ${dayStats.total} mục tiêu (${dayStats.completed} đã xong)`}
+                                            >
+                                                <span>{dayStats.completed}/{dayStats.total}</span>
+                                            </span>
                                         )}
+
                                         {isToday && (
                                             <span className="px-1.5 py-0.2 rounded-md bg-amber-500 text-white text-[9px] font-black uppercase tracking-wider shadow-2xs">
                                                 Nay
@@ -431,76 +471,19 @@ export default function CalendarWidget() {
                 </div>
             </div>
 
-            {/* Chi tiết ngày đang được chọn & Ghi chú mục tiêu ngày */}
-            <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-blue-50/70 via-indigo-50/40 to-slate-50 border border-blue-200/80 space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-blue-100">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-2xl bg-blue-600 text-white flex items-center justify-center font-black shadow-xs">
-                            <span className="text-base font-mono">{selectedDate.getDate()}</span>
-                        </div>
-                        <div>
-                            <div className="font-black text-slate-900 text-sm sm:text-base flex items-center gap-2">
-                                <span>{['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'][selectedDate.getDay()]}, {selectedDate.toLocaleDateString('vi-VN')}</span>
-                                {isTodaySelected && (
-                                    <span className="px-2 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-black uppercase">
-                                        Hôm nay
-                                    </span>
-                                )}
-                            </div>
-                            <div className="text-xs text-slate-600 mt-0.5 flex flex-wrap items-center gap-2">
-                                <span>Âm lịch: <b>Ngày {selectedLunar.day} tháng {selectedLunar.month}{selectedLunar.isLeap ? ' (Nhuận)' : ''}</b> ({selectedLunar.canChiDay})</span>
-                                <span>•</span>
-                                <span>Năm {selectedLunar.canChiYear}</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="text-xs font-semibold text-slate-500 self-start sm:self-center">
-                        {diffDaysFromToday === 0 ? (
-                            <span className="text-amber-700 font-bold">🎯 Đang là ngày hiện tại</span>
-                        ) : diffDaysFromToday > 0 ? (
-                            <span>Còn <b className="text-blue-700 font-mono text-sm">{diffDaysFromToday}</b> ngày nữa</span>
-                        ) : (
-                            <span>Đã qua <b className="text-slate-700 font-mono text-sm">{Math.abs(diffDaysFromToday)}</b> ngày trước</span>
-                        )}
-                    </div>
-                </div>
-
-                {/* Ô nhập ghi chú cá nhân / mục tiêu cho ngày này */}
-                <div className="space-y-2">
-                    <div className="flex items-center justify-between text-xs">
-                        <span className="font-bold text-slate-700 flex items-center gap-1.5">
-                            <Tag className="w-3.5 h-3.5 text-blue-600" />
-                            <span>Ghi chú công việc / Mục tiêu ngày {selectedDate.getDate()}/{selectedDate.getMonth() + 1}:</span>
-                        </span>
-                        {isSavedNoteToast && (
-                            <span className="text-emerald-700 font-bold flex items-center gap-1 animate-in fade-in">
-                                <Check className="w-3.5 h-3.5" />
-                                <span>Đã lưu ghi chú!</span>
-                            </span>
-                        )}
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                        <input
-                            type="text"
-                            value={currentNoteText}
-                            onChange={(e) => setCurrentNoteText(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && handleSaveNote()}
-                            placeholder="Ví dụ: Họp giao ban đầu ca; Đẩy mạnh thi đua iPhone; Chốt chỉ tiêu sim thẻ..."
-                            className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-xs text-slate-800 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 shadow-2xs"
-                        />
-                        <button
-                            type="button"
-                            onClick={handleSaveNote}
-                            className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition shadow-xs flex items-center gap-1.5 cursor-pointer shrink-0"
-                        >
-                            <Bookmark className="w-3.5 h-3.5" />
-                            <span>Lưu</span>
-                        </button>
-                    </div>
-                </div>
-            </div>
+            {/* Chi tiết ngày đang được chọn & Ghi chú mục tiêu công việc ngày */}
+            <DailyNotesTargetSection
+                selectedDate={selectedDate}
+                selectedLunar={selectedLunar}
+                selectedStore={selectedStore}
+                setSelectedStore={setSelectedStore}
+                availableStores={stores}
+                userAccessibleStores={userAccessibleStores}
+                currentUser={currentUser}
+                isAuthenticated={isAuthenticated}
+                targets={targets}
+                onTargetsChanged={refreshTargets}
+            />
         </div>
     );
 }
