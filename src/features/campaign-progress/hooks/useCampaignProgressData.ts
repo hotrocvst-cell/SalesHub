@@ -16,7 +16,7 @@ import {
 } from '../../employee-cumulative/utils/sessionStorage';
 import { getStoreOperatingConfig, getShortenedEmployeeName } from '../../employee-performance/utils/performanceConfig';
 import { resolveCanonicalCampaign, isEmployeeInStore, normalizeCampaignToken } from '../../campaign-summary/utils/campaignSummaryStorage';
-import { formatDate, getYesterdayDateString } from '../../../core/lib/formatters';
+import { formatDate, getYesterdayDateString, isStoreMatch } from '../../../core/lib/formatters';
 import type {
     CampaignProgressItem,
     EmployeeCampaignProgressDetail,
