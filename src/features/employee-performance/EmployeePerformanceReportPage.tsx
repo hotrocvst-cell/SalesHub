@@ -18,6 +18,7 @@ import {
     getTopBotConfig,
     applyTopBotEvaluation,
     getShortenedEmployeeName,
+    syncPerformanceConfigsFromCloud,
     type TopBotConfig
 } from './utils/performanceConfig';
 import {
@@ -82,21 +83,24 @@ export default function EmployeePerformanceReportPage() {
         setTimeout(() => setToastMessage(''), 3500);
     };
 
-    // Cấu hình hoạt động shop & TOP/BOT
+    // Cấu hình hoạt động shop & TOP/BOT theo đích danh siêu thị
     const [operatingConfig, setOperatingConfig] = useState(() =>
         getStoreOperatingConfig(selectedStore === 'all' ? 'ALL' : selectedStore, selectedMonth, selectedYear)
     );
-    const [topBotConfig, setTopBotConfig] = useState<TopBotConfig>(() => getTopBotConfig());
+    const [topBotConfig, setTopBotConfig] = useState<TopBotConfig>(() =>
+        getTopBotConfig(selectedStore === 'all' ? 'ALL' : selectedStore)
+    );
 
     // Cập nhật cấu hình khi đổi store/tháng/năm
     const refreshConfigs = () => {
+        const targetStore = selectedStore === 'all' ? 'ALL' : selectedStore;
         const op = getStoreOperatingConfig(
-            selectedStore === 'all' ? 'ALL' : selectedStore,
+            targetStore,
             selectedMonth,
             selectedYear
         );
         setOperatingConfig(op);
-        setTopBotConfig(getTopBotConfig());
+        setTopBotConfig(getTopBotConfig(targetStore));
     };
 
     useEffect(() => {
@@ -106,6 +110,12 @@ export default function EmployeePerformanceReportPage() {
     // 1. TẢI DỮ LIỆU CỐT LÕI
     const loadAllData = async () => {
         setLoading(true);
+
+        // Tự động đồng bộ cấu hình hoạt động & TOP/BOT từ Cloud Supabase nếu có
+        syncPerformanceConfigsFromCloud()
+            .then(() => refreshConfigs())
+            .catch(() => { });
+
         const [storesRes, empsRes, targetsRes] = await Promise.all([
             fetchStores(),
             fetchEmployees(selectedStore === 'all' ? undefined : selectedStore),
@@ -265,9 +275,43 @@ export default function EmployeePerformanceReportPage() {
             };
         });
 
-        // Áp dụng đánh giá TOP / BOT & gán thứ hạng Rank chuẩn xác
-        return applyTopBotEvaluation(rawList, topBotConfig);
-    }, [employees, revenueDataMap, revenueTargets, workHoursMap, operatingConfig, topBotConfig]);
+        // Áp dụng đánh giá TOP / BOT & gán thứ hạng Rank chuẩn xác theo đích danh siêu thị
+        if (selectedStore !== 'all') {
+            const targetCfg = getTopBotConfig(selectedStore);
+            return applyTopBotEvaluation(rawList, targetCfg);
+        } else {
+            // Khi xem Toàn bộ cụm: phân loại TOP/BOT theo cấu hình đích danh của từng siêu thị
+            const storeGroups: Record<string, typeof rawList> = {};
+            rawList.forEach(item => {
+                const sName = item.store_name || 'Khác';
+                if (!storeGroups[sName]) storeGroups[sName] = [];
+                storeGroups[sName].push(item);
+            });
+
+            const evaluatedList: EmployeePerformanceRow[] = [];
+            Object.entries(storeGroups).forEach(([sName, items]) => {
+                const storeCfg = getTopBotConfig(sName);
+                const evaluatedItems = applyTopBotEvaluation(items, storeCfg);
+                evaluatedList.push(...evaluatedItems);
+            });
+
+            return evaluatedList.sort((a, b) => {
+                if (topBotConfig.rankBy === 'FORECAST_COMPLETION_RATE') {
+                    return b.forecast_completion_rate - a.forecast_completion_rate;
+                }
+                if (topBotConfig.rankBy === 'REVENUE_ACTUAL') {
+                    return b.revenue_actual - a.revenue_actual;
+                }
+                if (topBotConfig.rankBy === 'COMPLETION_RATE') {
+                    return b.completion_rate - a.completion_rate;
+                }
+                if (topBotConfig.rankBy === 'REVENUE_QD') {
+                    return b.revenue_qd - a.revenue_qd;
+                }
+                return b.forecast_completion_rate - a.forecast_completion_rate;
+            });
+        }
+    }, [employees, revenueDataMap, revenueTargets, workHoursMap, operatingConfig, topBotConfig, selectedStore]);
 
     // 3. TÍNH TỔNG KẾT BÁO CÁO (CHỈ TẬP TRUNG VINH DANH CHỈ SỐ CÁ NHÂN)
     const summary = useMemo<StorePerformanceSummary>(() => {
@@ -580,36 +624,10 @@ export default function EmployeePerformanceReportPage() {
                             Đơn vị: <strong style="color: #f59e0b;">${storeLabel}</strong> • Tháng ${selectedMonth}/${selectedYear} • Xuất lúc: ${currentTimeStr}
                         </div>
                     </div>
-                    <div style="text-align: right;">
-                        <span style="display: inline-block; padding: 6px 14px; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.4); border-radius: 9999px; font-size: 12px; font-weight: 800; color: #fbbf24; font-family: 'UTM Avo', sans-serif;">
-                            ${resolution === '8K' ? '⚡ 8K ULTRA-HD (7680px)' : '✨ 4K ULTRA-HD'}
-                        </span>
-                        <div style="font-size: 11px; color: #64748b; margin-top: 4px; font-family: 'UTM Avo', sans-serif;">
-                            SalesHub Analytics System
-                        </div>
-                    </div>
+
                 `;
 
                 clonedReport.insertBefore(banner, clonedReport.firstChild);
-
-                // Thêm Footer Watermark
-                const footer = clonedDoc.createElement('div');
-                footer.style.marginTop = '18px';
-                footer.style.padding = '14px 18px';
-                footer.style.display = 'flex';
-                footer.style.justifyContent = 'space-between';
-                footer.style.alignItems = 'center';
-                footer.style.fontSize = '12px';
-                footer.style.color = '#94a3b8';
-                footer.style.borderTop = '1px solid #e2e8f0';
-                footer.style.fontFamily = "'UTM Avo', sans-serif";
-
-                footer.innerHTML = `
-                    <span>Hệ thống phân tích hiệu quả nhân sự & lũy kế kinh doanh • SalesHub</span>
-                    <span>Độ phân giải siêu nét ${resolution} (${Math.round(contentWidth * scale)}px)</span>
-                `;
-
-                clonedReport.appendChild(footer);
             }
         });
     };
@@ -691,11 +709,11 @@ export default function EmployeePerformanceReportPage() {
                             <Trophy className="w-5 h-5" />
                         </span>
                         <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-                            Báo Cáo Hiệu Quả Lũy Kế Doanh Thu Nhân Viên
+                            Hiệu Quả Doanh Thu Nhân Viên
                         </h1>
                     </div>
                     <p className="text-xs text-slate-500 mt-1">
-                        Bảng xếp hạng chiến binh, vinh danh cá nhân xuất sắc và đánh giá nhịp độ hoàn thành mục tiêu kinh doanh.
+                        Xếp hạng nhân viên, vinh danh cá nhân xuất sắc và đánh giá tiến độ hoàn thành mục tiêu.
                     </p>
                 </div>
 
@@ -727,11 +745,10 @@ export default function EmployeePerformanceReportPage() {
                         <button
                             type="button"
                             onClick={() => setExportResolution('4K')}
-                            className={`px-2.5 py-1.5 text-xs font-black rounded-lg transition cursor-pointer ${
-                                exportResolution === '4K'
-                                    ? 'bg-white text-blue-700 shadow-2xs'
-                                    : 'text-slate-500 hover:text-slate-800'
-                            }`}
+                            className={`px-2.5 py-1.5 text-xs font-black rounded-lg transition cursor-pointer ${exportResolution === '4K'
+                                ? 'bg-white text-blue-700 shadow-2xs'
+                                : 'text-slate-500 hover:text-slate-800'
+                                }`}
                             title="Chọn độ phân giải 4K (khoảng 3840px)"
                         >
                             4K UHD
@@ -739,11 +756,10 @@ export default function EmployeePerformanceReportPage() {
                         <button
                             type="button"
                             onClick={() => setExportResolution('8K')}
-                            className={`px-2.5 py-1.5 text-xs font-black rounded-lg transition cursor-pointer flex items-center gap-1 ${
-                                exportResolution === '8K'
-                                    ? 'bg-slate-900 text-amber-300 shadow-2xs'
-                                    : 'text-slate-500 hover:text-slate-800'
-                            }`}
+                            className={`px-2.5 py-1.5 text-xs font-black rounded-lg transition cursor-pointer flex items-center gap-1 ${exportResolution === '8K'
+                                ? 'bg-slate-900 text-amber-300 shadow-2xs'
+                                : 'text-slate-500 hover:text-slate-800'
+                                }`}
                             title="Chọn độ phân giải 8K Ultra-HD (khoảng 7680px siêu nét)"
                         >
                             <span>8K</span>
@@ -845,11 +861,10 @@ export default function EmployeePerformanceReportPage() {
             <div className="bg-white rounded-2xl p-3.5 border border-slate-200 shadow-2xs flex flex-wrap items-center justify-between gap-3 text-xs">
                 <div className="flex flex-wrap items-center gap-2">
                     {/* 1. Chọn Siêu Thị (Theo phân quyền tài khoản) */}
-                    <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all ${
-                        isLockedToSingleStore
-                            ? 'bg-amber-50/90 border-amber-200 text-amber-900 shadow-2xs'
-                            : 'bg-slate-50 border-slate-200 text-slate-800'
-                    }`}>
+                    <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all ${isLockedToSingleStore
+                        ? 'bg-amber-50/90 border-amber-200 text-amber-900 shadow-2xs'
+                        : 'bg-slate-50 border-slate-200 text-slate-800'
+                        }`}>
                         {isLockedToSingleStore ? (
                             <Lock className="w-4 h-4 text-amber-600 shrink-0" />
                         ) : (
@@ -860,11 +875,10 @@ export default function EmployeePerformanceReportPage() {
                             onChange={e => setSelectedStore(e.target.value)}
                             disabled={isLockedToSingleStore}
                             title={isLockedToSingleStore ? 'Tài khoản nhân viên được cố định theo siêu thị đã đăng ký' : undefined}
-                            className={`bg-transparent text-xs font-bold outline-hidden ${
-                                isLockedToSingleStore
-                                    ? 'cursor-not-allowed text-amber-900 font-black'
-                                    : 'cursor-pointer text-slate-800'
-                            }`}
+                            className={`bg-transparent text-xs font-bold outline-hidden ${isLockedToSingleStore
+                                ? 'cursor-not-allowed text-amber-900 font-black'
+                                : 'cursor-pointer text-slate-800'
+                                }`}
                         >
                             {canViewAllStores && (
                                 <option value="all">🏢 Toàn Cụm Siêu Thị</option>
@@ -989,6 +1003,10 @@ export default function EmployeePerformanceReportPage() {
                 <PerformanceTable
                     rows={filteredRows}
                     showStoreName={selectedStore === 'all'}
+                    onSelectEmployee={(emp) => {
+                        const targetStore = emp.store_name || (selectedStore !== 'all' ? selectedStore : '');
+                        navigate(`/chi-tiet-nhan-vien?emp=${emp.employee_id}&month=${selectedMonth}&year=${selectedYear}&store=${encodeURIComponent(targetStore)}`);
+                    }}
                 />
             </div>
 

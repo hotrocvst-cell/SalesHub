@@ -405,15 +405,6 @@ export default function CampaignSummaryPage() {
             el.style.display = 'none';
         });
 
-        // 9. Thêm watermark thông tin chân trang chuyên nghiệp
-        const footerInfo = document.createElement('div');
-        footerInfo.className = 'pt-3 pb-1 flex items-center justify-between text-[11px] text-slate-500 font-semibold px-2 border-t border-slate-100';
-        footerInfo.innerHTML = `
-            <span>Báo cáo tiến độ thi đua • Siêu thị: <b class="text-slate-800">${selectedStore === 'all' ? 'Toàn Cụm Siêu Thị' : selectedStore}</b></span>
-            <span>Độ phân giải: <b>${exportResolution} Ultra HD</b> • Xuất từ SalesHub: <b class="text-slate-800">${new Date().toLocaleDateString('vi-VN')} ${new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</b></span>
-        `;
-        clonedReport.appendChild(footerInfo);
-
         // Đưa vào body để trình duyệt hoàn tất layout computation
         exportContainer.appendChild(clonedReport);
         document.body.appendChild(exportContainer);
@@ -527,10 +518,11 @@ export default function CampaignSummaryPage() {
         const wb = new ExcelJS.Workbook();
         const ws = wb.addWorksheet('Tong_Hop_Thi_Dua');
 
+        const isPointsMode = campaignData.scoring_mode === 'POINTS';
         const headers = [
             'STT',
             'MSNV - Tên NV',
-            'Dự Kiến Đạt / Tổng',
+            isPointsMode ? 'Điểm Dự Kiến' : 'Dự Kiến Đạt',
             '%DKHT',
             ...campaignData.categories.map(c => getCampaignLabel(c, campaignDict))
         ];
@@ -540,7 +532,7 @@ export default function CampaignSummaryPage() {
             const rowValues = [
                 r.stt,
                 r.display_name,
-                `${r.achieved_count}/${r.total_count}`,
+                isPointsMode ? `${r.achieved_points ?? 0}/${r.total_points ?? 0}` : `${r.achieved_count}/${r.total_count}`,
                 `${r.achievement_rate}%`,
                 ...campaignData.categories.map(c => `${r.campaign_rates[c] ?? 0}%`)
             ];
@@ -776,11 +768,10 @@ export default function CampaignSummaryPage() {
                                     <button
                                         type="button"
                                         onClick={() => setExportResolution('4K')}
-                                        className={`px-2 py-1 rounded transition cursor-pointer ${
-                                            exportResolution === '4K'
+                                        className={`px-2 py-1 rounded transition cursor-pointer ${exportResolution === '4K'
                                                 ? 'bg-[#fde047] text-slate-900 shadow-xs'
                                                 : 'text-teal-100 hover:text-white'
-                                        }`}
+                                            }`}
                                         title="Độ phân giải 4K siêu nét (~4.500px)"
                                     >
                                         4K
@@ -788,11 +779,10 @@ export default function CampaignSummaryPage() {
                                     <button
                                         type="button"
                                         onClick={() => setExportResolution('8K')}
-                                        className={`px-2 py-1 rounded transition cursor-pointer ${
-                                            exportResolution === '8K'
+                                        className={`px-2 py-1 rounded transition cursor-pointer ${exportResolution === '8K'
                                                 ? 'bg-[#fde047] text-slate-900 shadow-xs'
                                                 : 'text-teal-100 hover:text-white'
-                                        }`}
+                                            }`}
                                         title="Độ phân giải 8K Ultra HD cực đại (~7.500px - 8.000px, phóng to không vỡ nét)"
                                     >
                                         💎 8K

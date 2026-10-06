@@ -63,6 +63,13 @@ export function isStoreMatch(
         return isAllA && isAllB;
     }
 
+    // Nếu so sánh getShortStoreName khớp nhau thì là cùng 1 siêu thị
+    const shortA = getShortStoreName(a).toLowerCase();
+    const shortB = getShortStoreName(b).toLowerCase();
+    if (shortA && shortB && shortA === shortB && shortA !== 'tổng') {
+        return true;
+    }
+
     // Nếu có danh sách stores từ DB, đối chiếu chính xác theo store code/id
     if (storesList && storesList.length > 0) {
         const objA = storesList.find(s => s.name === a || (s.code && (a.startsWith(s.code) || a.includes(`(${s.code})`))));
@@ -78,18 +85,35 @@ export function isStoreMatch(
         }
     }
 
-    // Đối chiếu theo brand/prefix (ví dụ: AAR_BRV_VTA vs TGD_BRV_VTA)
-    const prefixA = a.split(' - ')[0]?.trim().toLowerCase();
-    const prefixB = b.split(' - ')[0]?.trim().toLowerCase();
-    if (prefixA && prefixB && prefixA !== prefixB) {
-        return false;
+    // Kiểm tra mã số siêu thị ở đầu chuỗi (ví dụ "10335 - ..." đối chiếu "10335")
+    const codeMatchA = a.match(/^(\d+)/);
+    const codeMatchB = b.match(/^(\d+)/);
+    if (codeMatchA && codeMatchB && codeMatchA[1] === codeMatchB[1]) {
+        return true;
     }
-
-    if (getShortStoreName(a).toLowerCase() === getShortStoreName(b).toLowerCase()) {
+    if (codeMatchA && (b.includes(codeMatchA[1]) || b.startsWith(codeMatchA[1]))) {
+        return true;
+    }
+    if (codeMatchB && (a.includes(codeMatchB[1]) || a.startsWith(codeMatchB[1]))) {
         return true;
     }
 
-    return false;
+    // Loại bỏ mã số đầu chuỗi để đối chiếu phần tên và địa chỉ
+    const cleanA = a.replace(/^\d+\s*-\s*|^\d+\s+/, '').trim().toLowerCase();
+    const cleanB = b.replace(/^\d+\s*-\s*|^\d+\s+/, '').trim().toLowerCase();
+    if (cleanA && cleanB && cleanA === cleanB) return true;
+
+    // Đối chiếu theo brand/prefix (ví dụ: AAR vs TGDĐ)
+    const prefixA = cleanA.split(' - ')[0]?.trim().toLowerCase();
+    const prefixB = cleanB.split(' - ')[0]?.trim().toLowerCase();
+    const knownBrands = ['aar', 'tgdd', 'tgd', 'dmx', 'đmx', 'topzone', 'bhx'];
+    const isBrandA = knownBrands.some(k => prefixA.includes(k));
+    const isBrandB = knownBrands.some(k => prefixB.includes(k));
+    if (isBrandA && isBrandB && prefixA !== prefixB) {
+        return false;
+    }
+
+    return cleanA.includes(cleanB) || cleanB.includes(cleanA);
 }
 
 

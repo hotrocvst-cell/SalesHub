@@ -3,6 +3,7 @@ import type { EmployeeDataSession } from '../../employee-cumulative/utils/sessio
 import { getCampaignLabel, formatDate, isStoreMatch } from '../../../core/lib/formatters';
 import { getShortenedEmployeeName } from '../../employee-performance/utils/performanceConfig';
 import type { CampaignDictItem } from '../../../core/lib/storage';
+import { getStoreCampaignScoreConfig, getCampaignPoints } from '../../../core/lib/storeCampaignScoreService';
 
 /**
  * Chuẩn hóa chuỗi định danh thi đua để đối chiếu linh hoạt:
@@ -212,13 +213,27 @@ export function buildCampaignSummaryFromSession(
     const safePassed = Math.max(1, passedDays);
     const safeTotalDays = Math.max(1, operatingDays);
 
+    const effectiveStoreName = selectedStore === 'all'
+        ? (session.store_name || 'Toàn Cụm Siêu Thị')
+        : selectedStore;
+
+    const baseScoreConfig = getStoreCampaignScoreConfig(effectiveStoreName);
+    const isPointsMode = baseScoreConfig.scoring_mode === 'POINTS';
+
     const rows: CampaignSummaryRow[] = filteredRecords.map(r => {
         const empId = (r.employee_id || '').trim();
         const fullName = (r.full_name || '').trim();
         const shortName = getShortenedEmployeeName(fullName);
         const displayName = `${empId} - ${shortName}`;
 
+        const empStore = empStoreMap[empId] || session.store_name || effectiveStoreName;
+        const currentScoreConfig = (selectedStore === 'all' && empStore)
+            ? getStoreCampaignScoreConfig(empStore)
+            : baseScoreConfig;
+
         let achievedCount = 0;
+        let achievedPoints = 0;
+        let totalPoints = 0;
         const campaignRates: Record<string, number> = {};
 
         categories.forEach(cat => {
@@ -273,15 +288,20 @@ export function buildCampaignSummaryFromSession(
             }
 
             campaignRates[cat] = rate;
+            const pointsWeight = getCampaignPoints(cat, currentScoreConfig);
+            totalPoints += pointsWeight;
+
+            // Quy tắc tính: nếu dự kiến đạt từ 100%, có điểm. Không đạt không có điểm
             if (rate >= 100) {
                 achievedCount++;
+                achievedPoints += pointsWeight;
             }
         });
 
-        // Tỷ lệ hoàn thành tổng quan của nhân viên: số đạt / tổng số thi đua có target của siêu thị
-        const achievementRate = totalCategories > 0
-            ? Number(((achievedCount / totalCategories) * 100).toFixed(1))
-            : 0;
+        // Tỷ lệ hoàn thành tổng quan: nếu tính điểm thì tính theo Điểm đạt/Tổng điểm, nếu đếm số lượng thì Số đạt/Tổng số mục
+        const achievementRate = isPointsMode
+            ? (totalPoints > 0 ? Number(((achievedPoints / totalPoints) * 100).toFixed(1)) : 0)
+            : (totalCategories > 0 ? Number(((achievedCount / totalCategories) * 100).toFixed(1)) : 0);
 
         return {
             stt: 1,
@@ -291,15 +311,23 @@ export function buildCampaignSummaryFromSession(
             store_name: empStoreMap[empId] || session.store_name,
             achieved_count: achievedCount,
             total_count: totalCategories,
+            achieved_points: Number(achievedPoints.toFixed(1)),
+            total_points: Number(totalPoints.toFixed(1)),
             achievement_rate: achievementRate,
-            campaign_rates: campaignRates
+            campaign_rates: campaignRates,
+            scoring_mode: isPointsMode ? 'POINTS' : 'COUNT'
         };
     });
 
-    // 4. Sắp xếp giảm dần theo số thi đua dự kiến đạt (và tỷ lệ %DKHT)
+    // 4. Sắp xếp giảm dần theo điểm hoặc số thi đua dự kiến đạt (và tỷ lệ %DKHT)
     rows.sort((a, b) => {
-        if (b.achieved_count !== a.achieved_count) {
-            return b.achieved_count - a.achieved_count;
+        if (isPointsMode) {
+            const diffPoints = (b.achieved_points ?? 0) - (a.achieved_points ?? 0);
+            if (diffPoints !== 0) return diffPoints;
+        } else {
+            if (b.achieved_count !== a.achieved_count) {
+                return b.achieved_count - a.achieved_count;
+            }
         }
         return b.achievement_rate - a.achievement_rate;
     });
@@ -312,15 +340,12 @@ export function buildCampaignSummaryFromSession(
     // Định dạng ngày hiển thị DD/MM/YYYY
     const dateDisplay = formatDate(session.report_date);
 
-    const effectiveStoreName = selectedStore === 'all'
-        ? (session.store_name || 'Toàn Cụm Siêu Thị')
-        : selectedStore;
-
     return {
         report_date: session.report_date,
         date_display: dateDisplay,
         mode_label: 'DỰ KIẾN',
         store_name: effectiveStoreName,
+        scoring_mode: isPointsMode ? 'POINTS' : 'COUNT',
         total_categories: totalCategories,
         categories,
         rows,
@@ -346,19 +371,25 @@ export function generateSmartRemarks(
         };
     }
 
-    const rows = [...data.rows].sort((a, b) => b.achieved_count - a.achieved_count);
+    const isPointsMode = data.scoring_mode === 'POINTS';
+    const rows = [...data.rows].sort((a, b) => {
+        if (isPointsMode) {
+            return (b.achieved_points ?? 0) - (a.achieved_points ?? 0);
+        }
+        return b.achieved_count - a.achieved_count;
+    });
 
     // 1. Top 3 nhân sự xuất sắc
     const topEmployees = rows.slice(0, 3).map(r => ({
         name: r.display_name,
-        achieved: `${r.achieved_count}/${r.total_count}`,
+        achieved: isPointsMode ? `${r.achieved_points ?? 0}/${r.total_points ?? 0} đ` : `${r.achieved_count}/${r.total_count}`,
         rate: r.achievement_rate
     }));
 
     // 2. Nhóm nhân sự cần tập trung hỗ trợ
     const bottomEmployees = rows.slice(-3).reverse().map(r => ({
         name: r.display_name,
-        achieved: `${r.achieved_count}/${r.total_count}`,
+        achieved: isPointsMode ? `${r.achieved_points ?? 0}/${r.total_points ?? 0} đ` : `${r.achieved_count}/${r.total_count}`,
         rate: r.achievement_rate
     }));
 
@@ -400,15 +431,15 @@ export function generateSmartRemarks(
     const topNames = topEmployees.map((t, idx) => `   ${idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉'} ${t.name}: dự kiến đạt ${t.achieved} (${t.rate}%)`).join('\n');
     const bottomNames = bottomEmployees.map(b => `   👉 ${b.name}: dự kiến đạt ${b.achieved} (${b.rate}%)`).join('\n');
     const bestCatText = bestCategories.map(c => `   🔥 ${c.name}: ${c.passedCount}/${data.rows.length} bạn hoàn thành (${c.passRate}%)`).join('\n');
-    const weakCatText = weakCategories.map(c => `   ⚠️ ${c.name}: có ${c.under50Count} bạn chưa đạt nhịp`).join('\n');
+    const weakCatText = weakCategories.map(c => `   ⚠️ ${c.name}: có ${c.under50Count} bạn chưa đạt`).join('\n');
 
-    const recommendedZaloText = `📢 BÁO CÁO TỔNG HỢP THI ĐUA NGÀNH HÀNG (${data.date_display} - ${data.mode_label})
-🏢 Siêu thị: ${data.store_name}
-📊 Tổng số ngành hàng thi đua: ${data.total_categories} ngành hàng
+    const recommendedZaloText = `📢 TỔNG HỢP THI ĐUA NGÀNH HÀNG (${data.date_display} - ${data.mode_label})
+🏢 ${data.store_name}
+📊 Thi đua: ${data.total_categories} ngành hàng
 
-🏆 TOP CHIẾN BINH XUẤT SẮC DẪN ĐẦU:
+🏆 TOP XUẤT SẮC DẪN ĐẦU:
 ${topNames}
-👏 Chúc mừng các bạn đã duy trì phong độ vượt nhịp rất tốt trên nhiều ngành hàng!
+👏 Chúc mừng các bạn đã duy trì phong độ rất tốt trên nhiều ngành hàng!
 
 🌟 CÁC THI ĐUA MŨI NHỌN DẪN ĐẦU:
 ${bestCatText}
@@ -418,9 +449,9 @@ ${weakCatText}
 
 🎯 NHÂN SỰ CẦN TĂNG TỐC VỀ ĐÍCH:
 ${bottomNames}
-💪 Các bạn tập trung rà soát chỉ tiêu còn thiếu, chủ động cross-sale và tư vấn thêm gói bảo hiểm, phụ kiện để nhanh chóng bứt phá nhé!
+\n💪 Các bạn rà soát NH còn thiếu, tập trung bán kèm bán thêm các gói bảo hiểm, phụ kiện để nhanh chóng về đích nhé!
 
-Chúc toàn team một ngày bùng nổ doanh số! 🔥🚀`;
+Chúc team một ngày bùng nổ! 🔥🚀`;
 
     return {
         topEmployees,

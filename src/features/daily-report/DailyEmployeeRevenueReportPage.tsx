@@ -239,6 +239,11 @@ export default function DailyEmployeeRevenueReportPage() {
         summary
     } = processedData;
 
+    // Top vượt trội xuất sắc dẫn đầu (tối đa 3 nhân sự tương ứng 3 huy chương 🥇🥈🥉)
+    const topLeadingEmployees = useMemo(() => {
+        return top30Employees.slice(0, 3);
+    }, [top30Employees]);
+
     // Tên siêu thị hiển thị trên báo cáo
     const displayStoreTitle = useMemo(() => {
         if (selectedStore === 'all') {
@@ -355,89 +360,117 @@ export default function DailyEmployeeRevenueReportPage() {
     const generateReportCanvas = async (): Promise<HTMLCanvasElement | null> => {
         if (!reportRef.current) return null;
 
-        const exportContainer = document.createElement('div');
-        exportContainer.style.position = 'fixed';
-        exportContainer.style.left = '-99999px';
-        exportContainer.style.top = '0';
-        exportContainer.style.zIndex = '-9999';
-        const targetWidth = 1440;
-        exportContainer.style.width = `${targetWidth}px`;
-        exportContainer.style.backgroundColor = '#ffffff';
-
-        const clonedReport = reportRef.current.cloneNode(true) as HTMLElement;
-        clonedReport.style.width = `${targetWidth}px`;
-        clonedReport.style.maxWidth = `${targetWidth}px`;
-        clonedReport.style.margin = '0 auto';
-        clonedReport.style.boxSizing = 'border-box';
-        clonedReport.style.padding = '24px';
-        clonedReport.style.borderRadius = '0px';
-        clonedReport.style.boxShadow = 'none';
-
-        // 1. Áp dụng phạm vi xuất ảnh (exportScope)
-        if (exportScope === 'TABLE_ONLY') {
-            const topSec = clonedReport.querySelector('[data-section="top30"]');
-            const reminderSec = clonedReport.querySelector('[data-section="reminders"]');
-            if (topSec) (topSec as HTMLElement).style.display = 'none';
-            if (reminderSec) (reminderSec as HTMLElement).style.display = 'none';
-        } else if (exportScope === 'SUMMARY_ONLY') {
-            const tableSec = clonedReport.querySelector('[data-section="table"]');
-            if (tableSec) (tableSec as HTMLElement).style.display = 'none';
+        const originalEl = reportRef.current;
+        if (document.fonts && document.fonts.ready) {
+            await document.fonts.ready;
         }
 
-        // 2. Ẩn tất cả các nút tương tác
-        clonedReport.querySelectorAll<HTMLElement>('[data-export-ignore="true"]').forEach(el => {
-            el.style.display = 'none';
-        });
+        // Chờ 2 frame render của browser để đảm bảo DOM layout, font và bounding box ổn định 100%
+        await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 
-        // 3. Mở rộng chiều cao bảng
-        clonedReport.querySelectorAll<HTMLElement>('.overflow-x-auto, .overflow-y-auto').forEach(el => {
-            el.style.maxHeight = 'none';
-            el.style.overflow = 'visible';
-        });
-
-        // 4. Thêm chân trang chuyên nghiệp (Watermark)
-        const watermark = document.createElement('div');
-        watermark.className = 'pt-4 mt-4 flex items-center justify-between text-[11px] text-slate-500 font-semibold border-t border-slate-200';
-        watermark.innerHTML = `
-            <span>Báo cáo doanh thu nhân viên ngày • Siêu thị: <b class="text-slate-800">${displayStoreTitle}</b></span>
-            <span>Độ phân giải: <b>${exportResolution} Ultra HD</b> • Xuất từ SalesHub: <b class="text-slate-800">${new Date().toLocaleDateString('vi-VN')} ${new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</b></span>
-        `;
-        clonedReport.appendChild(watermark);
-
-        exportContainer.appendChild(clonedReport);
-        document.body.appendChild(exportContainer);
+        // Tối ưu độ rộng xuất ảnh cho smartphone (720px là tỷ lệ chuẩn sắc nét cho xem ảnh dọc trên điện thoại)
+        const targetWidth = 720;
+        const exportScale = exportResolution === '8K' ? 4 : 2.8;
 
         try {
-            if (document.fonts?.ready) {
-                await document.fonts.ready;
-            }
-            await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 80)));
-
-            const targetHeight = clonedReport.scrollHeight || clonedReport.offsetHeight;
-            let exportScale = exportResolution === '8K' ? 4.0 : 3.0;
-            if (targetWidth * exportScale > 14000) {
-                exportScale = Math.floor(14000 / targetWidth * 10) / 10;
-            }
-
-            const canvas = await html2canvas(clonedReport, {
+            return await html2canvas(originalEl, {
                 scale: exportScale,
+                useCORS: true,
+                allowTaint: true,
+                backgroundColor: '#ffffff',
+                logging: false,
                 width: targetWidth,
-                height: targetHeight,
-                windowWidth: targetWidth,
-                windowHeight: targetHeight,
+                windowWidth: targetWidth + 40,
                 scrollX: 0,
                 scrollY: 0,
-                backgroundColor: '#ffffff',
-                useCORS: true,
-                logging: false,
-                allowTaint: true
-            });
+                // TUYỆT ĐỐI KHÔNG truyền height hoặc windowHeight cố định theo Rule Unlimited Height
+                onclone: (clonedDoc) => {
+                    // 1. Nhúng typography UTM Avo đồng bộ hệ thống
+                    const fontStyle = clonedDoc.createElement('style');
+                    fontStyle.innerHTML = `
+                        @font-face {
+                            font-family: 'UTM Avo';
+                            src: url('/fonts/UTM-Avo.ttf') format('truetype');
+                            font-weight: 400;
+                            font-style: normal;
+                        }
+                        @font-face {
+                            font-family: 'UTM Avo';
+                            src: url('/fonts/UTM-AvoBold.ttf') format('truetype');
+                            font-weight: 700;
+                            font-style: normal;
+                        }
+                        * {
+                            -webkit-font-smoothing: antialiased;
+                            -moz-osx-font-smoothing: grayscale;
+                            box-sizing: border-box;
+                        }
+                        img, svg { display: inline-block !important; vertical-align: middle !important; }
+                        td, th { vertical-align: middle !important; }
+                        [data-report-container="true"] * { overflow: visible !important; }
+                    `;
+                    clonedDoc.head.appendChild(fontStyle);
 
-            return canvas;
-        } finally {
-            if (document.body.contains(exportContainer)) {
-                document.body.removeChild(exportContainer);
-            }
+                    // 2. Gỡ bỏ hoàn toàn giới hạn chiều cao ở cấp tài liệu và body
+                    clonedDoc.documentElement.style.height = 'auto';
+                    clonedDoc.documentElement.style.maxHeight = 'none';
+                    clonedDoc.documentElement.style.overflow = 'visible';
+                    clonedDoc.body.style.height = 'auto';
+                    clonedDoc.body.style.maxHeight = 'none';
+                    clonedDoc.body.style.overflow = 'visible';
+
+                    const clonedReport = clonedDoc.querySelector('[data-report-container="true"]') as HTMLElement;
+                    if (clonedReport) {
+                        clonedReport.style.width = `${targetWidth}px`;
+                        clonedReport.style.maxWidth = `${targetWidth}px`;
+                        clonedReport.style.minWidth = `${targetWidth}px`;
+                        clonedReport.style.height = 'auto';
+                        clonedReport.style.minHeight = 'auto';
+                        clonedReport.style.maxHeight = 'none';
+                        clonedReport.style.overflow = 'visible';
+                        clonedReport.style.margin = '0 auto';
+                        clonedReport.style.padding = '20px';
+                        clonedReport.style.paddingBottom = '32px'; // Đệm thoáng đáy báo cáo
+                        clonedReport.style.borderRadius = '0px';
+                        clonedReport.style.boxShadow = 'none';
+                        clonedReport.style.backgroundColor = '#ffffff';
+                        clonedReport.style.fontFamily = "'UTM Avo', 'Avo', 'Segoe UI Emoji', 'Apple Color Emoji', sans-serif";
+
+                        // 3. Áp dụng phạm vi xuất ảnh (exportScope)
+                        if (exportScope === 'TABLE_ONLY') {
+                            const topSec = clonedReport.querySelector('[data-section="top30"]');
+                            const reminderSec = clonedReport.querySelector('[data-section="reminders"]');
+                            if (topSec) (topSec as HTMLElement).style.display = 'none';
+                            if (reminderSec) (reminderSec as HTMLElement).style.display = 'none';
+                        } else if (exportScope === 'SUMMARY_ONLY') {
+                            const tableSec = clonedReport.querySelector('[data-section="table"]');
+                            if (tableSec) (tableSec as HTMLElement).style.display = 'none';
+                        }
+
+                        // 4. Ẩn tất cả các nút tương tác, bộ lọc, tìm kiếm
+                        clonedReport.querySelectorAll<HTMLElement>('[data-export-ignore="true"]').forEach(el => {
+                            el.style.display = 'none';
+                        });
+
+                        // 5. Gỡ bỏ vị trí sticky để html2canvas vẽ chuẩn không bị đè hoặc lệch
+                        clonedReport.querySelectorAll<HTMLElement>('.sticky').forEach(el => {
+                            el.style.position = 'static';
+                        });
+
+                        // 6. Mở rộng tất cả container cuộn bên trong để lấy 100% chiều dài tự nhiên
+                        clonedReport.querySelectorAll<HTMLElement>('.overflow-x-auto, .overflow-y-auto, [class*="max-h-"]').forEach(el => {
+                            el.style.maxHeight = 'none';
+                            el.style.overflow = 'visible';
+                            el.style.overflowX = 'visible';
+                            el.style.overflowY = 'visible';
+                            el.style.height = 'auto';
+                        });
+                    }
+                }
+            });
+        } catch (err) {
+            console.error('Lỗi khi vẽ canvas báo cáo doanh thu ngày:', err);
+            return null;
         }
     };
 
@@ -520,7 +553,7 @@ export default function DailyEmployeeRevenueReportPage() {
                 displayStoreTitle,
                 reportDate,
                 summary,
-                top30Employees,
+                topLeadingEmployees,
                 belowAvgEmployees,
                 zeroOrNegativeEmployees,
                 zeroInstallmentEmployees
@@ -568,11 +601,10 @@ export default function DailyEmployeeRevenueReportPage() {
                         {/* Dropdown chọn siêu thị và ngày */}
                         <div className="flex items-center gap-3 pt-1 flex-wrap">
                             {/* 1. Chọn Siêu thị (Tổng cụm hoặc từng siêu thị theo phân quyền) */}
-                            <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all ${
-                                isLockedToSingleStore
-                                    ? 'bg-amber-50/90 border-amber-200 text-amber-900 shadow-xs'
-                                    : 'bg-slate-100 border-slate-200 text-slate-800'
-                            }`}>
+                            <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all ${isLockedToSingleStore
+                                ? 'bg-amber-50/90 border-amber-200 text-amber-900 shadow-xs'
+                                : 'bg-slate-100 border-slate-200 text-slate-800'
+                                }`}>
                                 {isLockedToSingleStore ? (
                                     <Lock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                                 ) : (
@@ -584,11 +616,10 @@ export default function DailyEmployeeRevenueReportPage() {
                                     onChange={e => setSelectedStore(e.target.value)}
                                     disabled={isLockedToSingleStore}
                                     title={isLockedToSingleStore ? 'Tài khoản nhân viên được cố định theo siêu thị đã đăng ký' : undefined}
-                                    className={`bg-transparent font-extrabold outline-hidden ${
-                                        isLockedToSingleStore
-                                            ? 'cursor-not-allowed text-amber-900 font-black'
-                                            : 'cursor-pointer text-slate-800'
-                                    }`}
+                                    className={`bg-transparent font-extrabold outline-hidden ${isLockedToSingleStore
+                                        ? 'cursor-not-allowed text-amber-900 font-black'
+                                        : 'cursor-pointer text-slate-800'
+                                        }`}
                                 >
                                     {canViewAllStores && (
                                         <option value="all">🌐 Toàn Cụm Siêu Thị</option>
@@ -623,8 +654,8 @@ export default function DailyEmployeeRevenueReportPage() {
                                 type="button"
                                 onClick={() => setIsRosterModalOpen(!isRosterModalOpen)}
                                 className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border cursor-pointer ${isRosterModalOpen
-                                        ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
-                                        : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-300'
+                                    ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                                    : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-300'
                                     }`}
                                 title="Điểm danh và chọn thêm nhân viên đi làm nhưng chưa có biến động doanh thu"
                             >
@@ -655,8 +686,8 @@ export default function DailyEmployeeRevenueReportPage() {
                                 type="button"
                                 onClick={() => setExportScope('ALL')}
                                 className={`px-2.5 py-1 rounded-lg transition cursor-pointer text-xs ${exportScope === 'ALL'
-                                        ? 'bg-white text-emerald-700 shadow-2xs font-extrabold'
-                                        : 'text-slate-600 hover:text-slate-900'
+                                    ? 'bg-white text-emerald-700 shadow-2xs font-extrabold'
+                                    : 'text-slate-600 hover:text-slate-900'
                                     }`}
                                 title="Xuất toàn bộ Bảng kèm Tóm tắt"
                             >
@@ -666,8 +697,8 @@ export default function DailyEmployeeRevenueReportPage() {
                                 type="button"
                                 onClick={() => setExportScope('TABLE_ONLY')}
                                 className={`px-2.5 py-1 rounded-lg transition cursor-pointer text-xs ${exportScope === 'TABLE_ONLY'
-                                        ? 'bg-white text-emerald-700 shadow-2xs font-extrabold'
-                                        : 'text-slate-600 hover:text-slate-900'
+                                    ? 'bg-white text-emerald-700 shadow-2xs font-extrabold'
+                                    : 'text-slate-600 hover:text-slate-900'
                                     }`}
                                 title="Chỉ xuất phần Bảng chi tiết"
                             >
@@ -677,8 +708,8 @@ export default function DailyEmployeeRevenueReportPage() {
                                 type="button"
                                 onClick={() => setExportScope('SUMMARY_ONLY')}
                                 className={`px-2.5 py-1 rounded-lg transition cursor-pointer text-xs ${exportScope === 'SUMMARY_ONLY'
-                                        ? 'bg-white text-emerald-700 shadow-2xs font-extrabold'
-                                        : 'text-slate-600 hover:text-slate-900'
+                                    ? 'bg-white text-emerald-700 shadow-2xs font-extrabold'
+                                    : 'text-slate-600 hover:text-slate-900'
                                     }`}
                                 title="Chỉ xuất phần Tóm tắt & Nhắc nhở"
                             >
@@ -692,8 +723,8 @@ export default function DailyEmployeeRevenueReportPage() {
                                 type="button"
                                 onClick={() => setExportResolution('4K')}
                                 className={`px-2.5 py-1 rounded-lg transition cursor-pointer ${exportResolution === '4K'
-                                        ? 'bg-emerald-500 text-slate-950 shadow-xs'
-                                        : 'text-slate-300 hover:text-white'
+                                    ? 'bg-emerald-500 text-slate-950 shadow-xs'
+                                    : 'text-slate-300 hover:text-white'
                                     }`}
                             >
                                 4K
@@ -702,8 +733,8 @@ export default function DailyEmployeeRevenueReportPage() {
                                 type="button"
                                 onClick={() => setExportResolution('8K')}
                                 className={`px-2.5 py-1 rounded-lg transition cursor-pointer ${exportResolution === '8K'
-                                        ? 'bg-emerald-500 text-slate-950 shadow-xs'
-                                        : 'text-slate-300 hover:text-white'
+                                    ? 'bg-emerald-500 text-slate-950 shadow-xs'
+                                    : 'text-slate-300 hover:text-white'
                                     }`}
                             >
                                 8K
@@ -751,7 +782,7 @@ export default function DailyEmployeeRevenueReportPage() {
                 {isInputExpanded && (
                     <div className="pt-4 border-t border-slate-200 space-y-3 animate-in fade-in duration-200">
                         <div className="flex items-center justify-between text-xs text-slate-600 font-medium">
-                            <span>Dán toàn bộ bảng báo cáo doanh thu từ MWG Dashboard vào ô dưới đây:</span>
+                            <span>Dán toàn bộ bảng báo cáo doanh thu vào ô dưới đây:</span>
                             {rawText && (
                                 <button
                                     type="button"
@@ -843,8 +874,8 @@ export default function DailyEmployeeRevenueReportPage() {
                                     <label
                                         key={id}
                                         className={`flex items-center justify-between p-2.5 rounded-xl border text-xs cursor-pointer select-none transition ${isChecked
-                                                ? 'bg-white border-blue-400 shadow-2xs'
-                                                : 'bg-white/60 border-slate-200 text-slate-400 opacity-75 hover:opacity-100'
+                                            ? 'bg-white border-blue-400 shadow-2xs'
+                                            : 'bg-white/60 border-slate-200 text-slate-400 opacity-75 hover:opacity-100'
                                             }`}
                                     >
                                         <div className="flex items-center gap-2 truncate">
@@ -906,21 +937,21 @@ export default function DailyEmployeeRevenueReportPage() {
                             Chưa Có Dữ Liệu Cần Xử Lý
                         </h3>
                         <p className="text-xs sm:text-sm text-slate-500 max-w-lg mx-auto leading-relaxed">
-                            Hiện chưa có bảng báo cáo doanh thu được dán. Vui lòng sao chép bảng từ <b>MWG Dashboard</b> và dán vào ô bên dưới để hệ thống tự động bóc tách số liệu.
+                            Vui lòng sao chép dữ liệu và dán vào ô bên dưới. <br /> Hệ thống sẽ tự động xử lý dữ liệu hợp lệ.
                         </p>
                     </div>
 
                     {/* Vùng dán trực tiếp nhanh */}
                     <div className="max-w-xl mx-auto space-y-3 pt-2 text-left">
                         <div className="flex items-center justify-between text-xs text-slate-500 font-semibold px-1">
-                            <span>Dán bảng doanh thu MWG vào đây:</span>
+                            <span>Dán dữ liệu vào đây:</span>
                             <span className="text-[11px] text-slate-400">Ctrl + V</span>
                         </div>
                         <textarea
                             rows={6}
                             value={rawText}
                             onChange={e => setRawText(e.target.value)}
-                            placeholder="Dán bảng doanh thu MWG vào đây (gồm cột: Nhân viên, Số lượng, Doanh thu QĐ, Doanh thu...)"
+                            placeholder="Dán bảng dữ liệu vào đây (gồm cột: Nhân viên, Số lượng, Doanh thu QĐ, Doanh thu...)"
                             className="w-full p-3.5 bg-slate-50 border border-slate-300 rounded-2xl font-mono text-xs text-slate-800 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-emerald-500 shadow-inner"
                         />
                         <button
@@ -943,756 +974,768 @@ export default function DailyEmployeeRevenueReportPage() {
                 /* ========================================================= */
                 /* 4. KHUNG NỘI DUNG BÁO CÁO XUẤT BẢN (reportRef)             */
                 /* ========================================================= */
-                <div
-                    ref={reportRef}
-                    data-report-container="true"
-                    className="bg-white rounded-3xl border border-slate-200 shadow-sm p-4 sm:p-6 space-y-6"
-                >
-                    {/* A. BANNER TIÊU ĐỀ BÁO CÁO */}
-                    <div className="rounded-2xl p-5 sm:p-6 bg-gradient-to-r from-[#005a43] via-[#004735] to-[#00382b] text-white shadow-md relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-4">
-                        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#fde047_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
+                <div className="flex justify-center w-full">
+                    <div
+                        ref={reportRef}
+                        data-report-container="true"
+                        className="w-full max-w-[720px] bg-white rounded-3xl border border-slate-200 shadow-sm p-4 sm:p-5 space-y-4 font-avo"
+                    >
+                        {/* A. BANNER TIÊU ĐỀ BÁO CÁO */}
+                        <div data-section="banner" className="rounded-2xl p-4 sm:p-5 bg-gradient-to-r from-[#005a43] via-[#004735] to-[#00382b] text-white shadow-md relative overflow-hidden flex flex-col sm:flex-row items-center justify-between gap-3">
+                            <div data-export-ignore="true" className="absolute inset-0 opacity-10 bg-[radial-gradient(#fde047_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
 
-                        <div className="text-center md:text-left z-10 space-y-1 mx-auto md:mx-0">
-                            <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-400 text-slate-950 rounded-full text-[10px] font-black uppercase tracking-wider shadow-xs">
-                                <span>⚡ DOANH THU NHÂN VIÊN TRONG NGÀY</span>
-                            </div>
-                            <h2 className="text-2xl sm:text-3xl font-black text-[#fde047] tracking-wide uppercase drop-shadow-sm">
-                                BÁO CÁO HIỆU QUẢ KINH DOANH
-                            </h2>
-                            <p className="text-xs sm:text-sm font-semibold text-amber-100 flex items-center justify-center md:justify-start gap-2 flex-wrap">
-                                <span>🏢 Siêu thị: <b className="text-white">{displayStoreTitle}</b></span>
-                                <span>•</span>
-                                <span>📅 Ngày: <b className="text-[#fde047]">{formatDate(reportDate)}</b></span>
-                            </p>
-                        </div>
-
-                        {/* Thống kê nhanh trên banner */}
-                        <div className="z-10 grid grid-cols-3 gap-2.5 sm:gap-3 text-center w-full md:w-auto">
-                            <div className="bg-white/10 backdrop-blur-xs border border-white/20 rounded-xl p-2.5">
-                                <div className="text-[10px] text-amber-200 font-bold uppercase">Nhân sự ca</div>
-                                <div className="text-lg sm:text-xl font-black text-white">{summary.totalEmployees} <span className="text-[10px] font-medium text-amber-200">NV</span></div>
-                            </div>
-                            <div className="bg-white/10 backdrop-blur-xs border border-white/20 rounded-xl p-2.5">
-                                <div className="text-[10px] text-amber-200 font-bold uppercase">Tổng DTQĐ</div>
-                                <div className="text-lg sm:text-xl font-black text-[#fde047]">{formatValue(summary.totalRevenueQd)} <span className="text-[10px] font-medium text-amber-200">tr</span></div>
-                            </div>
-                            <div className="bg-white/10 backdrop-blur-xs border border-white/20 rounded-xl p-2.5">
-                                <div className="text-[10px] text-amber-200 font-bold uppercase">% Trả góp</div>
-                                <div className="text-lg sm:text-xl font-black text-white">{summary.avgInstallmentRate}%</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* B. CHỈ SỐ KPI TỔNG THỂ */}
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
-                                <Coins className="w-5 h-5" />
-                            </div>
-                            <div>
-                                <div className="text-[11px] font-bold text-slate-500 uppercase">Doanh Thu Thực</div>
-                                <div className="text-base sm:text-lg font-black text-slate-900">{formatValue(summary.totalActualRevenue)} <span className="text-xs font-semibold text-slate-500">tr</span></div>
-                                <div className="text-[10px] text-slate-400 font-medium">TB: {formatValue(summary.avgActualRevenue)} tr/NV</div>
-                            </div>
-                        </div>
-
-                        <div className="bg-emerald-50/70 border border-emerald-200 rounded-2xl p-3.5 flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
-                                <TrendingUp className="w-5 h-5" />
-                            </div>
-                            <div>
-                                <div className="text-[11px] font-extrabold text-emerald-800 uppercase">Doanh Thu Quy Đổi</div>
-                                <div className="text-base sm:text-lg font-black text-emerald-700">{formatValue(summary.totalRevenueQd)} <span className="text-xs font-semibold text-emerald-600">tr</span></div>
-                                <div className="text-[10px] text-emerald-600 font-bold">TB: {formatValue(summary.avgRevenueQd)} tr/NV</div>
-                            </div>
-                        </div>
-
-                        <div className="bg-purple-50/70 border border-purple-200 rounded-2xl p-3.5 flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center shrink-0 shadow-xs">
-                                <CreditCard className="w-5 h-5" />
-                            </div>
-                            <div>
-                                <div className="text-[11px] font-extrabold text-purple-900 uppercase">DT Trả Góp / Trả Chậm</div>
-                                <div className="text-base sm:text-lg font-black text-purple-700">{formatValue(summary.totalInstallmentRevenue)} <span className="text-xs font-semibold text-purple-600">tr</span></div>
-                                <div className="text-[10px] text-purple-600 font-bold">Chiếm {summary.avgInstallmentRate}% DT thực</div>
-                            </div>
-                        </div>
-
-                        <div className="bg-amber-50/70 border border-amber-200 rounded-2xl p-3.5 flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs">
-                                <Trophy className="w-5 h-5" />
-                            </div>
-                            <div>
-                                <div className="text-[11px] font-extrabold text-amber-900 uppercase">Top 30% Đột Phá</div>
-                                <div className="text-base sm:text-lg font-black text-amber-800">{summary.top30Count} <span className="text-xs font-semibold text-amber-700">Chiến Binh</span></div>
-                                <div className="text-[10px] text-amber-700 font-medium">Chiếm {(top30Employees.reduce((s, e) => s + e.contribution_rate, 0)).toFixed(1)}% DT ST</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* ========================================================= */}
-                    {/* C. PHẦN 1: GHI NHẬN TOP 30% VƯỢT TRỘI (THẺ HÀNG HUY CHƯƠNG) */}
-                    {/* ========================================================= */}
-                    {top30Employees.length > 0 && (
-                        <div data-section="top30" className="space-y-3">
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                    <span className="w-2.5 h-6 bg-amber-500 rounded-full inline-block" />
-                                    <h3 className="text-sm sm:text-base font-black text-slate-900 uppercase tracking-wide flex items-center gap-2">
-                                        <span>🏆 TOP 30% XUẤT SẮC DẪN ĐẦU DOANH THU</span>
-                                        <span className="px-2 py-0.5 bg-amber-100 text-amber-900 rounded-lg text-xs font-black">
-                                            {top30Employees.length} nhân sự
-                                        </span>
-                                    </h3>
-                                </div>
-                                <span className="text-xs text-slate-400 font-medium hidden sm:inline">
-                                    Huy chương 🥇🥈🥉 • Số liệu định dạng màu xanh lá in đậm
-                                </span>
-                            </div>
-
-                            {/* Danh sách thẻ hàng Top 30% */}
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                                {top30Employees.map((emp) => {
-                                    const isTop1 = emp.rank === 1;
-                                    const isTop2 = emp.rank === 2;
-                                    const isTop3 = emp.rank === 3;
-
-                                    const cardBorder = isTop1
-                                        ? 'border-amber-300 bg-gradient-to-b from-amber-50/70 to-white shadow-xs ring-1 ring-amber-300'
-                                        : isTop2
-                                            ? 'border-slate-300 bg-gradient-to-b from-slate-50 to-white shadow-2xs'
-                                            : isTop3
-                                                ? 'border-amber-200 bg-gradient-to-b from-orange-50/50 to-white shadow-2xs'
-                                                : 'border-slate-200 bg-white shadow-2xs';
-
-                                    const medalBadge = isTop1
-                                        ? '🥇'
-                                        : isTop2
-                                            ? '🥈'
-                                            : isTop3
-                                                ? '🥉'
-                                                : `🎖️ #${emp.rank}`;
-
-                                    return (
-                                        <div
-                                            key={emp.employee_id}
-                                            className={`rounded-2xl p-4 border transition hover:shadow-md relative overflow-hidden flex flex-col justify-between ${cardBorder}`}
-                                        >
-                                            {/* Header thẻ: Huy chương & Tên */}
-                                            <div className="flex items-start justify-between gap-2 pb-3 border-b border-slate-100">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-2xl shrink-0 select-none" title={`Hạng ${emp.rank}`}>
-                                                        {medalBadge}
-                                                    </span>
-                                                    <div>
-                                                        <div className="text-xs font-black text-slate-900 tracking-tight leading-snug" title={emp.full_name}>
-                                                            {emp.display_name}
-                                                        </div>
-                                                        <div className="text-[10px] text-slate-400 font-medium truncate max-w-[150px]">
-                                                            {emp.full_name}
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-black rounded-md shrink-0">
-                                                    {emp.contribution_rate}% ST
-                                                </span>
-                                            </div>
-
-                                            {/* Thông số chính: ĐỊNH DẠNG MÀU XANH LÁ IN ĐẬM */}
-                                            <div className="py-3 space-y-2">
-                                                {/* Doanh thu QĐ - Nổi bật nhất */}
-                                                <div className="flex items-baseline justify-between">
-                                                    <span className="text-[11px] font-extrabold text-slate-600">DTQĐ:</span>
-                                                    <span className="text-base font-black text-emerald-700 tracking-tight">
-                                                        {formatValue(emp.revenue_qd)} <span className="text-xs font-bold text-emerald-600">tr</span>
-                                                    </span>
-                                                </div>
-
-                                                {/* Doanh thu Thực */}
-                                                <div className="flex items-baseline justify-between text-xs">
-                                                    <span className="text-slate-500 font-semibold">DT Thực:</span>
-                                                    <span className="font-extrabold text-emerald-600">
-                                                        {formatValue(emp.revenue_actual)} tr
-                                                    </span>
-                                                </div>
-
-                                                {/* DT Trả góp & Tỷ lệ */}
-                                                <div className="flex items-baseline justify-between text-xs">
-                                                    <span className="text-slate-500 font-semibold">Trả góp:</span>
-                                                    <span className="font-extrabold text-emerald-600">
-                                                        {formatValue(emp.installment_revenue)} tr ({emp.installment_rate}%)
-                                                    </span>
-                                                </div>
-
-                                                {/* Số lượng sản phẩm */}
-                                                <div className="flex items-baseline justify-between text-xs">
-                                                    <span className="text-slate-500 font-semibold">Số lượng:</span>
-                                                    <span className="font-bold text-slate-700">
-                                                        {emp.quantity} SP
-                                                    </span>
-                                                </div>
-                                            </div>
-
-                                            {/* Thanh tiến độ tỷ trọng */}
-                                            <div className="pt-2 border-t border-slate-100">
-                                                <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
-                                                    <div
-                                                        className="bg-emerald-500 h-1.5 rounded-full"
-                                                        style={{ width: `${Math.min(100, emp.contribution_rate * 3)}%` }}
-                                                    />
-                                                </div>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* ========================================================= */}
-                    {/* D. PHẦN 2: TRỌNG TÂM NHẮC NHỞ & TĂNG TỐC KÉO SỐ (TỐI ƯU CÂN ĐỐI) */}
-                    {/* ========================================================= */}
-                    <div data-section="reminders" className="space-y-3">
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                                <span className="w-2.5 h-6 bg-orange-500 rounded-full inline-block" />
-                                <h3 className="text-sm sm:text-base font-black text-slate-900 uppercase tracking-wide flex items-center gap-2">
-                                    <span>⚡ TRỌNG TÂM NHẮC NHỞ & TĂNG TỐC KÉO SỐ</span>
-                                    <span className="px-2 py-0.5 bg-orange-100 text-orange-900 rounded-lg text-xs font-black">
-                                        {belowAvgEmployees.length + zeroOrNegativeEmployees.length + zeroInstallmentEmployees.length} mục tiêu nhắc nhở
+                            <div className="relative z-10 text-center sm:text-left space-y-1.5 mx-auto sm:mx-0">
+                                <h2 className="text-xl sm:text-2xl font-black text-[#fde047] tracking-wide uppercase drop-shadow-sm">
+                                    DOANH THU NHÂN VIÊN
+                                </h2>
+                                <p className="text-xs font-semibold text-amber-100 flex items-center justify-center sm:justify-start gap-2 flex-wrap">
+                                    <span className="inline-flex items-center gap-1">
+                                        <Store className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+                                        <span>Siêu thị: <b className="text-white">{displayStoreTitle}</b></span>
                                     </span>
-                                </h3>
+                                    <span>•</span>
+                                    <span className="inline-flex items-center gap-1">
+                                        <Calendar className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+                                        <span>Ngày: <b className="text-[#fde047]">{formatDate(reportDate)}</b></span>
+                                    </span>
+                                </p>
                             </div>
 
-                            {/* Nút chuyển đổi giao diện xem */}
-                            <div data-export-ignore="true" className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-xs">
-                                <button
-                                    type="button"
-                                    onClick={() => setReminderViewMode('CARDS')}
-                                    className={`px-2 py-1 rounded transition flex items-center gap-1 cursor-pointer font-bold ${reminderViewMode === 'CARDS' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-500'
-                                        }`}
-                                >
-                                    <LayoutGrid className="w-3.5 h-3.5" />
-                                    <span>Thẻ Cân Đối</span>
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setReminderViewMode('TABLE')}
-                                    className={`px-2 py-1 rounded transition flex items-center gap-1 cursor-pointer font-bold ${reminderViewMode === 'TABLE' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-500'
-                                        }`}
-                                >
-                                    <TableIcon className="w-3.5 h-3.5" />
-                                    <span>Bảng Chi Tiết</span>
-                                </button>
+                            {/* Thống kê nhanh trên banner */}
+                            <div className="relative z-10 grid grid-cols-3 gap-2 text-center w-full sm:w-auto shrink-0">
+                                <div className="bg-white/10 backdrop-blur-xs border border-white/20 rounded-xl p-2 min-w-[70px]">
+                                    <div className="text-[9.5px] text-amber-200 font-bold uppercase">Nhân sự</div>
+                                    <div className="text-base sm:text-lg font-black text-white">{summary.totalEmployees} <span className="text-[9px] font-medium text-amber-200">NV</span></div>
+                                </div>
+                                <div className="bg-white/10 backdrop-blur-xs border border-white/20 rounded-xl p-2 min-w-[80px]">
+                                    <div className="text-[9.5px] text-amber-200 font-bold uppercase">Tổng DTQĐ</div>
+                                    <div className="text-base sm:text-lg font-black text-[#fde047]">{formatValue(summary.totalRevenueQd)} <span className="text-[9px] font-medium text-amber-200">tr</span></div>
+                                </div>
+                                <div className="bg-white/10 backdrop-blur-xs border border-white/20 rounded-xl p-2 min-w-[65px]">
+                                    <div className="text-[9.5px] text-amber-200 font-bold uppercase">% Trả góp</div>
+                                    <div className="text-base sm:text-lg font-black text-white">{summary.avgInstallmentRate}%</div>
+                                </div>
                             </div>
                         </div>
 
-                        {/* HIỂN THỊ DẠNG THẺ CHIP CÂN ĐỐI (FLEX-WRAP CHIPS) */}
-                        {reminderViewMode === 'CARDS' ? (
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 items-stretch">
-                                {/* CỘT 1: DTQĐ DƯỚI TRUNG BÌNH */}
-                                <div className="bg-gradient-to-b from-amber-50/70 to-white border border-amber-200 rounded-2xl p-4 flex flex-col justify-between shadow-2xs space-y-3 min-h-[170px]">
-                                    <div className="space-y-1">
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-1.5 text-xs font-black text-amber-950 uppercase">
-                                                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                                                <span>DTQĐ Dưới Trung Bình</span>
-                                            </div>
-                                            <span className="px-2 py-0.5 bg-amber-200 text-amber-900 text-[10px] font-black rounded-lg shrink-0">
-                                                {belowAvgEmployees.length} bạn
-                                            </span>
-                                        </div>
-                                        <div className="text-[11px] text-amber-800 leading-snug">
-                                            Mức TB shop: <b className="text-amber-950 font-black">{formatValue(summary.avgRevenueQd)} tr</b>
-                                        </div>
-                                    </div>
-
-                                    {/* Danh sách dạng chip gọn gàng */}
-                                    <div className="flex-1 py-1">
-                                        {belowAvgEmployees.length === 0 ? (
-                                            <div className="h-full flex items-center justify-center py-4 px-2 text-center text-xs font-bold text-emerald-700 bg-white/80 rounded-xl border border-emerald-200">
-                                                ✨ 100% nhân sự đều vượt mức trung bình!
-                                            </div>
-                                        ) : (
-                                            <div className="flex flex-wrap gap-1.5 content-start">
-                                                {belowAvgEmployees.map(emp => {
-                                                    const diff = summary.avgRevenueQd - emp.revenue_qd;
-                                                    return (
-                                                        <div
-                                                            key={emp.employee_id}
-                                                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-amber-200 rounded-xl shadow-2xs text-xs hover:border-amber-300 transition"
-                                                            title={`${emp.full_name}: Hiện có ${formatValue(emp.revenue_qd)} tr, còn thiếu ${formatValue(diff)} tr để chạm TB`}
-                                                        >
-                                                            <span className="font-extrabold text-slate-800">{emp.display_name}</span>
-                                                            <span className="px-1.5 py-0.5 bg-amber-100 text-amber-900 rounded font-black text-[11px]">
-                                                                {formatValue(emp.revenue_qd)} tr
-                                                            </span>
-                                                            <span className="text-[10px] text-amber-700 font-semibold">
-                                                                (-{formatValue(diff)})
-                                                            </span>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        )}
-                                    </div>
+                        {/* B. CHỈ SỐ KPI TỔNG THỂ */}
+                        <div data-section="kpis" className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 flex items-center gap-2.5">
+                                <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
+                                    <Coins className="w-4 h-4" />
                                 </div>
-
-                                {/* CỘT 2: DTQĐ <= 0 (CHƯA CÓ SỐ / ÂM) */}
-                                <div className="bg-gradient-to-b from-rose-50/70 to-white border border-rose-200 rounded-2xl p-4 flex flex-col justify-between shadow-2xs space-y-3 min-h-[170px]">
-                                    <div className="space-y-1">
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-1.5 text-xs font-black text-rose-950 uppercase">
-                                                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-                                                <span>Chưa Có DTQĐ / Bị Âm</span>
-                                            </div>
-                                            <span className="px-2 py-0.5 bg-rose-200 text-rose-900 text-[10px] font-black rounded-lg shrink-0">
-                                                {zeroOrNegativeEmployees.length} bạn
-                                            </span>
-                                        </div>
-                                        <div className="text-[11px] text-rose-800 leading-snug">
-                                            Nhân sự trong ca chưa có doanh thu quy đổi hoặc bị âm
-                                        </div>
+                                <div className="min-w-0">
+                                    <div className="text-[10px] font-bold text-slate-500 uppercase truncate">Doanh Thu Thực</div>
+                                    <div className="text-sm sm:text-base font-black text-slate-900 leading-tight">
+                                        {formatValue(summary.totalActualRevenue)} <span className="text-[10px] font-semibold text-slate-500">tr</span>
                                     </div>
-
-                                    {/* Danh sách dạng chip gọn gàng */}
-                                    <div className="flex-1 py-1">
-                                        {zeroOrNegativeEmployees.length === 0 ? (
-                                            <div className="h-full flex items-center justify-center py-4 px-2 text-center text-xs font-bold text-emerald-700 bg-white/80 rounded-xl border border-emerald-200">
-                                                🎉 100% nhân sự trong ca đều đã nổ số!
-                                            </div>
-                                        ) : (
-                                            <div className="flex flex-wrap gap-1.5 content-start">
-                                                {zeroOrNegativeEmployees.map(emp => (
-                                                    <div
-                                                        key={emp.employee_id}
-                                                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-rose-200 rounded-xl shadow-2xs text-xs hover:border-rose-300 transition"
-                                                        title={`${emp.full_name}: ${emp.revenue_qd < 0 ? 'Bị âm do trả hàng' : 'Chưa có doanh thu'}`}
-                                                    >
-                                                        <span className="font-extrabold text-slate-800">{emp.display_name}</span>
-                                                        <span className="px-1.5 py-0.5 bg-rose-100 text-rose-700 rounded font-black text-[11px]">
-                                                            {formatValue(emp.revenue_qd)} tr
-                                                        </span>
-                                                        <span className="text-[10px] text-rose-600 font-bold">
-                                                            {emp.revenue_qd < 0 ? '⚠️ Âm số' : '🚨 Chưa có số'}
-                                                        </span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-
-                                {/* CỘT 3: CÓ DT NHƯNG 0% TRẢ GÓP */}
-                                <div className="bg-gradient-to-b from-indigo-50/70 to-white border border-indigo-200 rounded-2xl p-4 flex flex-col justify-between shadow-2xs space-y-3 min-h-[170px]">
-                                    <div className="space-y-1">
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-1.5 text-xs font-black text-indigo-950 uppercase">
-                                                <CreditCard className="w-4 h-4 text-indigo-600 shrink-0" />
-                                                <span>Có DT Nhưng 0% TrẢ GÓP</span>
-                                            </div>
-                                            <span className="px-2 py-0.5 bg-indigo-200 text-indigo-900 text-[10px] font-black rounded-lg shrink-0">
-                                                {zeroInstallmentEmployees.length} bạn
-                                            </span>
-                                        </div>
-                                        <div className="text-[11px] text-indigo-800 leading-snug">
-                                            Đã phát sinh doanh số nhưng chưa có hợp đồng trả chậm
-                                        </div>
-                                    </div>
-
-                                    {/* Danh sách dạng chip gọn gàng */}
-                                    <div className="flex-1 py-1">
-                                        {zeroInstallmentEmployees.length === 0 ? (
-                                            <div className="h-full flex items-center justify-center py-4 px-2 text-center text-xs font-bold text-emerald-700 bg-white/80 rounded-xl border border-emerald-200">
-                                                🎯 100% nhân sự có doanh thu đều có đơn trả góp!
-                                            </div>
-                                        ) : (
-                                            <div className="flex flex-wrap gap-1.5 content-start">
-                                                {zeroInstallmentEmployees.map(emp => (
-                                                    <div
-                                                        key={emp.employee_id}
-                                                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-indigo-200 rounded-xl shadow-2xs text-xs hover:border-indigo-300 transition"
-                                                        title={`${emp.full_name}: DTQĐ ${formatValue(emp.revenue_qd)} tr, chưa có hợp đồng trả góp`}
-                                                    >
-                                                        <span className="font-extrabold text-slate-800">{emp.display_name}</span>
-                                                        <span className="px-1.5 py-0.5 bg-indigo-100 text-indigo-800 rounded font-black text-[11px]">
-                                                            0% Trả góp
-                                                        </span>
-                                                        <span className="text-[10px] text-slate-500 font-semibold">
-                                                            (DT: {formatValue(emp.revenue_qd)} tr)
-                                                        </span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
+                                    <div className="text-[10px] text-slate-500 font-semibold truncate">
+                                        ~{formatValue(summary.avgActualRevenue)} tr/NV
                                     </div>
                                 </div>
                             </div>
-                        ) : (
-                            /* HIỂN THỊ DẠNG BẢNG CHI TIẾT NHẮC NHỞ */
-                            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-2xs">
-                                <div className="overflow-x-auto max-h-64 overflow-y-auto">
-                                    <table className="w-full text-left text-xs border-collapse">
-                                        <thead className="bg-slate-100 text-slate-700 font-black uppercase text-[10px] tracking-wider sticky top-0 z-10">
-                                            <tr>
-                                                <th className="py-2.5 px-3">MSNV - Tên Nhân Viên</th>
-                                                <th className="py-2.5 px-3 text-right">DTQĐ Hiện Tại</th>
-                                                <th className="py-2.5 px-3 text-center">Tiêu Chí Nhắc Nhở</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-slate-100 font-medium">
-                                            {allShiftEmployees
-                                                .filter(e => e.is_below_avg || e.is_zero_or_negative || e.is_zero_installment)
-                                                .map(emp => (
-                                                    <tr key={emp.employee_id} className="hover:bg-slate-50 transition">
-                                                        <td className="py-2.5 px-3 font-extrabold text-slate-900">
-                                                            {emp.display_name}
-                                                        </td>
-                                                        <td className="py-2.5 px-3 text-right font-black text-slate-800">
-                                                            {formatValue(emp.revenue_qd)} tr
-                                                        </td>
-                                                        <td className="py-2.5 px-3 text-center">
-                                                            <div className="flex items-center justify-center gap-1 flex-wrap">
-                                                                {emp.is_zero_or_negative && (
-                                                                    <span className="px-2 py-0.5 bg-rose-100 text-rose-700 rounded text-[10px] font-bold">
-                                                                        Chưa có số
-                                                                    </span>
-                                                                )}
-                                                                {emp.is_below_avg && !emp.is_zero_or_negative && (
-                                                                    <span className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded text-[10px] font-bold">
-                                                                        Dưới TB (-{formatValue(summary.avgRevenueQd - emp.revenue_qd)})
-                                                                    </span>
-                                                                )}
-                                                                {emp.is_zero_installment && (
-                                                                    <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded text-[10px] font-bold">
-                                                                        0% Trả góp
-                                                                    </span>
-                                                                )}
+
+                            <div className="bg-emerald-50/70 border border-emerald-200 rounded-2xl p-3 flex items-center gap-2.5">
+                                <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                                    <TrendingUp className="w-4 h-4" />
+                                </div>
+                                <div className="min-w-0">
+                                    <div className="text-[10px] font-extrabold text-emerald-800 uppercase truncate">Doanh Thu Quy Đổi</div>
+                                    <div className="text-sm sm:text-base font-black text-emerald-700 leading-tight">
+                                        {formatValue(summary.totalRevenueQd)} <span className="text-[10px] font-semibold text-emerald-600">tr</span>
+                                    </div>
+                                    <div className="text-[10px] text-emerald-700 font-semibold truncate">
+                                        ~{formatValue(summary.avgRevenueQd)} tr/NV
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="bg-purple-50/70 border border-purple-200 rounded-2xl p-3 flex items-center gap-2.5">
+                                <div className="w-9 h-9 rounded-xl bg-purple-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                                    <CreditCard className="w-4 h-4" />
+                                </div>
+                                <div className="min-w-0">
+                                    <div className="text-[10px] font-extrabold text-purple-900 uppercase truncate">Trả Góp / Trả Chậm</div>
+                                    <div className="text-sm sm:text-base font-black text-purple-700 leading-tight">
+                                        {formatValue(summary.totalInstallmentRevenue)} <span className="text-[10px] font-semibold text-purple-600">tr</span>
+                                    </div>
+                                    <div className="text-[10px] text-purple-700 font-semibold truncate">
+                                        {summary.avgInstallmentRate}% DT thực
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* ========================================================= */}
+                        {/* C. PHẦN 1: GHI NHẬN TOP XUẤT SẮC DẪN ĐẦU (TỐI ĐA 3 NV)    */}
+                        {/* ========================================================= */}
+                        {topLeadingEmployees.length > 0 && (
+                            <div data-section="top30" className="space-y-2.5">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <span className="w-2.5 h-5 bg-amber-500 rounded-full inline-block" />
+                                        <h3 className="text-xs sm:text-sm font-black text-slate-900 uppercase tracking-wide flex items-center gap-1.5">
+                                            <Trophy className="w-4 h-4 text-amber-500 shrink-0" />
+                                            <span>TOP XUẤT SẮC DẪN ĐẦU DOANH THU</span>
+                                        </h3>
+                                    </div>
+
+                                </div>
+
+                                {/* Danh sách thẻ hàng Top vượt trội (tối đa 3 nhân sự) */}
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                                    {topLeadingEmployees.map((emp) => {
+                                        const isTop1 = emp.rank === 1;
+                                        const isTop2 = emp.rank === 2;
+                                        const isTop3 = emp.rank === 3;
+
+                                        const cardBorder = isTop1
+                                            ? 'border-amber-300 bg-gradient-to-b from-amber-50/70 to-white shadow-xs ring-1 ring-amber-300'
+                                            : isTop2
+                                                ? 'border-slate-300 bg-gradient-to-b from-slate-50 to-white shadow-2xs'
+                                                : isTop3
+                                                    ? 'border-amber-200 bg-gradient-to-b from-orange-50/50 to-white shadow-2xs'
+                                                    : 'border-slate-200 bg-white shadow-2xs';
+
+                                        const medalBadge = isTop1
+                                            ? '🥇'
+                                            : isTop2
+                                                ? '🥈'
+                                                : isTop3
+                                                    ? '🥉'
+                                                    : `🎖️ #${emp.rank}`;
+
+                                        return (
+                                            <div
+                                                key={emp.employee_id}
+                                                className={`rounded-2xl p-3 border transition hover:shadow-md relative overflow-hidden flex flex-col justify-between ${cardBorder}`}
+                                            >
+                                                {/* Header thẻ: Huy chương & Tên */}
+                                                <div className="flex items-start justify-between gap-1.5 pb-2 border-b border-slate-100">
+                                                    <div className="flex items-center gap-1.5 min-w-0">
+                                                        <span className="text-xl shrink-0 select-none" title={`Hạng ${emp.rank}`}>
+                                                            {medalBadge}
+                                                        </span>
+                                                        <div className="min-w-0">
+                                                            <div className="text-xs font-black text-slate-900 tracking-tight leading-tight truncate" title={emp.full_name}>
+                                                                {emp.short_name}
                                                             </div>
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                        </tbody>
-                                    </table>
+                                                            <div className="text-[9.5px] font-semibold text-slate-400 font-mono">
+                                                                #{emp.employee_id}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-800 text-[9.5px] font-black rounded shrink-0">
+                                                        {emp.contribution_rate}% ST
+                                                    </span>
+                                                </div>
+
+                                                {/* Thông số chính */}
+                                                <div className="py-2 space-y-1.5">
+                                                    {/* Doanh thu QĐ - Nổi bật nhất */}
+                                                    <div className="flex items-baseline justify-between">
+                                                        <span className="text-[10px] font-extrabold text-slate-600">DTQĐ:</span>
+                                                        <span className="text-sm font-black text-emerald-700 tracking-tight">
+                                                            {formatValue(emp.revenue_qd)} <span className="text-[10px] font-bold text-emerald-600">tr</span>
+                                                        </span>
+                                                    </div>
+
+                                                    {/* Doanh thu Thực */}
+                                                    <div className="flex items-baseline justify-between text-[11px]">
+                                                        <span className="text-slate-500 font-semibold">DT Thực:</span>
+                                                        <span className="font-extrabold text-emerald-600">
+                                                            {formatValue(emp.revenue_actual)} tr
+                                                        </span>
+                                                    </div>
+
+                                                    {/* DT Trả góp & Tỷ lệ */}
+                                                    <div className="flex items-baseline justify-between text-[11px]">
+                                                        <span className="text-slate-500 font-semibold">Trả góp:</span>
+                                                        <span className="font-extrabold text-emerald-600">
+                                                            {formatValue(emp.installment_revenue)} tr ({emp.installment_rate}%)
+                                                        </span>
+                                                    </div>
+
+                                                    {/* Số lượng sản phẩm */}
+                                                    <div className="flex items-baseline justify-between text-[11px]">
+                                                        <span className="text-slate-500 font-semibold">Số lượng:</span>
+                                                        <span className="font-bold text-slate-700">
+                                                            {emp.quantity} SP
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             </div>
                         )}
-                    </div>
 
-                    {/* ========================================================= */}
-                    {/* E. PHẦN 3: BẢNG CHI TIẾT SỐ LIỆU DOANH THU NHÂN VIÊN       */}
-                    {/* ========================================================= */}
-                    <div data-section="table" className="space-y-3">
-                        {/* Thanh công cụ bảng: Lọc & Tìm kiếm */}
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
-                            <div className="flex items-center gap-2">
-                                <span className="w-2.5 h-6 bg-blue-600 rounded-full inline-block" />
-                                <h3 className="text-sm sm:text-base font-black text-slate-900 uppercase tracking-wide">
-                                    BẢNG CHI TIẾT DOANH THU NHÂN VIÊN
-                                </h3>
-                                <span className="text-xs text-slate-500 font-bold">({displayTableRows.length}/{allShiftEmployees.length} bạn)</span>
-                            </div>
-
-                            <div data-export-ignore="true" className="flex flex-wrap items-center gap-2">
-                                {/* Bộ lọc danh mục */}
-                                <div className="flex items-center bg-slate-100 p-0.5 rounded-xl text-xs font-bold border border-slate-200">
-                                    <button
-                                        type="button"
-                                        onClick={() => setFilterCategory('ALL')}
-                                        className={`px-2.5 py-1 rounded-lg transition cursor-pointer ${filterCategory === 'ALL'
-                                                ? 'bg-white text-slate-900 shadow-2xs font-extrabold'
-                                                : 'text-slate-500 hover:text-slate-800'
-                                            }`}
-                                    >
-                                        Tất cả ({allShiftEmployees.length})
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setFilterCategory('ACTIVE_ONLY')}
-                                        className={`px-2.5 py-1 rounded-lg transition cursor-pointer ${filterCategory === 'ACTIVE_ONLY'
-                                                ? 'bg-white text-emerald-800 shadow-2xs font-extrabold'
-                                                : 'text-slate-500 hover:text-slate-800'
-                                            }`}
-                                    >
-                                        Đang có số ({analyzedEmployees.length})
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setFilterCategory('TOP_30')}
-                                        className={`px-2.5 py-1 rounded-lg transition cursor-pointer ${filterCategory === 'TOP_30'
-                                                ? 'bg-white text-amber-700 shadow-2xs font-extrabold'
-                                                : 'text-slate-500 hover:text-slate-800'
-                                            }`}
-                                    >
-                                        Top 30%
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setFilterCategory('BELOW_AVG')}
-                                        className={`px-2.5 py-1 rounded-lg transition cursor-pointer ${filterCategory === 'BELOW_AVG'
-                                                ? 'bg-white text-orange-700 shadow-2xs font-extrabold'
-                                                : 'text-slate-500 hover:text-slate-800'
-                                            }`}
-                                    >
-                                        Dưới TB
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setFilterCategory('ZERO_OR_NEG')}
-                                        className={`px-2.5 py-1 rounded-lg transition cursor-pointer ${filterCategory === 'ZERO_OR_NEG'
-                                                ? 'bg-white text-rose-700 shadow-2xs font-extrabold'
-                                                : 'text-slate-500 hover:text-slate-800'
-                                            }`}
-                                    >
-                                        DTQĐ &le; 0
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setFilterCategory('ZERO_INSTALLMENT')}
-                                        className={`px-2.5 py-1 rounded-lg transition cursor-pointer ${filterCategory === 'ZERO_INSTALLMENT'
-                                                ? 'bg-white text-indigo-700 shadow-2xs font-extrabold'
-                                                : 'text-slate-500 hover:text-slate-800'
-                                            }`}
-                                    >
-                                        0% Trả góp
-                                    </button>
+                        {/* ========================================================= */}
+                        {/* D. PHẦN 2: TRỌNG TÂM NHẮC NHỞ & TĂNG TỐC KÉO SỐ (TỐI ƯU CÂN ĐỐI) */}
+                        {/* ========================================================= */}
+                        <div data-section="reminders" className="space-y-2.5">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <span className="w-2.5 h-5 bg-orange-500 rounded-full inline-block" />
+                                    <h3 className="text-xs sm:text-sm font-black text-slate-900 uppercase tracking-wide flex items-center gap-1.5">
+                                        <Zap className="w-4 h-4 text-orange-500 shrink-0 fill-orange-500" />
+                                        <span>TRỌNG TÂM NHẮC NHỞ & TĂNG TỐC</span>
+                                    </h3>
                                 </div>
 
-                                {/* Ô tìm kiếm */}
-                                <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl w-48 sm:w-56">
-                                    <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                                    <input
-                                        type="text"
-                                        placeholder="Tìm tên / MSNV..."
-                                        value={searchQuery}
-                                        onChange={e => setSearchQuery(e.target.value)}
-                                        className="bg-transparent text-xs outline-hidden w-full text-slate-800 placeholder-slate-400 font-medium"
-                                    />
+                                {/* Nút chuyển đổi giao diện xem */}
+                                <div data-export-ignore="true" className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-xs">
+                                    <button
+                                        type="button"
+                                        onClick={() => setReminderViewMode('CARDS')}
+                                        className={`px-2 py-1 rounded transition flex items-center gap-1 cursor-pointer font-bold ${reminderViewMode === 'CARDS' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-500'
+                                            }`}
+                                    >
+                                        <LayoutGrid className="w-3.5 h-3.5" />
+                                        <span>Thẻ</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setReminderViewMode('TABLE')}
+                                        className={`px-2 py-1 rounded transition flex items-center gap-1 cursor-pointer font-bold ${reminderViewMode === 'TABLE' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-500'
+                                            }`}
+                                    >
+                                        <TableIcon className="w-3.5 h-3.5" />
+                                        <span>Bảng</span>
+                                    </button>
                                 </div>
                             </div>
+
+                            {/* HIỂN THỊ DẠNG THẺ CHIP CÂN ĐỐI (FLEX-WRAP CHIPS) */}
+                            {reminderViewMode === 'CARDS' ? (
+                                <div className={`grid grid-cols-1 ${zeroOrNegativeEmployees.length > 0 ? 'sm:grid-cols-3' : 'sm:grid-cols-2'} gap-2.5 items-stretch`}>
+                                    {/* CỘT 1: DTQĐ DƯỚI TRUNG BÌNH */}
+                                    <div className="bg-gradient-to-b from-amber-50/70 to-white border border-amber-200 rounded-2xl p-3 flex flex-col justify-between shadow-2xs space-y-2.5 min-h-[150px]">
+                                        <div className="space-y-0.5">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-1.5 text-xs font-black text-amber-950 uppercase">
+                                                    <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                                    <span>Dưới Trung Bình</span>
+                                                </div>
+                                                <span className="px-1.5 py-0.5 bg-amber-200 text-amber-900 text-[9.5px] font-black rounded shrink-0">
+                                                    {belowAvgEmployees.length} bạn
+                                                </span>
+                                            </div>
+                                            <div className="text-[10.5px] text-amber-800 leading-snug">
+                                                Mức TB: <b className="text-amber-950 font-black">{formatValue(summary.avgRevenueQd)} tr</b>
+                                            </div>
+                                        </div>
+
+                                        {/* Danh sách dạng chip gọn gàng */}
+                                        <div className="flex-1 py-1">
+                                            {belowAvgEmployees.length === 0 ? (
+                                                <div className="h-full flex items-center justify-center py-3 px-2 text-center text-[11px] font-bold text-emerald-700 bg-white/80 rounded-xl border border-emerald-200">
+                                                    {summary.totalEmployees === 0 || summary.activeCount === 0
+                                                        ? 'Chưa có nhân sự phát sinh số'
+                                                        : (summary.zeroOrNegCount > 0 || zeroOrNegativeEmployees.length > 0)
+                                                            ? '✨ NV có số đều đạt mức TB!'
+                                                            : '✨ 100% nhân sự đều vượt mức TB!'}
+                                                </div>
+                                            ) : (
+                                                <div className="flex flex-wrap gap-1 content-start">
+                                                    {belowAvgEmployees.map(emp => {
+                                                        const diff = summary.avgRevenueQd - emp.revenue_qd;
+                                                        return (
+                                                            <div
+                                                                key={emp.employee_id}
+                                                                className="inline-flex items-center gap-1 px-2 py-1 bg-white border border-amber-200 rounded-lg shadow-2xs text-[11px] hover:border-amber-300 transition"
+                                                                title={`${emp.full_name}: Hiện có ${formatValue(emp.revenue_qd)} tr, còn thiếu ${formatValue(diff)} tr`}
+                                                            >
+                                                                <span className="font-bold text-slate-800">{emp.short_name}</span>
+                                                                <span className="px-1 py-0.2 bg-amber-100 text-amber-900 rounded font-black text-[10px]">
+                                                                    {formatValue(emp.revenue_qd)}
+                                                                </span>
+                                                                <span className="text-[9.5px] text-amber-700 font-semibold">
+                                                                    (-{formatValue(diff)})
+                                                                </span>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* CỘT 2: DTQĐ <= 0 (CHƯA CÓ SỐ / ÂM) - CHỈ HIỂN THỊ KHI CÓ NHÂN SỰ CHƯA CÓ DOANH THU HOẶC ÂM SỐ */}
+                                    {zeroOrNegativeEmployees.length > 0 && (
+                                        <div className="bg-gradient-to-b from-rose-50/70 to-white border border-rose-200 rounded-2xl p-3 flex flex-col justify-between shadow-2xs space-y-2.5 min-h-[150px]">
+                                            <div className="space-y-0.5">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-1.5 text-xs font-black text-rose-950 uppercase">
+                                                        <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                                                        <span>Doanh thu bất ổn</span>
+                                                    </div>
+                                                    <span className="px-1.5 py-0.5 bg-rose-200 text-rose-900 text-[9.5px] font-black rounded shrink-0">
+                                                        {zeroOrNegativeEmployees.length} bạn
+                                                    </span>
+                                                </div>
+                                                <div className="text-[10.5px] text-rose-800 leading-snug">
+                                                    Tập trung hơn - Cố gắng hơn
+                                                </div>
+                                            </div>
+
+                                            {/* Danh sách dạng chip gọn gàng */}
+                                            <div className="flex-1 py-1">
+                                                <div className="flex flex-wrap gap-1 content-start">
+                                                    {zeroOrNegativeEmployees.map(emp => (
+                                                        <div
+                                                            key={emp.employee_id}
+                                                            className="inline-flex items-center gap-1 px-2 py-1 bg-white border border-rose-200 rounded-lg shadow-2xs text-[11px] hover:border-rose-300 transition"
+                                                            title={`${emp.full_name}: ${emp.revenue_qd < 0 ? 'Bị âm do trả hàng' : 'Chưa có doanh thu'}`}
+                                                        >
+                                                            <span className="font-bold text-slate-800">{emp.short_name}</span>
+                                                            <span className="px-1 py-0.2 bg-rose-100 text-rose-700 rounded font-black text-[10px]">
+                                                                {formatValue(emp.revenue_qd)}
+                                                            </span>
+                                                            <span className="text-[9.5px] text-rose-600 font-bold">
+                                                                {emp.revenue_qd < 0 ? '⚠️ Âm' : '🚨 Chậm'}
+                                                            </span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* CỘT 3: CÓ DT NHƯNG 0% TRẢ GÓP */}
+                                    <div className="bg-gradient-to-b from-indigo-50/70 to-white border border-indigo-200 rounded-2xl p-3 flex flex-col justify-between shadow-2xs space-y-2.5 min-h-[150px]">
+                                        <div className="space-y-0.5">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-1.5 text-xs font-black text-indigo-950 uppercase">
+                                                    <CreditCard className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                                                    <span>0% Trả Góp</span>
+                                                </div>
+                                                <span className="px-1.5 py-0.5 bg-indigo-200 text-indigo-900 text-[9.5px] font-black rounded shrink-0">
+                                                    {zeroInstallmentEmployees.length} bạn
+                                                </span>
+                                            </div>
+                                            <div className="text-[10.5px] text-indigo-800 leading-snug">
+                                                Duyệt nhanh - Lãi suất thấp từ 0%
+                                            </div>
+                                        </div>
+
+                                        {/* Danh sách dạng chip gọn gàng */}
+                                        <div className="flex-1 py-1">
+                                            {zeroInstallmentEmployees.length === 0 ? (
+                                                <div className="h-full flex items-center justify-center py-3 px-2 text-center text-[11px] font-bold text-emerald-700 bg-white/80 rounded-xl border border-emerald-200">
+                                                    {summary.totalEmployees === 0 || summary.activeCount === 0
+                                                        ? 'Chưa có nhân sự nào phát sinh doanh thu'
+                                                        : '🎯 100% nhân sự đều có đơn trả góp!'}
+                                                </div>
+                                            ) : (
+                                                <div className="flex flex-wrap gap-1 content-start">
+                                                    {zeroInstallmentEmployees.map(emp => (
+                                                        <div
+                                                            key={emp.employee_id}
+                                                            className="inline-flex items-center gap-1 px-2 py-1 bg-white border border-indigo-200 rounded-lg shadow-2xs text-[11px] hover:border-indigo-300 transition"
+                                                            title={`${emp.full_name}: DTQĐ ${formatValue(emp.revenue_qd)} tr, chưa có hợp đồng trả góp`}
+                                                        >
+                                                            <span className="font-bold text-slate-800">{emp.short_name}</span>
+                                                            <span className="px-1 py-0.2 bg-indigo-100 text-indigo-800 rounded font-black text-[10px]">
+                                                                0% TG
+                                                            </span>
+                                                            <span className="text-[9.5px] text-slate-500 font-semibold">
+                                                                ({formatValue(emp.revenue_qd)}tr)
+                                                            </span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                /* HIỂN THỊ DẠNG BẢNG CHI TIẾT NHẮC NHỞ */
+                                <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-2xs">
+                                    <div className="overflow-x-auto max-h-64 overflow-y-auto">
+                                        <table className="w-full text-left text-xs border-collapse">
+                                            <thead className="bg-slate-100 text-slate-700 font-black uppercase text-[10px] tracking-wider sticky top-0 z-10">
+                                                <tr>
+                                                    <th className="py-2 px-2.5">Nhân Viên</th>
+                                                    <th className="py-2 px-2.5 text-right">DTQĐ</th>
+                                                    <th className="py-2 px-2.5 text-center">Tiêu Chí Nhắc Nhở</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100 font-medium">
+                                                {allShiftEmployees
+                                                    .filter(e => e.is_below_avg || e.is_zero_or_negative || e.is_zero_installment)
+                                                    .map(emp => (
+                                                        <tr key={emp.employee_id} className="hover:bg-slate-50 transition">
+                                                            <td className="py-2 px-2.5 font-extrabold text-slate-900 text-[11.5px]">
+                                                                {emp.short_name} <span className="text-[9.5px] text-slate-400 font-normal">#{emp.employee_id}</span>
+                                                            </td>
+                                                            <td className="py-2 px-2.5 text-right font-black text-slate-800 text-[11.5px]">
+                                                                {formatValue(emp.revenue_qd)} tr
+                                                            </td>
+                                                            <td className="py-2 px-2.5 text-center">
+                                                                <div className="flex items-center justify-center gap-1 flex-wrap">
+                                                                    {emp.is_zero_or_negative && (
+                                                                        <span className="px-1.5 py-0.5 bg-rose-100 text-rose-700 rounded text-[9.5px] font-bold">
+                                                                            Chưa có số
+                                                                        </span>
+                                                                    )}
+                                                                    {emp.is_below_avg && !emp.is_zero_or_negative && (
+                                                                        <span className="px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded text-[9.5px] font-bold">
+                                                                            Dưới TB (-{formatValue(summary.avgRevenueQd - emp.revenue_qd)})
+                                                                        </span>
+                                                                    )}
+                                                                    {emp.is_zero_installment && (
+                                                                        <span className="px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded text-[9.5px] font-bold">
+                                                                            0% Trả góp
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
-                        {/* Bảng dữ liệu chính */}
-                        <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-                            <div className="overflow-x-auto max-h-[600px] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300">
-                                <table className="w-full text-left text-xs border-collapse">
-                                    <thead className="sticky top-0 z-20 shadow-2xs select-none">
-                                        <tr className="bg-slate-900 text-white text-[11px] font-black uppercase h-11 tracking-wider">
-                                            {/* STT */}
-                                            <th
-                                                onClick={() => handleSort('rank')}
-                                                className="py-2 px-2.5 text-center w-12 cursor-pointer hover:bg-slate-800 border-r border-slate-800 transition"
-                                                title="Sắp xếp theo thứ hạng"
-                                            >
-                                                <div className="flex items-center justify-center gap-1">
-                                                    <span>STT</span>
-                                                    <ArrowUpDown className="w-2.5 h-2.5 opacity-60" />
-                                                </div>
-                                            </th>
+                        {/* ========================================================= */}
+                        {/* E. PHẦN 3: BẢNG CHI TIẾT SỐ LIỆU DOANH THU NHÂN VIÊN       */}
+                        {/* ========================================================= */}
+                        <div data-section="table" className="space-y-2.5">
+                            {/* Thanh công cụ bảng: Lọc & Tìm kiếm */}
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-1">
+                                <div className="flex items-center gap-2">
+                                    <span className="w-2.5 h-5 bg-blue-600 rounded-full inline-block" />
+                                    <h3 className="text-xs sm:text-sm font-black text-slate-900 uppercase tracking-wide">
+                                        BẢNG CHI TIẾT
+                                    </h3>
+                                    <span className="text-[11px] text-slate-500 font-bold">({displayTableRows.length}/{allShiftEmployees.length} bạn)</span>
+                                </div>
 
-                                            {/* Phân loại & Huy hiệu */}
-                                            <th className="py-2 px-2 text-center w-24 border-r border-slate-800">
-                                                ĐÁNH GIÁ
-                                            </th>
+                                <div data-export-ignore="true" className="flex flex-wrap items-center gap-2">
+                                    {/* Bộ lọc danh mục */}
+                                    <div className="flex items-center bg-slate-100 p-0.5 rounded-xl text-[11px] font-bold border border-slate-200">
+                                        <button
+                                            type="button"
+                                            onClick={() => setFilterCategory('ALL')}
+                                            className={`px-2 py-0.5 rounded-lg transition cursor-pointer ${filterCategory === 'ALL'
+                                                ? 'bg-white text-slate-900 shadow-2xs font-extrabold'
+                                                : 'text-slate-500 hover:text-slate-800'
+                                                }`}
+                                        >
+                                            Tất cả ({allShiftEmployees.length})
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setFilterCategory('ACTIVE_ONLY')}
+                                            className={`px-2 py-0.5 rounded-lg transition cursor-pointer ${filterCategory === 'ACTIVE_ONLY'
+                                                ? 'bg-white text-emerald-800 shadow-2xs font-extrabold'
+                                                : 'text-slate-500 hover:text-slate-800'
+                                                }`}
+                                        >
+                                            Có số ({analyzedEmployees.length})
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setFilterCategory('TOP_30')}
+                                            className={`px-2 py-0.5 rounded-lg transition cursor-pointer ${filterCategory === 'TOP_30'
+                                                ? 'bg-white text-amber-700 shadow-2xs font-extrabold'
+                                                : 'text-slate-500 hover:text-slate-800'
+                                                }`}
+                                        >
+                                            Top 30%
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setFilterCategory('BELOW_AVG')}
+                                            className={`px-2 py-0.5 rounded-lg transition cursor-pointer ${filterCategory === 'BELOW_AVG'
+                                                ? 'bg-white text-orange-700 shadow-2xs font-extrabold'
+                                                : 'text-slate-500 hover:text-slate-800'
+                                                }`}
+                                        >
+                                            Dưới TB
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setFilterCategory('ZERO_OR_NEG')}
+                                            className={`px-2 py-0.5 rounded-lg transition cursor-pointer ${filterCategory === 'ZERO_OR_NEG'
+                                                ? 'bg-white text-rose-700 shadow-2xs font-extrabold'
+                                                : 'text-slate-500 hover:text-slate-800'
+                                                }`}
+                                        >
+                                            &le; 0đ
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setFilterCategory('ZERO_INSTALLMENT')}
+                                            className={`px-2 py-0.5 rounded-lg transition cursor-pointer ${filterCategory === 'ZERO_INSTALLMENT'
+                                                ? 'bg-white text-indigo-700 shadow-2xs font-extrabold'
+                                                : 'text-slate-500 hover:text-slate-800'
+                                                }`}
+                                        >
+                                            0% TG
+                                        </button>
+                                    </div>
 
-                                            {/* MSNV - Tên NV Rút Gọn */}
-                                            <th
-                                                onClick={() => handleSort('name')}
-                                                className="py-2 px-3 min-w-[190px] cursor-pointer hover:bg-slate-800 border-r border-slate-800 transition"
-                                                title="Mã nhân viên và tên rút gọn"
-                                            >
-                                                <div className="flex items-center gap-1.5">
-                                                    <span>MSNV - Tên NV</span>
-                                                    <ArrowUpDown className="w-2.5 h-2.5 opacity-60" />
-                                                </div>
-                                            </th>
+                                    {/* Ô tìm kiếm */}
+                                    <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 px-2 py-1 rounded-xl w-36 sm:w-44">
+                                        <Search className="w-3 h-3 text-slate-400 shrink-0" />
+                                        <input
+                                            type="text"
+                                            placeholder="Tìm tên / MSNV..."
+                                            value={searchQuery}
+                                            onChange={e => setSearchQuery(e.target.value)}
+                                            className="bg-transparent text-[11px] outline-hidden w-full text-slate-800 placeholder-slate-400 font-medium"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
 
-                                            {/* Số Lượng */}
-                                            <th
-                                                onClick={() => handleSort('qty')}
-                                                className="py-2 px-2.5 text-right w-20 cursor-pointer hover:bg-slate-800 border-r border-slate-800 transition"
-                                            >
-                                                <div className="flex items-center justify-end gap-1">
-                                                    <span>SL SP</span>
-                                                    <ArrowUpDown className="w-2.5 h-2.5 opacity-60" />
-                                                </div>
-                                            </th>
+                            {/* Bảng dữ liệu chính - Tinh gọn cho Smartphone */}
+                            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+                                <div className="overflow-x-auto max-h-[600px] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300">
+                                    <table className="w-full text-left text-xs border-collapse" style={{ tableLayout: 'fixed', minWidth: '560px' }}>
+                                        <colgroup>
+                                            <col style={{ width: '34px' }} />
+                                            <col style={{ width: '56px' }} />
+                                            <col style={{ minWidth: '120px' }} />
+                                            <col style={{ width: '38px' }} />
+                                            <col style={{ width: '68px' }} />
+                                            <col style={{ width: '76px' }} />
+                                            <col style={{ width: '48px' }} />
+                                            <col style={{ width: '68px' }} />
+                                            <col style={{ width: '48px' }} />
+                                        </colgroup>
+                                        <thead className="sticky top-0 z-20 shadow-2xs select-none">
+                                            <tr className="bg-slate-900 text-white text-[10.5px] font-black uppercase h-9 tracking-wider">
+                                                {/* STT */}
+                                                <th
+                                                    onClick={() => handleSort('rank')}
+                                                    className="py-1.5 px-0.5 text-center cursor-pointer hover:bg-slate-800 border-r border-slate-800 transition"
+                                                    title="Sắp xếp theo thứ hạng"
+                                                >
+                                                    <div className="flex items-center justify-center gap-0.5">
+                                                        <span>STT</span>
+                                                        <ArrowUpDown className="w-2.5 h-2.5 opacity-60" />
+                                                    </div>
+                                                </th>
 
-                                            {/* Doanh Thu Thực */}
-                                            <th
-                                                onClick={() => handleSort('actual')}
-                                                className="py-2 px-3 text-right w-32 cursor-pointer hover:bg-slate-800 border-r border-slate-800 transition"
-                                            >
-                                                <div className="flex items-center justify-end gap-1">
-                                                    <span>DT Thực (tr)</span>
-                                                    <ArrowUpDown className="w-2.5 h-2.5 opacity-60" />
-                                                </div>
-                                            </th>
+                                                {/* Phân loại & Huy hiệu */}
+                                                <th className="py-1.5 px-0.5 text-center border-r border-slate-800">
+                                                    Đ.GIÁ
+                                                </th>
 
-                                            {/* DTQĐ (Màu Vàng Nổi Bật) */}
-                                            <th
-                                                onClick={() => handleSort('qd')}
-                                                className="py-2 px-3 text-right w-32 bg-[#005a43] text-[#fde047] cursor-pointer hover:bg-[#004735] border-r border-[#004735] transition"
-                                            >
-                                                <div className="flex items-center justify-end gap-1">
-                                                    <span>DTQĐ (tr)</span>
-                                                    <ArrowUpDown className="w-2.5 h-2.5 opacity-80" />
-                                                </div>
-                                            </th>
+                                                {/* MSNV - Tên NV Rút Gọn */}
+                                                <th
+                                                    onClick={() => handleSort('name')}
+                                                    className="py-1.5 px-2 cursor-pointer hover:bg-slate-800 border-r border-slate-800 transition"
+                                                    title="Mã nhân viên và tên rút gọn"
+                                                >
+                                                    <div className="flex items-center gap-1">
+                                                        <span>NHÂN VIÊN</span>
+                                                        <ArrowUpDown className="w-2.5 h-2.5 opacity-60" />
+                                                    </div>
+                                                </th>
 
-                                            {/* Tỷ trọng ST */}
-                                            <th className="py-2 px-2.5 text-right w-24 border-r border-slate-800">
-                                                Tỉ Trọng
-                                            </th>
+                                                {/* Số Lượng */}
+                                                <th
+                                                    onClick={() => handleSort('qty')}
+                                                    className="py-1.5 px-1 text-right cursor-pointer hover:bg-slate-800 border-r border-slate-800 transition"
+                                                    title="Số lượng sản phẩm"
+                                                >
+                                                    <div className="flex items-center justify-end gap-0.5">
+                                                        <span>SL</span>
+                                                        <ArrowUpDown className="w-2.5 h-2.5 opacity-60" />
+                                                    </div>
+                                                </th>
 
-                                            {/* DT Trả Góp */}
-                                            <th
-                                                onClick={() => handleSort('installment')}
-                                                className="py-2 px-3 text-right w-32 cursor-pointer hover:bg-slate-800 border-r border-slate-800 transition"
-                                            >
-                                                <div className="flex items-center justify-end gap-1">
-                                                    <span>Trả Góp (tr)</span>
-                                                    <ArrowUpDown className="w-2.5 h-2.5 opacity-60" />
-                                                </div>
-                                            </th>
+                                                {/* Doanh Thu Thực */}
+                                                <th
+                                                    onClick={() => handleSort('actual')}
+                                                    className="py-1.5 px-1.5 text-right cursor-pointer hover:bg-slate-800 border-r border-slate-800 transition"
+                                                    title="Doanh thu thực tế (triệu đồng)"
+                                                >
+                                                    <div className="flex items-center justify-end gap-0.5">
+                                                        <span>DT Thực</span>
+                                                        <ArrowUpDown className="w-2.5 h-2.5 opacity-60" />
+                                                    </div>
+                                                </th>
 
-                                            {/* % Trả Góp */}
-                                            <th className="py-2 px-2.5 text-right w-24">
-                                                % Trả Góp
-                                            </th>
-                                        </tr>
-                                    </thead>
+                                                {/* DTQĐ (Màu Vàng Nổi Bật) */}
+                                                <th
+                                                    onClick={() => handleSort('qd')}
+                                                    className="py-1.5 px-1.5 text-right bg-[#005a43] text-[#fde047] cursor-pointer hover:bg-[#004735] border-r border-[#004735] transition"
+                                                    title="Doanh thu quy đổi (triệu đồng)"
+                                                >
+                                                    <div className="flex items-center justify-end gap-0.5">
+                                                        <span>DTQĐ</span>
+                                                        <ArrowUpDown className="w-2.5 h-2.5 opacity-80" />
+                                                    </div>
+                                                </th>
 
-                                    <tbody className="divide-y divide-slate-100 font-medium text-xs">
-                                        {displayTableRows.map((row) => {
-                                            const isTop1 = row.rank === 1 && !row.is_zero_or_negative;
-                                            const isTop2 = row.rank === 2 && !row.is_zero_or_negative;
-                                            const isTop3 = row.rank === 3 && !row.is_zero_or_negative;
-                                            const isTop30 = row.is_top_30;
+                                                {/* Tỷ trọng ST */}
+                                                <th className="py-1.5 px-1 text-right border-r border-slate-800" title="Tỷ trọng đóng góp vào doanh thu siêu thị">
+                                                    % ST
+                                                </th>
 
-                                            const rowBg = isTop1
-                                                ? 'bg-amber-50/40 hover:bg-amber-50'
-                                                : isTop2
-                                                    ? 'bg-slate-50/50 hover:bg-slate-100'
-                                                    : isTop3
-                                                        ? 'bg-orange-50/30 hover:bg-orange-50'
-                                                        : row.is_zero_or_negative
-                                                            ? 'bg-rose-50/20 hover:bg-rose-50/40'
-                                                            : 'hover:bg-slate-50';
+                                                {/* DT Trả Góp */}
+                                                <th
+                                                    onClick={() => handleSort('installment')}
+                                                    className="py-1.5 px-1.5 text-right cursor-pointer hover:bg-slate-800 border-r border-slate-800 transition"
+                                                    title="Doanh thu trả góp (triệu đồng)"
+                                                >
+                                                    <div className="flex items-center justify-end gap-0.5">
+                                                        <span>T.Góp</span>
+                                                        <ArrowUpDown className="w-2.5 h-2.5 opacity-60" />
+                                                    </div>
+                                                </th>
 
-                                            return (
-                                                <tr key={row.employee_id} className={`transition ${rowBg}`}>
-                                                    {/* 1. STT */}
-                                                    <td className="py-2.5 px-2.5 text-center font-bold text-slate-700 border-r border-slate-100">
-                                                        {row.rank}
-                                                    </td>
+                                                {/* % Trả Góp */}
+                                                <th className="py-1.5 px-1 text-right" title="Tỷ lệ trả góp trên doanh thu thực">
+                                                    % TG
+                                                </th>
+                                            </tr>
+                                        </thead>
 
-                                                    {/* 2. Huy hiệu */}
-                                                    <td className="py-2.5 px-2 text-center border-r border-slate-100">
-                                                        {isTop1 ? (
-                                                            <span className="text-lg" title="Hạng 1 xuất sắc">🥇</span>
-                                                        ) : isTop2 ? (
-                                                            <span className="text-lg" title="Hạng 2 xuất sắc">🥈</span>
-                                                        ) : isTop3 ? (
-                                                            <span className="text-lg" title="Hạng 3 xuất sắc">🥉</span>
-                                                        ) : isTop30 ? (
-                                                            <span className="px-1.5 py-0.5 bg-amber-100 text-amber-900 text-[10px] font-black rounded-md">
-                                                                Top 30%
-                                                            </span>
-                                                        ) : row.is_zero_or_negative ? (
-                                                            <span className="px-1.5 py-0.5 bg-rose-100 text-rose-700 text-[10px] font-bold rounded-md">
-                                                                DTQĐ &le; 0
-                                                            </span>
-                                                        ) : row.is_below_avg ? (
-                                                            <span className="px-1.5 py-0.5 bg-amber-50 text-amber-700 text-[10px] font-bold rounded-md">
-                                                                Dưới TB
-                                                            </span>
-                                                        ) : (
-                                                            <span className="px-1.5 py-0.5 bg-emerald-50 text-emerald-700 text-[10px] font-bold rounded-md">
-                                                                Vượt TB
-                                                            </span>
-                                                        )}
-                                                    </td>
+                                        <tbody className="divide-y divide-slate-100 font-medium text-xs">
+                                            {displayTableRows.map((row) => {
+                                                const isTop1 = row.rank === 1 && !row.is_zero_or_negative;
+                                                const isTop2 = row.rank === 2 && !row.is_zero_or_negative;
+                                                const isTop3 = row.rank === 3 && !row.is_zero_or_negative;
+                                                const isTop30 = row.is_top_30;
 
-                                                    {/* 3. MSNV - Tên rút gọn */}
-                                                    <td className="py-2.5 px-3 border-r border-slate-100">
-                                                        <div className="font-extrabold text-slate-900" title={row.full_name}>
-                                                            {row.display_name}
-                                                        </div>
-                                                    </td>
+                                                const rowBg = isTop1
+                                                    ? 'bg-amber-50/40 hover:bg-amber-50'
+                                                    : isTop2
+                                                        ? 'bg-slate-50/50 hover:bg-slate-100'
+                                                        : isTop3
+                                                            ? 'bg-orange-50/30 hover:bg-orange-50'
+                                                            : row.is_zero_or_negative
+                                                                ? 'bg-rose-50/20 hover:bg-rose-50/40'
+                                                                : 'hover:bg-slate-50';
 
-                                                    {/* 4. Số lượng */}
-                                                    <td className="py-2.5 px-2.5 text-right font-bold text-slate-700 border-r border-slate-100">
-                                                        {row.quantity}
-                                                    </td>
+                                                return (
+                                                    <tr key={row.employee_id} className={`transition ${rowBg}`}>
+                                                        {/* 1. STT */}
+                                                        <td className="py-1.5 px-0.5 text-center font-bold text-slate-700 text-[11px] border-r border-slate-100">
+                                                            {row.rank}
+                                                        </td>
 
-                                                    {/* 5. Doanh thu thực (tr) - Màu xanh lá */}
-                                                    <td className="py-2.5 px-3 text-right font-extrabold text-emerald-700 border-r border-slate-100">
-                                                        {formatValue(row.revenue_actual)}
-                                                    </td>
+                                                        {/* 2. Huy hiệu */}
+                                                        <td className="py-1.5 px-0.5 text-center border-r border-slate-100">
+                                                            {isTop1 ? (
+                                                                <span className="text-base select-none" title="Hạng 1 xuất sắc">🥇</span>
+                                                            ) : isTop2 ? (
+                                                                <span className="text-base select-none" title="Hạng 2 xuất sắc">🥈</span>
+                                                            ) : isTop3 ? (
+                                                                <span className="text-base select-none" title="Hạng 3 xuất sắc">🥉</span>
+                                                            ) : isTop30 ? (
+                                                                <span className="px-1 py-0.5 bg-amber-100 text-amber-900 text-[9px] font-black rounded">
+                                                                    Top 30%
+                                                                </span>
+                                                            ) : row.is_zero_or_negative ? (
+                                                                <span className="px-1 py-0.5 bg-rose-100 text-rose-700 text-[9px] font-bold rounded">
+                                                                    &le; 0đ
+                                                                </span>
+                                                            ) : row.is_below_avg ? (
+                                                                <span className="px-1 py-0.5 bg-amber-50 text-amber-700 text-[9px] font-bold rounded">
+                                                                    &lt; TB
+                                                                </span>
+                                                            ) : (
+                                                                <span className="px-1 py-0.5 bg-emerald-50 text-emerald-700 text-[9px] font-bold rounded">
+                                                                    &gt; TB
+                                                                </span>
+                                                            )}
+                                                        </td>
 
-                                                    {/* 6. DTQĐ (tr) - Định dạng XANH LÁ IN ĐẬM */}
-                                                    <td className="py-2.5 px-3 text-right bg-emerald-50/60 font-black text-emerald-800 text-sm border-r border-emerald-100">
-                                                        {formatValue(row.revenue_qd)}
-                                                    </td>
+                                                        {/* 3. MSNV - Tên rút gọn */}
+                                                        <td className="py-1.5 px-2 border-r border-slate-100">
+                                                            <div className="min-w-0" title={row.full_name}>
+                                                                <div className="font-extrabold text-slate-900 truncate text-[11.5px] leading-tight">
+                                                                    {row.short_name}
+                                                                </div>
+                                                                <div className="text-[9.5px] font-semibold text-slate-400 font-mono tracking-tight leading-tight">
+                                                                    #{row.employee_id}
+                                                                </div>
+                                                            </div>
+                                                        </td>
 
-                                                    {/* 7. Tỷ trọng (%) */}
-                                                    <td className="py-2.5 px-2.5 text-right font-bold text-slate-600 border-r border-slate-100">
-                                                        {row.contribution_rate}%
-                                                    </td>
+                                                        {/* 4. Số lượng */}
+                                                        <td className="py-1.5 px-1 text-right font-bold text-slate-700 text-[11px] border-r border-slate-100">
+                                                            {row.quantity}
+                                                        </td>
 
-                                                    {/* 8. DT Trả Góp */}
-                                                    <td className="py-2.5 px-3 text-right font-extrabold text-slate-800 border-r border-slate-100">
-                                                        {row.installment_revenue > 0 ? (
-                                                            <span className="text-purple-700">{formatValue(row.installment_revenue)}</span>
-                                                        ) : (
-                                                            <span className="text-slate-300 font-medium">0</span>
-                                                        )}
-                                                    </td>
+                                                        {/* 5. Doanh thu thực (tr) - Màu xanh lá */}
+                                                        <td className="py-1.5 px-1.5 text-right font-bold text-slate-800 text-[11.5px] border-r border-slate-100">
+                                                            {formatValue(row.revenue_actual)}
+                                                        </td>
 
-                                                    {/* 9. % Trả Góp */}
-                                                    <td className="py-2.5 px-2.5 text-right font-bold">
-                                                        {row.installment_rate > 0 ? (
-                                                            <span className={row.installment_rate >= 30 ? 'text-emerald-700 font-black' : 'text-slate-700'}>
-                                                                {row.installment_rate}%
-                                                            </span>
-                                                        ) : (
-                                                            <span className="text-rose-500 font-bold">0%</span>
-                                                        )}
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })}
-                                    </tbody>
+                                                        {/* 6. DTQĐ (tr) - Định dạng XANH LÁ IN ĐẬM */}
+                                                        <td className="py-1.5 px-1.5 text-right bg-emerald-50/70 font-black text-emerald-800 text-xs border-r border-emerald-100">
+                                                            {formatValue(row.revenue_qd)}
+                                                        </td>
 
-                                    {/* HÀNG TỔNG CỘNG CHÂN BẢNG */}
-                                    <tfoot className="sticky bottom-0 bg-slate-900 text-white font-black text-xs z-20 shadow-xs select-none">
-                                        <tr className="h-10">
-                                            <td colSpan={3} className="py-2 px-3 text-center uppercase tracking-wider border-r border-slate-800">
-                                                TỔNG CỘNG ({displayTableRows.length} NHÂN SỰ)
-                                            </td>
-                                            <td className="py-2 px-2.5 text-right border-r border-slate-800">
-                                                {summary.totalQuantity}
-                                            </td>
-                                            <td className="py-2 px-3 text-right text-emerald-400 border-r border-slate-800">
-                                                {formatValue(summary.totalActualRevenue)}
-                                            </td>
-                                            <td className="py-2 px-3 text-right bg-[#005a43] text-[#fde047] text-sm border-r border-[#004735]">
-                                                {formatValue(summary.totalRevenueQd)}
-                                            </td>
-                                            <td className="py-2 px-2.5 text-right border-r border-slate-800">
-                                                100%
-                                            </td>
-                                            <td className="py-2 px-3 text-right text-purple-300 border-r border-slate-800">
-                                                {formatValue(summary.totalInstallmentRevenue)}
-                                            </td>
-                                            <td className="py-2 px-2.5 text-right text-amber-300">
-                                                {summary.avgInstallmentRate}%
-                                            </td>
-                                        </tr>
-                                    </tfoot>
-                                </table>
+                                                        {/* 7. Tỷ trọng (%) */}
+                                                        <td className="py-1.5 px-1 text-right font-bold text-slate-600 text-[11px] border-r border-slate-100">
+                                                            {row.contribution_rate}%
+                                                        </td>
+
+                                                        {/* 8. DT Trả Góp */}
+                                                        <td className="py-1.5 px-1.5 text-right font-extrabold text-slate-800 text-[11.5px] border-r border-slate-100">
+                                                            {row.installment_revenue > 0 ? (
+                                                                <span className="text-purple-700">{formatValue(row.installment_revenue)}</span>
+                                                            ) : (
+                                                                <span className="text-slate-300 font-medium">0</span>
+                                                            )}
+                                                        </td>
+
+                                                        {/* 9. % Trả Góp */}
+                                                        <td className="py-1.5 px-1 text-right font-bold text-[11px]">
+                                                            {row.installment_rate > 0 ? (
+                                                                <span className={row.installment_rate >= 30 ? 'text-emerald-700 font-black' : 'text-slate-700'}>
+                                                                    {row.installment_rate}%
+                                                                </span>
+                                                            ) : (
+                                                                <span className="text-rose-500 font-bold">0%</span>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+
+                                        {/* HÀNG TỔNG CỘNG CHÂN BẢNG */}
+                                        <tfoot className="sticky bottom-0 bg-slate-900 text-white font-black text-xs z-20 shadow-xs select-none">
+                                            <tr className="h-9">
+                                                <td colSpan={3} className="py-1.5 px-2 text-center uppercase tracking-wider border-r border-slate-800 text-[10.5px]">
+                                                    TỔNG ({displayTableRows.length} NV)
+                                                </td>
+                                                <td className="py-1.5 px-1 text-right border-r border-slate-800 text-[11px]">
+                                                    {summary.totalQuantity}
+                                                </td>
+                                                <td className="py-1.5 px-1.5 text-right text-emerald-400 border-r border-slate-800 text-[11.5px]">
+                                                    {formatValue(summary.totalActualRevenue)}
+                                                </td>
+                                                <td className="py-1.5 px-1.5 text-right bg-[#005a43] text-[#fde047] text-xs border-r border-[#004735]">
+                                                    {formatValue(summary.totalRevenueQd)}
+                                                </td>
+                                                <td className="py-1.5 px-1 text-right border-r border-slate-800 text-[11px]">
+                                                    100%
+                                                </td>
+                                                <td className="py-1.5 px-1.5 text-right text-purple-300 border-r border-slate-800 text-[11.5px]">
+                                                    {formatValue(summary.totalInstallmentRevenue)}
+                                                </td>
+                                                <td className="py-1.5 px-1 text-right text-amber-300 text-[11px]">
+                                                    {summary.avgInstallmentRate}%
+                                                </td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </div>
                             </div>
                         </div>
                     </div>

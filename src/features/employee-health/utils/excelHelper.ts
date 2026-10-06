@@ -22,7 +22,7 @@ export async function exportUnifiedTargetTemplate(
     year: number
 ) {
     const workbook = new ExcelJS.Workbook();
-    workbook.creator = 'SalesHub MWG';
+    workbook.creator = 'SalesHub';
     workbook.created = new Date();
 
     const sheetName = `Target_T${month}_${year}`;
@@ -55,7 +55,7 @@ export async function exportUnifiedTargetTemplate(
     headerRow.eachCell((cell, colNumber) => {
         cell.font = { name: 'Arial', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
         cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
-        
+
         // Màu nền phân biệt: Cột thông tin (Xanh navy), Cột doanh thu (Xanh dương đậm), Cột thi đua (Cam đậm)
         if (colNumber <= 3) {
             cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } }; // slate-800

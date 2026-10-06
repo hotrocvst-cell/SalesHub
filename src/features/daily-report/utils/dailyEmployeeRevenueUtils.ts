@@ -114,21 +114,26 @@ export function processDailyEmployeeRevenueData(
     // 3. Tích hợp các nhân viên được chọn thủ công (có đi làm trong ca)
     // Mặc định chỉ nhận các nhân viên được chọn trong danh sách điểm danh ca
     const existingEmpIds = new Set(storeFiltered.map(e => e.employee_id.trim()));
+    const seenMergedIds = new Set<string>();
     const mergedList: ParsedEmployeeRevenue[] = [];
 
     storeFiltered.forEach(emp => {
         const id = emp.employee_id.trim();
         // Nếu có danh sách điểm danh ca: chỉ lấy những ai được chọn (hoặc mặc định có DTQĐ khác 0)
         if (!manualShiftEmpIds || manualShiftEmpIds.has(id)) {
-            mergedList.push(emp);
+            if (!seenMergedIds.has(id)) {
+                seenMergedIds.add(id);
+                mergedList.push(emp);
+            }
         }
     });
 
     // Bổ sung các nhân viên có đi làm trong ca nhưng không có trong báo cáo dán
     additionalZeroEmployees.forEach(extra => {
         const id = extra.employee_id.trim();
-        if (!existingEmpIds.has(id)) {
+        if (!existingEmpIds.has(id) && !seenMergedIds.has(id)) {
             if (!manualShiftEmpIds || manualShiftEmpIds.has(id)) {
+                seenMergedIds.add(id);
                 existingEmpIds.add(id);
                 mergedList.push({
                     employee_id: id,
@@ -143,21 +148,24 @@ export function processDailyEmployeeRevenueData(
         }
     });
 
-    // 4. Phân nhóm:
-    // - activeList: Nhân viên có DTQĐ khác 0 (dùng xếp hạng & tính % trung bình)
+    // 4. Phân nhóm rõ ràng, KHÔNG TRÙNG LẶP:
+    // - activeList: Nhân viên có DTQĐ DƯƠNG (> 0) (dùng xếp hạng Top 30% & tính dưới trung bình)
     // - zeroOrNegList: Nhân viên có DTQĐ <= 0 (chưa phát sinh hoặc bị âm)
-    const activeList = mergedList.filter(e => e.revenue_qd !== 0);
+    const activeList = mergedList.filter(e => e.revenue_qd > 0);
     const zeroOrNegList = mergedList.filter(e => e.revenue_qd <= 0);
 
-    // Tính tổng số liệu của nhóm hoạt động
-    const totalRevenueQd = activeList.reduce((s, e) => s + (e.revenue_qd || 0), 0);
-    const totalActualRevenue = activeList.reduce((s, e) => s + (e.revenue_actual || 0), 0);
-    const totalInstallmentRevenue = activeList.reduce((s, e) => s + (e.installment_revenue || 0), 0);
-    const totalQuantity = activeList.reduce((s, e) => s + (e.quantity || 0), 0);
+    // Tính tổng số liệu của toàn bộ ca làm việc (bao gồm cả nhân viên bị âm do trả hàng)
+    const totalRevenueQd = mergedList.reduce((s, e) => s + (e.revenue_qd || 0), 0);
+    const totalActualRevenue = mergedList.reduce((s, e) => s + (e.revenue_actual || 0), 0);
+    const totalInstallmentRevenue = mergedList.reduce((s, e) => s + (e.installment_revenue || 0), 0);
+    const totalQuantity = mergedList.reduce((s, e) => s + (e.quantity || 0), 0);
 
     const activeCount = activeList.length;
-    const avgRevenueQd = activeCount > 0 ? Number((totalRevenueQd / activeCount).toFixed(2)) : 0;
-    const avgActualRevenue = activeCount > 0 ? Number((totalActualRevenue / activeCount).toFixed(2)) : 0;
+    // Mức TB: Chỉ tính theo trung bình của các nhân sự có phát sinh doanh thu (activeList)
+    const activeRevenueQd = activeList.reduce((s, e) => s + (e.revenue_qd || 0), 0);
+    const activeActualRevenue = activeList.reduce((s, e) => s + (e.revenue_actual || 0), 0);
+    const avgRevenueQd = activeCount > 0 ? Number((activeRevenueQd / activeCount).toFixed(2)) : 0;
+    const avgActualRevenue = activeCount > 0 ? Number((activeActualRevenue / activeCount).toFixed(2)) : 0;
     const avgInstallmentRate = totalActualRevenue > 0
         ? Number(((totalInstallmentRevenue / totalActualRevenue) * 100).toFixed(1))
         : 0;
@@ -178,7 +186,7 @@ export function processDailyEmployeeRevenueData(
         const rank = idx + 1;
         const isTop30 = rank <= top30Count;
         const isBelowAvg = emp.revenue_qd < avgRevenueQd && emp.revenue_qd > 0;
-        const isZeroOrNeg = emp.revenue_qd <= 0;
+        const isZeroOrNeg = false;
         const isZeroInstallment = (emp.installment_revenue <= 0 || emp.installment_rate === 0);
 
         return {
@@ -198,10 +206,8 @@ export function processDailyEmployeeRevenueData(
 
     const top30Employees = analyzedEmployees.filter(e => e.is_top_30);
     const belowAvgEmployees = analyzedEmployees.filter(e => e.is_below_avg);
-    // Nhóm có DTQĐ nhưng 0% trả góp (chỉ áp dụng cho các bạn đã nổ số để tránh trùng lặp với nhóm chưa có số)
-    const zeroInstallmentEmployees = analyzedEmployees.filter(e => e.is_zero_installment);
 
-    // 7. Gắn trường mở rộng cho nhóm DTQĐ <= 0
+    // 7. Gắn trường mở rộng cho nhóm DTQĐ <= 0 (nhân viên chưa có số hoặc bị âm)
     const zeroOrNegativeEmployees: DailyReportEmployeeRow[] = zeroOrNegList.map((emp, idx) => {
         const shortName = formatDailyEmployeeShortName(emp.full_name);
         const isManual = additionalZeroEmployees.some(a => a.employee_id.trim() === emp.employee_id.trim());
@@ -221,11 +227,19 @@ export function processDailyEmployeeRevenueData(
         };
     });
 
-    // Toàn bộ nhân viên trong ca làm việc hiển thị trên bảng
-    const allShiftEmployees: DailyReportEmployeeRow[] = [
-        ...analyzedEmployees,
-        ...zeroOrNegativeEmployees
-    ];
+    // Toàn bộ nhân viên trong ca làm việc hiển thị trên bảng (Khử trùng lặp tuyệt đối theo employee_id)
+    const seenEmpIds = new Set<string>();
+    const allShiftEmployees: DailyReportEmployeeRow[] = [];
+    [...analyzedEmployees, ...zeroOrNegativeEmployees].forEach(emp => {
+        const id = emp.employee_id.trim();
+        if (!seenEmpIds.has(id)) {
+            seenEmpIds.add(id);
+            allShiftEmployees.push(emp);
+        }
+    });
+
+    // Nhóm chưa có trả góp: Bao gồm tất cả nhân sự đi làm trong ca chưa phát sinh trả góp (cả nhóm có DTQĐ nhưng 0% trả góp lẫn nhóm chưa có DT)
+    const zeroInstallmentEmployees = allShiftEmployees.filter(e => e.is_zero_installment);
 
     const summary: DailyReportSummary = {
         totalRevenueQd: Number(totalRevenueQd.toFixed(2)),
@@ -271,44 +285,55 @@ export function generateDailyZaloText(
     // Top 30% text
     const topText = top30.map((e) => {
         const medal = e.rank === 1 ? '🥇' : e.rank === 2 ? '🥈' : e.rank === 3 ? '🥉' : `🎖️ #${e.rank}`;
-        return `   ${medal} ${e.display_name}: DTQĐ ${formatValue(e.revenue_qd)} tr | DT Thực ${formatValue(e.revenue_actual)} tr | Trả góp ${formatValue(e.installment_revenue)} tr (${e.installment_rate}%)`;
+        return `   ${medal} ${e.display_name}: ${formatValue(e.revenue_qd)} tr | ${formatValue(e.installment_revenue)} tr (${e.installment_rate}%)`;
     }).join('\n');
 
     // Dưới trung bình text
-    const belowAvgNames = belowAvg.length > 0
-        ? belowAvg.map(e => `${e.short_name} (${formatValue(e.revenue_qd)} tr)`).join(', ')
-        : 'Không có (100% nhân sự đều đạt vượt mức TB)';
+    let belowAvgNames = '';
+    if (belowAvg.length > 0) {
+        belowAvgNames = belowAvg.map(e => `${e.short_name} (${formatValue(e.revenue_qd)} tr)`).join('\n   👉 ');
+    } else if (summary.totalEmployees === 0 || summary.activeCount === 0) {
+        belowAvgNames = 'Chưa có nhân sự nào phát sinh số';
+    } else if (summary.zeroOrNegCount > 0) {
+        belowAvgNames = 'Không có (các bạn đã nổ số đều đạt mức TB trở lên)';
+    } else {
+        belowAvgNames = 'Không có (100% nhân sự trong ca đều đạt mức TB trở lên)';
+    }
 
     // DTQĐ <= 0 text
     const zeroOrNegNames = zeroOrNeg.length > 0
-        ? zeroOrNeg.map(e => `${e.short_name} (${formatValue(e.revenue_qd)} tr)`).join(', ')
+        ? zeroOrNeg.map(e => `${e.short_name} (${formatValue(e.revenue_qd)} tr)`).join('\n   👉 ')
         : 'Không có (100% nhân sự đều đã phát sinh số)';
 
     // 0% Trả góp text
-    const zeroInstallmentNames = zeroInstallment.length > 0
-        ? zeroInstallment.map(e => `${e.short_name} (${formatValue(e.revenue_qd)} tr)`).join(', ')
-        : 'Không có (100% nhân sự đều có hợp đồng trả góp)';
+    let zeroInstallmentNames = '';
+    if (zeroInstallment.length > 0) {
+        zeroInstallmentNames = zeroInstallment.map(e => `${e.short_name} (${formatValue(e.revenue_qd)} tr)`).join('\n   👉 ');
+    } else if (summary.totalEmployees === 0 || summary.activeCount === 0) {
+        zeroInstallmentNames = 'Chưa có nhân sự nào phát sinh doanh thu trong ca';
+    } else {
+        zeroInstallmentNames = 'Không có (100% nhân sự trong ca đều có hợp đồng trả góp)';
+    }
 
-    return `📢 BÁO CÁO DOANH THU NHÂN VIÊN TRONG NGÀY (${formattedDate})
-🏢 Siêu thị: ${storeName}
-👥 Tổng nhân sự đi làm trong ca: ${summary.totalEmployees} bạn (${summary.activeCount} bạn đã nổ số)
-💰 Tổng Doanh Thu Thực: ${formatValue(summary.totalActualRevenue)} tr
-💎 Tổng DTQĐ: ${formatValue(summary.totalRevenueQd)} tr (TB: ${formatValue(summary.avgRevenueQd)} tr/bạn)
-💳 Doanh Thu Trả Góp: ${formatValue(summary.totalInstallmentRevenue)} tr (${summary.avgInstallmentRate}% toàn shop)
+    return `📢 DOANH THU NHÂN VIÊN (${formattedDate})
+🏢 ${storeName}
 
-🏆 TOP 30% CHIẾN BINH XUẤT SẮC DẪN ĐẦU DOANH SỐ:
+💰 Doanh Thu Thực: ${formatValue(summary.totalActualRevenue)} tr
+💎 DTQĐ: ${formatValue(summary.totalRevenueQd)} tr (TB: ${formatValue(summary.avgRevenueQd)} tr/nv)
+💳 DT Trả Chậm: ${formatValue(summary.totalInstallmentRevenue)} tr (${summary.avgInstallmentRate}%)
+
+🏆 TOP DẪN ĐẦU: (DTQĐ | Trả chậm)
 ${topText}
-👏 Chúc mừng các bạn đã duy trì phong độ rất tốt và bứt phá doanh số!
 
-⚡ TRỌNG TÂM NHẮC NHỞ TĂNG TỐC KÉO SỐ:
+⚡ TRỌNG TÂM NHẮC NHỞ TĂNG TỐC:
 ⚠️ 1. Nhóm DTQĐ dưới trung bình (${summary.belowAvgCount} bạn < ${formatValue(summary.avgRevenueQd)} tr):
    👉 ${belowAvgNames}
 
-🚨 2. Nhóm chưa có DTQĐ / âm (${summary.zeroOrNegCount} bạn):
+🚨 2. Nhóm DT bất ổn (${summary.zeroOrNegCount} bạn):
    👉 ${zeroOrNegNames}
 
-💳 3. Nhóm có DT nhưng chưa phát sinh trả góp (${summary.zeroInstallmentCount} bạn):
+💳 3. Nhóm chưa có trả góp (${summary.zeroInstallmentCount} bạn):
    👉 ${zeroInstallmentNames}
 
-💪 Toàn team cùng đồng lòng tăng tốc, bứt phá doanh thu ca hôm nay! 🔥🚀`;
+`;
 }

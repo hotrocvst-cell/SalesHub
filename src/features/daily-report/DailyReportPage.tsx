@@ -326,7 +326,7 @@ export default function DailyReportPage() {
                     txt += `\n\n📊 TỔNG HỢP CHƯA ĐẠT (${stats.fails.length} NH):`;
                     if (groupNear.length > 0) txt += `\n- ⚡ CẬN ĐÍCH (>80%): ${groupNear.length} NH`;
                     if (groupSpeed.length > 0) txt += `\n- 🔥 CẦN TĂNG TỐC (50% - 80%): ${groupSpeed.length} NH`;
-                    if (groupAlert.length > 0) txt += `\n- ⚠️ BÁO ĐỘNG ĐỎ (<50%): ${groupAlert.length} NH`;
+                    if (groupAlert.length > 0) txt += `\n- ⚠️ NGUY HIỂM (<50%): ${groupAlert.length} NH`;
                 } else if (summaryMode === 2) {
                     txt += `\n\n📊 CHI TIẾT CHƯA ĐẠT (${stats.fails.length} NH):`;
                     if (groupNear.length > 0) {
@@ -342,7 +342,7 @@ export default function DailyReportPage() {
                         });
                     }
                     if (groupAlert.length > 0) {
-                        txt += `\n\n⚠️ BÁO ĐỘNG ĐỎ (<50%): ${groupAlert.length} NH`;
+                        txt += `\n\n⚠️ NGUY HIỂM (<50%): ${groupAlert.length} NH`;
                         groupAlert.forEach(d => {
                             txt += `\n- ${d.label}: thiếu ${formatValue(Math.max(0, d.target - d.actual))} (${d.pctHT.toFixed(1)}%)`;
                         });

@@ -14,8 +14,10 @@ const CampaignConfigPage = lazy(() => import('./features/admin-config/CampaignCo
 const StoreEmployeeConfigPage = lazy(() => import('./features/store-management/StoreEmployeeConfigPage'));
 const EmployeeCumulativePage = lazy(() => import('./features/employee-cumulative/EmployeeCumulativePage'));
 const EmployeePerformanceReportPage = lazy(() => import('./features/employee-performance/EmployeePerformanceReportPage'));
+const EmployeeDetailReportPage = lazy(() => import('./features/employee-detail/EmployeeDetailReportPage'));
 const EmployeeSessionManagerPage = lazy(() => import('./features/employee-cumulative/EmployeeSessionManagerPage'));
 const CampaignSummaryPage = lazy(() => import('./features/campaign-summary/CampaignSummaryPage'));
+const CampaignProgressPage = lazy(() => import('./features/campaign-progress/CampaignProgressPage'));
 const SystemAdminPage = lazy(() => import('./features/admin-config/SystemAdminPage'));
 const UserManagementPage = lazy(() => import('./features/admin-config/UserManagementPage'));
 const UserStorePermissionPage = lazy(() => import('./features/admin-config/UserStorePermissionPage'));
@@ -50,11 +52,13 @@ export function AppRoutes() {
                     <Route path="/bc-ngay/tong-quan" element={<DailyReportPage />} />
                     <Route path="/bc-ngay-nhan-vien" element={<DailyEmployeeRevenueReportPage />} />
 
-                    {/* Báo Cáo Hiệu Quả Doanh Thu Nhân Viên */}
+                    {/* Báo Cáo Hiệu Quả Doanh Thu Nhân Viên & Chi Tiết */}
                     <Route path="/bao-cao-hieu-qua-nhan-vien" element={<EmployeePerformanceReportPage />} />
+                    <Route path="/chi-tiet-nhan-vien" element={<EmployeeDetailReportPage />} />
 
-                    {/* Báo Cáo Tổng Hợp Thi Đua Ngành Hàng */}
+                    {/* Báo Cáo Tổng Hợp Thi Đua Ngành Hàng & Tiến Độ Thi Đua */}
                     <Route path="/tong-hop-thi-dua" element={<CampaignSummaryPage />} />
+                    <Route path="/tien-do-thi-dua" element={<CampaignProgressPage />} />
 
                     {/* Phân hệ Cập nhật Dữ liệu */}
                     <Route path="/cap-nhat" element={<DataUpdatePage />} />

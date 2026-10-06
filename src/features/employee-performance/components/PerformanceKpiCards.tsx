@@ -16,7 +16,7 @@ export default function PerformanceKpiCards({ summary }: Props) {
                 <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-amber-900 uppercase tracking-normal flex items-center gap-1.5">
                         <Trophy className="w-4 h-4 text-amber-500 shrink-0" />
-                        <span>Top 1 Lũy Kế DTQĐ</span>
+                        <span>Top 1 DTQĐ</span>
                     </span>
                     <span className="inline-block w-7 h-7 rounded-xl bg-amber-100 text-amber-800 text-center leading-7 text-xs font-bold shadow-2xs">
                         👑
@@ -39,7 +39,7 @@ export default function PerformanceKpiCards({ summary }: Props) {
                     </strong>
                 </div>
                 <div className="flex items-center justify-between text-[11px] text-slate-500 mt-1 leading-normal">
-                    <span>% Tiến độ thực tế:</span>
+                    <span>%HT thực tế:</span>
                     <span className="font-mono font-bold text-emerald-700">
                         {topRevenueEmp ? `${topRevenueEmp.completion_rate}%` : '0%'}
                     </span>
@@ -68,7 +68,7 @@ export default function PerformanceKpiCards({ summary }: Props) {
                 </div>
 
                 <div className="mt-3 flex items-center justify-between text-xs pt-2.5 border-t border-purple-100/80 leading-normal">
-                    <span className="text-purple-900/80 font-medium">Năng suất mỗi giờ:</span>
+                    <span className="text-purple-900/80 font-medium">Năng suất DTQĐ:</span>
                     <strong className="font-mono text-purple-700 font-bold text-sm">
                         {topProductivityEmp ? `${topProductivityEmp.productivity_qd_per_hour.toFixed(2)} tr/h` : '0 tr/h'}
                     </strong>
@@ -86,7 +86,7 @@ export default function PerformanceKpiCards({ summary }: Props) {
                 <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-emerald-900 uppercase tracking-normal flex items-center gap-1.5">
                         <Target className="w-4 h-4 text-emerald-600 shrink-0" />
-                        <span>Top 1 Nhịp Độ (%DKHT)</span>
+                        <span>Top 1 %DKHT</span>
                     </span>
                     <span className="inline-block w-7 h-7 rounded-xl bg-emerald-100 text-emerald-800 text-center leading-7 text-xs font-bold shadow-2xs">
                         🎯
@@ -103,13 +103,13 @@ export default function PerformanceKpiCards({ summary }: Props) {
                 </div>
 
                 <div className="mt-3 flex items-center justify-between text-xs pt-2.5 border-t border-emerald-100/80 leading-normal">
-                    <span className="text-emerald-900/80 font-medium">Dự báo về đích:</span>
+                    <span className="text-emerald-900/80 font-medium">Dự kiến hoàn thành:</span>
                     <strong className="font-mono text-emerald-700 font-bold text-sm">
                         {topForecastEmp ? `${topForecastEmp.forecast_completion_rate}%` : '0%'}
                     </strong>
                 </div>
                 <div className="flex items-center justify-between text-[11px] text-slate-500 mt-1 leading-normal">
-                    <span>Target giao:</span>
+                    <span>Target:</span>
                     <span className="font-mono font-bold text-slate-700">
                         {topForecastEmp ? `${topForecastEmp.revenue_target.toLocaleString('vi-VN')} tr` : '—'}
                     </span>
@@ -121,7 +121,7 @@ export default function PerformanceKpiCards({ summary }: Props) {
                 <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-blue-900 uppercase tracking-normal flex items-center gap-1.5">
                         <CreditCard className="w-4 h-4 text-blue-600 shrink-0" />
-                        <span>Top 1 Doanh Thu Trả Chậm</span>
+                        <span>Top 1 Trả Chậm</span>
                     </span>
                     <span className="inline-block w-7 h-7 rounded-xl bg-blue-100 text-blue-800 text-center leading-7 text-xs font-bold shadow-2xs">
                         💳

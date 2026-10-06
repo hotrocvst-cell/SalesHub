@@ -118,6 +118,7 @@ export default function PerformanceTable({
                                     key={row.employee_id}
                                     className="hover:bg-slate-50/80 transition cursor-pointer group whitespace-nowrap"
                                     onClick={() => onSelectEmployee?.(row)}
+                                    title={`Nhấp để xem báo cáo chi tiết nhân viên: ${row.employee_id} - ${cleanEmployeeName(row.full_name)}`}
                                 >
                                     {/* 1. Hạng */}
                                     <td className="py-2.5 px-3 text-center align-middle border-r border-slate-100 whitespace-nowrap">

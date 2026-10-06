@@ -12,6 +12,7 @@ import { getShortStoreName } from '../../core/lib/formatters';
 import { exportUnifiedTargetTemplate, type ParsedTargetRow } from './utils/excelHelper';
 import UnifiedTargetTable from './components/UnifiedTargetTable';
 import ImportTargetModal from './components/ImportTargetModal';
+import SupabaseSyncStatusBar, { type SyncStatusType } from './components/SupabaseSyncStatusBar';
 import {
     Target,
     Save,
@@ -21,7 +22,8 @@ import {
     UploadCloud,
     CheckCircle2,
     Calendar,
-    Store
+    Store,
+    CloudUpload
 } from 'lucide-react';
 
 export default function EmployeeTargetUnifiedPage() {
@@ -41,6 +43,9 @@ export default function EmployeeTargetUnifiedPage() {
     const [loading, setLoading] = useState<boolean>(true);
     const [isSaving, setIsSaving] = useState<boolean>(false);
     const [hasChanges, setHasChanges] = useState<boolean>(false);
+    const [syncStatus, setSyncStatus] = useState<SyncStatusType>('synced');
+    const [lastSavedTime, setLastSavedTime] = useState<string | null>(null);
+    const [lastSyncError, setLastSyncError] = useState<string | null>(null);
     const [isImportModalOpen, setIsImportModalOpen] = useState<boolean>(false);
     const [toastMessage, setToastMessage] = useState<string>('');
 
@@ -49,48 +54,123 @@ export default function EmployeeTargetUnifiedPage() {
         setTimeout(() => setToastMessage(''), 3500);
     };
 
-    // 1. TẢI DỮ LIỆU
+    // 1. TẢI DỮ LIỆU TỪ SUPABASE
     const loadData = async () => {
         setLoading(true);
-        const [empRes, campRes, campTargetRes, revTargetRes] = await Promise.all([
-            fetchEmployees(),
-            fetchCampaignDictionary(),
-            fetchEmployeeCampaignTargets(selectedMonth, selectedYear),
-            fetchEmployeeRevenueTargets(selectedMonth, selectedYear)
-        ]);
+        setLastSyncError(null);
+        try {
+            const [empRes, campRes, campTargetRes, revTargetRes] = await Promise.all([
+                fetchEmployees(),
+                fetchCampaignDictionary(),
+                fetchEmployeeCampaignTargets(selectedMonth, selectedYear),
+                fetchEmployeeRevenueTargets(selectedMonth, selectedYear)
+            ]);
 
-        if (empRes.success) setEmployees(empRes.data);
+            if (empRes.success) setEmployees(empRes.data);
 
-        // Lọc các chiến dịch thi đua đang active
-        const activeCamps = (campRes.data || []).filter(c => c.is_active);
-        setCampaigns(activeCamps);
+            // Lọc các chiến dịch thi đua đang active
+            const activeCamps = (campRes.data || []).filter(c => c.is_active);
+            setCampaigns(activeCamps);
 
-        // Map Target Doanh Thu
-        const revMap: Record<string, number> = {};
-        if (revTargetRes.success && revTargetRes.data) {
-            revTargetRes.data.forEach((r: any) => {
-                revMap[r.employee_id] = Number(r.target_revenue) || 0;
-            });
+            // Map Target Doanh Thu
+            const revMap: Record<string, number> = {};
+            if (revTargetRes.success && revTargetRes.data) {
+                revTargetRes.data.forEach((r: any) => {
+                    revMap[r.employee_id] = Number(r.target_revenue) || 0;
+                });
+            }
+            setRevenueTargets(revMap);
+
+            // Map Target Thi Đua
+            const campMap: Record<string, Record<string, number>> = {};
+            if (campTargetRes.success && campTargetRes.data) {
+                campTargetRes.data.forEach((r: any) => {
+                    if (!campMap[r.employee_id]) campMap[r.employee_id] = {};
+                    campMap[r.employee_id][r.raw_key] = Number(r.target_value) || 0;
+                });
+            }
+            setCampaignTargets(campMap);
+
+            setHasChanges(false);
+            setSyncStatus('synced');
+            const now = new Date();
+            setLastSavedTime(
+                now.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) +
+                ' (' + now.toLocaleDateString('vi-VN') + ')'
+            );
+        } catch (err: any) {
+            console.error('Lỗi loadData:', err);
+            setSyncStatus('error');
+            setLastSyncError(err?.message || 'Không thể tải dữ liệu từ máy chủ Supabase');
+        } finally {
+            setLoading(false);
         }
-        setRevenueTargets(revMap);
-
-        // Map Target Thi Đua
-        const campMap: Record<string, Record<string, number>> = {};
-        if (campTargetRes.success && campTargetRes.data) {
-            campTargetRes.data.forEach((r: any) => {
-                if (!campMap[r.employee_id]) campMap[r.employee_id] = {};
-                campMap[r.employee_id][r.raw_key] = Number(r.target_value) || 0;
-            });
-        }
-        setCampaignTargets(campMap);
-
-        setHasChanges(false);
-        setLoading(false);
     };
 
     useEffect(() => {
         loadData();
     }, [selectedMonth, selectedYear]);
+
+    // Cảnh báo người dùng khi reload hoặc tắt tab nếu có thay đổi chưa lưu
+    useEffect(() => {
+        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+            if (hasChanges) {
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        };
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    }, [hasChanges]);
+
+    // Chuyển tháng / năm có xác nhận nếu có thay đổi chưa lưu
+    const handleMonthChange = (m: number) => {
+        if (hasChanges) {
+            const confirmed = window.confirm(
+                `⚠️ Bạn có dữ liệu chỉ tiêu chưa lưu cho Tháng ${selectedMonth}/${selectedYear}!\n\nNếu chuyển sang Tháng ${m}, các thay đổi chưa lưu sẽ bị mất.\n\nBạn có muốn tiếp tục chuyển không?`
+            );
+            if (!confirmed) return;
+        }
+        setSelectedMonth(m);
+    };
+
+    const handleYearChange = (y: number) => {
+        if (hasChanges) {
+            const confirmed = window.confirm(
+                `⚠️ Bạn có dữ liệu chỉ tiêu chưa lưu cho Tháng ${selectedMonth}/${selectedYear}!\n\nNếu chuyển sang Năm ${y}, các thay đổi chưa lưu sẽ bị mất.\n\nBạn có muốn tiếp tục chuyển không?`
+            );
+            if (!confirmed) return;
+        }
+        setSelectedYear(y);
+    };
+
+    // Thống kê số lượng chỉ tiêu hiện tại của tháng
+    const targetStats = useMemo(() => {
+        let countWithRevenue = 0;
+        let totalRevenue = 0;
+        let countCampaignTargets = 0;
+
+        employees.forEach(emp => {
+            const rev = revenueTargets[emp.employee_id] || 0;
+            if (rev > 0) {
+                countWithRevenue++;
+                totalRevenue += rev;
+            }
+            const campMap = campaignTargets[emp.employee_id];
+            if (campMap) {
+                Object.values(campMap).forEach(val => {
+                    if (val > 0) countCampaignTargets++;
+                });
+            }
+        });
+
+        return {
+            totalEmployees: employees.length,
+            countWithRevenue,
+            totalRevenue,
+            countCampaignTargets
+        };
+    }, [employees, revenueTargets, campaignTargets]);
 
     // Danh sách siêu thị
     const storeList = useMemo(() => {
@@ -120,6 +200,7 @@ export default function EmployeeTargetUnifiedPage() {
     const handleRevenueChange = (empId: string, val: number) => {
         setRevenueTargets(prev => ({ ...prev, [empId]: val }));
         setHasChanges(true);
+        setSyncStatus('unsaved');
     };
 
     const handleCampaignChange = (empId: string, rawKey: string, val: number) => {
@@ -131,6 +212,7 @@ export default function EmployeeTargetUnifiedPage() {
             }
         }));
         setHasChanges(true);
+        setSyncStatus('unsaved');
     };
 
     // Xuất file Excel mẫu
@@ -174,41 +256,61 @@ export default function EmployeeTargetUnifiedPage() {
         setRevenueTargets(newRev);
         setCampaignTargets(newCamp);
         setHasChanges(true);
-        showToast(`🎉 Đã nạp chỉ tiêu cho ${matchCount} nhân sự! Bấm "Lưu Mục Tiêu" để hoàn tất.`);
+        setSyncStatus('unsaved');
+        showToast(`🎉 Đã nạp chỉ tiêu cho ${matchCount} nhân sự! Bấm "Lưu Lên Supabase" để hoàn tất.`);
     };
 
     // Lưu toàn bộ lên Supabase
     const handleSaveAll = async () => {
         setIsSaving(true);
-        const revPayload = Object.entries(revenueTargets).map(([empId, rev]) => ({
-            employee_id: empId,
-            target_revenue: rev
-        }));
+        setSyncStatus('saving');
+        setLastSyncError(null);
 
-        const campPayload: { employee_id: string; raw_key: string; target_value: number }[] = [];
-        Object.entries(campaignTargets).forEach(([empId, campMap]) => {
-            Object.entries(campMap).forEach(([rawKey, val]) => {
-                campPayload.push({
-                    employee_id: empId,
-                    raw_key: rawKey,
-                    target_value: val
+        try {
+            const revPayload = Object.entries(revenueTargets).map(([empId, rev]) => ({
+                employee_id: empId,
+                target_revenue: rev
+            }));
+
+            const campPayload: { employee_id: string; raw_key: string; target_value: number }[] = [];
+            Object.entries(campaignTargets).forEach(([empId, campMap]) => {
+                Object.entries(campMap).forEach(([rawKey, val]) => {
+                    campPayload.push({
+                        employee_id: empId,
+                        raw_key: rawKey,
+                        target_value: val
+                    });
                 });
             });
-        });
 
-        const res = await saveUnifiedEmployeeTargets({
-            month: selectedMonth,
-            year: selectedYear,
-            revenueTargets: revPayload,
-            campaignTargets: campPayload
-        });
+            const res = await saveUnifiedEmployeeTargets({
+                month: selectedMonth,
+                year: selectedYear,
+                revenueTargets: revPayload,
+                campaignTargets: campPayload
+            });
 
-        setIsSaving(false);
-        if (res.success) {
-            setHasChanges(false);
-            showToast('✅ Đã lưu toàn bộ mục tiêu doanh thu & thi đua thành công!');
-        } else {
-            showToast('❌ Lưu thất bại: ' + res.error);
+            if (res.success) {
+                setHasChanges(false);
+                setSyncStatus('synced');
+                const now = new Date();
+                setLastSavedTime(
+                    now.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) +
+                    ' (' + now.toLocaleDateString('vi-VN') + ')'
+                );
+                showToast('✅ Đã lưu toàn bộ mục tiêu doanh thu & thi đua lên Supabase Cloud thành công!');
+            } else {
+                setSyncStatus('error');
+                setLastSyncError(res.error || 'Lỗi khi cập nhật mục tiêu lên Supabase');
+                showToast('❌ Lưu thất bại: ' + res.error);
+            }
+        } catch (err: any) {
+            console.error('Lỗi handleSaveAll:', err);
+            setSyncStatus('error');
+            setLastSyncError(err?.message || 'Lỗi kết nối khi gửi dữ liệu lên Supabase');
+            showToast('❌ Lưu thất bại: ' + (err?.message || err));
+        } finally {
+            setIsSaving(false);
         }
     };
 
@@ -237,7 +339,7 @@ export default function EmployeeTargetUnifiedPage() {
                         <Calendar className="w-4 h-4 text-blue-600" />
                         <select
                             value={selectedMonth}
-                            onChange={e => setSelectedMonth(Number(e.target.value))}
+                            onChange={e => handleMonthChange(Number(e.target.value))}
                             className="bg-transparent text-xs font-bold text-slate-800 outline-hidden cursor-pointer"
                         >
                             {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
@@ -247,7 +349,7 @@ export default function EmployeeTargetUnifiedPage() {
                         <span className="text-slate-300">/</span>
                         <select
                             value={selectedYear}
-                            onChange={e => setSelectedYear(Number(e.target.value))}
+                            onChange={e => handleYearChange(Number(e.target.value))}
                             className="bg-transparent text-xs font-bold text-slate-800 outline-hidden cursor-pointer"
                         >
                             {[selectedYear - 1, selectedYear, selectedYear + 1].map(y => (
@@ -275,7 +377,7 @@ export default function EmployeeTargetUnifiedPage() {
                         <span>Nhập Liệu (Excel / Text)</span>
                     </button>
 
-                    {/* Button Lưu Tất Cả */}
+                    {/* Button Lưu Tất Cả Lên Supabase */}
                     <button
                         onClick={handleSaveAll}
                         disabled={isSaving}
@@ -284,21 +386,41 @@ export default function EmployeeTargetUnifiedPage() {
                                 ? 'bg-blue-600 hover:bg-blue-700 text-white ring-2 ring-blue-500/30 animate-pulse'
                                 : 'bg-slate-800 hover:bg-slate-900 text-white'
                         }`}
+                        title="Lưu toàn bộ chỉ tiêu Doanh thu & Thi đua lên Supabase Cloud"
                     >
-                        <Save className="w-4 h-4" />
-                        <span>{isSaving ? 'Đang lưu...' : hasChanges ? 'Lưu Thay Đổi *' : 'Lưu Mục Tiêu'}</span>
+                        {isSaving ? (
+                            <RefreshCw className="w-4 h-4 animate-spin text-white" />
+                        ) : hasChanges ? (
+                            <CloudUpload className="w-4 h-4 text-amber-300" />
+                        ) : (
+                            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                        )}
+                        <span>{isSaving ? 'Đang lưu...' : hasChanges ? 'Lưu Lên Supabase *' : 'Đã Lưu Supabase'}</span>
                     </button>
 
                     <button
                         onClick={loadData}
                         disabled={loading}
                         className="p-2.5 rounded-xl border border-slate-200 text-slate-600 hover:text-blue-600 hover:bg-slate-50 transition cursor-pointer"
-                        title="Tải lại dữ liệu"
+                        title="Tải lại dữ liệu mới nhất từ Supabase"
                     >
                         <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-blue-600' : ''}`} />
                     </button>
                 </div>
             </div>
+
+            {/* THANH TRẠNG THÁI THEO DÕI ĐỒNG BỘ SUPABASE CLOUD */}
+            <SupabaseSyncStatusBar
+                status={syncStatus}
+                lastSavedTime={lastSavedTime}
+                lastErrorMessage={lastSyncError}
+                selectedMonth={selectedMonth}
+                selectedYear={selectedYear}
+                stats={targetStats}
+                isSaving={isSaving}
+                onSaveAll={handleSaveAll}
+                onReload={loadData}
+            />
 
             {/* Bộ lọc Siêu thị & Tìm kiếm */}
             <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">

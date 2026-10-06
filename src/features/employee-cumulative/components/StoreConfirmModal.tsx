@@ -151,7 +151,7 @@ export default function StoreConfirmModal({
                         <div>
                             <span className="font-bold block">Quy chuẩn dữ liệu siêu thị:</span>
                             <span>
-                                Báo cáo Doanh thu và Thi đua của MWG được xuất theo từng siêu thị riêng biệt. Vui lòng xác nhận chính xác siêu thị đích trước khi lưu.
+                                Báo cáo Doanh thu và Thi đua được xuất theo từng siêu thị riêng biệt. Vui lòng xác nhận chính xác siêu thị đích trước khi lưu.
                             </span>
                         </div>
                     </div>

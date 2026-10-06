@@ -1,10 +1,13 @@
 import type { EmployeePerformanceRow } from '../types';
+import { supabase } from '../../../core/lib/supabase';
 
 export interface StoreOperatingConfig {
     openTime: string;   // e.g. "08:00"
     closeTime: string;  // e.g. "22:00"
     operatingHours: number; // e.g. 14
     monthlyDays: Record<string, number>; // key: "YYYY-MM" -> e.g. "2026-09": 30
+    updated_at?: string;
+    updated_by?: string;
 }
 
 export interface TopBotConfig {
@@ -12,10 +15,47 @@ export interface TopBotConfig {
     topValue: number;          // e.g. 20 (%) hoặc 3 (NV)
     botValue: number;          // e.g. 20 (%) hoặc 3 (NV)
     rankBy: 'FORECAST_COMPLETION_RATE' | 'REVENUE_QD' | 'REVENUE_ACTUAL' | 'COMPLETION_RATE';
+    updated_at?: string;
+    updated_by?: string;
 }
 
-const STORE_CONFIG_KEY = 'saleshub_store_operating_config_v1';
-const TOP_BOT_CONFIG_KEY = 'saleshub_top_bot_config_v1';
+export const STORE_CONFIG_KEY = 'saleshub_store_operating_config_v1';
+export const TOP_BOT_CONFIG_KEY = 'saleshub_top_bot_config_v1';
+
+/**
+ * Câu lệnh SQL tạo bảng trên Supabase để lưu trữ cấu hình hoạt động & TOP/BOT
+ */
+export const PERFORMANCE_CONFIGS_SQL = `-- 1. Bảng lưu cấu hình hoạt động siêu thị (Giờ mở/đóng cửa, số ngày hoạt động trong tháng)
+CREATE TABLE IF NOT EXISTS public.store_operating_configs (
+    store_name TEXT PRIMARY KEY,
+    open_time TEXT DEFAULT '08:00',
+    close_time TEXT DEFAULT '22:00',
+    operating_hours NUMERIC DEFAULT 14,
+    monthly_days JSONB DEFAULT '{}'::jsonb,
+    updated_by TEXT,
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Kích hoạt RLS & chính sách truy cập toàn quyền cho bảng store_operating_configs
+ALTER TABLE public.store_operating_configs ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "store_operating_configs_all_policy" ON public.store_operating_configs;
+CREATE POLICY "store_operating_configs_all_policy" 
+ON public.store_operating_configs FOR ALL USING (true) WITH CHECK (true);
+
+-- 2. Bảng lưu cấu hình chung hiệu quả / TOP BOT
+CREATE TABLE IF NOT EXISTS public.system_performance_configs (
+    config_key TEXT PRIMARY KEY,
+    config_data JSONB NOT NULL,
+    updated_by TEXT,
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Kích hoạt RLS & chính sách truy cập toàn quyền cho bảng system_performance_configs
+ALTER TABLE public.system_performance_configs ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "system_performance_configs_all_policy" ON public.system_performance_configs;
+CREATE POLICY "system_performance_configs_all_policy" 
+ON public.system_performance_configs FOR ALL USING (true) WITH CHECK (true);
+`;
 
 /**
  * Lấy số ngày trong tháng chuẩn theo lịch thiên văn
@@ -114,9 +154,9 @@ export function getStoreOperatingConfig(
 }
 
 /**
- * Lưu cấu hình hoạt động của siêu thị
+ * Lưu cấu hình hoạt động của siêu thị (Offline-First: Lưu LocalStorage và đồng bộ Supabase Cloud)
  */
-export function saveStoreOperatingConfig(
+export async function saveStoreOperatingConfig(
     storeName: string,
     month: number,
     year: number,
@@ -126,13 +166,15 @@ export function saveStoreOperatingConfig(
         operatingDays: number;
         applyToAll?: boolean;
     },
-    allStoreNames: string[] = []
-): void {
+    allStoreNames: string[] = [],
+    updatedBy?: string
+): Promise<{ success: boolean; cloudSynced?: boolean; error?: string }> {
     try {
         const raw = localStorage.getItem(STORE_CONFIG_KEY);
         const allConfigs: Record<string, StoreOperatingConfig> = raw ? JSON.parse(raw) : {};
         const monthKey = `${year}-${String(month).padStart(2, '0')}`;
         const operatingHours = calculateOperatingHours(config.openTime, config.closeTime);
+        const nowIso = new Date().toISOString();
 
         const targets = config.applyToAll
             ? ['ALL', ...allStoreNames]
@@ -150,22 +192,52 @@ export function saveStoreOperatingConfig(
             allConfigs[sName].openTime = config.openTime;
             allConfigs[sName].closeTime = config.closeTime;
             allConfigs[sName].operatingHours = operatingHours;
+            allConfigs[sName].updated_at = nowIso;
+            allConfigs[sName].updated_by = updatedBy;
             if (!allConfigs[sName].monthlyDays) {
                 allConfigs[sName].monthlyDays = {};
             }
             allConfigs[sName].monthlyDays[monthKey] = config.operatingDays;
         });
 
+        // 1. Lưu tức thì LocalStorage (đảm bảo độ trễ 0ms)
         localStorage.setItem(STORE_CONFIG_KEY, JSON.stringify(allConfigs));
-    } catch (e) {
+
+        // 2. Đồng bộ lên Cloud Supabase (bảng store_operating_configs)
+        try {
+            const upsertRows = targets.map(sName => ({
+                store_name: sName,
+                open_time: config.openTime,
+                close_time: config.closeTime,
+                operating_hours: operatingHours,
+                monthly_days: allConfigs[sName]?.monthlyDays || {},
+                updated_by: updatedBy || 'Quản lý',
+                updated_at: nowIso
+            }));
+
+            const { error } = await supabase
+                .from('store_operating_configs')
+                .upsert(upsertRows, { onConflict: 'store_name' });
+
+            if (error) {
+                console.warn('Đồng bộ Cloud store_operating_configs không thành công (đã lưu Local):', error.message);
+                return { success: true, cloudSynced: false, error: error.message };
+            }
+            return { success: true, cloudSynced: true };
+        } catch (cloudErr: any) {
+            console.warn('Lỗi kết nối Supabase store_operating_configs:', cloudErr);
+            return { success: true, cloudSynced: false, error: cloudErr?.message };
+        }
+    } catch (e: any) {
         console.error('Lỗi lưu store operating config:', e);
+        return { success: false, cloudSynced: false, error: e?.message };
     }
 }
 
 /**
- * Lấy cấu hình phân loại TOP/BOT
+ * Lấy cấu hình phân loại TOP/BOT theo đích danh siêu thị (nếu không có thì lấy cấu hình chung 'ALL')
  */
-export function getTopBotConfig(): TopBotConfig {
+export function getTopBotConfig(storeName: string = 'ALL'): TopBotConfig {
     const defaultCfg: TopBotConfig = {
         mode: 'PERCENT',
         topValue: 20,
@@ -177,12 +249,26 @@ export function getTopBotConfig(): TopBotConfig {
         const raw = localStorage.getItem(TOP_BOT_CONFIG_KEY);
         if (raw) {
             const parsed = JSON.parse(raw);
-            return {
-                mode: parsed.mode === 'COUNT' ? 'COUNT' : 'PERCENT',
-                topValue: Number(parsed.topValue) || 20,
-                botValue: Number(parsed.botValue) || 20,
-                rankBy: parsed.rankBy || 'FORECAST_COMPLETION_RATE'
-            };
+            let allConfigs: Record<string, TopBotConfig> = {};
+            if (parsed && parsed.mode) {
+                // Định dạng cũ đơn lẻ -> gán cho ALL
+                allConfigs['ALL'] = parsed;
+            } else if (typeof parsed === 'object') {
+                allConfigs = parsed;
+            }
+
+            const targetKey = (!storeName || storeName === 'all') ? 'ALL' : storeName;
+            const cfg = allConfigs[targetKey] || allConfigs['ALL'];
+            if (cfg) {
+                return {
+                    mode: cfg.mode === 'COUNT' ? 'COUNT' : 'PERCENT',
+                    topValue: Number(cfg.topValue) || 20,
+                    botValue: Number(cfg.botValue) || 20,
+                    rankBy: cfg.rankBy || 'FORECAST_COMPLETION_RATE',
+                    updated_at: cfg.updated_at,
+                    updated_by: cfg.updated_by
+                };
+            }
         }
     } catch (e) {
         console.warn('Lỗi đọc top bot config:', e);
@@ -192,13 +278,229 @@ export function getTopBotConfig(): TopBotConfig {
 }
 
 /**
- * Lưu cấu hình phân loại TOP/BOT
+ * Lưu cấu hình phân loại TOP/BOT theo đích danh siêu thị (Offline-First: Lưu LocalStorage và đồng bộ Supabase Cloud)
  */
-export function saveTopBotConfig(config: TopBotConfig): void {
+export async function saveTopBotConfig(
+    storeName: string = 'ALL',
+    config: TopBotConfig,
+    options?: {
+        applyToAll?: boolean;
+        allStoreNames?: string[];
+        userName?: string;
+    }
+): Promise<{ success: boolean; cloudSynced?: boolean; error?: string }> {
     try {
-        localStorage.setItem(TOP_BOT_CONFIG_KEY, JSON.stringify(config));
-    } catch (e) {
+        const raw = localStorage.getItem(TOP_BOT_CONFIG_KEY);
+        let allConfigs: Record<string, TopBotConfig> = {};
+        if (raw) {
+            try {
+                const parsed = JSON.parse(raw);
+                if (parsed && parsed.mode) {
+                    allConfigs['ALL'] = parsed;
+                } else if (typeof parsed === 'object') {
+                    allConfigs = parsed;
+                }
+            } catch {}
+        }
+
+        const nowIso = new Date().toISOString();
+        const updatedBy = options?.userName || 'Quản lý';
+        const targetStore = (!storeName || storeName === 'all') ? 'ALL' : storeName;
+
+        const targets = options?.applyToAll
+            ? ['ALL', ...(options?.allStoreNames || [])]
+            : [targetStore];
+
+        targets.forEach(sName => {
+            allConfigs[sName] = {
+                ...config,
+                updated_at: nowIso,
+                updated_by: updatedBy
+            };
+        });
+
+        // 1. Lưu tức thì LocalStorage
+        localStorage.setItem(TOP_BOT_CONFIG_KEY, JSON.stringify(allConfigs));
+
+        // 2. Đồng bộ lên Cloud Supabase (bảng system_performance_configs)
+        try {
+            // Lưu row tổng hợp 'top_bot' chứa toàn bộ map cấu hình các shop
+            const { error: err1 } = await supabase
+                .from('system_performance_configs')
+                .upsert({
+                    config_key: 'top_bot',
+                    config_data: allConfigs,
+                    updated_by: updatedBy,
+                    updated_at: nowIso
+                }, { onConflict: 'config_key' });
+
+            // Đồng thời lưu các row riêng lẻ 'top_bot:' + sName để query/quản lý độc lập theo từng shop
+            const individualRows = targets.map(sName => ({
+                config_key: `top_bot:${sName}`,
+                config_data: allConfigs[sName],
+                updated_by: updatedBy,
+                updated_at: nowIso
+            }));
+
+            try {
+                await supabase
+                    .from('system_performance_configs')
+                    .upsert(individualRows, { onConflict: 'config_key' });
+            } catch {}
+
+            if (err1) {
+                console.warn('Đồng bộ Cloud system_performance_configs không thành công (đã lưu Local):', err1.message);
+                return { success: true, cloudSynced: false, error: err1.message };
+            }
+            return { success: true, cloudSynced: true };
+        } catch (cloudErr: any) {
+            console.warn('Lỗi kết nối Supabase system_performance_configs:', cloudErr);
+            return { success: true, cloudSynced: false, error: cloudErr?.message };
+        }
+    } catch (e: any) {
         console.error('Lỗi lưu top bot config:', e);
+        return { success: false, cloudSynced: false, error: e?.message };
+    }
+}
+
+/**
+ * Tải và hợp nhất cấu hình hoạt động & TOP/BOT từ Supabase Cloud về LocalStorage
+ */
+export async function syncPerformanceConfigsFromCloud(): Promise<{
+    success: boolean;
+    storeConfigsCount: number;
+    hasTopBotConfig: boolean;
+    error?: string;
+}> {
+    try {
+        const [storeRes, topBotRes] = await Promise.all([
+            supabase.from('store_operating_configs').select('*'),
+            supabase.from('system_performance_configs').select('*').eq('config_key', 'top_bot').maybeSingle()
+        ]);
+
+        let storeCount = 0;
+        let hasTopBot = false;
+
+        // Cập nhật cấu hình hoạt động cửa hàng từ Cloud
+        if (!storeRes.error && Array.isArray(storeRes.data) && storeRes.data.length > 0) {
+            const raw = localStorage.getItem(STORE_CONFIG_KEY);
+            const allConfigs: Record<string, StoreOperatingConfig> = raw ? JSON.parse(raw) : {};
+
+            storeRes.data.forEach((row: any) => {
+                if (row && row.store_name) {
+                    const sName = row.store_name;
+                    allConfigs[sName] = {
+                        openTime: row.open_time || '08:00',
+                        closeTime: row.close_time || '22:00',
+                        operatingHours: Number(row.operating_hours) || 14,
+                        monthlyDays: row.monthly_days || {},
+                        updated_at: row.updated_at,
+                        updated_by: row.updated_by
+                    };
+                }
+            });
+
+            localStorage.setItem(STORE_CONFIG_KEY, JSON.stringify(allConfigs));
+            storeCount = storeRes.data.length;
+        }
+
+        // Cập nhật cấu hình TOP/BOT từ Cloud
+        if (!topBotRes.error && topBotRes.data && topBotRes.data.config_data) {
+            const raw = localStorage.getItem(TOP_BOT_CONFIG_KEY);
+            let localConfigs: Record<string, TopBotConfig> = {};
+            if (raw) {
+                try {
+                    const parsed = JSON.parse(raw);
+                    localConfigs = (parsed && parsed.mode) ? { ALL: parsed } : (parsed || {});
+                } catch {}
+            }
+
+            const cloudData = topBotRes.data.config_data;
+            if (cloudData && cloudData.mode) {
+                localConfigs['ALL'] = cloudData as TopBotConfig;
+            } else if (typeof cloudData === 'object') {
+                Object.assign(localConfigs, cloudData);
+            }
+            localStorage.setItem(TOP_BOT_CONFIG_KEY, JSON.stringify(localConfigs));
+            hasTopBot = true;
+        }
+
+        // Tải thêm các row cấu hình TOP/BOT riêng lẻ (nếu có lưu dạng top_bot:store_name)
+        try {
+            const { data: specificRows } = await supabase
+                .from('system_performance_configs')
+                .select('*')
+                .like('config_key', 'top_bot:%');
+
+            if (specificRows && specificRows.length > 0) {
+                const raw = localStorage.getItem(TOP_BOT_CONFIG_KEY);
+                const allConfigs: Record<string, TopBotConfig> = raw ? JSON.parse(raw) : {};
+                specificRows.forEach((r: any) => {
+                    const sName = r.config_key.replace('top_bot:', '');
+                    if (sName && r.config_data) {
+                        allConfigs[sName] = r.config_data;
+                    }
+                });
+                localStorage.setItem(TOP_BOT_CONFIG_KEY, JSON.stringify(allConfigs));
+                hasTopBot = true;
+            }
+        } catch {}
+
+        return {
+            success: true,
+            storeConfigsCount: storeCount,
+            hasTopBotConfig: hasTopBot
+        };
+    } catch (e: any) {
+        console.warn('Lỗi syncPerformanceConfigsFromCloud:', e);
+        return {
+            success: false,
+            storeConfigsCount: 0,
+            hasTopBotConfig: false,
+            error: e?.message
+        };
+    }
+}
+
+/**
+ * Kiểm tra trạng thái kết nối trực tiếp với 2 bảng cấu hình hiệu quả trên Supabase Cloud
+ */
+export async function checkSupabasePerformanceConnection(): Promise<{
+    isConnected: boolean;
+    storeOperatingReady: boolean;
+    storeOperatingCount: number;
+    systemPerfReady: boolean;
+    error?: string;
+    checkedAt: string;
+}> {
+    const checkedAt = new Date().toLocaleTimeString('vi-VN');
+    try {
+        const [storeRes, perfRes] = await Promise.all([
+            supabase.from('store_operating_configs').select('*', { count: 'exact', head: true }),
+            supabase.from('system_performance_configs').select('*', { count: 'exact', head: true })
+        ]);
+
+        const storeOperatingReady = !storeRes.error;
+        const systemPerfReady = !perfRes.error;
+        const isConnected = storeOperatingReady && systemPerfReady;
+
+        return {
+            isConnected,
+            storeOperatingReady,
+            storeOperatingCount: storeRes.count || 0,
+            systemPerfReady,
+            error: storeRes.error?.message || perfRes.error?.message,
+            checkedAt
+        };
+    } catch (e: any) {
+        return {
+            isConnected: false,
+            storeOperatingReady: false,
+            storeOperatingCount: 0,
+            systemPerfReady: false,
+            error: e?.message,
+            checkedAt
+        };
     }
 }
 

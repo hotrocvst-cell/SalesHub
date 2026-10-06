@@ -68,14 +68,34 @@ export const DEFAULT_PAGE_PERMISSIONS: SystemPagePermission[] = [
         order_index: 3
     },
     {
-        page_key: 'tong_hop_thi_dua',
-        page_name: 'Tổng hợp thi đua',
-        path: '/tong-hop-thi-dua',
+        page_key: 'chi_tiet_nv',
+        page_name: 'Chi tiết nhân viên',
+        path: '/chi-tiet-nhan-vien',
         group_title: 'BÁO CÁO KINH DOANH',
-        description: 'Tổng hợp tiến độ hoàn thành các chương trình thi đua trọng điểm',
+        description: 'Báo cáo chi tiết doanh thu, tiến độ ngành hàng và thi đua từng cá nhân',
         is_enabled: true,
         allowed_roles: ['ADMIN', 'QUAN_LY', 'TRUONG_CA', 'NHAN_VIEN'],
         order_index: 4
+    },
+    {
+        page_key: 'tong_hop_thi_dua',
+        page_name: 'Tổng hợp thi đua',
+        path: '/tong-hop-thi-dua',
+        group_title: 'SỨC KHỎE NHÂN VIÊN',
+        description: 'Tổng hợp tiến độ hoàn thành các chương trình thi đua',
+        is_enabled: true,
+        allowed_roles: ['ADMIN', 'QUAN_LY', 'TRUONG_CA', 'NHAN_VIEN'],
+        order_index: 5
+    },
+    {
+        page_key: 'tien_do_thi_dua',
+        page_name: 'Tiến độ thi đua',
+        path: '/tien-do-thi-dua',
+        group_title: 'SỨC KHỎE NHÂN VIÊN',
+        description: 'Báo cáo tiến độ hoàn thành các chương trình thi đua theo nhân sự và siêu thị',
+        is_enabled: true,
+        allowed_roles: ['ADMIN', 'QUAN_LY', 'TRUONG_CA', 'NHAN_VIEN'],
+        order_index: 6
     },
     {
         page_key: 'nhip_doanh_thu',
@@ -141,12 +161,12 @@ export const DEFAULT_PAGE_PERMISSIONS: SystemPagePermission[] = [
     },
     {
         page_key: 'cau_hinh_thi_dua',
-        page_name: 'Từ viết tắt thi đua',
+        page_name: 'Cấu hình thi đua & tính điểm',
         path: '/cau-hinh-thi-dua',
         group_title: 'HỆ THỐNG & CẤU HÌNH',
-        description: 'Từ điển mã gốc báo cáo sang tên viết tắt thân thiện',
+        description: 'Từ điển thi đua và cấu hình tính điểm theo từng siêu thị',
         is_enabled: true,
-        allowed_roles: ['ADMIN', 'QUAN_LY'],
+        allowed_roles: ['ADMIN', 'QUAN_LY', 'TRUONG_CA'],
         order_index: 11
     },
     {

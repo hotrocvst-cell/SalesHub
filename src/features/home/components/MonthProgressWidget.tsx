@@ -20,7 +20,7 @@ const MOTIVATIONAL_QUOTES = [
     },
     {
         quote: 'Hãy làm việc hôm nay với sự đam mê để ngày mai tự hào về những cột mốc doanh thu đã chinh phục!',
-        author: 'Tinh thần chiến binh SalesHub'
+        author: 'Tinh thần chiến binh'
     }
 ];
 
@@ -59,7 +59,7 @@ export default function MonthProgressWidget() {
                                     Đếm Ngược Chốt Doanh Số Tháng {currentMonth + 1}
                                 </h3>
                                 <p className="text-[11px] text-slate-300">
-                                    Chu kỳ kinh doanh từ 01/{currentMonth + 1} đến {totalDaysInMonth}/{currentMonth + 1}/{currentYear}
+                                    Chu kỳ từ 01/{currentMonth + 1} đến {totalDaysInMonth}/{currentMonth + 1}/{currentYear}
                                 </p>
                             </div>
                         </div>
@@ -94,19 +94,19 @@ export default function MonthProgressWidget() {
                         <div className={`p-2 rounded-xl border ${currentDay >= 1 && currentDay <= 10 ? 'bg-blue-500/20 border-blue-400/40 text-blue-200' : 'bg-black/20 border-white/5 text-slate-400'}`}>
                             <div className="text-[10px] uppercase font-bold">Giai đoạn 1</div>
                             <div className="font-mono font-black text-xs text-white">01 - 10</div>
-                            <div className="text-[9px] opacity-75">Khởi động KPI</div>
+                            <div className="text-[9px] opacity-75">Khởi động</div>
                         </div>
 
                         <div className={`p-2 rounded-xl border ${currentDay >= 11 && currentDay <= 20 ? 'bg-amber-500/20 border-amber-400/40 text-amber-200' : 'bg-black/20 border-white/5 text-slate-400'}`}>
                             <div className="text-[10px] uppercase font-bold">Giai đoạn 2</div>
                             <div className="font-mono font-black text-xs text-white">11 - 20</div>
-                            <div className="text-[9px] opacity-75">Tăng tốc bứt phá</div>
+                            <div className="text-[9px] opacity-75">Tăng tốc</div>
                         </div>
 
                         <div className={`p-2 rounded-xl border ${currentDay >= 21 ? 'bg-rose-500/20 border-rose-400/40 text-rose-200 animate-pulse' : 'bg-black/20 border-white/5 text-slate-400'}`}>
                             <div className="text-[10px] uppercase font-bold">Giai đoạn 3</div>
                             <div className="font-mono font-black text-xs text-white">21 - {totalDaysInMonth}</div>
-                            <div className="text-[9px] opacity-75">Về đích chốt số</div>
+                            <div className="text-[9px] opacity-75">Về đích</div>
                         </div>
                     </div>
                 </div>

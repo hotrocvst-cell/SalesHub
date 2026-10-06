@@ -80,11 +80,33 @@ export default function QuickNavigationGrid() {
             iconColor: 'text-purple-600'
         },
         {
+            title: 'Chi Tiết Nhân Viên',
+            path: '/chi-tiet-nhan-vien',
+            badge: '✨ Chi Tiết',
+            badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+            description: 'Báo cáo chi tiết luỹ kế doanh thu, tiến độ thi đua & ngành hàng từng nhân sự',
+            icon: UserCheck,
+            gradient: 'from-emerald-500/10 via-teal-500/5 to-transparent hover:border-emerald-300',
+            iconBg: 'bg-emerald-100 text-emerald-700',
+            iconColor: 'text-emerald-600'
+        },
+        {
+            title: 'Tiến Độ Thi Đua',
+            path: '/tien-do-thi-dua',
+            badge: '⚡ Mới',
+            badgeColor: 'bg-rose-100 text-rose-800 border-rose-200',
+            description: 'Báo cáo tiến độ các chương trình thi đua, lọc theo nhân viên & cảnh báo nguy cơ hụt target',
+            icon: Target,
+            gradient: 'from-rose-500/10 via-orange-500/5 to-transparent hover:border-rose-300',
+            iconBg: 'bg-rose-100 text-rose-700',
+            iconColor: 'text-rose-600'
+        },
+        {
             title: 'Tổng Hợp Thi Đua',
             path: '/tong-hop-thi-dua',
             badge: '🔥 Hot',
             badgeColor: 'bg-rose-100 text-rose-800 border-rose-200',
-            description: 'Tổng hợp tiến độ hoàn thành các chương trình thi đua trọng điểm toàn hệ thống',
+            description: 'Tổng hợp tiến độ hoàn thành các chương trình thi đua toàn hệ thống',
             icon: Award,
             gradient: 'from-rose-500/10 via-pink-500/5 to-transparent hover:border-rose-300',
             iconBg: 'bg-rose-100 text-rose-700',

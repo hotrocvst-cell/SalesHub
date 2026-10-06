@@ -14,6 +14,14 @@ import {
 
 export type { UserRole, UserAccountStatus };
 
+export interface ImpersonationState {
+    isActive: boolean;
+    role?: UserRole;
+    store_name?: string;
+    employee_id?: string;
+    employee_name?: string;
+}
+
 export interface CurrentUser {
     id?: string;
     auth_user_id?: string;
@@ -42,6 +50,14 @@ interface AuthContextType {
     isShiftLeader: boolean;
     accessibleStores: string[];
     canAccessStore: (storeName: string) => boolean;
+    // Kiểm thử / Mô phỏng dành riêng cho Admin
+    isImpersonating: boolean;
+    impersonationState: ImpersonationState;
+    setImpersonation: (updates: Partial<ImpersonationState>) => void;
+    setImpersonationRole: (role: UserRole) => void;
+    setImpersonationStore: (storeName?: string) => void;
+    setImpersonationEmployee: (employee?: { employee_id: string; full_name: string; store_name?: string; role?: UserRole }) => void;
+    resetImpersonation: () => void;
     login: (emailOrEmployeeId: string, password?: string) => Promise<{ success: boolean; error?: string }>;
     register: (params: {
         email: string;
@@ -66,6 +82,7 @@ interface AuthContextType {
 
 const STORAGE_ACTIVE_USER_KEY = 'saleshub_active_user_v2';
 const STORAGE_LEGACY_KEY = 'saleshub_active_user_v1';
+const STORAGE_IMPERSONATION_KEY = 'saleshub_admin_impersonation_v2';
 
 // Trạng thái người dùng ẩn danh / Chưa xác thực
 export const ANONYMOUS_USER: CurrentUser = {
@@ -104,7 +121,7 @@ function profileToCurrentUser(profile: UserProfile, authUserId?: string, actualR
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-    const [currentUser, setCurrentUser] = useState<CurrentUser>(() => {
+    const [rawUser, setRawUser] = useState<CurrentUser>(() => {
         try {
             const saved = localStorage.getItem(STORAGE_ACTIVE_USER_KEY) || localStorage.getItem(STORAGE_LEGACY_KEY);
             if (saved) {
@@ -125,6 +142,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return ANONYMOUS_USER;
     });
 
+    // Trạng thái mô phỏng dành riêng cho Admin để kiểm thử hệ thống
+    const [impersonationState, setImpersonationState] = useState<ImpersonationState>(() => {
+        try {
+            const saved = localStorage.getItem(STORAGE_IMPERSONATION_KEY);
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                if (parsed && typeof parsed === 'object') {
+                    return parsed;
+                }
+            }
+        } catch (e) {
+            console.warn('Lỗi đọc Impersonation từ localStorage:', e);
+        }
+        return { isActive: false };
+    });
+
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [isInitializing, setIsInitializing] = useState<boolean>(() => {
         try {
@@ -141,6 +174,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return true;
     });
 
+    // Quyền Admin thực tế (dựa trên tài khoản đăng nhập gốc)
+    const isAuthenticated = Boolean(rawUser && rawUser.email && rawUser.id);
+    const isActualAdmin = isAuthenticated && (
+        (rawUser.actual_role === 'ADMIN') ||
+        (rawUser.role === 'ADMIN') ||
+        (rawUser.email === 'admin@saleshub.vn')
+    );
+    const isImpersonating = Boolean(isActualAdmin && impersonationState.isActive);
+
+    // Tính toán currentUser hiệu lực (đã áp dụng mô phỏng nếu Admin đang testing)
+    const currentUser = useMemo<CurrentUser>(() => {
+        if (!isActualAdmin || !impersonationState.isActive) {
+            return rawUser;
+        }
+
+        const effectiveRole = impersonationState.role || rawUser.role || 'ADMIN';
+        const effectiveStore = impersonationState.store_name !== undefined ? impersonationState.store_name : rawUser.store_name;
+        const effectiveEmpId = impersonationState.employee_id !== undefined ? impersonationState.employee_id : rawUser.employee_id;
+        const effectiveName = impersonationState.employee_name || rawUser.full_name;
+
+        let effectiveAccessible: string[] = [];
+        if (effectiveRole === 'ADMIN') {
+            effectiveAccessible = ['all'];
+        } else if (effectiveRole === 'NHAN_VIEN') {
+            effectiveAccessible = effectiveStore ? [effectiveStore] : [];
+        } else {
+            // Quản lý hoặc Trưởng ca
+            effectiveAccessible = effectiveStore ? [effectiveStore] : (rawUser.accessible_stores || []);
+        }
+
+        return {
+            ...rawUser,
+            role: effectiveRole,
+            actual_role: rawUser.actual_role || rawUser.role || 'ADMIN',
+            role_title: ROLE_LABELS[effectiveRole] || effectiveRole,
+            store_name: effectiveStore,
+            employee_id: effectiveEmpId,
+            full_name: effectiveName,
+            accessible_stores: effectiveAccessible
+        };
+    }, [rawUser, isActualAdmin, impersonationState]);
+
     // Danh sách siêu thị được phép xem của tài khoản hiện tại
     const accessibleStores = useMemo<string[]>(() => {
         if (!currentUser || !currentUser.id) return [];
@@ -153,7 +228,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Kiểm tra xem user hiện tại có quyền xem một siêu thị cụ thể không
     const canAccessStore = useCallback((storeName: string): boolean => {
-        if (!currentUser || !currentUser.id) return false;
+        if (!currentUser) return false;
         if (currentUser.role === 'ADMIN') return true;
         if (currentUser.role === 'NHAN_VIEN') {
             if (storeName === 'all') return false;
@@ -164,14 +239,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const myStores = currentUser.accessible_stores && currentUser.accessible_stores.length > 0
             ? currentUser.accessible_stores
             : (currentUser.store_name ? [currentUser.store_name] : []);
+        if (myStores.length === 0) return true;
         return myStores.some(s => isStoreMatch(s, storeName));
     }, [currentUser]);
 
     // Chỉ lưu vào LocalStorage khi người dùng THỰC SỰ đã xác thực (có id và email)
     useEffect(() => {
         try {
-            if (currentUser && currentUser.id && currentUser.email) {
-                localStorage.setItem(STORAGE_ACTIVE_USER_KEY, JSON.stringify(currentUser));
+            if (rawUser && rawUser.id && rawUser.email) {
+                localStorage.setItem(STORAGE_ACTIVE_USER_KEY, JSON.stringify(rawUser));
             } else {
                 localStorage.removeItem(STORAGE_ACTIVE_USER_KEY);
                 localStorage.removeItem(STORAGE_LEGACY_KEY);
@@ -179,7 +255,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } catch (e) {
             console.warn('Lỗi lưu Auth vào localStorage:', e);
         }
-    }, [currentUser]);
+    }, [rawUser]);
 
     // Kiểm tra session Supabase khi khởi chạy
     useEffect(() => {
@@ -189,7 +265,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 if (session?.user?.email) {
                     const profile = await getUserProfile(session.user.email);
                     if (profile) {
-                        setCurrentUser(profileToCurrentUser(profile, session.user.id));
+                        setRawUser(profileToCurrentUser(profile, session.user.id));
                     }
                 }
             } catch {
@@ -205,10 +281,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (session?.user?.email) {
                 const profile = await getUserProfile(session.user.email);
                 if (profile) {
-                    setCurrentUser(profileToCurrentUser(profile, session.user.id));
+                    setRawUser(profileToCurrentUser(profile, session.user.id));
                 }
             } else if (_event === 'SIGNED_OUT') {
-                setCurrentUser(ANONYMOUS_USER);
+                setRawUser(ANONYMOUS_USER);
             }
         });
 
@@ -217,12 +293,63 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         };
     }, []);
 
-    const isAuthenticated = Boolean(currentUser && currentUser.email && currentUser.id);
-    const isActualAdmin = isAuthenticated && ((currentUser.actual_role === 'ADMIN') || (currentUser.role === 'ADMIN') || (currentUser.email === 'admin@saleshub.vn'));
     const isAdmin = isAuthenticated && (currentUser.role === 'ADMIN');
     const canConfigure = isAuthenticated && (currentUser.role === 'ADMIN' || currentUser.role === 'QUAN_LY' || currentUser.role === 'TRUONG_CA');
     const isManager = isAuthenticated && (currentUser.role === 'ADMIN' || currentUser.role === 'QUAN_LY');
     const isShiftLeader = isAuthenticated && (currentUser.role === 'TRUONG_CA');
+
+    // =========================================================================
+    // HỆ THỐNG MÔ PHỎNG / TESTING PHÂN QUYỀN DÀNH CHO ADMIN
+    // =========================================================================
+    const setImpersonation = useCallback((updates: Partial<ImpersonationState>) => {
+        if (!isActualAdmin) return;
+        setImpersonationState(prev => {
+            const next: ImpersonationState = {
+                ...prev,
+                ...updates,
+                isActive: true
+            };
+            try {
+                localStorage.setItem(STORAGE_IMPERSONATION_KEY, JSON.stringify(next));
+            } catch (e) {
+                console.warn('Lỗi lưu impersonation:', e);
+            }
+            return next;
+        });
+    }, [isActualAdmin]);
+
+    const setImpersonationRole = useCallback((role: UserRole) => {
+        setImpersonation({ role });
+    }, [setImpersonation]);
+
+    const setImpersonationStore = useCallback((storeName?: string) => {
+        setImpersonation({ store_name: storeName });
+    }, [setImpersonation]);
+
+    const setImpersonationEmployee = useCallback((emp?: { employee_id: string; full_name: string; store_name?: string; role?: UserRole }) => {
+        if (!emp) {
+            setImpersonation({
+                employee_id: '',
+                employee_name: undefined
+            });
+            return;
+        }
+        setImpersonation({
+            employee_id: emp.employee_id,
+            employee_name: emp.full_name,
+            ...(emp.store_name ? { store_name: emp.store_name } : {}),
+            ...(emp.role ? { role: emp.role } : {})
+        });
+    }, [setImpersonation]);
+
+    const resetImpersonation = useCallback(() => {
+        setImpersonationState({ isActive: false });
+        try {
+            localStorage.removeItem(STORAGE_IMPERSONATION_KEY);
+        } catch (e) {
+            console.warn('Lỗi xóa impersonation:', e);
+        }
+    }, []);
 
     // 1. Đăng nhập bằng Email / Mã nhân viên + Mật khẩu
     const login = async (emailOrEmployeeId: string, password?: string): Promise<{ success: boolean; error?: string }> => {
@@ -249,7 +376,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                             });
                         }
 
-                        setCurrentUser(profileToCurrentUser(profile, data.user.id));
+                        setRawUser(profileToCurrentUser(profile, data.user.id));
                         setIsLoading(false);
                         return { success: true };
                     }
@@ -272,7 +399,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     }
                 }
 
-                setCurrentUser(profileToCurrentUser(profile));
+                setRawUser(profileToCurrentUser(profile));
                 setIsLoading(false);
                 return { success: true };
             }
@@ -368,7 +495,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 });
             }
 
-            setCurrentUser({
+            setRawUser({
                 id: profile.id,
                 auth_user_id: profile.auth_user_id,
                 email: profile.email,
@@ -392,7 +519,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // 3. Đăng nhập nhanh bằng Demo User
     const loginAsDemoUser = (user: UserProfile) => {
-        setCurrentUser({
+        setRawUser({
             id: user.id,
             email: user.email,
             employee_id: user.employee_id,
@@ -408,12 +535,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // 4. Đồng bộ / Tải lại trạng thái hồ sơ người dùng
     const refreshProfile = useCallback(async () => {
-        if (!currentUser.email && !currentUser.id) return;
+        if (!rawUser.email && !rawUser.id) return;
         try {
-            const key = currentUser.email || currentUser.id || '';
+            const key = rawUser.email || rawUser.id || '';
             const profile = await getUserProfile(key);
             if (profile) {
-                setCurrentUser(prev => ({
+                setRawUser(prev => ({
                     ...prev,
                     id: profile.id,
                     email: profile.email,
@@ -434,26 +561,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } catch (e) {
             console.warn('Lỗi refreshProfile:', e);
         }
-    }, [currentUser.email, currentUser.id]);
+    }, [rawUser.email, rawUser.id]);
 
     const updateLocalProfileStatus = (status: UserAccountStatus, updates?: Partial<CurrentUser>) => {
-        setCurrentUser(prev => ({
+        setRawUser(prev => ({
             ...prev,
             status,
             ...(updates || {})
         }));
     };
 
-    // 5. Chuyển đổi vai trò nhanh
-    const switchRole = (newRole: UserRole, storeName?: string) => {
-        setCurrentUser(prev => ({
-            ...prev,
-            role: newRole,
-            actual_role: prev.actual_role || prev.role,
-            role_title: ROLE_LABELS[newRole],
-            ...(storeName ? { store_name: storeName } : {})
-        }));
-    };
+    // 5. Chuyển đổi vai trò nhanh (Tích hợp mô phỏng nếu là Admin)
+    const switchRole = useCallback((newRole: UserRole, storeName?: string) => {
+        if (isActualAdmin) {
+            if (newRole === 'ADMIN' && !storeName) {
+                resetImpersonation();
+            } else {
+                setImpersonation({
+                    role: newRole,
+                    ...(storeName !== undefined ? { store_name: storeName } : {})
+                });
+            }
+        } else {
+            setRawUser(prev => ({
+                ...prev,
+                role: newRole,
+                actual_role: prev.actual_role || prev.role,
+                role_title: ROLE_LABELS[newRole],
+                ...(storeName ? { store_name: storeName } : {})
+            }));
+        }
+    }, [isActualAdmin, resetImpersonation, setImpersonation]);
 
     // 6. Đăng nhập vai trò nhân viên từ danh sách
     const loginAsEmployee = (employee: EmployeeItem, roleOverride?: UserRole) => {
@@ -471,7 +609,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
         }
 
-        setCurrentUser({
+        setRawUser({
             id: employee.id,
             employee_id: employee.employee_id,
             full_name: employee.full_name,
@@ -510,7 +648,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         localStorage.removeItem(STORAGE_ACTIVE_USER_KEY);
         localStorage.removeItem(STORAGE_LEGACY_KEY);
-        setCurrentUser(ANONYMOUS_USER);
+        localStorage.removeItem(STORAGE_IMPERSONATION_KEY);
+        setImpersonationState({ isActive: false });
+        setRawUser(ANONYMOUS_USER);
     };
 
     return (
@@ -527,6 +667,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 isShiftLeader,
                 accessibleStores,
                 canAccessStore,
+                isImpersonating,
+                impersonationState,
+                setImpersonation,
+                setImpersonationRole,
+                setImpersonationStore,
+                setImpersonationEmployee,
+                resetImpersonation,
                 login,
                 register,
                 loginAsDemoUser,
@@ -550,3 +697,4 @@ export function useAuth() {
     }
     return context;
 }
+

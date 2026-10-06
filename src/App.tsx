@@ -19,8 +19,10 @@ const CampaignConfigPage = lazy(() => import('./features/admin-config/CampaignCo
 const StoreEmployeeConfigPage = lazy(() => import('./features/store-management/StoreEmployeeConfigPage'));
 const EmployeeCumulativePage = lazy(() => import('./features/employee-cumulative/EmployeeCumulativePage'));
 const EmployeePerformanceReportPage = lazy(() => import('./features/employee-performance/EmployeePerformanceReportPage'));
+const EmployeeDetailReportPage = lazy(() => import('./features/employee-detail/EmployeeDetailReportPage'));
 const EmployeeSessionManagerPage = lazy(() => import('./features/employee-cumulative/EmployeeSessionManagerPage'));
 const CampaignSummaryPage = lazy(() => import('./features/campaign-summary/CampaignSummaryPage'));
+const CampaignProgressPage = lazy(() => import('./features/campaign-progress/CampaignProgressPage'));
 const SystemAdminPage = lazy(() => import('./features/admin-config/SystemAdminPage'));
 const UserManagementPage = lazy(() => import('./features/admin-config/UserManagementPage'));
 const UserStorePermissionPage = lazy(() => import('./features/admin-config/UserStorePermissionPage'));
@@ -83,10 +85,24 @@ export default function App() {
                                     </ProtectedRoute>
                                 } />
 
+                                {/* Báo Cáo Chi Tiết Nhân Viên */}
+                                <Route path="/chi-tiet-nhan-vien" element={
+                                    <ProtectedRoute path="/chi-tiet-nhan-vien">
+                                        <EmployeeDetailReportPage />
+                                    </ProtectedRoute>
+                                } />
+
                                 {/* Báo Cáo Tổng Hợp Thi Đua Ngành Hàng */}
                                 <Route path="/tong-hop-thi-dua" element={
                                     <ProtectedRoute path="/tong-hop-thi-dua">
                                         <CampaignSummaryPage />
+                                    </ProtectedRoute>
+                                } />
+
+                                {/* Báo Cáo Tiến Độ Thi Đua Nhân Viên */}
+                                <Route path="/tien-do-thi-dua" element={
+                                    <ProtectedRoute path="/tien-do-thi-dua">
+                                        <CampaignProgressPage />
                                     </ProtectedRoute>
                                 } />
 

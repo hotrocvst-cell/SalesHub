@@ -41,7 +41,9 @@ interface EmulationRowItem {
     label: string;
     target: number;
     actual: number;
+    pctHT: number;
     pctDK: number;
+    remaining: number;
 }
 
 export default function MonthlyReportPage() {
@@ -56,7 +58,7 @@ export default function MonthlyReportPage() {
     const [selectedStore, setSelectedStore] = useState<string>("all");
     const [selectedDate, setSelectedDate] = useState<string>("latest");
 
-    // Bộ lọc, sắp xếp và chế độ tóm tắt Zalo
+    // Bộ lọc, sắp xếp và chế độ tóm tắt
     const [sortOrder, setSortOrder] = useState<string>("pct-desc");
     const [statusFilter, setStatusFilter] = useState<string>("all");
     const [summaryMode, setSummaryMode] = useState<number>(1);
@@ -110,14 +112,28 @@ export default function MonthlyReportPage() {
         return Array.from(s).sort();
     }, [records]);
 
-    // Lọc siêu thị theo phân quyền tài khoản (Nhân viên chỉ xem shop mình, Quản lý xem các shop được phân quyền)
+    // Lọc siêu thị theo phân quyền tài khoản (Nhân viên chỉ xem shop mình, Quản lý/Trưởng ca xem các shop được phân quyền)
     const storeList = useMemo(() => {
         if (isAdmin) return allStoreList;
-        return allStoreList.filter(s => canAccessStore(s));
-    }, [allStoreList, isAdmin, canAccessStore]);
+        const matched = allStoreList.filter(sName => {
+            if (canAccessStore(sName)) return true;
+            const originalRecord = records.find(r => getShortStoreName(r.storeName) === sName);
+            if (originalRecord && canAccessStore(originalRecord.storeName)) return true;
+            return false;
+        });
+        if (matched.length > 0) return matched;
 
-    const isLockedToSingleStore = !isAdmin && (currentUser?.role === 'NHAN_VIEN' || storeList.length <= 1);
-    const canViewAllStores = isAdmin || (!isLockedToSingleStore && currentUser?.role !== 'NHAN_VIEN' && storeList.length > 1);
+        // Fallback nếu records tháng chưa có dữ liệu nhưng tài khoản có accessible_stores / store_name
+        const accessible = currentUser?.accessible_stores && currentUser.accessible_stores.length > 0
+            ? currentUser.accessible_stores
+            : (currentUser?.store_name ? [currentUser.store_name] : []);
+        return Array.from(new Set(accessible.map(s => getShortStoreName(s))));
+    }, [allStoreList, isAdmin, canAccessStore, records, currentUser]);
+
+    const isStaff = currentUser?.role === 'NHAN_VIEN';
+    // CHỈ KHÓA TÀI KHOẢN NHÂN VIÊN. QUẢN LÝ (QL) VÀ TRƯỞNG CA (TC) LUÔN ĐƯỢC MỞ KHÓA
+    const isLockedToSingleStore = !isAdmin && isStaff;
+    const canViewAllStores = isAdmin || (!isStaff && storeList.length > 1);
 
     // Tự động điều chỉnh siêu thị được chọn cho nhân viên hoặc quản lý
     useEffect(() => {
@@ -129,12 +145,17 @@ export default function MonthlyReportPage() {
             }
             return;
         }
-        if (!canViewAllStores && storeList.length === 1 && selectedStore === 'all') {
+
+        // Quản lý hoặc Trưởng ca:
+        // Nếu chỉ phụ trách 1 shop và đang chọn 'all' mà không xem được all -> chọn shop đó
+        if (storeList.length === 1 && selectedStore === 'all' && !canViewAllStores) {
             setSelectedStore(storeList[0]);
             return;
         }
+
+        // Nếu shop đang chọn không nằm trong danh sách được phép
         if (selectedStore !== 'all' && !storeList.includes(selectedStore) && storeList.length > 0) {
-            setSelectedStore(storeList[0]);
+            setSelectedStore(canViewAllStores ? 'all' : storeList[0]);
         }
     }, [currentUser, isAdmin, storeList, selectedStore, canViewAllStores]);
 
@@ -167,9 +188,15 @@ export default function MonthlyReportPage() {
         if (isAll) {
             const memberStores = recordsInActiveDay.filter(r => {
                 const sName = getShortStoreName(r.storeName);
-                return sName !== 'Tổng' && !/^(tổng|tong)/i.test(r.storeName);
+                if (sName === 'Tổng' || /^(tổng|tong)/i.test(r.storeName)) return false;
+                if (isAdmin) return true;
+                return canAccessStore(r.storeName) || canAccessStore(sName);
             });
-            const targetList = memberStores.length > 0 ? memberStores : recordsInActiveDay;
+            const targetList = memberStores.length > 0 ? memberStores : recordsInActiveDay.filter(r => {
+                const sName = getShortStoreName(r.storeName);
+                if (sName === 'Tổng' || /^(tổng|tong)/i.test(r.storeName)) return false;
+                return isAdmin || canAccessStore(r.storeName) || canAccessStore(sName);
+            });
 
             const totalActual = targetList.reduce((sum, r) => sum + (Number(r.revenueActual) || 0), 0);
             const totalTarget = targetList.reduce((sum, r) => sum + (Number(r.revenueTarget) || 0), 0);
@@ -184,8 +211,12 @@ export default function MonthlyReportPage() {
 
             const installmentRate = totalActual > 0 ? (totalInstallment / totalActual * 100) : 0;
 
+            const clusterLabel = isAdmin
+                ? `TỔNG TOÀN CỤM (${targetList.length} SIÊU THỊ)`
+                : `TỔNG CỤM PHỤ TRÁCH (${targetList.length} SIÊU THỊ)`;
+
             return {
-                storeName: `TỔNG TOÀN CỤM (${targetList.length} SIÊU THỊ)`,
+                storeName: clusterLabel,
                 reportDate: activeReportDate,
                 month: targetList[0]?.month || selectedMonth,
                 year: targetList[0]?.year || selectedYear,
@@ -205,7 +236,7 @@ export default function MonthlyReportPage() {
 
         const singleStore = recordsInActiveDay.find(r => getShortStoreName(r.storeName) === selectedStore);
         return singleStore || null;
-    }, [recordsInActiveDay, activeReportDate, selectedStore, selectedMonth, selectedYear]);
+    }, [recordsInActiveDay, activeReportDate, selectedStore, selectedMonth, selectedYear, isAdmin, canAccessStore]);
 
     // 7. BÓC TÁCH DANH SÁCH THI ĐUA (HIỂN THỊ ĐẦY ĐỦ TÊN SIÊU THỊ KHI XEM CỤM)
     const emulationRowList = useMemo<EmulationRowItem[]>(() => {
@@ -217,9 +248,15 @@ export default function MonthlyReportPage() {
         if (isAll) {
             const memberStores = recordsInActiveDay.filter(r => {
                 const sName = getShortStoreName(r.storeName);
-                return sName !== 'Tổng' && !/^(tổng|tong)/i.test(r.storeName);
+                if (sName === 'Tổng' || /^(tổng|tong)/i.test(r.storeName)) return false;
+                if (isAdmin) return true;
+                return canAccessStore(r.storeName) || canAccessStore(sName);
             });
-            const targetRecords = memberStores.length > 0 ? memberStores : recordsInActiveDay;
+            const targetRecords = memberStores.length > 0 ? memberStores : recordsInActiveDay.filter(r => {
+                const sName = getShortStoreName(r.storeName);
+                if (sName === 'Tổng' || /^(tổng|tong)/i.test(r.storeName)) return false;
+                return isAdmin || canAccessStore(r.storeName) || canAccessStore(sName);
+            });
 
             targetRecords.forEach(r => {
                 const sName = getShortStoreName(r.storeName);
@@ -229,6 +266,8 @@ export default function MonthlyReportPage() {
                         if (target > 0) {
                             const actual = Number(val.actual) || 0;
                             const pctDK = typeof val.pctDK === 'number' ? val.pctDK : (target > 0 ? (actual / target * 100) : 0);
+                            const pctHT = target > 0 ? (actual / target * 100) : (typeof val.pctHT === 'number' ? val.pctHT : 0);
+                            const remaining = Math.max(0, target - actual);
                             rows.push({
                                 id: `${sName}-${rawKey}`,
                                 storeName: sName,
@@ -236,7 +275,9 @@ export default function MonthlyReportPage() {
                                 label: getCampaignLabel(rawKey, campaigns),
                                 target,
                                 actual,
-                                pctDK
+                                pctHT,
+                                pctDK,
+                                remaining
                             });
                         }
                     });
@@ -251,6 +292,8 @@ export default function MonthlyReportPage() {
                     if (target > 0) {
                         const actual = Number(val.actual) || 0;
                         const pctDK = typeof val.pctDK === 'number' ? val.pctDK : (target > 0 ? (actual / target * 100) : 0);
+                        const pctHT = target > 0 ? (actual / target * 100) : (typeof val.pctHT === 'number' ? val.pctHT : 0);
+                        const remaining = Math.max(0, target - actual);
                         rows.push({
                             id: `${sName}-${rawKey}`,
                             storeName: sName,
@@ -258,7 +301,9 @@ export default function MonthlyReportPage() {
                             label: getCampaignLabel(rawKey, campaigns),
                             target,
                             actual,
-                            pctDK
+                            pctHT,
+                            pctDK,
+                            remaining
                         });
                     }
                 });
@@ -275,13 +320,17 @@ export default function MonthlyReportPage() {
         filtered.sort((a, b) => {
             if (sortOrder === "pct-desc") return b.pctDK - a.pctDK;
             if (sortOrder === "pct-asc") return a.pctDK - b.pctDK;
+            if (sortOrder === "pctHT-desc") return b.pctHT - a.pctHT;
+            if (sortOrder === "pctHT-asc") return a.pctHT - b.pctHT;
+            if (sortOrder === "remaining-desc") return b.remaining - a.remaining;
+            if (sortOrder === "remaining-asc") return a.remaining - b.remaining;
             if (sortOrder === "store-asc") return a.storeName.localeCompare(b.storeName);
             if (sortOrder === "name-asc") return a.label.localeCompare(b.label);
             return 0;
         });
 
         return filtered;
-    }, [recordsInActiveDay, activeReportDate, selectedStore, campaigns, statusFilter, sortOrder]);
+    }, [recordsInActiveDay, activeReportDate, selectedStore, campaigns, statusFilter, sortOrder, isAdmin, canAccessStore]);
 
     // 8. TÍNH TOÁN SỐ MỤC THI ĐUA ĐẠT / CHƯA ĐẠT CHO SUMMARY
     const emulationStats = useMemo(() => {
@@ -309,9 +358,14 @@ export default function MonthlyReportPage() {
             if (selectedStore === "all" || selectedStore === "Tổng") {
                 const memberStores = dayRecords.filter(r => {
                     const sName = getShortStoreName(r.storeName);
-                    return sName !== 'Tổng' && !/^(tổng|tong)/i.test(r.storeName);
+                    if (sName === 'Tổng' || /^(tổng|tong)/i.test(r.storeName)) return false;
+                    return isAdmin || canAccessStore(r.storeName) || canAccessStore(sName);
                 });
-                const targets = memberStores.length > 0 ? memberStores : dayRecords;
+                const targets = memberStores.length > 0 ? memberStores : dayRecords.filter(r => {
+                    const sName = getShortStoreName(r.storeName);
+                    if (sName === 'Tổng' || /^(tổng|tong)/i.test(r.storeName)) return false;
+                    return isAdmin || canAccessStore(r.storeName) || canAccessStore(sName);
+                });
                 const totalActual = targets.reduce((sum, r) => sum + (Number(r.revenueActual) || 0), 0);
 
                 return {
@@ -340,29 +394,30 @@ export default function MonthlyReportPage() {
         }
 
         return paceList;
-    }, [records, selectedStore]);
+    }, [records, selectedStore, isAdmin, canAccessStore]);
 
-    // 10. MODULE NHẬN XÉT & TÓM TẮT MỤC TIÊU ZALO
+    // 10. MODULE NHẬN XÉT & TÓM TẮT MỤC TIÊU
     const summaryText = useMemo(() => {
         if (!currentRecord) return '';
 
         const isAll = selectedStore === "all" || selectedStore === "Tổng";
-        const dispStore = isAll ? 'TỔNG TOÀN CỤM' : selectedStore;
-        let txt = `📢 BÁO CÁO THÁNG [${dispStore}] - NGÀY ${formatDate(currentRecord.reportDate)}`;
+        const dispStore = isAll ? (isAdmin ? 'TỔNG TOÀN CỤM' : 'TỔNG CỤM PHỤ TRÁCH') : selectedStore;
+        let txt = `📢 [${dispStore}]\n- NGÀY ${formatDate(currentRecord.reportDate)}`;
 
-        txt += `\n\n💰 LŨY KẾ THỰC THU: ${formatValue(currentRecord.revenueActual)} (Dự báo HT: ${(currentRecord.forecastCompletionRate || 0).toFixed(1)}%)`;
+        txt += `\n\n💰 Lũy kế DTQĐ: ${formatValue(currentRecord.revenueActual)} (DKHT: ${(currentRecord.forecastCompletionRate || 0).toFixed(1)}%)`;
+        if (currentRecord.revenueActual < currentRecord.revenueTarget) {
+            txt += `\n- Còn lại: ${formatValue(currentRecord.revenueTarget - currentRecord.revenueActual)}`;
+        }
         if (currentRecord.revenueInstallment > 0 || currentRecord.installmentRate > 0) {
             txt += `\n- DT trả góp: ${formatValue(currentRecord.revenueInstallment)} (${(currentRecord.installmentRate || 0).toFixed(1)}%)`;
         }
-        if (currentRecord.revenueActual < currentRecord.revenueTarget) {
-            txt += `\n- Cần thêm: ${formatValue(currentRecord.revenueTarget - currentRecord.revenueActual)}`;
-        }
+
 
         if (emulationRowList.length > 0) {
             const targeted = emulationRowList;
             const passed = targeted.filter(d => d.pctDK >= 100);
             const passRate = targeted.length > 0 ? (passed.length / targeted.length * 100).toFixed(1) : '0';
-            txt += `\n\n🎯 THI ĐUA: Đạt ${passed.length}/${targeted.length} mục (${passRate}%)`;
+            txt += `\n\n🎯 THI ĐUA: DK Đạt ${passed.length}/${targeted.length} NH (${passRate}%)`;
 
             const fails = targeted.filter(d => d.pctDK < 100);
 
@@ -374,38 +429,38 @@ export default function MonthlyReportPage() {
                 const groupAlert = fails.filter(d => d.pctDK < 50);
 
                 if (summaryMode === 1) {
-                    txt += `\n\n📊 TỔNG HỢP CHƯA ĐẠT (${fails.length} mục):`;
-                    if (groupNear.length > 0) txt += `\n- ⚡ CẬN ĐÍCH (>80%): ${groupNear.length} mục`;
-                    if (groupSpeed.length > 0) txt += `\n- 🔥 CẦN TĂNG TỐC (50% - 80%): ${groupSpeed.length} mục`;
-                    if (groupAlert.length > 0) txt += `\n- ⚠️ BÁO ĐỘNG ĐỎ (<50%): ${groupAlert.length} mục`;
+                    txt += `\n\n📊 TỔNG HỢP DK CHƯA ĐẠT (${fails.length} NH):`;
+                    if (groupNear.length > 0) txt += `\n- ⚡ CẬN ĐÍCH (>80%): ${groupNear.length} NH`;
+                    if (groupSpeed.length > 0) txt += `\n- 🔥 CẦN TĂNG TỐC (50% - 80%): ${groupSpeed.length} NH`;
+                    if (groupAlert.length > 0) txt += `\n- ⚠️ NGUY HIỂM (<50%): ${groupAlert.length} NH`;
                 } else if (summaryMode === 2) {
-                    txt += `\n\n📊 CHI TIẾT CHƯA ĐẠT (${fails.length} mục):`;
+                    txt += `\n\n📊 CHI TIẾT DK CHƯA ĐẠT (${fails.length} NH):`;
                     if (groupNear.length > 0) {
-                        txt += `\n\n⚡ CẬN ĐÍCH (>80%): ${groupNear.length} mục`;
+                        txt += `\n\n⚡ CẬN ĐÍCH (>80%): ${groupNear.length} NH`;
                         groupNear.forEach(d => {
                             const prefix = isAll ? `[${d.storeName}] ` : '';
-                            txt += `\n- ${prefix}${d.label}: thiếu ${formatValue(Math.max(0, d.target - d.actual))} (Dự báo: ${d.pctDK.toFixed(1)}%)`;
+                            txt += `\n- ${prefix}${d.label}: thiếu ${formatValue(Math.max(0, d.target - d.actual))} (${d.pctDK.toFixed(1)}%)`;
                         });
                     }
                     if (groupSpeed.length > 0) {
-                        txt += `\n\n🔥 CẦN TĂNG TỐC (50% - 80%): ${groupSpeed.length} mục`;
+                        txt += `\n\n🔥 CẦN TĂNG TỐC (50% - 80%): ${groupSpeed.length} NH`;
                         groupSpeed.forEach(d => {
                             const prefix = isAll ? `[${d.storeName}] ` : '';
-                            txt += `\n- ${prefix}${d.label}: thiếu ${formatValue(Math.max(0, d.target - d.actual))} (Dự báo: ${d.pctDK.toFixed(1)}%)`;
+                            txt += `\n- ${prefix}${d.label}: thiếu ${formatValue(Math.max(0, d.target - d.actual))} (${d.pctDK.toFixed(1)}%)`;
                         });
                     }
                     if (groupAlert.length > 0) {
-                        txt += `\n\n⚠️ BÁO ĐỘNG ĐỎ (<50%): ${groupAlert.length} mục`;
+                        txt += `\n\n⚠️ NGUY HIỂM (<50%): ${groupAlert.length} NH`;
                         groupAlert.forEach(d => {
                             const prefix = isAll ? `[${d.storeName}] ` : '';
-                            txt += `\n- ${prefix}${d.label}: thiếu ${formatValue(Math.max(0, d.target - d.actual))} (Dự báo: ${d.pctDK.toFixed(1)}%)`;
+                            txt += `\n- ${prefix}${d.label}: thiếu ${formatValue(Math.max(0, d.target - d.actual))} (${d.pctDK.toFixed(1)}%)`;
                         });
                     }
                 } else {
-                    txt += `\n\n⚠️ CHI TIẾT CHƯA ĐẠT (${fails.length} mục):`;
+                    txt += `\n\n⚠️ CHI TIẾT DK CHƯA ĐẠT (${fails.length} NH):`;
                     fails.forEach(d => {
                         const prefix = isAll ? `[${d.storeName}] ` : '';
-                        txt += `\n- ${prefix}${d.label}: thiếu ${formatValue(Math.max(0, d.target - d.actual))} (Dự báo: ${d.pctDK.toFixed(1)}%)`;
+                        txt += `\n- ${prefix}${d.label}: thiếu ${formatValue(Math.max(0, d.target - d.actual))} (${d.pctDK.toFixed(1)}%)`;
                     });
                 }
             }
@@ -444,7 +499,14 @@ export default function MonthlyReportPage() {
                 if (target) {
                     target.style.width = '100%';
                     target.style.maxWidth = 'none';
+                    target.style.height = 'auto';
+                    target.style.maxHeight = 'none';
+                    target.style.overflow = 'visible';
                 }
+                const scrollBoxes = clonedDoc.querySelectorAll('.overflow-x-auto');
+                scrollBoxes.forEach(sb => {
+                    (sb as HTMLElement).style.overflow = 'visible';
+                });
             }
         });
     };
@@ -519,13 +581,13 @@ export default function MonthlyReportPage() {
                         </div>
                         <div>
                             <h1 className="text-base font-black text-slate-800 uppercase tracking-wide">
-                                Báo Cáo Tiến Độ Doanh Thu & Thi Đua Tháng {selectedMonth}/{selectedYear}
+                                Lũy Kế Doanh Thu & Thi Đua Tháng {selectedMonth}/{selectedYear}
                             </h1>
                             <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1.5">
                                 <span>Trạng thái:</span>
                                 {currentRecord ? (
                                     <span className="text-emerald-700 font-bold bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded text-[10px]">
-                                        Bản ghi ngày {formatDate(currentRecord.reportDate)} (Mới nhất)
+                                        Bản ghi ngày {formatDate(currentRecord.reportDate)}
                                     </span>
                                 ) : (
                                     <span className="text-amber-700 font-bold bg-amber-50 border border-amber-200 px-1.5 py-0.2 rounded text-[10px]">
@@ -538,11 +600,10 @@ export default function MonthlyReportPage() {
 
                     {/* Bộ lọc lựa chọn dữ liệu */}
                     <div className="flex items-center gap-2 flex-wrap">
-                        <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all ${
-                            isLockedToSingleStore
-                                ? 'bg-amber-50/90 border-amber-200 text-amber-900 shadow-2xs'
-                                : 'bg-slate-50 border-slate-300 text-slate-700'
-                        }`}>
+                        <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all ${isLockedToSingleStore
+                            ? 'bg-amber-50/90 border-amber-200 text-amber-900 shadow-2xs'
+                            : 'bg-slate-50 border-slate-300 text-slate-700'
+                            }`}>
                             {isLockedToSingleStore ? (
                                 <Lock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                             ) : (
@@ -556,14 +617,18 @@ export default function MonthlyReportPage() {
                                 }}
                                 disabled={isLockedToSingleStore}
                                 title={isLockedToSingleStore ? 'Tài khoản nhân viên được cố định theo siêu thị đã đăng ký' : undefined}
-                                className={`bg-transparent outline-none font-bold ${
-                                    isLockedToSingleStore
-                                        ? 'cursor-not-allowed text-amber-900 font-black'
-                                        : 'cursor-pointer text-slate-700'
-                                }`}
+                                className={`bg-transparent outline-none font-bold ${isLockedToSingleStore
+                                    ? 'cursor-not-allowed text-amber-900 font-black'
+                                    : 'cursor-pointer text-slate-700'
+                                    }`}
                             >
                                 {canViewAllStores && (
-                                    <option value="all">🏢 TỔNG TOÀN CỤM ({allStoreList.length} siêu thị)</option>
+                                    <option value="all">
+                                        {isAdmin
+                                            ? `🏢 TỔNG TOÀN CỤM (${allStoreList.length} siêu thị)`
+                                            : `🏢 TỔNG CỤM PHỤ TRÁCH (${storeList.length} siêu thị)`
+                                        }
+                                    </option>
                                 )}
                                 {storeList.map(s => (
                                     <option key={s} value={s}>{s}</option>
@@ -612,7 +677,7 @@ export default function MonthlyReportPage() {
                 {/* HÀNG 2: BUTTON BÁO CÁO */}
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                     <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                        Công cụ xuất báo cáo Ultra HD (4K)
+                        Công cụ xuất báo cáo
                     </div>
 
                     <div className="flex items-center gap-2">
@@ -719,7 +784,7 @@ export default function MonthlyReportPage() {
                         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
                             {/* Card 1: DOANH THU QĐ */}
                             <div className="bg-amber-50/70 border-l-4 border-amber-500 rounded-xl p-3 shadow-xs text-center">
-                                <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider block">DOANH THU QĐ</span>
+                                <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider block">DTQĐ</span>
                                 <span className="text-base sm:text-lg font-black text-slate-800 font-mono mt-0.5 block">
                                     {formatValue(currentRecord.revenueActual || 0)}
                                 </span>
@@ -727,7 +792,7 @@ export default function MonthlyReportPage() {
 
                             {/* Card 2: MỤC TIÊU */}
                             <div className="bg-rose-50/70 border-l-4 border-rose-500 rounded-xl p-3 shadow-xs text-center">
-                                <span className="text-[10px] font-bold text-rose-700 uppercase tracking-wider block">MỤC TIÊU</span>
+                                <span className="text-[10px] font-bold text-rose-700 uppercase tracking-wider block">TARGET</span>
                                 <span className="text-base sm:text-lg font-black text-slate-800 font-mono mt-0.5 block">
                                     {formatValue(currentRecord.revenueTarget || 0)}
                                 </span>
@@ -744,7 +809,7 @@ export default function MonthlyReportPage() {
 
                             {/* Card 4: % TRẢ GÓP */}
                             <div className="bg-purple-50/70 border-l-4 border-purple-500 rounded-xl p-3 shadow-xs text-center">
-                                <span className="text-[10px] font-bold text-purple-700 uppercase tracking-wider block">% TRẢ GÓP</span>
+                                <span className="text-[10px] font-bold text-purple-700 uppercase tracking-wider block">% TRẢ CHẬM</span>
                                 <span className="text-base sm:text-lg font-black text-purple-700 font-mono mt-0.5 block">
                                     {(currentRecord.installmentRate || 0).toFixed(1)}%
                                 </span>
@@ -752,7 +817,7 @@ export default function MonthlyReportPage() {
 
                             {/* Card 5: THI ĐUA ĐẠT */}
                             <div className="bg-slate-100/90 border-l-4 border-slate-600 rounded-xl p-3 shadow-xs text-center">
-                                <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wider block">THI ĐUA ĐẠT</span>
+                                <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wider block">THI ĐUA</span>
                                 <span className="text-base sm:text-lg font-black text-slate-800 font-mono mt-0.5 block">
                                     {emulationStats.passed}/{emulationStats.total}
                                 </span>
@@ -760,7 +825,7 @@ export default function MonthlyReportPage() {
 
                             {/* Card 6: %HT THI ĐUA */}
                             <div className="bg-emerald-50/70 border-l-4 border-emerald-500 rounded-xl p-3 shadow-xs text-center">
-                                <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block">%HT THI ĐUA</span>
+                                <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block">%DKHT</span>
                                 <span className="text-base sm:text-lg font-black text-emerald-600 font-mono mt-0.5 block">
                                     {emulationStats.passRate}%
                                 </span>
@@ -777,11 +842,11 @@ export default function MonthlyReportPage() {
                                     </div>
                                     <div>
                                         <h3 className="font-extrabold text-sm sm:text-base tracking-wide uppercase flex items-center gap-1.5 drop-shadow-xs">
-                                            <span>Bảng Kết Quả Thi Đua Chi Tiết {isAllMode ? '(Toàn Cụm)' : ''}</span>
+                                            <span>Bảng Thi Đua Chi Tiết {isAllMode ? '(Toàn Cụm)' : ''}</span>
                                             <Sparkles className="w-4 h-4 text-amber-300 animate-pulse" />
                                         </h3>
                                         <p className="text-[11px] text-blue-100 font-medium mt-0.5">
-                                            Tiến độ hoàn thành chỉ tiêu các chương trình thi đua đến ngày {formatDate(currentRecord.reportDate)}
+                                            Lũy kế tính đến hết ngày {formatDate(currentRecord.reportDate)}
                                         </p>
                                     </div>
                                 </div>
@@ -824,8 +889,12 @@ export default function MonthlyReportPage() {
                                             onChange={(e) => setSortOrder(e.target.value)}
                                             className="bg-transparent font-bold text-slate-700 outline-none cursor-pointer text-xs"
                                         >
-                                            <option value="pct-desc">% Tiến độ giảm dần</option>
-                                            <option value="pct-asc">% Tiến độ tăng dần</option>
+                                            <option value="pct-desc">% Tiến độ DK giảm dần</option>
+                                            <option value="pct-asc">% Tiến độ DK tăng dần</option>
+                                            <option value="pctHT-desc">% Hoàn thành (%HT) giảm dần</option>
+                                            <option value="pctHT-asc">% Hoàn thành (%HT) tăng dần</option>
+                                            <option value="remaining-desc">Mục tiêu còn lại giảm dần</option>
+                                            <option value="remaining-asc">Mục tiêu còn lại tăng dần</option>
                                             {isAllMode && <option value="store-asc">Sắp xếp theo Siêu Thị</option>}
                                             <option value="name-asc">Sắp xếp theo Tên Thi Đua</option>
                                         </select>
@@ -835,24 +904,26 @@ export default function MonthlyReportPage() {
 
                             {/* BẢNG SỐ LIỆU CHI TIẾT */}
                             <div className="overflow-x-auto no-scrollbar">
-                                <table className="w-full text-xs text-left min-w-[760px] font-avo report-table">
+                                <table className="w-full text-xs text-left min-w-[840px] font-avo report-table">
                                     <thead className="bg-slate-800 text-white uppercase text-[10px] font-black border-b border-slate-700">
                                         <tr>
                                             <th className="py-3 px-3 text-center w-10">#</th>
                                             {isAllMode && (
                                                 <th className="py-3 px-3 min-w-[200px]">Siêu Thị</th>
                                             )}
-                                            <th className="py-3 px-3">Tên Chương Trình</th>
-                                            <th className="py-3 px-3 text-center">Chỉ Tiêu Khoán</th>
-                                            <th className="py-3 px-3 text-center">Lũy Kế Thực Hiện</th>
-                                            <th className="py-3 px-3 text-center">% Tiến Độ (%DK)</th>
-                                            <th className="py-3 px-3 text-center">Trạng Thái</th>
+                                            <th className="py-3 px-3">Thi đua</th>
+                                            <th className="py-3 px-3 text-center">Target</th>
+                                            <th className="py-3 px-3 text-center">Lũy Kế</th>
+                                            <th className="py-3 px-3 text-center" title="% Hoàn thành hiện tại: (Lũy kế / Target) * 100">%HT</th>
+                                            <th className="py-3 px-3 text-center" title="% Dự kiến hoàn thành cuối tháng theo nhịp bán">%DKHT</th>
+                                            <th className="py-3 px-3 text-center" title="Mục tiêu thi đua còn lại: Target - Lũy kế">Còn lại</th>
+                                            <th className="py-3 px-3 text-center">Đánh giá</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
                                         {emulationRowList.length === 0 ? (
                                             <tr>
-                                                <td colSpan={isAllMode ? 7 : 6} className="py-8 text-center text-slate-400">
+                                                <td colSpan={isAllMode ? 9 : 8} className="py-8 text-center text-slate-400">
                                                     Không tìm thấy mục thi đua nào khớp với điều kiện lọc trong ngày {formatDate(currentRecord.reportDate)}.
                                                 </td>
                                             </tr>
@@ -882,10 +953,21 @@ export default function MonthlyReportPage() {
                                                             {formatValue(row.actual)}
                                                         </td>
                                                         <td className="py-2.5 px-3 text-center font-mono font-bold">
+                                                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${row.pctHT >= 100
+                                                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                                                : 'bg-slate-100 text-slate-700 border border-slate-200'
+                                                                }`}>
+                                                                {row.pctHT.toFixed(0)}%
+                                                            </span>
+                                                        </td>
+                                                        <td className="py-2.5 px-3 text-center font-mono font-bold">
                                                             <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${isPass ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-rose-100 text-rose-800 border border-rose-300'
                                                                 }`}>
                                                                 {row.pctDK.toFixed(0)}%
                                                             </span>
+                                                        </td>
+                                                        <td className={`py-2.5 px-3 text-center font-mono font-bold ${row.remaining > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                                                            {formatValue(row.remaining)}
                                                         </td>
                                                         <td className="py-2.5 px-3 text-center">
                                                             {isPass ? (
@@ -914,10 +996,10 @@ export default function MonthlyReportPage() {
                             <div>
                                 <h3 className="font-black text-xs sm:text-sm text-slate-800 uppercase tracking-wide flex items-center gap-2">
                                     <TrendingUp className="w-4 h-4 text-indigo-600" />
-                                    <span>Biến Động Nhịp Doanh Thu (Pace Từng Ngày {isAllMode ? 'Toàn Cụm' : selectedStore})</span>
+                                    <span>Biến Động Nhịp Doanh Thu ({isAllMode ? 'Toàn Cụm' : selectedStore})</span>
                                 </h3>
                                 <p className="text-[11px] text-slate-400 mt-0.5">
-                                    Doanh số phát sinh thực tế từng ngày = Lũy kế ngày N - Lũy kế ngày N-1
+                                    Doanh số phát sinh thực tế từng ngày
                                 </p>
                             </div>
 
@@ -966,14 +1048,14 @@ export default function MonthlyReportPage() {
                         </div>
                     </div>
 
-                    {/* MODULE NHẬN XÉT & TÓM TẮT MỤC TIÊU ZALO */}
+                    {/* MODULE NHẬN XÉT & TÓM TẮT MỤC TIÊU */}
                     {summaryText && currentRecord && (
                         <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-xs space-y-3">
                             <div className="flex flex-wrap items-center justify-between gap-2">
                                 <div className="flex flex-wrap items-center gap-2">
                                     <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
                                         <FileText className="w-4 h-4 text-indigo-600" />
-                                        <span>Nhận Xét & Tóm Tắt Mục Tiêu Zalo</span>
+                                        <span>Nhận Xét & Tóm Tắt Mục Tiêu</span>
                                     </span>
 
                                     {/* Bộ 3 nút chuyển chế độ tóm tắt */}

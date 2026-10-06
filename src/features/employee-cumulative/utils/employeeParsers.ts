@@ -1,5 +1,5 @@
 /**
- * Bộ giải mã cú pháp (Parser) cho dữ liệu nhân viên bóc tách từ báo cáo MWG
+ * Bộ giải mã cú pháp (Parser) cho dữ liệu nhân viên bóc tách từ báo cáo
  */
 
 export interface ParsedEmployeeRevenue {
@@ -166,9 +166,14 @@ export function parseEmployeeRevenueText(rawText: string): ParsedEmployeeRevenue
     // Hàm nhận diện dòng nhân viên: "Mã NV - Họ và Tên"
     const extractEmployeeInfo = (str: string): { empId: string; fullName: string } | null => {
         if (isStoreHeader(str)) return null;
-        const m = str.match(/^([a-zA-Z0-9_.-]+)\s*-\s*([^\t\r\n]+)$/);
-        if (m && m[1].toLowerCase() !== 'online') {
-            return { empId: m[1].trim(), fullName: m[2].trim() };
+        // Mã nhân viên không được bắt đầu bằng dấu trừ '-'
+        const m = str.match(/^([a-zA-Z0-9_.]+)\s*-\s*([^\t\r\n]+)$/);
+        if (m && m[1].toLowerCase() !== 'online' && !m[1].startsWith('-')) {
+            const name = m[2].trim();
+            // Tên nhân viên phải chứa ký tự chữ cái (tránh nhận nhầm biểu thức toán/số âm)
+            if (/[a-zA-Z\u00C0-\u024F\u1EA0-\u1EF9]/.test(name)) {
+                return { empId: m[1].trim(), fullName: name };
+            }
         }
         return null;
     };
@@ -217,6 +222,26 @@ export function parseEmployeeRevenueText(rawText: string): ParsedEmployeeRevenue
         };
     };
 
+    // Hàm ghi nhận kết quả và gộp trùng lặp nếu cùng 1 nhân viên xuất hiện nhiều dòng
+    const addOrUpdateResult = (empInfo: { empId: string; fullName: string }, metrics: ReturnType<typeof extractMetrics>) => {
+        const existingIdx = results.findIndex(r => r.employee_id === empInfo.empId);
+        if (existingIdx >= 0) {
+            results[existingIdx].quantity += metrics.quantity;
+            results[existingIdx].revenue_qd = Number((results[existingIdx].revenue_qd + metrics.revenue_qd).toFixed(2));
+            results[existingIdx].revenue_actual = Number((results[existingIdx].revenue_actual + metrics.revenue_actual).toFixed(2));
+            results[existingIdx].installment_revenue = Number((results[existingIdx].installment_revenue + metrics.installment_revenue).toFixed(2));
+            if (results[existingIdx].revenue_actual > 0) {
+                results[existingIdx].installment_rate = Number(((results[existingIdx].installment_revenue / results[existingIdx].revenue_actual) * 100).toFixed(1));
+            }
+        } else {
+            results.push({
+                employee_id: empInfo.empId,
+                full_name: empInfo.fullName,
+                ...metrics
+            });
+        }
+    };
+
     for (let i = 0; i < cleanLines.length; i++) {
         const line = cleanLines[i];
 
@@ -228,11 +253,7 @@ export function parseEmployeeRevenueText(rawText: string): ParsedEmployeeRevenue
             if (empInfo && parts.length >= 5) {
                 const cols = parts.slice(1);
                 const metrics = extractMetrics(cols);
-                results.push({
-                    employee_id: empInfo.empId,
-                    full_name: empInfo.fullName,
-                    ...metrics
-                });
+                addOrUpdateResult(empInfo, metrics);
                 continue;
             }
         }
@@ -247,11 +268,7 @@ export function parseEmployeeRevenueText(rawText: string): ParsedEmployeeRevenue
 
                 if (nextCols.length >= 4) {
                     const metrics = extractMetrics(nextCols);
-                    results.push({
-                        employee_id: empInfo.empId,
-                        full_name: empInfo.fullName,
-                        ...metrics
-                    });
+                    addOrUpdateResult(empInfo, metrics);
                     i++; // Bỏ qua dòng 2 vì đã xử lý
                     continue;
                 }
@@ -263,7 +280,7 @@ export function parseEmployeeRevenueText(rawText: string): ParsedEmployeeRevenue
             while (j < cleanLines.length && collectedCols.length < 8) {
                 const checkLine = cleanLines[j];
                 // Dừng lại nếu gặp nhân viên tiếp theo
-                if (extractEmployeeInfo(checkLine) || (checkLine.includes(' - ') && /^[a-zA-Z0-9_.-]+\s*-/.test(checkLine))) {
+                if (extractEmployeeInfo(checkLine)) {
                     break;
                 }
                 collectedCols.push(checkLine);
@@ -272,11 +289,7 @@ export function parseEmployeeRevenueText(rawText: string): ParsedEmployeeRevenue
 
             if (collectedCols.length >= 4) {
                 const metrics = extractMetrics(collectedCols);
-                results.push({
-                    employee_id: empInfo.empId,
-                    full_name: empInfo.fullName,
-                    ...metrics
-                });
+                addOrUpdateResult(empInfo, metrics);
                 i = j - 1; // Nhảy con trỏ tới dòng số liệu cuối cùng đã gom
                 continue;
             }
@@ -423,6 +436,13 @@ function parseNumber(val: any): number {
     if (!str || str === '—' || str === '-' || str === 'N/A' || str === 'null') return 0;
     // Bỏ ký tự %, tiền tệ và khoảng trắng
     str = str.replace(/[%đĐ]/g, '').trim();
+
+    // Xử lý số âm trong ngoặc đơn (1,500) -> -1,500
+    if (/^\(.*\)$/.test(str)) {
+        str = '-' + str.slice(1, -1).trim();
+    }
+    // Xử lý khoảng trắng giữa dấu trừ và số (- 1,500 -> -1,500)
+    str = str.replace(/^-\s+/, '-');
 
     // Nếu dạng "30,5" hoặc "12,5" (1 dấu phẩy và theo sau là 1 hoặc 2 chữ số): chuyển thành dấu chấm thập phân
     if (/^-?\d+,\d{1,2}$/.test(str)) {

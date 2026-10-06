@@ -3,6 +3,7 @@ import { Outlet, useLocation, Navigate, useNavigate, Link } from 'react-router-d
 import { useAuth } from '../../contexts/AuthContext';
 import RolePermissionModal from '../../../features/store-management/components/RolePermissionModal';
 import NotificationBell from '../../../features/auth/components/NotificationBell';
+import AdminTestingBar from './AdminTestingBar';
 import SidebarNav, { NAVIGATION_GROUPS } from './SidebarNav';
 import {
     Store,
@@ -12,12 +13,23 @@ import {
     Menu,
     X,
     LogOut,
-    LogIn
+    LogIn,
+    FlaskConical,
+    RotateCcw
 } from 'lucide-react';
 
 export default function MainLayout() {
     const navigate = useNavigate();
-    const { currentUser, isActualAdmin, switchRole, isAuthenticated, isInitializing, logout } = useAuth();
+    const {
+        currentUser,
+        isActualAdmin,
+        isImpersonating,
+        resetImpersonation,
+        switchRole,
+        isAuthenticated,
+        isInitializing,
+        logout
+    } = useAuth();
     const location = useLocation();
 
     // 1. Kiểm tra trạng thái khởi tạo
@@ -49,6 +61,34 @@ export default function MainLayout() {
     // Trạng thái mở menu trên Mobile (drawer)
     const [isMobileOpen, setIsMobileOpen] = useState(false);
     const [isRoleModalOpen, setIsRoleModalOpen] = useState(false);
+
+    // Trạng thái bật/tắt thanh công cụ Testing Bar dành cho Admin
+    const [isTestingBarOpen, setIsTestingBarOpen] = useState<boolean>(() => {
+        if (!isActualAdmin) return false;
+        try {
+            const saved = localStorage.getItem('saleshub_admin_testing_bar_open');
+            if (saved !== null) return saved === 'true';
+        } catch {
+            // ignore
+        }
+        return isImpersonating; // Mặc định mở nếu đang có cấu hình mô phỏng
+    });
+
+    // Tự động mở Testing Bar nếu Admin kích hoạt mô phỏng
+    useEffect(() => {
+        if (isImpersonating) {
+            setIsTestingBarOpen(true);
+        }
+    }, [isImpersonating]);
+
+    // Lưu tùy chọn mở thanh testing vào localStorage
+    useEffect(() => {
+        try {
+            localStorage.setItem('saleshub_admin_testing_bar_open', String(isTestingBarOpen));
+        } catch {
+            // ignore
+        }
+    }, [isTestingBarOpen]);
 
     // Lưu tùy chọn thu gọn của người dùng vào localStorage
     useEffect(() => {
@@ -154,49 +194,91 @@ export default function MainLayout() {
                             {/* Chuông Thông Báo & Xét Duyệt */}
                             <NotificationBell />
 
-                            {/* Badge Vai trò Người dùng & Nút Phân Quyền (Chỉ dành riêng cho Admin) */}
-                            {isActualAdmin ? (
+                            {/* CÔNG CỤ KIỂM THỬ PHÂN QUYỀN (CHỈ DÀNH CHO ADMIN) */}
+                            {isActualAdmin && (
                                 <div className="flex items-center gap-1.5">
-                                    {/* Nút thoát chế độ mô phỏng nếu Admin đang xem vai trò khác */}
-                                    {currentUser.role !== 'ADMIN' && (
+                                    {isImpersonating ? (
+                                        <>
+                                            {/* Badge nổi bật khi đang giả lập kiểm thử */}
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsTestingBarOpen(prev => !prev)}
+                                                className="px-2.5 py-1 rounded-full bg-gradient-to-r from-purple-700 to-indigo-800 hover:from-purple-800 hover:to-indigo-900 text-white text-xs font-black flex items-center gap-1.5 shadow-xs transition cursor-pointer border border-purple-400/40"
+                                                title="Đang trong chế độ kiểm thử phân quyền. Bấm để mở / thu gọn thanh công cụ testing."
+                                            >
+                                                <FlaskConical className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
+                                                <span className="hidden sm:inline">Test:</span>
+                                                <span className="text-amber-300 uppercase">{currentUser.role}</span>
+                                                {currentUser.store_name && (
+                                                    <span className="hidden md:inline text-purple-200 truncate max-w-[100px]">
+                                                        • {currentUser.store_name}
+                                                    </span>
+                                                )}
+                                                {currentUser.employee_id && (
+                                                    <span className="hidden lg:inline text-emerald-300">
+                                                        • #{currentUser.employee_id}
+                                                    </span>
+                                                )}
+                                            </button>
+
+                                            {/* Nút 1-click Thoát Chế Độ Mô Phỏng Về Admin Gốc */}
+                                            <button
+                                                type="button"
+                                                onClick={() => resetImpersonation()}
+                                                className="px-2 py-1 rounded-full bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-black uppercase tracking-wider flex items-center gap-1 shadow-xs transition cursor-pointer"
+                                                title="Khôi phục toàn bộ thiết lập về tài khoản Admin tối cao mặc định"
+                                            >
+                                                <RotateCcw className="w-3 h-3" />
+                                                <span className="hidden sm:inline">Về Admin</span>
+                                            </button>
+                                        </>
+                                    ) : (
+                                        /* Nút bật thanh testing khi chưa mô phỏng */
                                         <button
                                             type="button"
-                                            onClick={() => switchRole('ADMIN')}
-                                            className="px-2.5 py-1 rounded-full bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shadow-xs transition cursor-pointer"
-                                            title="Đang mô phỏng vai trò khác. Bấm để trở về vai trò Admin tối cao."
+                                            onClick={() => setIsTestingBarOpen(prev => !prev)}
+                                            className={`px-2.5 py-1 rounded-full border text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs ${
+                                                isTestingBarOpen
+                                                    ? 'bg-indigo-600 text-white border-indigo-700 shadow-xs'
+                                                    : 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100'
+                                            }`}
+                                            title="Bật/Tắt thanh công cụ kiểm thử phân quyền theo Siêu thị & Nhân viên"
                                         >
-                                            <span>Về Admin</span>
-                                            <span>🛡️</span>
+                                            <FlaskConical className="w-3.5 h-3.5 text-indigo-600" />
+                                            <span className="hidden sm:inline">Giả Lập Testing</span>
                                         </button>
                                     )}
-
-                                    <button
-                                        type="button"
-                                        onClick={() => setIsRoleModalOpen(true)}
-                                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-bold transition shadow-2xs cursor-pointer ${
-                                            currentUser.role === 'ADMIN'
-                                                ? 'bg-rose-50 border-rose-300 text-rose-900 hover:bg-rose-100'
-                                                : currentUser.role === 'QUAN_LY'
-                                                ? 'bg-amber-50 border-amber-300 text-amber-900 hover:bg-amber-100'
-                                                : currentUser.role === 'TRUONG_CA'
-                                                ? 'bg-blue-50 border-blue-300 text-blue-900 hover:bg-blue-100'
-                                                : 'bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200'
-                                        }`}
-                                        title="Admin: Bấm để chuyển đổi vai trò kiểm thử hoặc mở khóa quyền"
-                                    >
-                                        <span className="text-sm">
-                                            {currentUser.role === 'ADMIN' ? '🛡️' : currentUser.role === 'QUAN_LY' ? '👑' : currentUser.role === 'TRUONG_CA' ? '⭐' : '👤'}
-                                        </span>
-                                        <div className="flex flex-col text-left">
-                                            <span className="text-[10px] leading-tight opacity-75 font-semibold hidden sm:inline">
-                                                {currentUser.role_title}
-                                            </span>
-                                            <span className="text-xs font-black truncate max-w-[120px]">
-                                                {currentUser.full_name}
-                                            </span>
-                                        </div>
-                                    </button>
                                 </div>
+                            )}
+
+                            {/* Badge Vai trò Người dùng & Nút Phân Quyền (Dành riêng cho Admin) */}
+                            {isActualAdmin ? (
+                                <button
+                                    type="button"
+                                    onClick={() => setIsRoleModalOpen(true)}
+                                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-bold transition shadow-2xs cursor-pointer ${
+                                        currentUser.role === 'ADMIN'
+                                            ? 'bg-rose-50 border-rose-300 text-rose-900 hover:bg-rose-100'
+                                            : currentUser.role === 'QUAN_LY'
+                                            ? 'bg-amber-50 border-amber-300 text-amber-900 hover:bg-amber-100'
+                                            : currentUser.role === 'TRUONG_CA'
+                                            ? 'bg-blue-50 border-blue-300 text-blue-900 hover:bg-blue-100'
+                                            : 'bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200'
+                                    }`}
+                                    title="Admin: Bấm để mở bảng phân quyền chi tiết hoặc nhập PIN mở khóa"
+                                >
+                                    <span className="text-sm">
+                                        {currentUser.role === 'ADMIN' ? '🛡️' : currentUser.role === 'QUAN_LY' ? '👑' : currentUser.role === 'TRUONG_CA' ? '⭐' : '👤'}
+                                    </span>
+                                    <div className="flex flex-col text-left">
+                                        <span className="text-[10px] leading-tight opacity-75 font-semibold hidden sm:inline">
+                                            {currentUser.role_title}
+                                        </span>
+                                        <span className="text-xs font-black truncate max-w-[120px]">
+                                            {currentUser.full_name}
+                                        </span>
+                                    </div>
+                                </button>
                             ) : (
                                 /* Người dùng thông thường: Chỉ hiển thị tĩnh, KHÔNG thể click đổi vai trò */
                                 <div
@@ -250,7 +332,7 @@ export default function MainLayout() {
                             </Link>
                             <Link
                                 to="/dang-ky"
-                                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition cursor-pointer"
+                                className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition cursor-pointer"
                             >
                                 <span>Đăng ký</span>
                             </Link>
@@ -258,6 +340,14 @@ export default function MainLayout() {
                     )}
                 </div>
             </header>
+
+            {/* THANH CÔNG CỤ KIỂM THỬ PHÂN QUYỀN HỆ THỐNG DÀNH RIÊNG CHO ADMIN */}
+            {isActualAdmin && (
+                <AdminTestingBar
+                    isOpen={isTestingBarOpen}
+                    onClose={() => setIsTestingBarOpen(false)}
+                />
+            )}
 
             {/* Modal Phân quyền chỉ khả dụng với Admin */}
             {isActualAdmin && (

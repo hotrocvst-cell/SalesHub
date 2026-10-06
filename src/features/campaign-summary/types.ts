@@ -6,8 +6,11 @@ export interface CampaignSummaryRow {
     store_name?: string;
     achieved_count: number; // Số ngành hàng đạt (>= 100%) ví dụ 15
     total_count: number;    // Tổng số ngành hàng xét, ví dụ 39
-    achievement_rate: number; // Tỷ lệ % đạt (15/39 = 38.5%)
+    achieved_points?: number; // Số điểm đạt được
+    total_points?: number;    // Tổng điểm tối đa của các ngành hàng có target
+    achievement_rate: number; // Tỷ lệ % đạt (15/39 = 38.5% hoặc điểm đạt / tổng điểm)
     campaign_rates: Record<string, number>; // { [categoryName]: percentageNumber (e.g. 76, 145, 0) }
+    scoring_mode?: 'POINTS' | 'COUNT';
 }
 
 export interface CampaignSummaryData {
@@ -15,11 +18,12 @@ export interface CampaignSummaryData {
     date_display: string;      // "26-09-2026"
     mode_label: string;        // "DỰ KIẾN" | "CHÍNH THỨC"
     store_name: string;        // Siêu thị hoặc "Toàn Cụm Siêu Thị"
+    scoring_mode?: 'POINTS' | 'COUNT';
     total_categories: number;  // ví dụ 39
     categories: string[];      // Danh sách tên các ngành hàng thi đua
     rows: CampaignSummaryRow[];
-    created_at: string;
-    updated_at: string;
+    created_at?: string;
+    updated_at?: string;
     notes?: string;
 }
 

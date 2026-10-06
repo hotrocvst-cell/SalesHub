@@ -31,7 +31,7 @@ export function useUserStoreFilter(
             ? currentUser.accessible_stores
             : (currentUser.store_name ? [currentUser.store_name] : []);
 
-        if (accessible.length === 0) return [];
+        if (accessible.length === 0) return stores;
         return stores.filter(s => accessible.some(acc => isStoreMatch(s.name, acc, stores)));
     }, [stores, currentUser, isAdmin]);
 
@@ -64,11 +64,11 @@ export function useUserStoreFilter(
         }
     }, [allowedStores, selectedStore, currentUser, isAdmin, setSelectedStore, stores]);
 
-    const isLockedToSingleStore = !isAdmin && (currentUser.role === 'NHAN_VIEN' || allowedStores.length <= 1);
+    const isLockedToSingleStore = !isAdmin && currentUser.role === 'NHAN_VIEN';
 
     return {
         allowedStores,
         isLockedToSingleStore,
-        canViewAllStores: isAdmin || (!isLockedToSingleStore && allowedStores.length > 1)
+        canViewAllStores: isAdmin || (currentUser.role !== 'NHAN_VIEN' && allowedStores.length > 1)
     };
 }

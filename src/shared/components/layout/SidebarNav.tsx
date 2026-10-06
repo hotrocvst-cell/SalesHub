@@ -19,7 +19,10 @@ import {
     Award,
     ShieldCheck,
     Users,
-    Building2
+    Building2,
+    BarChart3,
+    HeartPulse,
+    Settings
 } from 'lucide-react';
 
 export interface NavItem {
@@ -30,13 +33,16 @@ export interface NavItem {
 }
 
 export interface NavGroup {
-    groupTitle: string;
+    groupTitle?: string;
+    icon?: React.ComponentType<{ className?: string }>;
+    colorClass?: string;
+    bgClass?: string;
     items: NavItem[];
 }
 
 export const NAVIGATION_GROUPS: NavGroup[] = [
     {
-        groupTitle: 'TỔNG QUAN',
+        // Trang chủ hiển thị độc lập ở trên cùng, không đặt trong groupTitle
         items: [
             {
                 name: 'Trang Chủ',
@@ -48,6 +54,9 @@ export const NAVIGATION_GROUPS: NavGroup[] = [
     },
     {
         groupTitle: 'BÁO CÁO KINH DOANH',
+        icon: BarChart3,
+        colorClass: 'text-blue-700',
+        bgClass: 'bg-blue-100 text-blue-700',
         items: [
             {
                 name: 'BC Ngày (Realtime)',
@@ -67,10 +76,29 @@ export const NAVIGATION_GROUPS: NavGroup[] = [
                 icon: CalendarDays
             },
             {
-                name: 'Hiệu quả NV lũy kế',
+                name: 'Nhịp Doanh Thu',
+                path: '/nhip-doanh-thu',
+                icon: TrendingUp
+            }
+        ]
+    },
+    {
+        groupTitle: 'SỨC KHỎE NHÂN VIÊN',
+        icon: HeartPulse,
+        colorClass: 'text-rose-700',
+        bgClass: 'bg-rose-100 text-rose-700',
+        items: [
+            {
+                name: 'Doanh thu lũy kế',
                 path: '/bao-cao-hieu-qua-nhan-vien',
                 icon: Trophy,
                 badge: '⭐ Mới'
+            },
+            {
+                name: 'Tiến độ thi đua',
+                path: '/tien-do-thi-dua',
+                icon: Target,
+                badge: '⚡ Mới'
             },
             {
                 name: 'Tổng hợp thi đua',
@@ -79,14 +107,18 @@ export const NAVIGATION_GROUPS: NavGroup[] = [
                 badge: '🔥 Hot'
             },
             {
-                name: 'Nhịp Doanh Thu',
-                path: '/nhip-doanh-thu',
-                icon: TrendingUp
+                name: 'Chi tiết nhân viên',
+                path: '/chi-tiet-nhan-vien',
+                icon: UserCheck,
+                badge: '✨ Mới'
             }
         ]
     },
     {
         groupTitle: 'DỮ LIỆU & PHIÊN LÀM VIỆC',
+        icon: Database,
+        colorClass: 'text-emerald-700',
+        bgClass: 'bg-emerald-100 text-emerald-700',
         items: [
             {
                 name: 'Cập nhật số liệu LK',
@@ -113,6 +145,9 @@ export const NAVIGATION_GROUPS: NavGroup[] = [
     },
     {
         groupTitle: 'HỆ THỐNG & CẤU HÌNH',
+        icon: Settings,
+        colorClass: 'text-purple-700',
+        bgClass: 'bg-purple-100 text-purple-700',
         items: [
             {
                 name: 'Cấu hình Siêu thị & NV',
@@ -121,7 +156,7 @@ export const NAVIGATION_GROUPS: NavGroup[] = [
                 badge: '👑 Boss'
             },
             {
-                name: 'Từ viết tắt thi đua',
+                name: 'Cấu hình thi đua',
                 path: '/cau-hinh-thi-dua',
                 icon: BookOpenCheck
             },
@@ -164,22 +199,34 @@ export default function SidebarNav({ isCollapsed, onToggleCollapse, onItemClick 
     return (
         <div className="flex flex-col h-full justify-between">
             {/* Danh sách module */}
-            <div className={`p-3 space-y-5 overflow-y-auto overflow-x-hidden flex-1 ${isCollapsed ? 'px-2' : 'px-3'}`}>
+            <div className={`p-3 space-y-4 overflow-y-auto overflow-x-hidden flex-1 ${isCollapsed ? 'px-2' : 'px-3'}`}>
                 {NAVIGATION_GROUPS.map((group, gIdx) => {
                     // Lọc chỉ các item được phép truy cập theo phân quyền và trạng thái Bật
                     const visibleItems = group.items.filter(item => canAccessPage(item.path).allowed);
                     if (visibleItems.length === 0) return null;
 
+                    const GroupIcon = group.icon;
+
                     return (
                         <div key={gIdx} className="space-y-1.5">
                             {/* Tiêu đề nhóm */}
                             {isCollapsed ? (
-                                <div className="border-t border-slate-200/80 my-2.5 mx-1" title={group.groupTitle} />
-                            ) : (
-                                <div className="px-3 text-[10px] font-black uppercase tracking-wider text-slate-400 select-none">
-                                    {group.groupTitle}
+                                group.groupTitle ? (
+                                    <div className="border-t border-slate-200/80 my-2 mx-1" title={group.groupTitle} />
+                                ) : null
+                            ) : group.groupTitle ? (
+                                <div className="flex items-center gap-2 px-2.5 pt-2 pb-0.5 select-none">
+                                    {GroupIcon && (
+                                        <span className={`p-1 rounded-lg ${group.bgClass || 'bg-slate-100 text-slate-600'} shrink-0 shadow-2xs`}>
+                                            <GroupIcon className="w-3.5 h-3.5" />
+                                        </span>
+                                    )}
+                                    <span className={`text-[10px] font-black uppercase tracking-wider ${group.colorClass || 'text-slate-500'}`}>
+                                        {group.groupTitle}
+                                    </span>
+                                    <span className="flex-1 h-px bg-slate-200/60 ml-0.5" />
                                 </div>
-                            )}
+                            ) : null}
 
                             {/* Danh sách items */}
                             <div className="space-y-1">
@@ -255,7 +302,7 @@ export default function SidebarNav({ isCollapsed, onToggleCollapse, onItemClick 
                 {!isCollapsed && (
                     <div className="mb-2 px-1">
                         <div className="text-[11px] text-slate-600 font-bold truncate">
-                            Sales Hub Cụm MWG
+                            Tiện ích báo cáo Sales Hub
                         </div>
                         <div className="text-[10px] text-slate-400">
                             Phiên bản 2026

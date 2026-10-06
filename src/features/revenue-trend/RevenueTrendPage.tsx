@@ -318,7 +318,7 @@ export default function RevenueTrendPage() {
                             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
                                 <div className="flex items-center justify-between text-slate-400 mb-1">
                                     <span className="text-[10px] font-bold uppercase tracking-wider">
-                                        {selectedStore === 'Tổng' ? 'Tổng Lũy Kế Cụm' : 'Lũy Kế Thực Thu'}
+                                        {selectedStore === 'Tổng' ? 'Lũy Kế Cụm' : 'Lũy Kế DTQĐ'}
                                     </span>
                                     <Coins className="w-4 h-4 text-emerald-600" />
                                 </div>
@@ -333,7 +333,7 @@ export default function RevenueTrendPage() {
                             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
                                 <div className="flex items-center justify-between text-slate-400 mb-1">
                                     <span className="text-[10px] font-bold uppercase tracking-wider">
-                                        {selectedStore === 'Tổng' ? 'Tổng Chỉ Tiêu Cụm' : 'Chỉ Tiêu Khoán'}
+                                        {selectedStore === 'Tổng' ? 'TARGET CỤM' : 'TARGET'}
                                     </span>
                                     <Target className="w-4 h-4 text-indigo-600" />
                                 </div>
@@ -347,14 +347,14 @@ export default function RevenueTrendPage() {
 
                             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
                                 <div className="flex items-center justify-between text-slate-400 mb-1">
-                                    <span className="text-[10px] font-bold uppercase tracking-wider">Nhịp Thực Thu Ngày Gần Nhất</span>
+                                    <span className="text-[10px] font-bold uppercase tracking-wider">DTQĐ Ngày Gần Nhất</span>
                                     <ArrowUpRight className="w-4 h-4 text-amber-600" />
                                 </div>
                                 <p className="text-xl font-black font-mono text-amber-600">
                                     {formatValue(latestData.dailyPace)}
                                 </p>
                                 <p className="text-[11px] text-slate-400 mt-1">
-                                    Phát sinh riêng ngày {formatDate(latestData.reportDate)}
+                                    Tính riêng ngày {formatDate(latestData.reportDate)}
                                 </p>
                             </div>
                         </div>
@@ -365,7 +365,7 @@ export default function RevenueTrendPage() {
                         <div className="flex items-center justify-between border-b border-slate-200 pb-2">
                             <h3 className="font-black text-xs sm:text-sm text-slate-800 uppercase tracking-wide flex items-center gap-2">
                                 <TrendingUp className="w-4 h-4 text-indigo-600" />
-                                <span>Biểu Đồ Nhịp Thực Thu Từng Ngày (Pace Hàng Ngày)</span>
+                                <span>Biểu Đồ Nhịp DTQĐ Hàng Ngày</span>
                             </h3>
                             <span className="text-[11px] font-mono font-bold text-slate-500">
                                 {timelineData.length} ngày ghi nhận
@@ -402,7 +402,7 @@ export default function RevenueTrendPage() {
                     <div data-report-table="true" className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs font-avo">
                         <div className="p-3.5 bg-slate-50 border-b border-slate-200">
                             <h3 className="font-black text-xs uppercase text-slate-700 tracking-wider">
-                                Bảng Thống Kê Chi Tiết {selectedStore === 'Tổng' ? 'Cụm' : selectedStore} Theo Ngày
+                                Thống Kê Chi Tiết, Theo Ngày : <span className="text-indigo-600 font-black">{selectedStore === 'Tổng' ? 'Cụm' : selectedStore}</span>
                             </h3>
                         </div>
                         <div className="overflow-x-auto no-scrollbar">
@@ -410,11 +410,11 @@ export default function RevenueTrendPage() {
                                 <thead className="bg-slate-100 text-slate-600 uppercase text-[10px] font-black border-b border-slate-200">
                                     <tr>
                                         <th className="py-2.5 px-3">Ngày Báo Cáo</th>
-                                        <th className="py-2.5 px-3 text-right">Lũy Kế Thực Thu</th>
-                                        <th className="py-2.5 px-3 text-right text-indigo-700">Nhịp Phát Sinh Ngày</th>
-                                        <th className="py-2.5 px-3 text-right">Chỉ Tiêu Tháng</th>
+                                        <th className="py-2.5 px-3 text-right">Lũy Kế DTQĐ</th>
+                                        <th className="py-2.5 px-3 text-right text-indigo-700">DT Ngày</th>
+                                        <th className="py-2.5 px-3 text-right">TARGET</th>
                                         <th className="py-2.5 px-3 text-right">% Hoàn Thành</th>
-                                        <th className="py-2.5 px-3 text-right">Doanh Số Trả Góp</th>
+                                        <th className="py-2.5 px-3 text-right">DT Trả Chậm</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100 font-medium text-slate-700">

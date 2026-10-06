@@ -25,6 +25,8 @@ export default function CampaignSummaryTable({
         ? categories
         : categories.filter(c => c === selectedCategoryFilter);
 
+    const isPointsMode = rows.length > 0 && rows[0].scoring_mode === 'POINTS';
+
     // Xử lý sắp xếp khi click header
     const handleSort = (field: 'stt' | 'achieved' | 'rate' | 'name') => {
         if (sortField === field) {
@@ -38,7 +40,13 @@ export default function CampaignSummaryTable({
     const sortedRows = [...rows].sort((a, b) => {
         let diff = 0;
         if (sortField === 'stt') diff = a.stt - b.stt;
-        else if (sortField === 'achieved') diff = a.achieved_count - b.achieved_count;
+        else if (sortField === 'achieved') {
+            if (isPointsMode) {
+                diff = (a.achieved_points ?? 0) - (b.achieved_points ?? 0);
+            } else {
+                diff = a.achieved_count - b.achieved_count;
+            }
+        }
         else if (sortField === 'rate') diff = a.achievement_rate - b.achievement_rate;
         else if (sortField === 'name') diff = a.full_name.localeCompare(b.full_name);
         return sortDirection === 'asc' ? diff : -diff;
@@ -84,16 +92,15 @@ export default function CampaignSummaryTable({
                                 </div>
                             </th>
 
-                            {/* 3. SỐ THI ĐUA DỰ KIẾN ĐẠT/TỔNG */}
+                            {/* 3. SỐ THI ĐUA DỰ KIẾN ĐẠT/TỔNG HOẶC ĐIỂM DỰ KIẾN */}
                             <th
                                 onClick={() => handleSort('achieved')}
                                 className="py-2 px-2 text-center min-w-[110px] w-[110px] bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase cursor-pointer border-r border-emerald-500 sticky left-[240px] z-40 transition align-middle"
-                                title="Số lượng ngành hàng thi đua dự kiến đạt (≥100%) trên tổng số ngành hàng"
+                                title={isPointsMode ? 'Điểm thi đua dự kiến đạt (≥100%) trên tổng điểm tối đa' : 'Số lượng ngành hàng thi đua dự kiến đạt (≥100%) trên tổng số ngành hàng'}
                             >
                                 <div className="flex items-center justify-center gap-1 min-h-[38px] leading-snug">
                                     <div className="text-center">
-                                        <div>Dự kiến đạt</div>
-                                        <div className="text-[10px] font-semibold opacity-90">/ Tổng</div>
+                                        <div>{isPointsMode ? 'Điểm DK' : 'DK đạt'}</div>
                                     </div>
                                     {sortField === 'achieved' && (
                                         sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 shrink-0" /> : <ArrowDown className="w-3 h-3 shrink-0" />
@@ -157,9 +164,12 @@ export default function CampaignSummaryTable({
                                     </span>
                                 </td>
 
-                                {/* 3. SỐ THI ĐUA DỰ KIẾN ĐẠT/TỔNG (ví dụ: 15/39) */}
+                                {/* 3. SỐ THI ĐUA DỰ KIẾN ĐẠT/TỔNG (ví dụ: 15/39 hoặc 12/18 đ) */}
                                 <td className="py-2.5 px-2 text-center font-mono font-black text-slate-900 bg-white group-hover:bg-slate-50 border-r border-slate-200 sticky left-[240px] z-20 whitespace-nowrap min-w-[110px] w-[110px]">
-                                    {row.achieved_count}/{row.total_count}
+                                    {isPointsMode
+                                        ? `${row.achieved_points ?? 0}/${row.total_points ?? 0} đ`
+                                        : `${row.achieved_count}/${row.total_count}`
+                                    }
                                 </td>
 
                                 {/* 4. %DKHT (ví dụ: 38.5%) */}
@@ -176,13 +186,12 @@ export default function CampaignSummaryTable({
                                     return (
                                         <td
                                             key={cat}
-                                            className={`py-2.5 px-2 text-center font-mono text-xs border-r border-slate-100 transition whitespace-nowrap ${
-                                                isAchieved
-                                                    ? 'bg-[#d1fae5] text-[#065f46] font-black'
-                                                    : isLow
+                                            className={`py-2.5 px-2 text-center font-mono text-xs border-r border-slate-100 transition whitespace-nowrap ${isAchieved
+                                                ? 'bg-[#d1fae5] text-[#065f46] font-black'
+                                                : isLow
                                                     ? 'bg-[#ffe4e6] text-[#9f1239] font-black'
                                                     : 'bg-white text-slate-800 font-bold'
-                                            }`}
+                                                }`}
                                         >
                                             {val}%
                                         </td>
