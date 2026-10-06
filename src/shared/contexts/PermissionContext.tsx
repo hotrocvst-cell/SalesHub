@@ -98,7 +98,7 @@ export function PermissionProvider({ children }: { children: ReactNode }) {
 
         // Trang Quản trị hệ thống: ĐẶC BIỆT CHỈ DÀNH CHO ADMIN
         if (path === '/quan-tri-he-thong' || (page && page.path === '/quan-tri-he-thong')) {
-            const isAdmin = currentUser.role === 'ADMIN';
+            const isAdmin = currentUser?.role === 'ADMIN';
             return {
                 allowed: isAdmin,
                 isEnabled: true,
@@ -111,7 +111,7 @@ export function PermissionProvider({ children }: { children: ReactNode }) {
         if (path === '/quan-ly-tai-khoan' || (page && page.path === '/quan-ly-tai-khoan')) {
             const isEnabled = page ? Boolean(page.is_enabled) : true;
             const allowedRoles = page?.allowed_roles || ['ADMIN'];
-            const roleAllowed = currentUser.role === 'ADMIN' || allowedRoles.includes(currentUser.role);
+            const roleAllowed = Boolean(currentUser?.role === 'ADMIN' || (currentUser?.role && allowedRoles.includes(currentUser.role)));
             return {
                 allowed: isEnabled && roleAllowed,
                 isEnabled,
@@ -127,7 +127,7 @@ export function PermissionProvider({ children }: { children: ReactNode }) {
 
         const isEnabled = Boolean(page.is_enabled);
         // ADMIN luôn có quyền mọi trang nếu trang đang Bật
-        const roleAllowed = currentUser.role === 'ADMIN' || (page.allowed_roles && page.allowed_roles.includes(currentUser.role));
+        const roleAllowed = Boolean(currentUser?.role === 'ADMIN' || (page.allowed_roles && currentUser?.role && page.allowed_roles.includes(currentUser.role)));
         const allowed = isEnabled && roleAllowed;
 
         return { allowed, isEnabled, roleAllowed, page };

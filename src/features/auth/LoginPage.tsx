@@ -10,13 +10,13 @@ export default function LoginPage() {
 
     // Tự động điều hướng nếu đã có phiên đăng nhập hợp lệ
     useEffect(() => {
-        if (isAuthenticated && currentUser.email && currentUser.id) {
+        if (isAuthenticated && currentUser?.email && currentUser?.id) {
             if (currentUser.status === 'PENDING_ONBOARDING') {
                 navigate('/onboarding', { replace: true });
             } else if (currentUser.status === 'PENDING_APPROVAL' || currentUser.status === 'REJECTED') {
                 navigate('/cho-xet-duyet', { replace: true });
             } else {
-                navigate('/bc-thang/tong-quan', { replace: true });
+                navigate('/', { replace: true });
             }
         }
     }, [isAuthenticated, currentUser, navigate]);
@@ -47,7 +47,7 @@ export default function LoginPage() {
         setIsSubmitting(false);
 
         if (res.success) {
-            navigate('/bc-thang/tong-quan');
+            navigate('/');
         } else {
             setErrorMsg(res.error || 'Đăng nhập không thành công');
         }

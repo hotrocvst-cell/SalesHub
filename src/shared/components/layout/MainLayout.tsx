@@ -42,10 +42,17 @@ export default function MainLayout() {
         );
     }
 
-    // 2. Chặn toàn bộ truy cập nếu chưa đăng nhập (ngoại trừ trang chủ mở cho mọi người)
-    const isPublicHome = location.pathname === '/' || location.pathname === '/trang-chu';
-    if ((!isAuthenticated || !currentUser?.email || !currentUser?.id) && !isPublicHome) {
+    // 2. Chặn toàn bộ truy cập nếu chưa đăng nhập (bắt buộc chuyển hướng đến trang Đăng nhập)
+    if (!isAuthenticated || !currentUser?.email || !currentUser?.id) {
         return <Navigate to="/dang-nhap" replace />;
+    }
+
+    // 3. Chặn truy cập nếu chưa hoàn thành onboarding hoặc đang chờ xét duyệt
+    if (currentUser.status === 'PENDING_ONBOARDING') {
+        return <Navigate to="/onboarding" replace />;
+    }
+    if (currentUser.status === 'PENDING_APPROVAL' || currentUser.status === 'REJECTED') {
+        return <Navigate to="/cho-xet-duyet" replace />;
     }
 
     // Mặc định là Open (false = không thu gọn)

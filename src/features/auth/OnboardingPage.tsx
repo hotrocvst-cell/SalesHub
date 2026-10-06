@@ -36,7 +36,7 @@ export default function OnboardingPage() {
     }
 
     if (currentUser.status === 'ACTIVE') {
-        return <Navigate to="/bc-thang/tong-quan" replace />;
+        return <Navigate to="/" replace />;
     }
 
     if (currentUser.status === 'PENDING_APPROVAL' || currentUser.status === 'REJECTED') {

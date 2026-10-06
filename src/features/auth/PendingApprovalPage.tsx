@@ -32,7 +32,7 @@ export default function PendingApprovalPage() {
     }
 
     if (currentUser.status === 'ACTIVE') {
-        return <Navigate to="/bc-thang/tong-quan" replace />;
+        return <Navigate to="/" replace />;
     }
 
     if (currentUser.status === 'PENDING_ONBOARDING') {

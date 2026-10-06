@@ -53,9 +53,17 @@ export default function App() {
                             <Route path="/cho-xet-duyet" element={<PendingApprovalPage />} />
 
                             <Route element={<MainLayout />}>
-                                {/* Trang Chủ Hệ Thống (Khả dụng với tất cả user) */}
-                                <Route path="/" element={<HomePage />} />
-                                <Route path="/trang-chu" element={<HomePage />} />
+                                {/* Trang Chủ Hệ Thống (Yêu cầu đăng nhập) */}
+                                <Route path="/" element={
+                                    <ProtectedRoute path="/">
+                                        <HomePage />
+                                    </ProtectedRoute>
+                                } />
+                                <Route path="/trang-chu" element={
+                                    <ProtectedRoute path="/trang-chu">
+                                        <HomePage />
+                                    </ProtectedRoute>
+                                } />
 
                                 {/* Phân hệ BC Tháng */}
                                 <Route path="/bc-thang" element={<Navigate to="/bc-thang/tong-quan" replace />} />

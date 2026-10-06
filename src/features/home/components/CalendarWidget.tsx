@@ -57,15 +57,15 @@ export default function CalendarWidget() {
         if (isAdmin) {
             return stores.map(s => s.name);
         }
-        if (currentUser.accessible_stores && currentUser.accessible_stores.length > 0) {
+        if (currentUser?.accessible_stores && currentUser.accessible_stores.length > 0) {
             return currentUser.accessible_stores;
         }
-        return currentUser.store_name ? [currentUser.store_name] : [];
+        return currentUser?.store_name ? [currentUser.store_name] : [];
     }, [isAdmin, currentUser, stores]);
 
     // 2. Siêu thị đang được chọn lọc dữ liệu
     const [selectedStore, setSelectedStore] = useState<string>(() => {
-        if (currentUser.role === 'NHAN_VIEN' && currentUser.store_name) {
+        if (currentUser?.role === 'NHAN_VIEN' && currentUser?.store_name) {
             return currentUser.store_name;
         }
         return ALL_ASSIGNED_STORE_KEY;
@@ -73,7 +73,7 @@ export default function CalendarWidget() {
 
     // Đồng bộ lại selectedStore nếu tài khoản là Nhân Viên
     useEffect(() => {
-        if (currentUser.role === 'NHAN_VIEN' && currentUser.store_name) {
+        if (currentUser?.role === 'NHAN_VIEN' && currentUser?.store_name) {
             setSelectedStore(currentUser.store_name);
         }
     }, [currentUser]);
@@ -193,8 +193,8 @@ export default function CalendarWidget() {
             month,
             selectedStore,
             userAccessibleStores,
-            currentUser.role || 'NHAN_VIEN',
-            currentUser.store_name
+            currentUser?.role || 'NHAN_VIEN',
+            currentUser?.store_name
         );
     }, [notes, year, month, selectedStore, userAccessibleStores, currentUser]);
 
@@ -234,13 +234,13 @@ export default function CalendarWidget() {
             selectedDateKey,
             selectedStore,
             userAccessibleStores,
-            currentUser.role || 'NHAN_VIEN',
-            currentUser.store_name
+            currentUser?.role || 'NHAN_VIEN',
+            currentUser?.store_name
         );
     }, [notes, selectedDateKey, selectedStore, userAccessibleStores, currentUser]);
 
     // Phân quyền
-    const userRole = currentUser.role || 'NHAN_VIEN';
+    const userRole = currentUser?.role || 'NHAN_VIEN';
     const isStaff = isAuthenticated && userRole === 'NHAN_VIEN';
     const canManage = isAuthenticated && (userRole === 'ADMIN' || userRole === 'QUAN_LY' || userRole === 'TRUONG_CA');
 
