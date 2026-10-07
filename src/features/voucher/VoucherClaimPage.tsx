@@ -10,13 +10,16 @@ import {
     Tag,
     RefreshCw,
     History,
-    ChevronDown
+    ChevronDown,
+    RotateCcw,
+    X
 } from 'lucide-react';
 import { useAuth } from '../../shared/contexts/AuthContext';
 import type { VoucherItem, VoucherCampaignSummary } from './types';
 import {
     fetchStoreVouchers,
     claimVoucher,
+    resetClaimedVoucher,
     getCampaignSummaries
 } from './services/voucherService';
 import VoucherCard from './components/VoucherCard';
@@ -36,6 +39,8 @@ export default function VoucherClaimPage() {
     const [justClaimedVoucher, setJustClaimedVoucher] = useState<VoucherItem | null>(null);
     const [toastMessage, setToastMessage] = useState<string>('');
     const [visibleHistoryCount, setVisibleHistoryCount] = useState<number>(5);
+    const [voucherToReturn, setVoucherToReturn] = useState<VoucherItem | null>(null);
+    const [isReturning, setIsReturning] = useState<boolean>(false);
 
     const userStoreName = currentUser.store_name || 'Toàn Cụm Siêu Thị';
     const accessibleStores = useMemo(() => {
@@ -48,7 +53,12 @@ export default function VoucherClaimPage() {
     const loadData = async () => {
         setLoading(true);
         try {
-            const list = await fetchStoreVouchers(userStoreName, accessibleStores);
+            const list = await fetchStoreVouchers(
+                userStoreName,
+                accessibleStores,
+                currentUser.full_name || currentUser.employee_id,
+                false
+            );
             setVouchers(list);
         } finally {
             setLoading(false);
@@ -61,8 +71,14 @@ export default function VoucherClaimPage() {
 
     // Tóm tắt các chương trình và tồn kho
     const campaignSummaries = useMemo<VoucherCampaignSummary[]>(() => {
-        return getCampaignSummaries(vouchers, userStoreName, accessibleStores);
-    }, [vouchers, userStoreName, accessibleStores]);
+        return getCampaignSummaries(
+            vouchers,
+            userStoreName,
+            accessibleStores,
+            currentUser.full_name || currentUser.employee_id,
+            false
+        );
+    }, [vouchers, userStoreName, accessibleStores, currentUser]);
 
     // Các mệnh giá khả dụng của chương trình đang chọn
     const activeCampaignData = useMemo(() => {
@@ -156,6 +172,34 @@ export default function VoucherClaimPage() {
         }
     };
 
+    // Xác nhận trả lại mã voucher đã lấy về kho
+    const handleConfirmReturn = async () => {
+        if (!voucherToReturn) return;
+        setIsReturning(true);
+        try {
+            const res = await resetClaimedVoucher(
+                voucherToReturn.code,
+                currentUser.full_name || currentUser.employee_id || 'Nhân viên',
+                userStoreName,
+                accessibleStores
+            );
+            if (res.success) {
+                if (justClaimedVoucher?.id === voucherToReturn.id || justClaimedVoucher?.code === voucherToReturn.code) {
+                    setJustClaimedVoucher(null);
+                }
+                showToast(`✅ Đã trả lại mã "${voucherToReturn.code}" về kho thành công!`);
+                setVoucherToReturn(null);
+                await loadData();
+            } else {
+                showToast(`❌ Không thể trả lại mã: ${res.error}`);
+            }
+        } catch (e: any) {
+            showToast(`❌ Lỗi hệ thống: ${e.message || String(e)}`);
+        } finally {
+            setIsReturning(false);
+        }
+    };
+
     // Toàn bộ lịch sử mã mà cá nhân user này đã nhận
     const myClaimedVouchers = useMemo(() => {
         const empId = (currentUser.employee_id || currentUser.id || '').trim();
@@ -225,7 +269,12 @@ export default function VoucherClaimPage() {
                         </span>
                     </div>
 
-                    <VoucherCard voucher={justClaimedVoucher} onCopySuccess={() => showToast('📋 Đã copy mã vào bộ nhớ tạm!')} />
+                    <VoucherCard
+                        voucher={justClaimedVoucher}
+                        onCopySuccess={() => showToast('📋 Đã copy mã vào bộ nhớ tạm!')}
+                        onReturn={(v) => setVoucherToReturn(v)}
+                        isReturning={isReturning && voucherToReturn?.id === justClaimedVoucher.id}
+                    />
 
                     <button
                         type="button"
@@ -414,7 +463,14 @@ export default function VoucherClaimPage() {
 
                     <div className="space-y-2.5">
                         {displayedHistoryVouchers.map(v => (
-                            <VoucherCard key={v.id} voucher={v} compact onCopySuccess={() => showToast('📋 Đã copy mã!')} />
+                            <VoucherCard
+                                key={v.id}
+                                voucher={v}
+                                compact
+                                onCopySuccess={() => showToast('📋 Đã copy mã!')}
+                                onReturn={(voucher) => setVoucherToReturn(voucher)}
+                                isReturning={isReturning && voucherToReturn?.id === v.id}
+                            />
                         ))}
                     </div>
 
@@ -439,6 +495,97 @@ export default function VoucherClaimPage() {
                                 Thu gọn
                             </button>
                         )}
+                    </div>
+                </div>
+            )}
+
+            {/* 5. MODAL XÁC NHẬN HOÀN TRẢ MÃ VOUCHER VỀ KHO */}
+            {voucherToReturn && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs font-avo animate-in fade-in">
+                    <div className="bg-white rounded-3xl max-w-sm w-full border border-slate-200 shadow-2xl p-5 space-y-4 animate-in zoom-in-95">
+                        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                            <div className="flex items-center gap-2.5">
+                                <div className="w-8 h-8 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center font-bold shrink-0">
+                                    <RotateCcw className="w-4 h-4" />
+                                </div>
+                                <div>
+                                    <h3 className="font-black text-sm text-slate-900">
+                                        Trả Lại Mã Phiếu Mua Hàng
+                                    </h3>
+                                    <p className="text-[10.5px] text-slate-500 font-medium">
+                                        Hoàn trả về kho cho nhân viên khác
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => !isReturning && setVoucherToReturn(null)}
+                                className="p-1 text-slate-400 hover:text-slate-700 cursor-pointer rounded-lg hover:bg-slate-100"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+
+                        {/* Thẻ thông tin mã cần trả */}
+                        <div className="bg-amber-50/70 rounded-2xl p-3 border border-amber-200 space-y-1.5 text-xs text-slate-700">
+                            <div className="flex items-center justify-between">
+                                <span className="text-[10px] uppercase font-bold text-slate-500">Mã voucher:</span>
+                                <span className="font-mono font-black text-amber-900 text-sm tracking-wider">
+                                    {voucherToReturn.code}
+                                </span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <span className="text-[10px] uppercase font-bold text-slate-500">Mệnh giá:</span>
+                                <span className="font-mono font-black text-rose-600">
+                                    {Number(voucherToReturn.denomination).toLocaleString('vi-VN')}đ
+                                </span>
+                            </div>
+                            <div className="flex items-center justify-between text-[11px]">
+                                <span className="text-[10px] uppercase font-bold text-slate-500">Chương trình:</span>
+                                <span className="font-bold text-slate-800 line-clamp-1 text-right max-w-[180px]">
+                                    {voucherToReturn.campaign_name}
+                                </span>
+                            </div>
+                            {voucherToReturn.order_id && (
+                                <div className="flex items-center justify-between text-[11px] pt-1 border-t border-dashed border-amber-200">
+                                    <span className="text-[10px] uppercase font-bold text-slate-500">Đã gắn đơn:</span>
+                                    <span className="font-mono font-bold text-indigo-700">
+                                        {voucherToReturn.order_id}
+                                    </span>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Cảnh báo ghi chú */}
+                        <div className="bg-slate-50 rounded-2xl p-2.5 border border-slate-200 text-[11px] text-slate-600 leading-relaxed space-y-1">
+                            <p className="font-bold text-slate-800 flex items-center gap-1">
+                                <span>⚠️ Lưu ý:</span>
+                            </p>
+                            <p>
+                                Chỉ hoàn trả khi mã này <strong>thực sự chưa áp dụng vào đơn thanh toán</strong> của khách hàng. Mã sẽ lập tức quay về trạng thái sẵn sàng để đồng nghiệp khác sử dụng.
+                            </p>
+                        </div>
+
+                        {/* Nút hành động */}
+                        <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                            <button
+                                type="button"
+                                onClick={() => setVoucherToReturn(null)}
+                                disabled={isReturning}
+                                className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition cursor-pointer disabled:opacity-50"
+                            >
+                                Giữ Lại Mã
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleConfirmReturn}
+                                disabled={isReturning}
+                                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black transition cursor-pointer shadow-sm flex items-center gap-1.5 disabled:opacity-50 active:scale-[0.98]"
+                            >
+                                <RotateCcw className={`w-3.5 h-3.5 ${isReturning ? 'animate-spin' : ''}`} />
+                                <span>{isReturning ? 'Đang Hoàn Trả...' : 'Xác Nhận Trả Lại'}</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

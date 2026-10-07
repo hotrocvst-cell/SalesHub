@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
-import { X, Plus, Upload, Check, AlertCircle, Layers, Calendar } from 'lucide-react';
+import { X, Plus, Upload, Check, AlertCircle, Layers, Calendar, Store, Shield } from 'lucide-react';
 import { importVouchers, getDefaultExpiryDate } from '../services/voucherService';
-import { formatDate } from '../../../core/lib/formatters';
+import { formatDate, getShortStoreName } from '../../../core/lib/formatters';
 
 interface Props {
     isOpen: boolean;
@@ -10,6 +10,8 @@ interface Props {
     currentUserDisplayName: string;
     existingCampaigns: string[];
     allowedStores?: Array<{ name: string; id?: string }>;
+    accessibleStores?: string[];
+    isAdmin?: boolean;
     onSuccess: (addedCount: number, duplicateCount: number, cloudWarning?: string) => void;
 }
 
@@ -20,9 +22,13 @@ export default function VoucherImportModal({
     onClose,
     currentUserDisplayName,
     existingCampaigns,
+    allowedStores = [],
+    accessibleStores = [],
+    isAdmin = false,
     onSuccess
 }: Props) {
-    const targetStore = 'Toàn Cụm Siêu Thị';
+    // Phạm vi áp dụng: 'CLUSTER' (toàn cụm của user), hoặc tên một siêu thị cụ thể
+    const [scopeType, setScopeType] = useState<string>('CLUSTER');
     const [campaignName, setCampaignName] = useState<string>('');
     const [customCampaign, setCustomCampaign] = useState<string>('');
     const [denomination, setDenomination] = useState<number>(50000);
@@ -30,6 +36,17 @@ export default function VoucherImportModal({
     const [rawCodesText, setRawCodesText] = useState<string>('');
     const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
     const [errorMsg, setErrorMsg] = useState<string>('');
+
+    // Danh sách siêu thị trong cụm của người dùng
+    const clusterStoreNames = useMemo(() => {
+        if (allowedStores && allowedStores.length > 0) {
+            return allowedStores.map(s => s.name);
+        }
+        if (accessibleStores && accessibleStores.length > 0) {
+            return accessibleStores;
+        }
+        return [];
+    }, [allowedStores, accessibleStores]);
 
     // Tách và chuẩn hóa danh sách mã
     const parsedCodes = useMemo(() => {
@@ -71,10 +88,29 @@ export default function VoucherImportModal({
             return;
         }
 
+        // Xác định store_name và cluster_stores
+        let targetStoreName: string;
+        let targetClusterStores: string[] | undefined;
+
+        if (scopeType === 'CLUSTER') {
+            // Nạp cho Toàn Cụm của Quản lý: Lấy shop đầu tiên làm đại diện và gắn danh sách cả Cụm
+            targetStoreName = clusterStoreNames[0] || 'Toàn Cụm Siêu Thị';
+            targetClusterStores = clusterStoreNames.length > 0 ? clusterStoreNames : undefined;
+        } else if (scopeType === 'ALL_GLOBAL' && isAdmin) {
+            // Chỉ dành cho Admin tối cao nạp toàn quốc
+            targetStoreName = 'Toàn Cụm Siêu Thị';
+            targetClusterStores = undefined;
+        } else {
+            // Nạp riêng cho 1 shop cụ thể
+            targetStoreName = scopeType;
+            targetClusterStores = undefined;
+        }
+
         setIsSubmitting(true);
         try {
             const res = await importVouchers({
-                store_name: targetStore,
+                store_name: targetStoreName,
+                cluster_stores: targetClusterStores,
                 campaign_name: effectiveCampaign,
                 denomination,
                 expires_at: expiresAt,
@@ -109,7 +145,7 @@ export default function VoucherImportModal({
                                 Nạp Mã Voucher Mới Vào Kho
                             </h3>
                             <div className="text-[11px] text-emerald-200">
-                                Phân quyền: <strong>Toàn Cụm Siêu Thị</strong>
+                                Quản lý: <strong>{currentUserDisplayName}</strong>
                             </div>
                         </div>
                     </div>
@@ -131,22 +167,47 @@ export default function VoucherImportModal({
                         </div>
                     )}
 
-                    {/* 0. PHÂN QUYỀN SỬ DỤNG THEO CỤM */}
-                    <div className="bg-emerald-50/90 border border-emerald-200 rounded-2xl p-3 flex items-start gap-2.5">
-                        <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-black shrink-0 text-sm shadow-xs">
-                            🏢
+                    {/* 0. PHÂN QUYỀN SỬ DỤNG THEO CỤM (BẢO VỆ RIÊNG TƯ) */}
+                    <div className="bg-emerald-50/90 border border-emerald-200 rounded-2xl p-3.5 space-y-2">
+                        <div className="flex items-center justify-between text-xs">
+                            <span className="font-black text-emerald-950 flex items-center gap-1.5">
+                                <Shield className="w-4 h-4 text-emerald-700" />
+                                <span>Phạm Vi Phân Quyền Cụm & Riêng Tư:</span>
+                            </span>
+                            <span className="text-[10px] bg-emerald-200/90 text-emerald-900 px-2 py-0.5 rounded-full font-bold">
+                                Bảo Vệ Dữ Liệu
+                            </span>
                         </div>
-                        <div className="text-xs">
-                            <div className="font-black text-emerald-950 flex items-center gap-1.5 flex-wrap">
-                                <span>Phân Quyền Sử Dụng:</span>
-                                <span className="bg-emerald-200 text-emerald-900 px-2 py-0.5 rounded-full text-[10.5px] font-black">
-                                    Toàn Cụm Siêu Thị
-                                </span>
-                            </div>
-                            <p className="text-[11px] text-emerald-800 mt-1 leading-relaxed">
-                                Kho mã dùng chung cho <strong>tất cả nhân viên trong cụm</strong>, không ràng riêng lẻ siêu thị. Mọi nhân viên các siêu thị trong cụm đều có thể lấy mã trong kho đang sẵn có.
-                            </p>
-                        </div>
+
+                        <select
+                            value={scopeType}
+                            onChange={(e) => setScopeType(e.target.value)}
+                            className="w-full bg-white border border-emerald-300 rounded-xl p-2 font-bold text-slate-900 focus:outline-emerald-600 cursor-pointer text-xs"
+                        >
+                            {clusterStoreNames.length > 1 && (
+                                <option value="CLUSTER">
+                                    🏢 Toàn Cụm Của Tôi ({clusterStoreNames.length} shop - Dùng chung nội bộ cụm)
+                                </option>
+                            )}
+                            {clusterStoreNames.map(name => (
+                                <option key={name} value={name}>
+                                    🏪 Riêng shop: {getShortStoreName(name)}
+                                </option>
+                            ))}
+                            {isAdmin && (
+                                <option value="ALL_GLOBAL">
+                                    🌐 Toàn Hệ Thống (Tất Cả Cụm - Dành riêng Admin)
+                                </option>
+                            )}
+                        </select>
+
+                        <p className="text-[10.5px] text-emerald-800 leading-relaxed">
+                            {scopeType === 'CLUSTER'
+                                ? `Mã chỉ cấp cho nhân viên thuộc ${clusterStoreNames.length} siêu thị trong cụm của bạn. Các cụm khác hoàn toàn không thể xem hoặc lấy mã.`
+                                : scopeType === 'ALL_GLOBAL'
+                                ? 'Mã dùng chung cho toàn bộ nhân viên trên toàn quốc.'
+                                : `Mã chỉ dành riêng cho nhân viên tại siêu thị ${getShortStoreName(scopeType)}.`}
+                        </p>
                     </div>
 
                     {/* 1. Chọn Chương Trình */}

@@ -152,75 +152,149 @@ export function setLocalVouchers(list: VoucherItem[]): void {
 /**
  * Kiểm tra đối chiếu tên siêu thị / cụm siêu thị cho voucher
  * Hỗ trợ:
- * 1. Mã nạp cho Toàn Cụm Siêu Thị / Toàn Cụm / all -> Luôn khả dụng cho mọi nhân viên ở tất cả siêu thị trong cụm
- * 2. Mã thuộc đúng siêu thị của nhân viên
- * 3. Mã thuộc bất kỳ siêu thị nào trong danh sách accessible_stores của nhân viên
- * 4. Cụm siêu thị cùng địa chỉ vật lý (ví dụ: 10335 AAR và 111 TGD cùng tại 290 Trương Công Định)
+/**
+ * Trích xuất địa chỉ vật lý từ tên siêu thị dạng "[MÃ] - [BRAND] - [ĐỊA CHỈ]"
+ */
+export function extractStoreAddress(storeName?: string | null): string {
+    if (!storeName) return '';
+    const parts = storeName.split('-');
+    if (parts.length >= 3) {
+        return parts.slice(2).join('-').trim().toLowerCase();
+    }
+    return '';
+}
+
+/**
+ * Kiểm tra đối chiếu tên siêu thị / cụm siêu thị cho voucher (Phân lập riêng tư theo Cụm)
+ * Đảm bảo: Cụm 1 nạp mã thì chỉ nhân viên trong Cụm 1 được xem & sử dụng, Cụm 2 tuyệt đối không thấy!
  */
 export function isStoreOrClusterMatch(
     voucherStoreName: string | undefined | null,
     userStoreName?: string | undefined | null,
-    accessibleStores?: string[]
+    accessibleStores?: string[],
+    voucherNote?: string,
+    voucherCreatedBy?: string,
+    currentUserDisplayName?: string,
+    voucherClaimedByStore?: string
 ): boolean {
     if (!voucherStoreName) return false;
     const vStore = voucherStoreName.trim();
 
-    // 1. Mã nạp cho Toàn Cụm / all -> Luôn khớp với mọi siêu thị
-    const isGlobalCluster = (
-        vStore === 'Toàn Cụm Siêu Thị' ||
-        vStore === 'Toàn Cụm' ||
-        vStore.toLowerCase().includes('toàn cụm') ||
-        vStore === 'all'
-    );
-    if (isGlobalCluster) return true;
-
-    // 2. Không có storeName giới hạn hoặc chọn xem toàn bộ 'all'
-    if (!userStoreName || userStoreName === 'all') return true;
-
-    // 3. Khớp trực tiếp tên siêu thị
-    if (isStoreMatch(vStore, userStoreName)) return true;
-
-    // 4. Khớp với bất kỳ siêu thị nào trong accessibleStores
+    // 1. Tập hợp tất cả các siêu thị thuộc phạm vi Cụm của User
+    const clusterStores: string[] = [];
+    if (userStoreName && userStoreName !== 'all') {
+        clusterStores.push(userStoreName.trim());
+    }
     if (accessibleStores && accessibleStores.length > 0) {
-        if (accessibleStores.some(s => isStoreMatch(vStore, s))) {
-            return true;
-        }
+        accessibleStores.forEach(s => {
+            if (s && s !== 'all' && !clusterStores.some(c => isStoreMatch(c, s))) {
+                clusterStores.push(s.trim());
+            }
+        });
     }
 
-    // 5. Khớp cụm siêu thị qua địa chỉ dùng chung (ví dụ cụm BRV_VTA: 10335 & 111 cùng tại 290 Trương Công Định)
-    const extractAddress = (name: string) => {
-        const parts = name.split('-');
-        if (parts.length >= 3) {
-            return parts.slice(2).join('-').trim().toLowerCase();
-        }
-        return '';
-    };
-
-    const addrV = extractAddress(vStore);
-    const addrU = extractAddress(userStoreName);
-    if (addrV && addrU && addrV === addrU) {
+    // Nếu không có bất kỳ thông tin siêu thị nào của User và chọn 'all' -> Dành cho Admin xem toàn hệ thống
+    if (clusterStores.length === 0) {
         return true;
     }
 
-    if (accessibleStores && accessibleStores.length > 0 && addrV) {
-        if (accessibleStores.some(s => extractAddress(s) === addrV)) {
+    // 2. Khớp trực tiếp tên siêu thị
+    if (clusterStores.some(s => isStoreMatch(vStore, s))) {
+        return true;
+    }
+
+    // 3. Khớp cụm siêu thị qua địa chỉ dùng chung (ví dụ cụm BRV_VTA: 10335 & 111 cùng tại 290 Trương Công Định)
+    const addrV = extractStoreAddress(vStore);
+    if (addrV && clusterStores.some(s => extractStoreAddress(s) === addrV)) {
+        return true;
+    }
+
+    // 4. Khớp theo tag Cụm được lưu trong note (ví dụ "[CỤM: 10335 | 111]")
+    if (voucherNote && voucherNote.includes('[CỤM:')) {
+        const clusterTagMatch = voucherNote.match(/\[CỤM:\s*([^\]]+)\]/i);
+        if (clusterTagMatch && clusterTagMatch[1]) {
+            const rawClusterList = clusterTagMatch[1].split('|').map(s => s.trim());
+            const hasMatch = clusterStores.some(myStore =>
+                rawClusterList.some(cStore =>
+                    isStoreMatch(cStore, myStore) ||
+                    (extractStoreAddress(cStore) && extractStoreAddress(cStore) === extractStoreAddress(myStore))
+                )
+            );
+            if (hasMatch) return true;
+        }
+    }
+
+    // 5. Khớp theo siêu thị của nhân viên đã nhận mã (claimed_by_store)
+    if (voucherClaimedByStore) {
+        const addrClaim = extractStoreAddress(voucherClaimedByStore);
+        if (clusterStores.some(s => isStoreMatch(voucherClaimedByStore, s) || (addrClaim && addrClaim === extractStoreAddress(s)))) {
             return true;
         }
+    }
+
+    // 6. Xử lý các mã cũ đã lỡ nạp chuỗi "Toàn Cụm Siêu Thị" / "Toàn Cụm":
+    // CHỈ cho phép hiển thị nếu người tạo khớp với Quản lý của cụm này hoặc có nhắc đến shop trong note
+    const isOldClusterString = (
+        vStore === 'Toàn Cụm Siêu Thị' ||
+        vStore === 'Toàn Cụm' ||
+        vStore === 'all' ||
+        vStore.toLowerCase().includes('toàn cụm')
+    );
+    if (isOldClusterString) {
+        // Khớp theo người nạp (Quản lý tạo mã cho cụm của mình)
+        if (currentUserDisplayName && voucherCreatedBy && currentUserDisplayName.trim().toLowerCase() === voucherCreatedBy.trim().toLowerCase()) {
+            return true;
+        }
+        // Khớp nếu note chứa tên hoặc địa chỉ siêu thị trong cụm
+        if (voucherNote) {
+            const noteLower = voucherNote.toLowerCase();
+            if (clusterStores.some(s => noteLower.includes(s.toLowerCase()) || (extractStoreAddress(s) && noteLower.includes(extractStoreAddress(s))))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     return false;
 }
 
 /**
+ * Kiểm tra toàn diện một VoucherItem có thuộc Cụm của User hiện tại hay không
+ */
+export function isVoucherInUserCluster(
+    v: VoucherItem,
+    userStoreName?: string | null,
+    accessibleStores?: string[],
+    currentUserDisplayName?: string,
+    isAdmin?: boolean
+): boolean {
+    if (isAdmin && (!userStoreName || userStoreName === 'all')) {
+        return true;
+    }
+    return isStoreOrClusterMatch(
+        v.store_name,
+        userStoreName,
+        accessibleStores,
+        v.note,
+        v.created_by,
+        currentUserDisplayName,
+        v.claimed_by_store
+    );
+}
+
+/**
  * Tải danh sách voucher theo siêu thị / cụm siêu thị (Đồng bộ Cloud Supabase + LocalStorage)
+ * Phân lập hoàn toàn quyền riêng tư giữa các Cụm khác nhau
  */
 export async function fetchStoreVouchers(
     storeName?: string,
-    accessibleStores?: string[]
+    accessibleStores?: string[],
+    currentUserDisplayName?: string,
+    isAdmin?: boolean
 ): Promise<VoucherItem[]> {
     let localList = getLocalVouchers();
 
-    // Đồng bộ từ Supabase nếu có kết nối (truy vấn toàn bộ kho mã của Cụm)
+    // Đồng bộ từ Supabase nếu có kết nối
     try {
         const { data, error } = await supabase
             .from('store_vouchers')
@@ -248,13 +322,16 @@ export async function fetchStoreVouchers(
         // Fallback local
     }
 
-    if (storeName && storeName !== 'all') {
-        return localList.filter(v =>
-            isStoreOrClusterMatch(v.store_name, storeName, accessibleStores) ||
-            (v.claimed_by_store && isStoreOrClusterMatch(v.claimed_by_store, storeName, accessibleStores))
-        );
+    // Nếu là Admin và chọn xem toàn bộ ('all'): Cho phép xem tất cả
+    if (isAdmin && (!storeName || storeName === 'all')) {
+        return localList;
     }
-    return localList;
+
+    // Với mọi trường hợp khác (Quản lý Cụm, Nhân viên, hoặc Admin chọn lọc siêu thị):
+    // Luôn lọc nghiêm ngặt theo phạm vi Cụm của người dùng
+    return localList.filter(v =>
+        isVoucherInUserCluster(v, storeName, accessibleStores, currentUserDisplayName, isAdmin)
+    );
 }
 
 /**
@@ -267,6 +344,8 @@ export async function importVouchers(params: {
     codes: string[];
     created_by: string;
     expires_at?: string;
+    cluster_stores?: string[];
+    note?: string;
 }): Promise<{
     success: boolean;
     addedCount: number;
@@ -284,6 +363,12 @@ export async function importVouchers(params: {
         let duplicateCount = 0;
         const now = new Date().toISOString();
         const effectiveExpiry = params.expires_at || getDefaultExpiryDate();
+
+        let noteContent = params.note;
+        if (params.cluster_stores && params.cluster_stores.length > 0) {
+            const clusterTag = `[CỤM: ${params.cluster_stores.join(' | ')}]`;
+            noteContent = noteContent ? `${clusterTag} ${noteContent}` : clusterTag;
+        }
 
         for (const raw of params.codes) {
             const clean = raw.trim().toUpperCase();
@@ -304,7 +389,8 @@ export async function importVouchers(params: {
                 status: 'AVAILABLE',
                 expires_at: effectiveExpiry,
                 created_at: now,
-                created_by: params.created_by
+                created_by: params.created_by,
+                note: noteContent
             };
             newItems.push(item);
         }
@@ -347,7 +433,7 @@ export async function importVouchers(params: {
 
 /**
  * Cấp mã voucher cho nhân viên (Ràng buộc mã đơn hàng, atomic select)
- * All nhân viên trong cụm đều có thể lấy mã trong kho sẵn có
+ * Nhân viên CHỈ được lấy mã trong phạm vi Cụm siêu thị của mình!
  */
 export async function claimVoucher(
     req: VoucherClaimRequest
@@ -381,40 +467,32 @@ export async function claimVoucher(
             isStoreMatch(v.store_name, req.store_name) && matchesCampaignAndDenom(v)
         );
 
-        // 2. Tìm trong danh sách siêu thị được phân quyền (accessible_stores)
+        // 2. Tìm trong danh sách siêu thị được phân quyền của Cụm (accessible_stores)
         if (index === -1 && req.accessible_stores && req.accessible_stores.length > 0) {
             index = all.findIndex(v =>
                 req.accessible_stores!.some(s => isStoreMatch(v.store_name, s)) && matchesCampaignAndDenom(v)
             );
         }
 
-        // 3. Tìm trong kho mã dùng chung cho Toàn Cụm Siêu Thị
+        // 3. Tìm theo Cụm (cùng địa chỉ dùng chung hoặc cùng metadata [CỤM: ...] trong note)
         if (index === -1) {
             index = all.findIndex(v =>
-                (v.store_name === 'Toàn Cụm Siêu Thị' ||
-                    v.store_name === 'Toàn Cụm' ||
-                    v.store_name === 'all' ||
-                    v.store_name.toLowerCase().includes('toàn cụm')) &&
-                matchesCampaignAndDenom(v)
+                isStoreOrClusterMatch(
+                    v.store_name,
+                    req.store_name,
+                    req.accessible_stores,
+                    v.note,
+                    v.created_by,
+                    req.employee_name,
+                    v.claimed_by_store
+                ) && matchesCampaignAndDenom(v)
             );
-        }
-
-        // 4. Tìm theo cụm dùng chung địa chỉ (ví dụ: AAR & TGD cùng 290 Trương Công Định)
-        if (index === -1) {
-            index = all.findIndex(v =>
-                isStoreOrClusterMatch(v.store_name, req.store_name, req.accessible_stores) && matchesCampaignAndDenom(v)
-            );
-        }
-
-        // 5. Fallback: Nếu kho cụm vẫn còn bất kỳ mã nào khả dụng của chương trình & mệnh giá đó, cho phép lấy ngay
-        if (index === -1) {
-            index = all.findIndex(v => matchesCampaignAndDenom(v));
         }
 
         if (index === -1) {
             return {
                 success: false,
-                error: `Đã hết mã voucher mệnh giá ${req.denomination.toLocaleString('vi-VN')}đ của chương trình "${req.campaign_name}" trong kho cụm!`
+                error: `Đã hết mã voucher mệnh giá ${req.denomination.toLocaleString('vi-VN')}đ của chương trình "${req.campaign_name}" trong kho Cụm của bạn!`
             };
         }
 
@@ -456,10 +534,32 @@ export async function resetClaimedVoucher(
     accessibleStores?: string[]
 ): Promise<{ success: boolean; voucher?: VoucherItem; error?: string }> {
     try {
-        const all = getLocalVouchers();
+        let all = getLocalVouchers();
         const cleanCode = code.trim().toUpperCase();
 
-        const index = all.findIndex(v => {
+        // Đồng bộ realtime bản ghi mới nhất từ Supabase Cloud nếu có kết nối
+        try {
+            const { data: cloudRow } = await supabase
+                .from('store_vouchers')
+                .select('*')
+                .eq('code', cleanCode)
+                .maybeSingle();
+
+            if (cloudRow) {
+                const cIdx = all.findIndex(v => v.id === cloudRow.id || v.code.toUpperCase() === cleanCode);
+                if (cIdx >= 0) {
+                    all[cIdx] = cloudRow;
+                } else {
+                    all.push(cloudRow);
+                }
+                setLocalVouchers(all);
+            }
+        } catch (e) {
+            console.warn('Không thể kiểm tra cloud trước khi reset:', e);
+        }
+
+        // 1. Tìm theo mã và siêu thị/cụm
+        let index = all.findIndex(v => {
             const matchCode = v.code.toUpperCase() === cleanCode;
             if (!matchCode) return false;
             if (storeName && storeName !== 'all') {
@@ -471,14 +571,36 @@ export async function resetClaimedVoucher(
             return true;
         });
 
+        // 2. Fallback tìm theo mã chính xác nếu không lọc trúng storeName
+        if (index === -1) {
+            index = all.findIndex(v => v.code.toUpperCase() === cleanCode);
+        }
+
         if (index === -1) {
             return { success: false, error: `Không tìm thấy mã voucher "${cleanCode}" trong hệ thống!` };
         }
 
         const target = all[index];
+
+        // Chặn không cho trả lại mã đã sử dụng hoàn tất trong đơn hàng
+        if (target.status === 'USED') {
+            return {
+                success: false,
+                error: `Mã voucher "${cleanCode}" đã được ghi nhận sử dụng hoàn tất trong đơn hàng (${target.order_id || 'đã thanh toán'}), không thể trả lại kho!`
+            };
+        }
+
+        // Nếu mã đã ở trạng thái AVAILABLE sẵn rồi
+        if (target.status === 'AVAILABLE') {
+            return {
+                success: true,
+                voucher: target
+            };
+        }
+
         const prevClaimed = target.claimed_by_name ? ` (NV: ${target.claimed_by_name} - ${target.claimed_by_id || ''} [${target.claimed_by_store || target.store_name}])` : '';
         const prevOrder = target.order_id ? ` (ĐH: ${target.order_id})` : '';
-        const resetNote = `[Reset lúc ${new Date().toLocaleTimeString('vi-VN')} ${new Date().toLocaleDateString('vi-VN')} bởi ${performedBy}] Trước đó: ${target.status}${prevClaimed}${prevOrder}`;
+        const resetNote = `[Trả lại kho lúc ${new Date().toLocaleTimeString('vi-VN')} ${new Date().toLocaleDateString('vi-VN')} bởi ${performedBy}] Trước đó: ${target.status}${prevClaimed}${prevOrder}`;
 
         const updated: VoucherItem = {
             ...target,
@@ -495,8 +617,18 @@ export async function resetClaimedVoucher(
         all[index] = updated;
         setLocalVouchers(all);
 
+        // Đồng bộ lên Supabase Cloud: Gán các trường claimed/order thành null để Postgres DB xóa sạch dữ liệu cũ
         try {
-            await supabase.from('store_vouchers').upsert([updated], { onConflict: 'id' });
+            const dbPayload = {
+                ...updated,
+                claimed_at: null,
+                claimed_by_id: null,
+                claimed_by_name: null,
+                claimed_by_store: null,
+                order_id: null,
+                used_at: null
+            };
+            await supabase.from('store_vouchers').upsert([dbPayload], { onConflict: 'id' });
         } catch (e) {
             console.warn('Sync cloud error on reset:', e);
         }
@@ -541,7 +673,15 @@ export async function markVoucherUsed(code: string): Promise<{ success: boolean;
 /**
  * Xóa một mã voucher khỏi hệ thống (Local + Supabase Cloud)
  */
-export async function deleteVoucher(idOrCode: string): Promise<{ success: boolean; error?: string }> {
+export async function deleteVoucher(
+    idOrCode: string,
+    clusterContext?: {
+        userStoreName?: string;
+        accessibleStores?: string[];
+        currentUserDisplayName?: string;
+        isAdmin?: boolean;
+    }
+): Promise<{ success: boolean; error?: string }> {
     try {
         const all = getLocalVouchers();
         const clean = idOrCode.trim();
@@ -549,6 +689,20 @@ export async function deleteVoucher(idOrCode: string): Promise<{ success: boolea
 
         if (!target) {
             return { success: false, error: 'Không tìm thấy mã voucher để xóa' };
+        }
+
+        // Chặn người dùng xóa mã thuộc Cụm khác nếu không phải Admin
+        if (clusterContext && !clusterContext.isAdmin) {
+            const isOwned = isVoucherInUserCluster(
+                target,
+                clusterContext.userStoreName,
+                clusterContext.accessibleStores,
+                clusterContext.currentUserDisplayName,
+                false
+            );
+            if (!isOwned) {
+                return { success: false, error: 'Bạn không có quyền xóa mã voucher thuộc Cụm siêu thị khác!' };
+            }
         }
 
         const remaining = all.filter(v => v.id !== target.id);
@@ -570,7 +724,15 @@ export async function deleteVoucher(idOrCode: string): Promise<{ success: boolea
 /**
  * Xóa nhiều mã voucher theo danh sách id hoặc mã code (Batch delete)
  */
-export async function deleteVouchersBatch(idsOrCodes: string[]): Promise<{ success: boolean; deletedCount: number; error?: string }> {
+export async function deleteVouchersBatch(
+    idsOrCodes: string[],
+    clusterContext?: {
+        userStoreName?: string;
+        accessibleStores?: string[];
+        currentUserDisplayName?: string;
+        isAdmin?: boolean;
+    }
+): Promise<{ success: boolean; deletedCount: number; error?: string }> {
     try {
         if (!idsOrCodes || idsOrCodes.length === 0) {
             return { success: true, deletedCount: 0 };
@@ -580,9 +742,25 @@ export async function deleteVouchersBatch(idsOrCodes: string[]): Promise<{ succe
         const idSet = new Set(idsOrCodes.map(s => s.trim()));
         const all = getLocalVouchers();
 
-        const targets = all.filter(v => idSet.has(v.id) || cleanSet.has(v.code.toUpperCase()));
+        let targets = all.filter(v => idSet.has(v.id) || cleanSet.has(v.code.toUpperCase()));
         if (targets.length === 0) {
             return { success: true, deletedCount: 0 };
+        }
+
+        // Lọc chỉ giữ lại các mã thuộc Cụm của người dùng nếu không phải Admin
+        if (clusterContext && !clusterContext.isAdmin) {
+            targets = targets.filter(t =>
+                isVoucherInUserCluster(
+                    t,
+                    clusterContext.userStoreName,
+                    clusterContext.accessibleStores,
+                    clusterContext.currentUserDisplayName,
+                    false
+                )
+            );
+            if (targets.length === 0) {
+                return { success: false, deletedCount: 0, error: 'Không có mã nào thuộc quyền quản lý của Cụm bạn để xóa!' };
+            }
         }
 
         const targetIds = targets.map(t => t.id);
@@ -620,16 +798,17 @@ export interface VoucherExpiryStats {
 export function getVoucherExpiryStats(
     vouchers: VoucherItem[],
     storeName?: string,
-    accessibleStores?: string[]
+    accessibleStores?: string[],
+    currentUserDisplayName?: string,
+    isAdmin?: boolean
 ): VoucherExpiryStats {
     const todayStr = new Date().toISOString().slice(0, 10);
     const threeDaysLater = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
     let list = vouchers;
-    if (storeName && storeName !== 'all') {
+    if (!isAdmin || (storeName && storeName !== 'all')) {
         list = list.filter(v =>
-            isStoreOrClusterMatch(v.store_name, storeName, accessibleStores) ||
-            (v.claimed_by_store && isStoreOrClusterMatch(v.claimed_by_store, storeName, accessibleStores))
+            isVoucherInUserCluster(v, storeName, accessibleStores, currentUserDisplayName, isAdmin)
         );
     }
 
@@ -685,16 +864,22 @@ export async function cleanVouchers(params: {
     mode: 'DELETE' | 'MARK_EXPIRED';
     storeName?: string;
     accessibleStores?: string[];
+    currentUserDisplayName?: string;
+    isAdmin?: boolean;
 }): Promise<{ success: boolean; affectedCount: number; totalValue: number; error?: string }> {
     try {
-        const { type, mode, storeName, accessibleStores } = params;
+        const { type, mode, storeName, accessibleStores, currentUserDisplayName, isAdmin } = params;
         const all = getLocalVouchers();
         const todayStr = new Date().toISOString().slice(0, 10);
 
         const matchStore = (v: VoucherItem) => {
-            if (!storeName || storeName === 'all') return true;
-            return isStoreOrClusterMatch(v.store_name, storeName, accessibleStores) ||
-                (v.claimed_by_store && isStoreOrClusterMatch(v.claimed_by_store, storeName, accessibleStores));
+            return isVoucherInUserCluster(
+                v,
+                storeName,
+                accessibleStores,
+                currentUserDisplayName,
+                isAdmin
+            );
         };
 
         const isTarget = (v: VoucherItem) => {
@@ -766,13 +951,14 @@ export async function cleanVouchers(params: {
 export function getCampaignSummaries(
     vouchers: VoucherItem[],
     storeName?: string,
-    accessibleStores?: string[]
+    accessibleStores?: string[],
+    currentUserDisplayName?: string,
+    isAdmin?: boolean
 ): VoucherCampaignSummary[] {
     let list = vouchers;
-    if (storeName && storeName !== 'all') {
+    if (!isAdmin || (storeName && storeName !== 'all')) {
         list = list.filter(v =>
-            isStoreOrClusterMatch(v.store_name, storeName, accessibleStores) ||
-            (v.claimed_by_store && isStoreOrClusterMatch(v.claimed_by_store, storeName, accessibleStores))
+            isVoucherInUserCluster(v, storeName, accessibleStores, currentUserDisplayName, isAdmin)
         );
     }
 

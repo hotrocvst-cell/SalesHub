@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { Trash2, AlertTriangle, CheckCircle2, ShieldAlert, X, Sparkles, Filter, Archive } from 'lucide-react';
 import type { VoucherItem } from '../types';
-import { cleanVouchers } from '../services/voucherService';
-import { formatDate, getShortStoreName, isStoreMatch } from '../../../core/lib/formatters';
+import { cleanVouchers, isVoucherInUserCluster } from '../services/voucherService';
+import { formatDate, getShortStoreName } from '../../../core/lib/formatters';
 
 interface Props {
     isOpen: boolean;
@@ -10,6 +10,8 @@ interface Props {
     vouchers: VoucherItem[];
     currentStoreName: string;
     accessibleStores?: string[];
+    currentUserDisplayName?: string;
+    isAdmin?: boolean;
     onSuccess: (affectedCount: number, message: string) => void;
 }
 
@@ -19,6 +21,8 @@ export default function VoucherCleanModal({
     vouchers,
     currentStoreName,
     accessibleStores,
+    currentUserDisplayName,
+    isAdmin,
     onSuccess
 }: Props) {
     const todayStr = new Date().toISOString().slice(0, 10);
@@ -32,13 +36,9 @@ export default function VoucherCleanModal({
     const targetVouchers = useMemo(() => {
         let list = vouchers;
 
-        if (currentStoreName && currentStoreName !== 'all') {
+        if (!isAdmin || (currentStoreName && currentStoreName !== 'all')) {
             list = list.filter(v =>
-                isStoreMatch(v.store_name, currentStoreName) ||
-                (accessibleStores && accessibleStores.some(s => isStoreMatch(v.store_name, s))) ||
-                (v.claimed_by_store && isStoreMatch(v.claimed_by_store, currentStoreName)) ||
-                v.store_name === 'Toàn Cụm Siêu Thị' ||
-                v.store_name === 'Toàn Cụm'
+                isVoucherInUserCluster(v, currentStoreName, accessibleStores, currentUserDisplayName, isAdmin)
             );
         }
 
@@ -59,7 +59,7 @@ export default function VoucherCleanModal({
             }
             return false;
         });
-    }, [vouchers, currentStoreName, accessibleStores, cleanType, selectedCampaign, todayStr]);
+    }, [vouchers, currentStoreName, accessibleStores, currentUserDisplayName, isAdmin, cleanType, selectedCampaign, todayStr]);
 
     const totalValue = useMemo(() => {
         return targetVouchers.reduce((sum, v) => sum + (Number(v.denomination) || 0), 0);
@@ -93,7 +93,9 @@ export default function VoucherCleanModal({
                 type: cleanType,
                 mode: cleanMode,
                 storeName: currentStoreName,
-                accessibleStores
+                accessibleStores,
+                currentUserDisplayName,
+                isAdmin
             });
 
             if (res.success) {

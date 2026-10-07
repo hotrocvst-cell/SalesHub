@@ -88,7 +88,7 @@ export default function VoucherAdminPage() {
         try {
             const [storesRes, voucherList, statusRes] = await Promise.all([
                 fetchStores(),
-                fetchStoreVouchers(selectedStore, accessible),
+                fetchStoreVouchers(selectedStore, accessible, currentUser.full_name || currentUser.employee_id, isAdmin),
                 checkSupabaseVoucherTable()
             ]);
             if (storesRes.success) setStores(storesRes.data);
@@ -116,7 +116,7 @@ export default function VoucherAdminPage() {
 
     useEffect(() => {
         loadData();
-    }, [selectedStore, accessible]);
+    }, [selectedStore, accessible, isAdmin]);
 
     // Các chương trình hiện có để gợi ý trong modal nạp
     const existingCampaigns = useMemo(() => {
@@ -152,7 +152,13 @@ export default function VoucherAdminPage() {
     };
 
     const handleDeleteSingleVoucher = async (code: string) => {
-        const res = await deleteVoucher(code);
+        const clusterCtx = {
+            userStoreName: selectedStore,
+            accessibleStores: accessible,
+            currentUserDisplayName: currentUser.full_name || currentUser.employee_id,
+            isAdmin
+        };
+        const res = await deleteVoucher(code, clusterCtx);
         if (res.success) {
             showToast(`🗑️ Đã xóa vĩnh viễn mã "${code}" khỏi kho!`);
             loadData();
@@ -162,7 +168,13 @@ export default function VoucherAdminPage() {
     };
 
     const handleDeleteMultipleVouchers = async (codes: string[]) => {
-        const res = await deleteVouchersBatch(codes);
+        const clusterCtx = {
+            userStoreName: selectedStore,
+            accessibleStores: accessible,
+            currentUserDisplayName: currentUser.full_name || currentUser.employee_id,
+            isAdmin
+        };
+        const res = await deleteVouchersBatch(codes, clusterCtx);
         if (res.success) {
             showToast(`🗑️ Đã xóa thành công ${res.deletedCount} mã voucher khỏi kho!`);
             loadData();
@@ -380,7 +392,13 @@ export default function VoucherAdminPage() {
                         onChange={(e) => setSelectedStore(e.target.value)}
                         className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 font-bold text-slate-800 cursor-pointer max-w-[240px] truncate"
                     >
-                        <option value="all">🏢 Toàn Cụm Siêu Thị (Kho Chung)</option>
+                        <option value="all">
+                            {isAdmin
+                                ? '🏢 Toàn Bộ Hệ Thống (Tất Cả Cụm)'
+                                : allowedStores.length > 1
+                                ? `🏢 Toàn Cụm Của Tôi (${allowedStores.length} shop)`
+                                : '🏢 Kho Siêu Thị Của Tôi'}
+                        </option>
                         {allowedStores.map(s => (
                             <option key={s.id || s.name} value={s.name}>
                                 🏪 {getShortStoreName(s.name)}
@@ -480,6 +498,10 @@ export default function VoucherAdminPage() {
                 onClose={() => setIsImportModalOpen(false)}
                 currentUserDisplayName={currentUser.full_name || 'Admin'}
                 existingCampaigns={existingCampaigns}
+                allowedStores={allowedStores}
+                accessibleStores={accessible}
+                isAdmin={isAdmin}
+                currentStoreName={selectedStore}
                 onSuccess={(added, dup, cloudWarning) => {
                     if (cloudWarning) {
                         showToast(`🎉 Đã nạp ${added} mã! ⚠️ ${cloudWarning}`);
@@ -510,6 +532,8 @@ export default function VoucherAdminPage() {
                 vouchers={vouchers}
                 currentStoreName={selectedStore}
                 accessibleStores={accessible}
+                currentUserDisplayName={currentUser.full_name || currentUser.employee_id}
+                isAdmin={isAdmin}
                 onSuccess={(affected, msg) => {
                     showToast(msg);
                     loadData();
