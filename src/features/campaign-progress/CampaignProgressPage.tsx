@@ -1,6 +1,7 @@
 import { useState, useRef, useMemo } from 'react';
 import html2canvas from 'html2canvas';
 import { useCampaignProgressData } from './hooks/useCampaignProgressData';
+import { useAuth } from '../../shared/contexts/AuthContext';
 import CampaignProgressHeader from './components/CampaignProgressHeader';
 import CampaignMultiSelectDropdown from './components/CampaignMultiSelectDropdown';
 import CampaignProgressCard from './components/CampaignProgressCard';
@@ -8,6 +9,8 @@ import { AlertTriangle, CheckCircle2, ListFilter } from 'lucide-react';
 
 export default function CampaignProgressPage() {
     const reportRef = useRef<HTMLDivElement>(null);
+    const { currentUser, isAdmin, canConfigure } = useAuth();
+    const canExportAllTables = isAdmin || canConfigure || ['ADMIN', 'QUAN_LY', 'TRUONG_CA'].includes(currentUser?.role);
     const [isExporting, setIsExporting] = useState<boolean>(false);
 
     const {
@@ -51,6 +54,7 @@ export default function CampaignProgressPage() {
 
     // Xuất ảnh báo cáo gửi Zalo (Tuân thủ triệt để GEMINI.md: Unlimited height, No footer watermark)
     const handleExportImage = async () => {
+        if (!canExportAllTables) return;
         if (!reportRef.current) return;
         setIsExporting(true);
 

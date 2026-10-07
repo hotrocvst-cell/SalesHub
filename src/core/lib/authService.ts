@@ -14,6 +14,7 @@ export interface UserProfile {
     accessible_stores?: string[];
     role: UserRole;
     role_title: string;
+    department?: string;
     status: UserAccountStatus;
     password?: string;
     rejection_reason?: string;
@@ -29,6 +30,7 @@ export interface UserApprovalRequest {
     phone?: string;
     employee_id?: string;
     requested_role: UserRole;
+    department?: string;
     store_name: string;
     is_new_store: boolean;
     new_store_code?: string;
@@ -57,9 +59,9 @@ export interface SystemNotification {
 
 export const ROLE_LABELS: Record<UserRole, string> = {
     ADMIN: 'Quản trị viên (Admin)',
-    QUAN_LY: 'Quản lý Siêu thị (QL)',
-    TRUONG_CA: 'Trưởng Ca (TC)',
-    NHAN_VIEN: 'Nhân viên (NV)'
+    QUAN_LY: 'Quản Lý',
+    TRUONG_CA: 'Trưởng Ca',
+    NHAN_VIEN: 'Nhân Viên'
 };
 
 const LOCAL_STORAGE_PROFILES_KEY = 'saleshub_user_profiles_v1';
@@ -87,6 +89,9 @@ CREATE TABLE IF NOT EXISTS public.user_profiles (
 
 -- Tự động thêm cột accessible_stores nếu bảng đã tồn tại từ trước
 ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS accessible_stores JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS department TEXT;
+ALTER TABLE public.user_approval_requests ADD COLUMN IF NOT EXISTS department TEXT;
+ALTER TABLE public.employees ADD COLUMN IF NOT EXISTS department TEXT;
 
 -- Bảng 2: Yêu cầu xét duyệt tài khoản & siêu thị
 CREATE TABLE IF NOT EXISTS public.user_approval_requests (
@@ -218,6 +223,7 @@ export function parseRawUserProfile(item: any): UserProfile {
         accessible_stores: accessibleStores,
         role: item.role as UserRole,
         role_title: ROLE_LABELS[item.role as UserRole] || 'Người dùng',
+        department: item.department || '',
         status: item.status as UserAccountStatus,
         password: item.password,
         rejection_reason: cleanRejection,
@@ -398,20 +404,46 @@ export async function createUserProfile(params: {
     auth_user_id?: string;
     password?: string;
     role?: UserRole;
+    department?: string;
     store_name?: string;
     status?: UserAccountStatus;
 }): Promise<UserProfile> {
     const role = params.role || 'NHAN_VIEN';
+    let finalFullName = params.full_name.trim();
+    let finalDept = params.department?.trim() || '';
+
+    // TRƯỜNG HỢP USER ĐĂNG KÝ TRÙNG VỚI USER ĐÃ KHAI BÁO TRONG SIÊU THỊ:
+    // Mặc định sử dụng thông tin họ tên & bộ phận theo hệ thống đã lưu trước!
+    if (params.employee_id?.trim()) {
+        try {
+            const { data: matchedEmp } = await supabase
+                .from('employees')
+                .select('*')
+                .eq('employee_id', params.employee_id.trim())
+                .maybeSingle();
+
+            if (matchedEmp && matchedEmp.full_name?.trim()) {
+                finalFullName = matchedEmp.full_name.trim();
+                if (!finalDept) {
+                    finalDept = (matchedEmp.role || matchedEmp.job_title || matchedEmp.department || '').trim();
+                }
+            }
+        } catch (e) {
+            console.warn('Lỗi kiểm tra nhân viên khi createUserProfile:', e);
+        }
+    }
+
     const newProfile: UserProfile = {
         id: `usr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
         auth_user_id: params.auth_user_id,
         email: params.email.trim().toLowerCase(),
         employee_id: params.employee_id?.trim() || '',
-        full_name: params.full_name.trim(),
+        full_name: finalFullName,
         phone: params.phone?.trim() || '',
         store_name: params.store_name || '',
         role,
-        role_title: ROLE_LABELS[role] || 'Nhân viên kinh doanh',
+        role_title: ROLE_LABELS[role] || 'Nhân Viên',
+        department: finalDept,
         status: params.status || 'PENDING_APPROVAL',
         password: params.password || '123456',
         created_at: new Date().toISOString(),
@@ -430,21 +462,32 @@ export async function createUserProfile(params: {
 
     // 2. Cố gắng ghi lên Supabase
     try {
-        await supabase
+        const payload: any = {
+            id: newProfile.id,
+            email: newProfile.email,
+            auth_user_id: newProfile.auth_user_id,
+            employee_id: newProfile.employee_id,
+            full_name: newProfile.full_name,
+            phone: newProfile.phone,
+            store_name: newProfile.store_name,
+            role: newProfile.role,
+            status: newProfile.status,
+            password: newProfile.password,
+            department: newProfile.department || null,
+            updated_at: new Date().toISOString()
+        };
+
+        const { error: upsertErr } = await supabase
             .from('user_profiles')
-            .upsert({
-                id: newProfile.id,
-                email: newProfile.email,
-                auth_user_id: newProfile.auth_user_id,
-                employee_id: newProfile.employee_id,
-                full_name: newProfile.full_name,
-                phone: newProfile.phone,
-                store_name: newProfile.store_name,
-                role: newProfile.role,
-                status: newProfile.status,
-                password: newProfile.password,
-                updated_at: new Date().toISOString()
-            }, { onConflict: 'email' });
+            .upsert(payload, { onConflict: 'email' });
+
+        if (upsertErr) {
+            // Safe fallback nếu chưa có cột department trong bảng user_profiles
+            delete payload.department;
+            await supabase
+                .from('user_profiles')
+                .upsert(payload, { onConflict: 'email' });
+        }
     } catch {
         // Safe fallback
     }
@@ -465,9 +508,10 @@ export async function submitOnboardingRequest(params: {
     new_store_address?: string;
     phone?: string;
     employee_id?: string;
+    department?: string;
 }): Promise<{ success: boolean; request: UserApprovalRequest; error?: string }> {
     try {
-        const { user, requested_role, store_name, is_new_store, new_store_code, new_store_address, phone, employee_id } = params;
+        const { user, requested_role, store_name, is_new_store, new_store_code, new_store_address, phone, employee_id, department } = params;
 
         // Phân quyền xét duyệt:
         // - QL / TC / Siêu thị mới -> Giao ADMIN phê duyệt
@@ -476,14 +520,32 @@ export async function submitOnboardingRequest(params: {
             ? 'QUAN_LY'
             : 'ADMIN';
 
+        let finalFullName = user.full_name;
+        const cleanEmpId = (employee_id || user.employee_id || '').trim();
+        if (cleanEmpId) {
+            try {
+                const { data: matchedEmp } = await supabase
+                    .from('employees')
+                    .select('*')
+                    .eq('employee_id', cleanEmpId)
+                    .maybeSingle();
+                if (matchedEmp && matchedEmp.full_name?.trim()) {
+                    finalFullName = matchedEmp.full_name.trim();
+                }
+            } catch (e) {
+                console.warn('Lỗi kiểm tra matchedEmp trong submitOnboardingRequest:', e);
+            }
+        }
+
         const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
         const approvalRequest: UserApprovalRequest = {
             id: requestId,
             user_id: user.id,
-            full_name: user.full_name,
+            full_name: finalFullName,
             email: user.email,
             phone: phone || user.phone || '',
             employee_id: employee_id || user.employee_id || '',
+            department: department || user.department || '',
             requested_role,
             store_name,
             is_new_store,
@@ -498,8 +560,10 @@ export async function submitOnboardingRequest(params: {
         // 1. Cập nhật trạng thái người dùng -> PENDING_APPROVAL
         const updatedUser: UserProfile = {
             ...user,
+            full_name: finalFullName,
             phone: phone || user.phone,
             employee_id: employee_id || user.employee_id,
+            department: department || user.department,
             store_name,
             role: requested_role,
             role_title: ROLE_LABELS[requested_role],
@@ -740,20 +804,88 @@ export async function processApprovalRequest(params: {
             }
         }
 
-        // 4. NẾU DUYỆT VÀ LÀ NHÂN VIÊN: Tự động thêm nhân viên vào danh sách employees của siêu thị
-        if (decision === 'APPROVED' && req.requested_role === 'NHAN_VIEN') {
-            try {
-                await supabase.from('employees').upsert({
+        // 4. CẬP NHẬT HOẶC BỔ SUNG NHÂN VIÊN VÀO DANH SÁCH EMPLOYEES
+        // NGUYÊN TẮC: Mặc định giữ nguyên họ tên và bộ phận (AIO, Kho, v.v.) theo hệ thống đã lưu trước!
+        try {
+            const empId = req.employee_id?.trim();
+            let existingEmp: any = null;
+            if (empId) {
+                const { data: foundEmp } = await supabase
+                    .from('employees')
+                    .select('*')
+                    .eq('employee_id', empId)
+                    .maybeSingle();
+                existingEmp = foundEmp;
+            }
+
+            if (existingEmp) {
+                // Đã tồn tại trong hệ thống siêu thị:
+                // MẶC ĐỊNH GIỮ NGUYÊN HỌ TÊN VÀ VAI TRÒ ĐÃ LƯU TRƯỚC (ĐẶC BIỆT LÀ AIO), KHÔNG ĐƯỢC ĐÈ THÀNH "Nhân viên"!
+                const preserveName = existingEmp.full_name?.trim() || req.full_name;
+
+                // VAI TRÒ CŨNG LÀ BỘ PHẬN:
+                // Tuyệt đối không đè vai trò của nhân sự AIO hoặc chức danh đã khai báo thành "Nhân viên"
+                let preserveRole = existingEmp.role?.trim();
+                const rawRoleLower = (preserveRole || '').toLowerCase();
+                const rawJobLower = (existingEmp.job_title || existingEmp.department || '').toLowerCase();
+
+                if (rawRoleLower.includes('aio') || rawJobLower.includes('aio')) {
+                    preserveRole = (preserveRole && preserveRole.toLowerCase().includes('aio'))
+                        ? preserveRole
+                        : (existingEmp.job_title || existingEmp.department || 'AIO');
+                } else if (!preserveRole || preserveRole === 'Nhân viên' || preserveRole === 'NHAN_VIEN') {
+                    preserveRole = req.requested_role === 'QUAN_LY' ? 'Quản Lý' : (req.requested_role === 'TRUONG_CA' ? 'Trưởng Ca' : 'Nhân Viên');
+                }
+
+                const updatePayload: any = {
+                    full_name: preserveName,
+                    store_name: req.store_name || existingEmp.store_name,
+                    role: preserveRole,
+                    job_title: preserveRole,
+                    department: preserveRole,
+                    is_active: true,
+                    updated_at: new Date().toISOString()
+                };
+
+                const { error: updateErr } = await supabase
+                    .from('employees')
+                    .update(updatePayload)
+                    .eq('employee_id', empId);
+
+                if (updateErr) {
+                    delete updatePayload.department;
+                    await supabase
+                        .from('employees')
+                        .update(updatePayload)
+                        .eq('employee_id', empId);
+                }
+            } else if (req.requested_role === 'NHAN_VIEN') {
+                // Chưa tồn tại và là nhân viên mới -> tạo mới trong employees
+                const defaultRoleName = 'Nhân Viên';
+                const newEmpPayload: any = {
                     employee_id: req.employee_id || `NV_${Date.now().toString().slice(-4)}`,
                     full_name: req.full_name,
                     store_name: req.store_name,
-                    role: 'Tư vấn bán hàng',
+                    role: defaultRoleName,
+                    job_title: defaultRoleName,
+                    department: defaultRoleName,
                     is_active: true,
                     updated_at: new Date().toISOString()
-                }, { onConflict: 'employee_id' });
-            } catch (e) {
-                console.warn('Lỗi tự động cập nhật bảng employees:', e);
+                };
+
+                const { error: insertErr } = await supabase
+                    .from('employees')
+                    .upsert(newEmpPayload, { onConflict: 'employee_id' });
+
+                if (insertErr) {
+                    delete newEmpPayload.department;
+                    await supabase
+                        .from('employees')
+                        .upsert(newEmpPayload, { onConflict: 'employee_id' });
+                }
             }
+        } catch (e) {
+            console.warn('Lỗi tự động cập nhật bảng employees:', e);
         }
 
         // 5. Gửi thông báo kết quả cho người dùng
@@ -1387,6 +1519,7 @@ export async function adminCreateUserProfile(data: {
     email: string;
     password?: string;
     role: UserRole;
+    department?: string;
     store_name: string;
     phone?: string;
     employee_id?: string;
@@ -1398,15 +1531,39 @@ export async function adminCreateUserProfile(data: {
             throw new Error(`Email "${email}" đã tồn tại trên hệ thống.`);
         }
 
+        let finalFullName = data.full_name.trim();
+        let finalDept = data.department?.trim() || '';
+
+        // Mặc định sử dụng thông tin theo nhân sự đã lưu trước nếu có
+        if (data.employee_id?.trim()) {
+            try {
+                const { data: matchedEmp } = await supabase
+                    .from('employees')
+                    .select('*')
+                    .eq('employee_id', data.employee_id.trim())
+                    .maybeSingle();
+
+                if (matchedEmp && matchedEmp.full_name?.trim()) {
+                    finalFullName = matchedEmp.full_name.trim();
+                    if (!finalDept) {
+                        finalDept = (matchedEmp.role || matchedEmp.job_title || matchedEmp.department || '').trim();
+                    }
+                }
+            } catch (e) {
+                console.warn('Lỗi kiểm tra nhân viên khi adminCreateUserProfile:', e);
+            }
+        }
+
         const newProfile: UserProfile = {
             id: `usr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
             email,
             employee_id: data.employee_id?.trim() || '',
-            full_name: data.full_name.trim(),
+            full_name: finalFullName,
             phone: data.phone?.trim() || '',
             store_name: data.store_name.trim(),
             role: data.role,
             role_title: ROLE_LABELS[data.role],
+            department: finalDept,
             status: 'ACTIVE',
             password: data.password || '123456',
             created_at: new Date().toISOString(),
@@ -1418,7 +1575,7 @@ export async function adminCreateUserProfile(data: {
 
         // Lưu vào Supabase
         try {
-            await supabase.from('user_profiles').insert({
+            const payload: any = {
                 id: newProfile.id,
                 email: newProfile.email,
                 employee_id: newProfile.employee_id,
@@ -1426,10 +1583,17 @@ export async function adminCreateUserProfile(data: {
                 phone: newProfile.phone,
                 store_name: newProfile.store_name,
                 role: newProfile.role,
+                department: newProfile.department || null,
                 status: 'ACTIVE',
                 password: newProfile.password,
                 updated_at: new Date().toISOString()
-            });
+            };
+
+            const { error: insertErr } = await supabase.from('user_profiles').insert(payload);
+            if (insertErr) {
+                delete payload.department;
+                await supabase.from('user_profiles').insert(payload);
+            }
         } catch {
             // Safe fallback
         }

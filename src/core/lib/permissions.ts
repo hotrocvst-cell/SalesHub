@@ -109,6 +109,16 @@ export const DEFAULT_PAGE_PERMISSIONS: SystemPagePermission[] = [
     },
     // DỮ LIỆU & PHIÊN LÀM VIỆC
     {
+        page_key: 'trang_thai_du_lieu',
+        page_name: 'Trạng Thái Dữ Liệu',
+        path: '/trang-thai-du-lieu',
+        group_title: 'DỮ LIỆU & PHIÊN LÀM VIỆC',
+        description: 'Tổng hợp trạng thái cập nhật phiên n-1 của dữ liệu doanh thu, thi đua siêu thị và nhân viên',
+        is_enabled: true,
+        allowed_roles: ['ADMIN', 'QUAN_LY', 'TRUONG_CA', 'NHAN_VIEN'],
+        order_index: 6
+    },
+    {
         page_key: 'cap_nhat_so_lieu',
         page_name: 'Cập nhật số liệu',
         path: '/cap-nhat',
@@ -116,7 +126,7 @@ export const DEFAULT_PAGE_PERMISSIONS: SystemPagePermission[] = [
         description: 'Nạp dữ liệu báo cáo kinh doanh từ Excel hoặc dán nhanh',
         is_enabled: true,
         allowed_roles: ['ADMIN', 'QUAN_LY', 'TRUONG_CA'],
-        order_index: 6
+        order_index: 7
     },
     {
         page_key: 'cap_nhat_luy_ke_nv',
@@ -147,6 +157,27 @@ export const DEFAULT_PAGE_PERMISSIONS: SystemPagePermission[] = [
         is_enabled: true,
         allowed_roles: ['ADMIN', 'QUAN_LY', 'TRUONG_CA'],
         order_index: 9
+    },
+    // TIỆN ÍCH BÁN HÀNG
+    {
+        page_key: 'cap_ma_voucher',
+        page_name: 'Cấp mã voucher',
+        path: '/cap-ma-voucher',
+        group_title: 'TIỆN ÍCH BÁN HÀNG',
+        description: 'Cấp mã voucher ưu đãi bán hàng theo đơn hàng thực tế cho nhân viên',
+        is_enabled: true,
+        allowed_roles: ['ADMIN', 'QUAN_LY', 'TRUONG_CA', 'NHAN_VIEN'],
+        order_index: 10
+    },
+    {
+        page_key: 'quan_ly_voucher',
+        page_name: 'Quản lý kho voucher',
+        path: '/quan-ly-voucher',
+        group_title: 'TIỆN ÍCH BÁN HÀNG',
+        description: 'Quản trị kho mã voucher, nạp mã mới, double check, cảnh báo đầu cơ và reset mã',
+        is_enabled: true,
+        allowed_roles: ['ADMIN', 'QUAN_LY', 'TRUONG_CA'],
+        order_index: 11
     },
     // HỆ THỐNG & CẤU HÌNH
     {
@@ -210,6 +241,51 @@ export const DEFAULT_PAGE_PERMISSIONS: SystemPagePermission[] = [
         order_index: 15
     }
 ];
+
+/**
+ * Danh mục chuẩn 100% các trang thực tế trong hệ thống (App Route Registry)
+ * Dùng làm thước đo đối chiếu (Audit) với danh sách đã lưu trên Supabase/LocalStorage
+ */
+export const APP_SYSTEM_PAGES_REGISTRY: SystemPagePermission[] = DEFAULT_PAGE_PERMISSIONS;
+
+export interface RouteAuditReport {
+    totalAppRoutes: number;
+    managedRoutesCount: number;
+    unmanagedRoutes: SystemPagePermission[];
+    coveragePercent: number;
+    isFullyAudited: boolean;
+}
+
+/**
+ * Kiểm toán tính toàn vẹn giữa các trang đang chạy thực tế và danh sách phân quyền
+ */
+export function auditRouteCoverage(currentPermissions: SystemPagePermission[]): RouteAuditReport {
+    const existingPaths = new Set(currentPermissions.map(p => p.path));
+    const unmanaged = APP_SYSTEM_PAGES_REGISTRY.filter(def => !existingPaths.has(def.path));
+    const managedRoutesCount = APP_SYSTEM_PAGES_REGISTRY.length - unmanaged.length;
+    const coveragePercent = Math.round((managedRoutesCount / APP_SYSTEM_PAGES_REGISTRY.length) * 100);
+
+    return {
+        totalAppRoutes: APP_SYSTEM_PAGES_REGISTRY.length,
+        managedRoutesCount,
+        unmanagedRoutes: unmanaged,
+        coveragePercent,
+        isFullyAudited: unmanaged.length === 0
+    };
+}
+
+/**
+ * Tự động hợp nhất tất cả các trang thực tế còn thiếu vào danh sách phân quyền hiện tại
+ */
+export function syncMissingPagesToPermissions(currentPermissions: SystemPagePermission[]): SystemPagePermission[] {
+    const existingPaths = new Set(currentPermissions.map(p => p.path));
+    const existingKeys = new Set(currentPermissions.map(p => p.page_key));
+    const toAdd = APP_SYSTEM_PAGES_REGISTRY.filter(
+        def => !existingPaths.has(def.path) && !existingKeys.has(def.page_key)
+    );
+
+    return [...currentPermissions, ...toAdd].sort((a, b) => a.order_index - b.order_index);
+}
 
 const LOCAL_STORAGE_KEY = 'saleshub_system_page_permissions_v1';
 

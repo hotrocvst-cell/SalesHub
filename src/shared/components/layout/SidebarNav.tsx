@@ -22,7 +22,9 @@ import {
     Building2,
     BarChart3,
     HeartPulse,
-    Settings
+    Settings,
+    Ticket,
+    Tag
 } from 'lucide-react';
 
 export interface NavItem {
@@ -121,6 +123,12 @@ export const NAVIGATION_GROUPS: NavGroup[] = [
         bgClass: 'bg-emerald-100 text-emerald-700',
         items: [
             {
+                name: 'Trạng thái dữ liệu',
+                path: '/trang-thai-du-lieu',
+                icon: ShieldCheck,
+                badge: '✨ Mới'
+            },
+            {
                 name: 'Cập nhật số liệu LK',
                 path: '/cap-nhat',
                 icon: UploadCloud
@@ -140,6 +148,26 @@ export const NAVIGATION_GROUPS: NavGroup[] = [
                 name: 'Quản lý bản ghi ST',
                 path: '/quan-ly-du-lieu',
                 icon: Database
+            }
+        ]
+    },
+    {
+        groupTitle: 'TIỆN ÍCH BÁN HÀNG',
+        icon: Ticket,
+        colorClass: 'text-amber-700',
+        bgClass: 'bg-amber-100 text-amber-700',
+        items: [
+            {
+                name: 'Cấp mã voucher',
+                path: '/cap-ma-voucher',
+                icon: Ticket,
+                badge: '🎁 Hot'
+            },
+            {
+                name: 'Quản lý kho voucher',
+                path: '/quan-ly-voucher',
+                icon: Tag,
+                badge: '🔑 QL'
             }
         ]
     },

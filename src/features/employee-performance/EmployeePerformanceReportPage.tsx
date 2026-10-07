@@ -40,12 +40,15 @@ import {
     Lock
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../shared/contexts/AuthContext';
 import { useUserStoreFilter } from '../../shared/hooks/useUserStoreFilter';
 import ExcelJS from 'exceljs';
 import html2canvas from 'html2canvas';
 
 export default function EmployeePerformanceReportPage() {
     const navigate = useNavigate();
+    const { currentUser, canConfigure } = useAuth();
+    const canManage = canConfigure || ['ADMIN', 'QUAN_LY', 'TRUONG_CA'].includes(currentUser?.role);
     const reportRef = useRef<HTMLDivElement>(null);
 
     const [stores, setStores] = useState<StoreItem[]>([]);
@@ -718,27 +721,31 @@ export default function EmployeePerformanceReportPage() {
                 </div>
 
                 <div className="flex items-center gap-2 self-stretch sm:self-auto flex-wrap">
-                    {/* Nút Cấu Hình Shop & TOP/BOT */}
-                    <button
-                        type="button"
-                        onClick={() => setIsConfigModalOpen(true)}
-                        className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs"
-                        title="Cấu hình giờ mở cửa, số ngày hoạt động và tiêu chuẩn TOP/BOT"
-                    >
-                        <Settings className="w-4 h-4 text-amber-400" />
-                        <span>Cấu Hình Shop & TOP/BOT</span>
-                    </button>
+                    {/* Nút Cấu Hình Shop & TOP/BOT (Chỉ hiển thị với Admin/QL/TC) */}
+                    {canManage && (
+                        <button
+                            type="button"
+                            onClick={() => setIsConfigModalOpen(true)}
+                            className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs"
+                            title="Cấu hình giờ mở cửa, số ngày hoạt động và tiêu chuẩn TOP/BOT"
+                        >
+                            <Settings className="w-4 h-4 text-amber-400" />
+                            <span>Cấu Hình Shop & TOP/BOT</span>
+                        </button>
+                    )}
 
-                    {/* Nút Khai Báo Target */}
-                    <button
-                        type="button"
-                        onClick={() => navigate('/muc-tieu-nhan-vien')}
-                        className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs"
-                        title="Đi đến trang Khai Báo & Quản Lý Mục Tiêu Nhân Viên"
-                    >
-                        <Target className="w-4 h-4" />
-                        <span>Khai Báo Target</span>
-                    </button>
+                    {/* Nút Khai Báo Target (Chỉ hiển thị với Admin/QL/TC) */}
+                    {canManage && (
+                        <button
+                            type="button"
+                            onClick={() => navigate('/muc-tieu-nhan-vien')}
+                            className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs"
+                            title="Đi đến trang Khai Báo & Quản Lý Mục Tiêu Nhân Viên"
+                        >
+                            <Target className="w-4 h-4" />
+                            <span>Khai Báo Target</span>
+                        </button>
+                    )}
 
                     {/* Toggle Chọn Độ Phân Giải 4K / 8K */}
                     <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200 shadow-2xs">
@@ -800,14 +807,17 @@ export default function EmployeePerformanceReportPage() {
                         <span>Xuất Excel</span>
                     </button>
 
-                    <button
-                        type="button"
-                        onClick={() => navigate('/cap-nhat-luy-ke-nhan-vien')}
-                        className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs"
-                    >
-                        <span>Cập Nhật Số Liệu</span>
-                        <ArrowUpRight className="w-4 h-4" />
-                    </button>
+                    {/* Nút Cập Nhật Số Liệu (Chỉ hiển thị với Admin/QL/TC) */}
+                    {canManage && (
+                        <button
+                            type="button"
+                            onClick={() => navigate('/cap-nhat-luy-ke-nhan-vien')}
+                            className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs"
+                        >
+                            <span>Cập Nhật Số Liệu</span>
+                            <ArrowUpRight className="w-4 h-4" />
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -847,14 +857,16 @@ export default function EmployeePerformanceReportPage() {
                     </span>
                 </div>
 
-                <button
-                    type="button"
-                    onClick={() => setIsConfigModalOpen(true)}
-                    className="px-2.5 py-1 rounded-xl bg-white hover:bg-slate-100 text-blue-700 font-bold border border-slate-200 text-xs flex items-center gap-1 shadow-2xs transition cursor-pointer"
-                >
-                    <Settings className="w-3.5 h-3.5" />
-                    <span>Thay đổi cấu hình</span>
-                </button>
+                {canManage && (
+                    <button
+                        type="button"
+                        onClick={() => setIsConfigModalOpen(true)}
+                        className="px-2.5 py-1 rounded-xl bg-white hover:bg-slate-100 text-blue-700 font-bold border border-slate-200 text-xs flex items-center gap-1 shadow-2xs transition cursor-pointer"
+                    >
+                        <Settings className="w-3.5 h-3.5" />
+                        <span>Thay đổi cấu hình</span>
+                    </button>
+                )}
             </div>
 
             {/* Thanh Bộ Lọc & Tìm Kiếm & Sắp Xếp */}
@@ -1012,7 +1024,7 @@ export default function EmployeePerformanceReportPage() {
 
             {/* Modal Cấu Hình Hoạt Động & TOP/BOT */}
             <PerformanceConfigModal
-                isOpen={isConfigModalOpen}
+                isOpen={canManage && isConfigModalOpen}
                 onClose={() => setIsConfigModalOpen(false)}
                 stores={stores}
                 currentStoreName={selectedStore}

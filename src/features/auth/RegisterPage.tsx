@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth, type UserRole } from '../../shared/contexts/AuthContext';
-import { fetchStores, type StoreItem } from '../../core/lib/storage';
+import { fetchStores, fetchEmployees, type StoreItem, type EmployeeItem, parseEmployeeRoleAndDept } from '../../core/lib/storage';
 import { ROLE_LABELS } from '../../core/lib/authService';
 import {
     Store,
@@ -56,6 +56,7 @@ export default function RegisterPage() {
     // Step 2: Store & Role Selection
     const [role, setRole] = useState<UserRole>('NHAN_VIEN');
     const [stores, setStores] = useState<StoreItem[]>([]);
+    const [employees, setEmployees] = useState<EmployeeItem[]>([]);
     const [isLoadingStores, setIsLoadingStores] = useState(true);
     const [selectedStoreName, setSelectedStoreName] = useState('');
     const [isNewStore, setIsNewStore] = useState(false);
@@ -66,19 +67,46 @@ export default function RegisterPage() {
     const [errorMsg, setErrorMsg] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // Tải danh sách siêu thị
+    // Tải danh sách siêu thị & nhân sự đã khai báo trong hệ thống
     useEffect(() => {
-        async function loadStores() {
+        async function loadInitialData() {
             setIsLoadingStores(true);
-            const res = await fetchStores();
-            if (res.success && res.data.length > 0) {
-                setStores(res.data);
-                setSelectedStoreName(res.data[0].name);
+            const [storesRes, empsRes] = await Promise.all([
+                fetchStores(),
+                fetchEmployees()
+            ]);
+            if (storesRes.success && storesRes.data.length > 0) {
+                setStores(storesRes.data);
+                setSelectedStoreName(storesRes.data[0].name);
+            }
+            if (empsRes.success && empsRes.data.length > 0) {
+                setEmployees(empsRes.data);
             }
             setIsLoadingStores(false);
         }
-        loadStores();
+        loadInitialData();
     }, []);
+
+    // Nhận diện nhân sự đã có sẵn trong hệ thống siêu thị
+    const matchedEmployee = useMemo(() => {
+        const cleanId = employeeId.trim().toLowerCase();
+        if (!cleanId || cleanId.length < 2) return null;
+        return employees.find(e => e.employee_id?.trim().toLowerCase() === cleanId) || null;
+    }, [employeeId, employees]);
+
+    // Tự động điền và mặc định thông tin theo hệ thống đã lưu trước
+    useEffect(() => {
+        if (matchedEmployee) {
+            if (matchedEmployee.full_name) {
+                setFullName(matchedEmployee.full_name);
+            }
+            if (matchedEmployee.store_name) {
+                setSelectedStoreName(matchedEmployee.store_name);
+            }
+            const normalized = parseEmployeeRoleAndDept(matchedEmployee);
+            setRole(normalized.role);
+        }
+    }, [matchedEmployee]);
 
     // Chuyển sang bước 2
     const handleProceedToStep2 = (e: React.FormEvent) => {
@@ -122,12 +150,17 @@ export default function RegisterPage() {
             return;
         }
 
+        // ƯU TIÊN MẶC ĐỊNH SỬ DỤNG HỌ TÊN & BỘ PHẬN THEO HỆ THỐNG ĐÃ LƯU TRƯỚC
+        const finalFullName = matchedEmployee?.full_name?.trim() || fullName.trim();
+        const finalDepartment = matchedEmployee?.department || matchedEmployee?.job_title || undefined;
+
         setIsSubmitting(true);
         const res = await register({
             email,
             password,
-            full_name: fullName,
-            employee_id: employeeId,
+            full_name: finalFullName,
+            employee_id: employeeId.trim(),
+            department: finalDepartment,
             phone,
             role,
             store_name: finalStoreName,
@@ -218,9 +251,16 @@ export default function RegisterPage() {
                     {step === 1 && (
                         <form onSubmit={handleProceedToStep2} className="space-y-4 animate-in fade-in duration-150">
                             <div>
-                                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                                    Họ và tên của bạn: <span className="text-rose-500">*</span>
-                                </label>
+                                <div className="flex items-center justify-between mb-1.5">
+                                    <label className="block text-xs font-bold text-slate-700">
+                                        Họ và tên của bạn: <span className="text-rose-500">*</span>
+                                    </label>
+                                    {matchedEmployee && (
+                                        <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                                            ✓ Tên chuẩn theo hệ thống
+                                        </span>
+                                    )}
+                                </div>
                                 <div className="relative">
                                     <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
                                     <input
@@ -228,10 +268,18 @@ export default function RegisterPage() {
                                         required
                                         value={fullName}
                                         onChange={(e) => setFullName(e.target.value)}
+                                        readOnly={Boolean(matchedEmployee)}
                                         placeholder="ví dụ: Nguyễn Văn An"
-                                        className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
+                                        className={`w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition ${
+                                            matchedEmployee ? 'border-emerald-300 bg-emerald-50/40 cursor-not-allowed font-bold text-emerald-900' : 'border-slate-200'
+                                        }`}
                                     />
                                 </div>
+                                {matchedEmployee && (
+                                    <p className="text-[10px] text-emerald-700 mt-1 font-medium">
+                                        🔒 Họ tên đã được khóa cố định theo hồ sơ siêu thị đã lưu: <b>{matchedEmployee.full_name}</b> (#{matchedEmployee.employee_id}) • Siêu thị: <b>{matchedEmployee.store_name}</b>.
+                                    </p>
+                                )}
                             </div>
 
                             <div>
@@ -405,13 +453,21 @@ export default function RegisterPage() {
                                             {role === 'NHAN_VIEN' && <CheckCircle2 className="w-4 h-4 text-emerald-600" />}
                                         </div>
                                         <div>
-                                            <div className="font-black text-xs text-slate-900">Nhân Viên Bán Hàng</div>
+                                            <div className="font-black text-xs text-slate-900">Nhân Viên</div>
                                             <div className="text-[10px] text-slate-500 mt-0.5">
-                                                KPI cá nhân &amp; thi đua ngành hàng
+                                                Tư vấn bán hàng, AIO, thu ngân, kho...
                                             </div>
                                         </div>
                                     </button>
                                 </div>
+                                {matchedEmployee && (matchedEmployee.role || matchedEmployee.job_title || matchedEmployee.department) && (
+                                    <div className="p-2.5 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-800 flex items-center gap-2">
+                                        <Sparkles className="w-4 h-4 text-blue-600 shrink-0" />
+                                        <span>
+                                            Vai trò nghiệp vụ đã lưu trong siêu thị: <b>{matchedEmployee.role || matchedEmployee.job_title || matchedEmployee.department}</b>
+                                        </span>
+                                    </div>
+                                )}
                             </div>
 
                             {/* 2. CHỌN SIÊU THỊ */}

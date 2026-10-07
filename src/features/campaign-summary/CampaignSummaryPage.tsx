@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { CampaignSummaryData } from './types';
-import { buildCampaignSummaryFromSession } from './utils/campaignSummaryStorage';
+import { buildCampaignSummaryFromSession, isEmployeeInStore } from './utils/campaignSummaryStorage';
 import {
     fetchStores,
     fetchCampaignDictionary,
@@ -17,6 +17,8 @@ import {
     type EmployeeDataSession
 } from '../employee-cumulative/utils/sessionStorage';
 import { getStoreOperatingConfig } from '../employee-performance/utils/performanceConfig';
+import { useAuth } from '../../shared/contexts/AuthContext';
+import { useUserStoreFilter } from '../../shared/hooks/useUserStoreFilter';
 import CampaignSummaryTable from './components/CampaignSummaryTable';
 import CampaignRemarksModal from './components/CampaignRemarksModal';
 import {
@@ -31,7 +33,8 @@ import {
     FileSpreadsheet,
     AlertTriangle,
     Layers,
-    CheckCircle2
+    CheckCircle2,
+    Lock
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import ExcelJS from 'exceljs';
@@ -40,11 +43,25 @@ export default function CampaignSummaryPage() {
     const navigate = useNavigate();
     const reportRef = useRef<HTMLDivElement>(null);
 
+    const { currentUser } = useAuth();
     const [selectedMonth, setSelectedMonth] = useState<number>(() => new Date().getMonth() + 1);
     const [selectedYear, setSelectedYear] = useState<number>(() => new Date().getFullYear());
-    const [selectedStore, setSelectedStore] = useState<string>('all');
     const [stores, setStores] = useState<StoreItem[]>([]);
     const [employees, setEmployees] = useState<EmployeeItem[]>([]);
+
+    const [selectedStore, setSelectedStore] = useState<string>(() => {
+        if (currentUser?.role === 'NHAN_VIEN' && currentUser.store_name) {
+            return currentUser.store_name;
+        }
+        return 'all';
+    });
+
+    // Phân quyền siêu thị theo tài khoản người dùng
+    const { allowedStores, isLockedToSingleStore, canViewAllStores } = useUserStoreFilter(
+        stores,
+        selectedStore,
+        setSelectedStore
+    );
 
     const [sessions, setSessions] = useState<EmployeeDataSession[]>([]);
     const [selectedSessionId, setSelectedSessionId] = useState<string>('');
@@ -115,8 +132,19 @@ export default function CampaignSummaryPage() {
         loadSystemData();
     }, [selectedMonth, selectedYear]);
 
+    // Bản đồ nhân viên -> siêu thị
+    const empStoreMap = useMemo(() => {
+        const map: Record<string, string> = {};
+        employees.forEach(e => {
+            if (e.employee_id) {
+                map[e.employee_id.trim()] = e.store_name || '';
+            }
+        });
+        return map;
+    }, [employees]);
+
     // Danh sách phiên thi đua phù hợp theo siêu thị đang chọn:
-    // - Khi chọn siêu thị A: CHỈ hiển thị các phiên của siêu thị A
+    // - Khi chọn siêu thị A: hiển thị các phiên của siêu thị A hoặc phiên cụm có chứa nhân viên của siêu thị A
     // - Khi chọn Toàn cụm: tổng hợp phiên mới nhất của từng siêu thị lên đầu
     const availableSessions = useMemo<EmployeeDataSession[]>(() => {
         if (selectedStore === 'all') {
@@ -162,9 +190,15 @@ export default function CampaignSummaryPage() {
             return sessions;
         }
 
-        // Lọc nghiêm ngặt: CHỈ LẤY CÁC PHIÊN CỦA ĐÚNG SIÊU THỊ ĐƯỢC CHỌN
-        return sessions.filter(s => isStoreMatch(s.store_name, selectedStore, stores));
-    }, [sessions, selectedStore, stores, selectedMonth, selectedYear]);
+        // Lọc: Lấy các phiên của đúng siêu thị được chọn, HOẶC phiên toàn cụm nếu có chứa nhân sự của siêu thị này
+        return sessions.filter(s => {
+            if (isStoreMatch(s.store_name, selectedStore, stores)) return true;
+            if (s.store_name === 'Toàn Cụm Siêu Thị' || !s.store_name) {
+                return (s.records || []).some(r => isEmployeeInStore(r.employee_id, selectedStore, empStoreMap, s.store_name, stores));
+            }
+            return false;
+        });
+    }, [sessions, selectedStore, stores, selectedMonth, selectedYear, empStoreMap]);
 
     // Khi danh sách phiên khả dụng thay đổi: Tự động chọn phiên mới nhất
     useEffect(() => {
@@ -183,23 +217,19 @@ export default function CampaignSummaryPage() {
     // Xử lý khi người dùng chọn siêu thị khác trên dropdown:
     // Lập tức chuyển sang phiên mới nhất của siêu thị đó
     const handleStoreChange = (newStore: string) => {
+        if (isLockedToSingleStore) return;
         setSelectedStore(newStore);
         const filtered = newStore === 'all'
             ? sessions
-            : sessions.filter(s => isStoreMatch(s.store_name, newStore, stores));
+            : sessions.filter(s => {
+                if (isStoreMatch(s.store_name, newStore, stores)) return true;
+                if (s.store_name === 'Toàn Cụm Siêu Thị' || !s.store_name) {
+                    return (s.records || []).some(r => isEmployeeInStore(r.employee_id, newStore, empStoreMap, s.store_name, stores));
+                }
+                return false;
+            });
         setSelectedSessionId(filtered[0]?.id || '');
     };
-
-    // Bản đồ nhân viên -> siêu thị
-    const empStoreMap = useMemo(() => {
-        const map: Record<string, string> = {};
-        employees.forEach(e => {
-            if (e.employee_id) {
-                map[e.employee_id.trim()] = e.store_name || '';
-            }
-        });
-        return map;
-    }, [employees]);
 
     // Phiên đang chọn để hiển thị báo cáo: Luôn tìm trong danh sách availableSessions
     const activeSession = useMemo(() => {
@@ -564,19 +594,38 @@ export default function CampaignSummaryPage() {
             {/* Thanh công cụ lọc: Tháng/Năm, Siêu Thị, Chọn Phiên, Tìm kiếm, Xuất Excel */}
             <div className="bg-white rounded-2xl p-3.5 border border-slate-200 shadow-2xs flex flex-wrap items-center justify-between gap-3 text-xs">
                 <div className="flex flex-wrap items-center gap-2.5">
-                    {/* Chọn Siêu Thị */}
-                    <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl">
-                        <Store className="w-4 h-4 text-emerald-600" />
+                    {/* Chọn Siêu Thị (Theo phân quyền tài khoản) */}
+                    <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all ${isLockedToSingleStore
+                        ? 'bg-amber-50/90 border-amber-200 text-amber-900 shadow-2xs'
+                        : 'bg-slate-50 border-slate-200 text-slate-800'
+                        }`}>
+                        {isLockedToSingleStore ? (
+                            <Lock className="w-4 h-4 text-amber-600 shrink-0" />
+                        ) : (
+                            <Store className="w-4 h-4 text-emerald-600 shrink-0" />
+                        )}
                         <select
                             value={selectedStore}
                             onChange={e => handleStoreChange(e.target.value)}
-                            className="bg-transparent text-xs font-bold text-slate-800 outline-hidden cursor-pointer"
+                            disabled={isLockedToSingleStore}
+                            title={isLockedToSingleStore ? 'Tài khoản nhân viên được cố định theo siêu thị đang làm việc' : undefined}
+                            className={`bg-transparent text-xs font-bold outline-hidden ${isLockedToSingleStore
+                                ? 'cursor-not-allowed text-amber-900 font-black'
+                                : 'cursor-pointer text-slate-800'
+                                }`}
                         >
-                            <option value="all">🏢 Toàn Cụm Siêu Thị</option>
-                            {stores.map(s => (
+                            {canViewAllStores && (
+                                <option value="all">🏢 Toàn Cụm Siêu Thị</option>
+                            )}
+                            {allowedStores.map(s => (
                                 <option key={s.id || s.code} value={s.name}>{s.name} ({s.code})</option>
                             ))}
                         </select>
+                        {isLockedToSingleStore && (
+                            <span className="text-[10px] bg-amber-200/80 text-amber-800 px-1 py-0.5 rounded font-bold uppercase tracking-wider hidden sm:inline">
+                                Đã khóa
+                            </span>
+                        )}
                     </div>
 
                     {/* Chọn Tháng / Năm */}

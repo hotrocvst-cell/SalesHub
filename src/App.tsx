@@ -26,6 +26,9 @@ const CampaignProgressPage = lazy(() => import('./features/campaign-progress/Cam
 const SystemAdminPage = lazy(() => import('./features/admin-config/SystemAdminPage'));
 const UserManagementPage = lazy(() => import('./features/admin-config/UserManagementPage'));
 const UserStorePermissionPage = lazy(() => import('./features/admin-config/UserStorePermissionPage'));
+const DataStatusPage = lazy(() => import('./features/data-status/DataStatusPage'));
+const VoucherClaimPage = lazy(() => import('./features/voucher/VoucherClaimPage'));
+const VoucherAdminPage = lazy(() => import('./features/voucher/VoucherAdminPage'));
 
 // Các trang Định danh, Đăng ký & Onboarding
 const LoginPage = lazy(() => import('./features/auth/LoginPage'));
@@ -115,6 +118,11 @@ export default function App() {
                                 } />
 
                                 {/* Phân hệ Cập nhật & Quản lý */}
+                                <Route path="/trang-thai-du-lieu" element={
+                                    <ProtectedRoute path="/trang-thai-du-lieu">
+                                        <DataStatusPage />
+                                    </ProtectedRoute>
+                                } />
                                 <Route path="/cap-nhat" element={
                                     <ProtectedRoute path="/cap-nhat">
                                         <DataUpdatePage />
@@ -133,6 +141,18 @@ export default function App() {
                                 <Route path="/quan-ly-phien-nhan-vien" element={
                                     <ProtectedRoute path="/quan-ly-phien-nhan-vien">
                                         <EmployeeSessionManagerPage />
+                                    </ProtectedRoute>
+                                } />
+
+                                {/* Phân hệ Cấp & Quản lý Voucher Bán Hàng */}
+                                <Route path="/cap-ma-voucher" element={
+                                    <ProtectedRoute path="/cap-ma-voucher">
+                                        <VoucherClaimPage />
+                                    </ProtectedRoute>
+                                } />
+                                <Route path="/quan-ly-voucher" element={
+                                    <ProtectedRoute path="/quan-ly-voucher">
+                                        <VoucherAdminPage />
                                     </ProtectedRoute>
                                 } />
 

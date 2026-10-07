@@ -5,8 +5,11 @@ import {
     fetchSystemPagePermissions,
     saveSystemPagePermissions,
     checkSupabasePermissionsTable,
+    auditRouteCoverage,
+    syncMissingPagesToPermissions,
     DEFAULT_PAGE_PERMISSIONS,
-    type SystemPagePermission
+    type SystemPagePermission,
+    type RouteAuditReport
 } from '../../core/lib/permissions';
 
 interface PageAccessResult {
@@ -20,8 +23,10 @@ interface PermissionContextType {
     permissions: SystemPagePermission[];
     loading: boolean;
     isSyncedWithSupabase: boolean;
+    routeAudit: RouteAuditReport;
     canAccessPage: (path: string) => PageAccessResult;
     updatePermissions: (newPerms: SystemPagePermission[]) => Promise<{ success: boolean; fromSupabase: boolean; error?: string }>;
+    syncMissingPages: () => Promise<{ success: boolean; fromSupabase: boolean; error?: string }>;
     resetToDefault: () => Promise<{ success: boolean; fromSupabase: boolean }>;
     refreshPermissions: () => Promise<void>;
     checkCloudConnection: () => Promise<{ exists: boolean; count: number; error?: string }>;
@@ -133,9 +138,19 @@ export function PermissionProvider({ children }: { children: ReactNode }) {
         return { allowed, isEnabled, roleAllowed, page };
     };
 
+    const routeAudit = auditRouteCoverage(permissions);
+
     const updatePermissions = async (newPerms: SystemPagePermission[]) => {
         setPermissions(newPerms);
         const res = await saveSystemPagePermissions(newPerms);
+        setIsSyncedWithSupabase(res.fromSupabase);
+        return res;
+    };
+
+    const syncMissingPages = async () => {
+        const full = syncMissingPagesToPermissions(permissions);
+        setPermissions(full);
+        const res = await saveSystemPagePermissions(full);
         setIsSyncedWithSupabase(res.fromSupabase);
         return res;
     };
@@ -153,8 +168,10 @@ export function PermissionProvider({ children }: { children: ReactNode }) {
                 permissions,
                 loading,
                 isSyncedWithSupabase,
+                routeAudit,
                 canAccessPage,
                 updatePermissions,
+                syncMissingPages,
                 resetToDefault,
                 refreshPermissions: loadPermissions,
                 checkCloudConnection

@@ -65,7 +65,8 @@ import {
     X,
     Loader2,
     FileText,
-    EyeOff
+    EyeOff,
+    Layers
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 
@@ -150,6 +151,10 @@ export default function EmployeeDetailReportPage() {
         return searchParams.get('emp') || '';
     });
 
+    const [selectedSessionId, setSelectedSessionId] = useState<string>(() => {
+        return searchParams.get('session') || searchParams.get('sess') || '';
+    });
+
     const [campaignFilterMode, setCampaignFilterMode] = useState<'TARGET_ONLY' | 'ALL' | 'UNACHIEVED' | 'ACHIEVED'>('TARGET_ONLY');
 
     // Sắp xếp bảng kết quả thi đua: Mặc định sắp xếp theo %DK (completionRate) giảm dần
@@ -220,9 +225,10 @@ export default function EmployeeDetailReportPage() {
     };
 
     // Thông tin tài khoản người dùng & phân quyền
-    const { currentUser, isAdmin } = useAuth();
+    const { currentUser, isAdmin, canConfigure } = useAuth();
     const isStaffUser = currentUser.role === 'NHAN_VIEN' && !isAdmin;
     const isLockedToEmployee = isStaffUser && Boolean(currentUser.employee_id);
+    const canExportAllEmployees = isAdmin || canConfigure || ['ADMIN', 'QUAN_LY', 'TRUONG_CA'].includes(currentUser.role);
 
     // Phân quyền siêu thị theo tài khoản người dùng
     const { allowedStores, isLockedToSingleStore, canViewAllStores } = useUserStoreFilter(
@@ -388,13 +394,126 @@ export default function EmployeeDetailReportPage() {
 
     const isPointsMode = scoreConfig.scoring_mode === 'POINTS';
 
-    // 6. TÌM BẢN GHI DỮ LIỆU MỚI NHẤT CỦA NHÂN VIÊN TRONG CÁC PHIÊN LÀM VIỆC
-    const employeeLatestSessionRecord = useMemo(() => {
-        if (!selectedEmployeeId || sessions.length === 0) return null;
+    // 6. DANH SÁCH PHIÊN DỮ LIỆU ĐƯỢC LỌC RÀNG BUỘC THEO SIÊU THỊ & NHÂN VIÊN
+    const availableSessions = useMemo(() => {
+        if (!selectedEmployeeId || sessions.length === 0) return [];
+        const empId = selectedEmployeeId.trim();
 
-        for (const sess of sessions) {
-            if (sess.records && sess.records.length > 0) {
-                const found = sess.records.find(r => (r.employee_id || '').trim() === selectedEmployeeId.trim());
+        // Lọc các phiên thi đua / doanh thu có dữ liệu của nhân viên
+        let list = sessions.filter(s => {
+            // Loại trừ phiên chỉ thuần giờ công nếu đã có các phiên thi đua doanh thu
+            if (s.session_type === 'WORK_HOURS') return false;
+
+            // 1. Ràng buộc theo siêu thị (nếu có chọn cụ thể hoặc bị giới hạn quyền)
+            if (selectedStore !== 'all') {
+                const matchStore = isStoreMatch(s.store_name, selectedStore, stores) ||
+                    s.store_name === 'Toàn Cụm Siêu Thị' ||
+                    (currentEmployee && isStoreMatch(s.store_name, currentEmployee.store_name, stores));
+                if (!matchStore) return false;
+            } else if (!canViewAllStores && allowedStores.length > 0) {
+                const matchAllowed = allowedStores.some(st => isStoreMatch(s.store_name, st.name, stores)) ||
+                    s.store_name === 'Toàn Cụm Siêu Thị';
+                if (!matchAllowed) return false;
+            }
+
+            // 2. Ràng buộc phiên BẮT BUỘC phải có bản ghi của nhân viên đang chọn
+            return (s.records || []).some(r => (r.employee_id || '').trim() === empId);
+        });
+
+        // Fallback: nếu chưa có phiên REVENUE_CAMPAIGN nào nhưng có phiên khác chứa nhân viên
+        if (list.length === 0) {
+            list = sessions.filter(s => {
+                if (selectedStore !== 'all') {
+                    const matchStore = isStoreMatch(s.store_name, selectedStore, stores) ||
+                        s.store_name === 'Toàn Cụm Siêu Thị' ||
+                        (currentEmployee && isStoreMatch(s.store_name, currentEmployee.store_name, stores));
+                    if (!matchStore) return false;
+                } else if (!canViewAllStores && allowedStores.length > 0) {
+                    const matchAllowed = allowedStores.some(st => isStoreMatch(s.store_name, st.name, stores)) ||
+                        s.store_name === 'Toàn Cụm Siêu Thị';
+                    if (!matchAllowed) return false;
+                }
+                return (s.records || []).some(r => (r.employee_id || '').trim() === empId);
+            });
+        }
+
+        // Sắp xếp phiên mới nhất lên đầu
+        return list.sort((a, b) => {
+            const timeA = new Date(a.created_at || a.report_date || 0).getTime();
+            const timeB = new Date(b.created_at || b.report_date || 0).getTime();
+            return timeB - timeA;
+        });
+    }, [sessions, selectedStore, stores, canViewAllStores, allowedStores, selectedEmployeeId, currentEmployee]);
+
+    // Tự động đồng bộ và chọn phiên dữ liệu hợp lệ
+    useEffect(() => {
+        if (availableSessions.length > 0) {
+            const exists = availableSessions.some(s => s.id === selectedSessionId);
+            if (!selectedSessionId || !exists) {
+                const defaultSessId = availableSessions[0].id;
+                setSelectedSessionId(defaultSessId);
+                setSearchParams(prev => {
+                    const p = new URLSearchParams(prev);
+                    p.set('session', defaultSessId);
+                    return p;
+                }, { replace: true });
+            }
+        } else {
+            if (selectedSessionId) {
+                setSelectedSessionId('');
+                setSearchParams(prev => {
+                    const p = new URLSearchParams(prev);
+                    p.delete('session');
+                    return p;
+                }, { replace: true });
+            }
+        }
+    }, [availableSessions, selectedSessionId]);
+
+    // Phiên dữ liệu đang hoạt động
+    const activeSession = useMemo(() => {
+        if (availableSessions.length === 0) return null;
+        if (selectedSessionId) {
+            const found = availableSessions.find(s => s.id === selectedSessionId);
+            if (found) return found;
+        }
+        return availableSessions[0];
+    }, [availableSessions, selectedSessionId]);
+
+    // Chọn phiên từ dropdown
+    const handleSelectSession = (sessionId: string) => {
+        setSelectedSessionId(sessionId);
+        setSearchParams(prev => {
+            const p = new URLSearchParams(prev);
+            if (sessionId) {
+                p.set('session', sessionId);
+            } else {
+                p.delete('session');
+            }
+            return p;
+        }, { replace: true });
+    };
+
+    // Bản ghi dữ liệu của nhân viên trong phiên đang chọn
+    const employeeLatestSessionRecord = useMemo(() => {
+        if (!selectedEmployeeId) return null;
+        const empId = selectedEmployeeId.trim();
+
+        // 1. Lấy trong phiên activeSession được người dùng chọn
+        if (activeSession && activeSession.records) {
+            const found = activeSession.records.find(r => (r.employee_id || '').trim() === empId);
+            if (found) {
+                return {
+                    record: found,
+                    session: activeSession
+                };
+            }
+        }
+
+        // 2. Fallback quét trong availableSessions
+        for (const sess of availableSessions) {
+            if (sess.records) {
+                const found = sess.records.find(r => (r.employee_id || '').trim() === empId);
                 if (found) {
                     return {
                         record: found,
@@ -404,7 +523,26 @@ export default function EmployeeDetailReportPage() {
             }
         }
         return null;
-    }, [selectedEmployeeId, sessions]);
+    }, [selectedEmployeeId, activeSession, availableSessions]);
+
+    // Giờ công: nếu phiên thi đua không có giờ công thì đối chiếu tìm trong các phiên WORK_HOURS
+    const resolvedWorkHours = useMemo(() => {
+        const recHours = employeeLatestSessionRecord?.record?.work_hours;
+        if (recHours && recHours > 0) return recHours;
+
+        if (!selectedEmployeeId || sessions.length === 0) return 0;
+        const empId = selectedEmployeeId.trim();
+
+        for (const sess of sessions) {
+            if (sess.session_type === 'WORK_HOURS' && sess.records) {
+                const found = sess.records.find(r => (r.employee_id || '').trim() === empId);
+                if (found && found.work_hours && found.work_hours > 0) {
+                    return found.work_hours;
+                }
+            }
+        }
+        return 0;
+    }, [employeeLatestSessionRecord, selectedEmployeeId, sessions]);
 
     // Xác định ngày báo cáo luỹ kế (từ phiên hoặc ngày đã trôi qua)
     const reportDateString = useMemo(() => {
@@ -421,6 +559,20 @@ export default function EmployeeDetailReportPage() {
         return `${dayStr}-${monthStr}-${selectedYear}`;
     }, [employeeLatestSessionRecord, operatingConfig.passedDays, selectedMonth, selectedYear]);
 
+    // Số ngày đã trôi qua thực tế gắn liền với phiên được chọn
+    const effectivePassedDays = useMemo(() => {
+        if (employeeLatestSessionRecord?.session?.report_date) {
+            const parts = employeeLatestSessionRecord.session.report_date.split('-');
+            if (parts.length === 3) {
+                const dayVal = parseInt(parts[2], 10);
+                if (!isNaN(dayVal) && dayVal > 0) {
+                    return Math.min(dayVal, operatingConfig.operatingDays);
+                }
+            }
+        }
+        return operatingConfig.passedDays;
+    }, [employeeLatestSessionRecord, operatingConfig.passedDays, operatingConfig.operatingDays]);
+
     // 7. TÍNH TOÁN 6 CHỈ SỐ KPI TỔNG QUÁT CỦA NHÂN VIÊN
     const employeeKpis = useMemo(() => {
         const empId = selectedEmployeeId.trim();
@@ -430,7 +582,7 @@ export default function EmployeeDetailReportPage() {
         const revActual = rec?.revenue_actual ?? 0;
         const revQd = rec?.revenue_qd ?? 0;
 
-        const passed = Math.max(1, operatingConfig.passedDays);
+        const passed = Math.max(1, effectivePassedDays);
         const totalDays = Math.max(1, operatingConfig.operatingDays);
 
         const realCompletionRate = targetQd > 0 ? Number(((revQd / targetQd) * 100).toFixed(0)) : 0;
@@ -446,7 +598,7 @@ export default function EmployeeDetailReportPage() {
             ? Number(((instRev / revActual) * 100).toFixed(1))
             : (rec?.installment_rate ?? 0);
 
-        const workHours = rec?.work_hours ?? 0;
+        const workHours = resolvedWorkHours;
         const prodQdPerHour = workHours > 0 ? Number((revQd / workHours).toFixed(2)) : 0;
         const bonusText = '-';
 
@@ -462,7 +614,7 @@ export default function EmployeeDetailReportPage() {
             prodQdPerHour,
             bonusText
         };
-    }, [selectedEmployeeId, revenueTargets, employeeLatestSessionRecord, operatingConfig]);
+    }, [selectedEmployeeId, revenueTargets, employeeLatestSessionRecord, effectivePassedDays, operatingConfig, resolvedWorkHours]);
 
     // 8. TÍNH TOÁN CHI TIẾT CÁC NGÀNH HÀNG / THI ĐUA CỦA NHÂN VIÊN THEO CẤU HÌNH ĐIỂM
     const campaignDetailRows = useMemo<CampaignDetailRow[]>(() => {
@@ -472,7 +624,7 @@ export default function EmployeeDetailReportPage() {
         const empTargets = campaignTargetsMap[empId] || {};
         const empCampaigns = employeeLatestSessionRecord?.record?.campaigns || {};
 
-        const passed = Math.max(1, operatingConfig.passedDays);
+        const passed = Math.max(1, effectivePassedDays);
         const totalDays = Math.max(1, operatingConfig.operatingDays);
 
         const allKeys = new Set<string>();
@@ -606,7 +758,7 @@ export default function EmployeeDetailReportPage() {
         });
 
         return rows;
-    }, [selectedEmployeeId, campaignTargetsMap, employeeLatestSessionRecord, operatingConfig, campaignDict, scoreConfig]);
+    }, [selectedEmployeeId, campaignTargetsMap, employeeLatestSessionRecord, effectivePassedDays, operatingConfig, campaignDict, scoreConfig]);
 
     // 9. LỌC CÁC DÒNG THEO CHẾ ĐỘ & SẮP XẾP THEO CỘT (MẶC ĐỊNH %DK GIẢM DẦN)
     const filteredCampaignRows = useMemo(() => {
@@ -849,6 +1001,11 @@ export default function EmployeeDetailReportPage() {
 
     // Xuất ảnh theo chuẩn Screen cho TẤT CẢ nhân viên trong siêu thị được chọn
     const handleBatchExportAllStore = async () => {
+        if (!canExportAllEmployees) {
+            showToast('⚠️ Bạn không có quyền xuất ảnh báo cáo toàn bộ nhân viên!');
+            return;
+        }
+
         if (availableEmployees.length === 0) {
             showToast('⚠️ Không có nhân viên nào trong danh sách siêu thị được chọn!');
             return;
@@ -1080,21 +1237,23 @@ export default function EmployeeDetailReportPage() {
                         <span>Tải Ảnh</span>
                     </button>
 
-                    {/* NÚT XUẤT ẢNH HÀNG LOẠT CHO TẤT CẢ NHÂN VIÊN CỦA SHOP (THEO SCREEN) */}
-                    <button
-                        type="button"
-                        onClick={handleBatchExportAllStore}
-                        disabled={isExporting || batchExport.isRunning}
-                        className="px-3.5 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs"
-                        title={`Xuất ảnh báo cáo theo screen (${exportResolution}) cho tất cả ${availableEmployees.length} nhân viên trong siêu thị được chọn`}
-                    >
-                        {batchExport.isRunning ? (
-                            <Loader2 className="w-4 h-4 animate-spin text-white" />
-                        ) : (
-                            <Users className="w-4 h-4 text-amber-300" />
-                        )}
-                        <span>Xuất Tất Cả NV ({exportResolution})</span>
-                    </button>
+                    {/* NÚT XUẤT ẢNH HÀNG LOẠT CHO TẤT CẢ NHÂN VIÊN CỦA SHOP (THEO SCREEN) (Chỉ hiển thị với Admin/QL/TC) */}
+                    {canExportAllEmployees && (
+                        <button
+                            type="button"
+                            onClick={handleBatchExportAllStore}
+                            disabled={isExporting || batchExport.isRunning}
+                            className="px-3.5 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs"
+                            title={`Xuất ảnh báo cáo theo screen (${exportResolution}) cho tất cả ${availableEmployees.length} nhân viên trong siêu thị được chọn`}
+                        >
+                            {batchExport.isRunning ? (
+                                <Loader2 className="w-4 h-4 animate-spin text-white" />
+                            ) : (
+                                <Users className="w-4 h-4 text-amber-300" />
+                            )}
+                            <span>Xuất Tất Cả NV ({exportResolution})</span>
+                        </button>
+                    )}
 
                     <button
                         type="button"
@@ -1103,7 +1262,7 @@ export default function EmployeeDetailReportPage() {
                         title="Copy tóm tắt kết quả dạng văn bản gửi Zalo"
                     >
                         <Sparkles className="w-4 h-4" />
-                        <span>Copy Zalo</span>
+                        <span>Copy Nhận xét</span>
                     </button>
                 </div>
             </div>
@@ -1237,6 +1396,40 @@ export default function EmployeeDetailReportPage() {
                         )}
                     </div>
 
+                    {/* Chọn Phiên Dữ Liệu (Ràng buộc Siêu Thị & Nhân Viên) */}
+                    <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl text-xs font-bold min-w-[220px] max-w-full flex-1 sm:flex-initial">
+                        <Layers className="w-4 h-4 text-indigo-600 shrink-0" />
+                        <span className="text-slate-500 shrink-0">Phiên:</span>
+                        <select
+                            value={selectedSessionId || activeSession?.id || ''}
+                            onChange={e => handleSelectSession(e.target.value)}
+                            disabled={availableSessions.length === 0}
+                            className="bg-transparent text-xs font-bold text-slate-800 outline-hidden cursor-pointer disabled:cursor-not-allowed flex-1 min-w-0 truncate"
+                            title="Chọn phiên cập nhật số liệu cần xem (ràng buộc theo siêu thị và nhân viên)"
+                        >
+                            {availableSessions.length === 0 ? (
+                                <option value="">Chưa có phiên dữ liệu cho NV này</option>
+                            ) : (
+                                availableSessions.map(s => {
+                                    const storeLabel = s.store_name === 'Toàn Cụm Siêu Thị'
+                                        ? 'Toàn Cụm'
+                                        : (getShortStoreName(s.store_name) || s.store_name || 'Shop');
+                                    const dateLabel = s.report_date ? formatDate(s.report_date) : (s.created_at ? formatDate(s.created_at) : '');
+                                    return (
+                                        <option key={s.id} value={s.id}>
+                                            [{storeLabel}] Phiên ngày {dateLabel}
+                                        </option>
+                                    );
+                                })
+                            )}
+                        </select>
+                        {availableSessions.length > 0 && (
+                            <span className="text-[10px] font-bold bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full shrink-0">
+                                {availableSessions.length} phiên
+                            </span>
+                        )}
+                    </div>
+
                     {/* Bộ lọc chế độ hiển thị ngành hàng */}
                     <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl">
                         <Filter className="w-4 h-4 text-amber-600" />
@@ -1274,6 +1467,19 @@ export default function EmployeeDetailReportPage() {
                     </button>
                 </div>
             </div>
+
+            {/* Cảnh báo nếu không có phiên dữ liệu nào cho nhân viên đang chọn */}
+            {availableSessions.length === 0 && !loading && (
+                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-xs text-amber-800 flex items-center gap-2.5 shadow-2xs">
+                    <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
+                    <div>
+                        <div className="font-bold">Chưa có phiên dữ liệu thi đua / doanh thu cho nhân viên này</div>
+                        <div className="text-[11px] text-amber-700 mt-0.5">
+                            Nhân viên <strong>{currentEmployee ? cleanEmployeeName(currentEmployee.full_name) : selectedEmployeeId}</strong> ({selectedEmployeeId}) chưa có số liệu trong các phiên của Tháng {selectedMonth}/{selectedYear}. Vui lòng kiểm tra lại siêu thị hoặc cập nhật số liệu phiên tại phân hệ Quản lý Phiên.
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* 3. KHU VỰC BÁO CÁO CHÍNH - XUẤT ẢNH CHUẨN SCREEN CHO SMARTPHONE */}
             <div className="flex justify-center w-full">
@@ -1313,7 +1519,7 @@ export default function EmployeeDetailReportPage() {
                             </span>
                         </div>
 
-                        {/* Tag bổ sung thông tin Siêu Thị & Chức Danh */}
+                        {/* Tag bổ sung thông tin Siêu Thị, Chức Danh & Phiên */}
                         <div className="mt-3 flex items-center justify-center gap-2 flex-wrap text-[11px] font-semibold text-emerald-100/90">
                             <span className="px-2.5 py-0.5 rounded-full bg-emerald-900/60 border border-emerald-500/40">
                                 🏢 {currentEmployee?.store_name || selectedStore}
@@ -1326,6 +1532,11 @@ export default function EmployeeDetailReportPage() {
                             {employeeKpis.workHours > 0 && (
                                 <span className="px-2.5 py-0.5 rounded-full bg-emerald-900/60 border border-emerald-500/40">
                                     ⏱️ {employeeKpis.workHours}h công ({employeeKpis.prodQdPerHour} tr/h)
+                                </span>
+                            )}
+                            {activeSession && (
+                                <span className="px-2.5 py-0.5 rounded-full bg-amber-400/20 text-amber-200 border border-amber-400/40 font-bold" title={activeSession.session_title || 'Phiên dữ liệu'}>
+                                    ⚡ Phiên: {activeSession.store_name === 'Toàn Cụm Siêu Thị' ? 'Toàn Cụm' : getShortStoreName(activeSession.store_name)} ({reportDateString})
                                 </span>
                             )}
                         </div>
@@ -1396,21 +1607,7 @@ export default function EmployeeDetailReportPage() {
                             <div className="text-xs font-black uppercase tracking-wider flex items-center gap-2 flex-wrap">
                                 <Trophy className="w-4 h-4 text-amber-300 shrink-0" />
                                 <span>BẢNG KẾT QUẢ THI ĐUA</span>
-                                {sortColumn === 'completionRate' && (
-                                    <span className="text-[9.5px] bg-emerald-900/80 text-amber-200 px-2 py-0.5 rounded-full font-bold uppercase border border-emerald-600/50 flex items-center gap-1 shadow-2xs">
-                                        {sortDirection === 'desc' ? (
-                                            <>
-                                                <ArrowDown className="w-2.5 h-2.5 text-amber-300 shrink-0" />
-                                                <span>%DK giảm dần</span>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <ArrowUp className="w-2.5 h-2.5 text-amber-300 shrink-0" />
-                                                <span>%DK tăng dần</span>
-                                            </>
-                                        )}
-                                    </span>
-                                )}
+
                                 {isPointsMode && (
                                     <span className="text-[9.5px] bg-amber-400 text-slate-950 px-2 py-0.5 rounded-full font-black uppercase shadow-2xs">
                                         Thang điểm shop

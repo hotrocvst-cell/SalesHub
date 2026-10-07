@@ -1,14 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import { fetchEmployees, fetchStores, type EmployeeItem, type StoreItem } from '../../core/lib/storage';
-import { getYesterdayDateString, formatDateTime } from '../../core/lib/formatters';
+import { getYesterdayDateString, formatDateTime, getShortStoreName } from '../../core/lib/formatters';
 import RevenuePasteTab from './components/RevenuePasteTab';
 import CampaignPasteTab from './components/CampaignPasteTab';
 import WorkHoursPasteTab from './components/WorkHoursPasteTab';
 import CumulativeSummaryTab from './components/CumulativeSummaryTab';
 import SessionHistoryTab from './components/SessionHistoryTab';
 import StoreConfirmModal from './components/StoreConfirmModal';
-import WorkHoursConfirmModal from './components/WorkHoursConfirmModal';
+import WorkHoursConfirmModal, { type WorkHoursSaveScope } from './components/WorkHoursConfirmModal';
 import type { ParsedEmployeeRevenue, ParsedCampaignBlock } from './utils/employeeParsers';
 import {
     saveEmployeeDataSession,
@@ -263,15 +263,105 @@ export default function EmployeeCumulativePage() {
         setActiveTab('summary');
     };
 
+    // Tính toán phân bổ giờ công theo từng siêu thị dựa trên danh mục nhân sự
+    const workHoursStoreBreakdown = useMemo(() => {
+        const map: Record<string, { employeeCount: number; hours: number }> = {};
+        Object.entries(workHoursMap).forEach(([empId, h]) => {
+            if (h <= 0) return;
+            const emp = employees.find(e => e.employee_id === empId);
+            const sName = emp?.store_name?.trim() || (selectedStore !== 'all' ? selectedStore : 'Chưa phân siêu thị');
+            if (!map[sName]) {
+                map[sName] = { employeeCount: 0, hours: 0 };
+            }
+            map[sName].employeeCount += 1;
+            map[sName].hours = Number((map[sName].hours + h).toFixed(2));
+        });
+        return Object.entries(map).map(([storeName, stat]) => ({
+            storeName,
+            employeeCount: stat.employeeCount,
+            hours: stat.hours
+        })).sort((a, b) => b.hours - a.hours);
+    }, [workHoursMap, employees, selectedStore]);
+
     // 3. MỞ MODAL XÁC NHẬN LƯU GIỜ CÔNG
     const handleSaveWorkHoursOnly = async () => {
         setIsWorkHoursModalOpen(true);
     };
 
     // THỰC HIỆN LƯU HOẶC CẬP NHẬT GIỜ CÔNG
-    const handleConfirmWorkHoursSave = async (saveMode: 'update' | 'new' = 'update') => {
+    const handleConfirmWorkHoursSave = async (options: {
+        saveMode: 'update' | 'new';
+        scope: WorkHoursSaveScope;
+        selectedStoreName?: string;
+    }) => {
         setIsSaving(true);
         saveDraft();
+        const { saveMode, scope, selectedStoreName } = options;
+
+        // 1. CHẾ ĐỘ TÁCH RIÊNG THEO TỪNG SIÊU THỊ
+        if (scope === 'split_by_store') {
+            const storeGroups: Record<string, { empId: string; h: number }[]> = {};
+            Object.entries(workHoursMap).forEach(([empId, h]) => {
+                if (h <= 0) return;
+                const emp = employees.find(e => e.employee_id === empId);
+                const sName = emp?.store_name?.trim() || (selectedStore !== 'all' ? selectedStore : 'Toàn Cụm Siêu Thị');
+                if (!storeGroups[sName]) storeGroups[sName] = [];
+                storeGroups[sName].push({ empId, h });
+            });
+
+            const storeNames = Object.keys(storeGroups);
+            if (storeNames.length === 0) {
+                showToast('Không có dữ liệu giờ công lớn hơn 0 để lưu!');
+                setIsSaving(false);
+                return;
+            }
+
+            let savedSuccess = 0;
+            for (const sName of storeNames) {
+                const groupItems = storeGroups[sName];
+                const groupTotalHours = Number(groupItems.reduce((acc, it) => acc + it.h, 0).toFixed(2));
+                const groupRecords = groupItems.map(it => ({
+                    employee_id: it.empId,
+                    full_name: employees.find(e => e.employee_id === it.empId)?.full_name || `NV ${it.empId}`,
+                    quantity: 0,
+                    revenue_qd: 0,
+                    revenue_actual: 0,
+                    installment_revenue: 0,
+                    installment_rate: 0,
+                    work_hours: it.h
+                }));
+
+                const sessionPayload = {
+                    session_type: 'WORK_HOURS' as const,
+                    session_title: `Cập nhật Giờ công - ${getShortStoreName(sName)} (T${selectedMonth}/${selectedYear})`,
+                    store_name: sName,
+                    month: selectedMonth,
+                    year: selectedYear,
+                    report_date: reportDate,
+                    created_by: 'Quản lý',
+                    employee_count: groupRecords.length,
+                    total_revenue_actual: 0,
+                    total_revenue_qd: 0,
+                    total_work_hours: groupTotalHours,
+                    source_type: 'PASTE_TEXT' as const,
+                    records: groupRecords
+                };
+
+                const res = await saveEmployeeDataSession(sessionPayload);
+                if (res.success) savedSuccess++;
+            }
+
+            setIsSaving(false);
+            setIsWorkHoursModalOpen(false);
+            setHasLocalDraft(false);
+            showToast(`🎉 Đã tách và lưu thành công ${savedSuccess} phiên giờ công riêng theo từng siêu thị lên hệ thống & Cloud!`);
+            return;
+        }
+
+        // 2. CHẾ ĐỘ LƯU CHO 1 SIÊU THỊ CỤ THỂ HOẶC TOÀN CỤM
+        const targetStore = scope === 'single_store' && selectedStoreName
+            ? selectedStoreName
+            : (selectedStore !== 'all' ? selectedStore : 'Toàn Cụm Siêu Thị');
 
         const totalHours = Object.values(workHoursMap).reduce((s, h) => s + h, 0);
         const records = Object.entries(workHoursMap).map(([empId, h]) => ({
@@ -289,8 +379,8 @@ export default function EmployeeCumulativePage() {
             session_type: 'WORK_HOURS' as const,
             session_title: editingSession && saveMode === 'update' && editingSession.session_type === 'WORK_HOURS'
                 ? editingSession.session_title
-                : `Cập nhật Giờ công Toàn cụm (T${selectedMonth}/${selectedYear})`,
-            store_name: 'Toàn Cụm Siêu Thị',
+                : `Cập nhật Giờ công - ${getShortStoreName(targetStore)} (T${selectedMonth}/${selectedYear})`,
+            store_name: targetStore,
             month: selectedMonth,
             year: selectedYear,
             report_date: reportDate,
@@ -325,7 +415,7 @@ export default function EmployeeCumulativePage() {
                     year: res.session.year,
                     report_date: res.session.report_date
                 });
-                showToast(`🎉 Đã lưu phiên giờ công toàn cụm (${Object.keys(workHoursMap).length} nhân sự) lên hệ thống & Cloud!`);
+                showToast(`🎉 Đã lưu phiên giờ công [${getShortStoreName(targetStore)}] (${Object.keys(workHoursMap).length} nhân sự) lên hệ thống & Cloud!`);
             }
         }
 
@@ -811,7 +901,7 @@ export default function EmployeeCumulativePage() {
                 editingSession={editingSession?.session_type === 'REVENUE_CAMPAIGN' ? editingSession : null}
             />
 
-            {/* Popup Xác Nhận Lưu Giờ Công Toàn Cụm */}
+            {/* Popup Xác Nhận Lưu Giờ Công */}
             <WorkHoursConfirmModal
                 isOpen={isWorkHoursModalOpen}
                 onClose={() => setIsWorkHoursModalOpen(false)}
@@ -821,6 +911,9 @@ export default function EmployeeCumulativePage() {
                 employeeCount={Object.keys(workHoursMap).length}
                 totalHours={Object.values(workHoursMap).reduce((s, h) => s + h, 0)}
                 isSaving={isSaving}
+                stores={stores}
+                currentSelectedStore={selectedStore}
+                storeBreakdown={workHoursStoreBreakdown}
                 editingSession={editingSession?.session_type === 'WORK_HOURS' ? editingSession : null}
             />
         </div>

@@ -13,7 +13,8 @@ import {
     X,
     Save,
     AlertCircle,
-    Store
+    Store,
+    Briefcase
 } from 'lucide-react';
 
 interface Props {
@@ -26,15 +27,18 @@ interface Props {
     onOpenRoleModal: () => void;
 }
 
+// DANH MỤC VAI TRÒ (VAI TRÒ CŨNG LÀ BỘ PHẬN)
 const COMMON_ROLES = [
-    'Quản lý siêu thị',
-    'Trưởng ca bán hàng',
-    'Tư vấn bán hàng',
-    'AIO - TZ',
-    'AIO - TGD',
-    'AIO - ĐMX',
-    'Thu ngân',
-    'Kho / Kỹ thuật'
+    { value: 'Quản lý', label: 'Quản Lý', icon: '👑' },
+    { value: 'Trưởng ca', label: 'Trưởng Ca', icon: '⭐' },
+    { value: 'Nhân viên', label: 'Nhân Viên', icon: '👤' },
+    { value: 'AIO', label: 'AIO', icon: '📱' },
+    { value: 'AIO - TZ', label: 'AIO - TZ', icon: '📱' },
+    { value: 'AIO - TGD', label: 'AIO - TGD', icon: '📱' },
+    { value: 'AIO - ĐMX', label: 'AIO - ĐMX', icon: '📱' },
+    { value: 'Tư vấn bán hàng', label: 'Tư vấn bán hàng', icon: '👥' },
+    { value: 'Thu ngân', label: 'Thu ngân', icon: '💳' },
+    { value: 'Kho / Kỹ thuật', label: 'Kho / Kỹ thuật', icon: '📦' }
 ];
 
 export default function EmployeeListSection({
@@ -55,18 +59,36 @@ export default function EmployeeListSection({
     const [isSaving, setIsSaving] = useState(false);
     const [errorMsg, setErrorMsg] = useState('');
 
-    // Lọc danh sách nhân viên
+    // Lọc danh sách nhân viên theo Siêu thị và Vai trò (Vai trò cũng là bộ phận)
     const filteredEmployees = useMemo(() => {
         return employees.filter(emp => {
+            const roleStr = (emp.role || emp.job_title || '').toLowerCase();
             const matchStore = selectedStoreFilter === 'all' || emp.store_name === selectedStoreFilter;
-            const role = (emp.role || emp.job_title || '').toLowerCase();
-            const matchRole = selectedRoleFilter === 'all' || role.includes(selectedRoleFilter.toLowerCase());
+            
+            let matchRole = true;
+            if (selectedRoleFilter !== 'all') {
+                const target = selectedRoleFilter.toLowerCase();
+                if (target === 'aio') {
+                    matchRole = roleStr.includes('aio');
+                } else if (target === 'quản lý') {
+                    matchRole = roleStr.includes('quản lý') || roleStr.includes('quan_ly');
+                } else if (target === 'trưởng ca') {
+                    matchRole = roleStr.includes('trưởng ca') || roleStr.includes('truong_ca');
+                } else if (target === 'nhân viên') {
+                    matchRole = !roleStr.includes('quản lý') && !roleStr.includes('quan_ly') && !roleStr.includes('trưởng ca') && !roleStr.includes('truong_ca');
+                } else {
+                    matchRole = roleStr.includes(target);
+                }
+            }
+
             const q = searchQuery.toLowerCase().trim();
             const matchSearch =
                 !q ||
                 emp.employee_id.toLowerCase().includes(q) ||
                 emp.full_name.toLowerCase().includes(q) ||
-                emp.store_name.toLowerCase().includes(q);
+                emp.store_name.toLowerCase().includes(q) ||
+                roleStr.includes(q);
+
             return matchStore && matchRole && matchSearch;
         });
     }, [employees, selectedStoreFilter, selectedRoleFilter, searchQuery]);
@@ -80,7 +102,7 @@ export default function EmployeeListSection({
             employee_id: '',
             full_name: '',
             store_name: selectedStoreFilter !== 'all' ? selectedStoreFilter : (stores[0]?.name || ''),
-            role: 'Tư vấn bán hàng',
+            role: 'Nhân viên',
             is_active: true
         });
         setErrorMsg('');
@@ -92,7 +114,10 @@ export default function EmployeeListSection({
             onOpenRoleModal();
             return;
         }
-        setEditingEmp({ ...emp });
+        setEditingEmp({
+            ...emp,
+            role: emp.role || emp.job_title || 'Nhân viên'
+        });
         setErrorMsg('');
         setIsModalOpen(true);
     };
@@ -105,7 +130,13 @@ export default function EmployeeListSection({
         }
         setIsSaving(true);
         setErrorMsg('');
-        const ok = await onSaveEmployee(editingEmp);
+        const chosenRole = editingEmp.role?.trim() || 'Nhân viên';
+        const payload: Partial<EmployeeItem> = {
+            ...editingEmp,
+            role: chosenRole,
+            job_title: chosenRole
+        };
+        const ok = await onSaveEmployee(payload);
         setIsSaving(false);
         if (ok) {
             setIsModalOpen(false);
@@ -138,10 +169,11 @@ export default function EmployeeListSection({
 
     const handleExportCsv = () => {
         if (filteredEmployees.length === 0) return;
-        const headers = ['STT,Mã NV,Họ và Tên,Siêu Thị,Chức Danh,Trạng Thái'];
-        const rows = filteredEmployees.map((e, idx) =>
-            `${idx + 1},"${e.employee_id}","${e.full_name}","${e.store_name}","${e.role || ''}","${e.is_active !== false ? 'Đang làm việc' : 'Nghỉ việc'}"`
-        );
+        const headers = ['STT,Mã NV,Họ và Tên,Siêu Thị,Vai Trò,Trạng Thái'];
+        const rows = filteredEmployees.map((e, idx) => {
+            const role = e.role || e.job_title || 'Nhân viên';
+            return `${idx + 1},"${e.employee_id}","${e.full_name}","${e.store_name}","${role}","${e.is_active !== false ? 'Đang làm việc' : 'Nghỉ việc'}"`;
+        });
         const csvContent = '\uFEFF' + [headers, ...rows].join('\n');
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
@@ -158,7 +190,7 @@ export default function EmployeeListSection({
             {/* Toolbar Bộ lọc & Thao tác */}
             <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs space-y-3">
                 <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
-                    {/* Filter Siêu thị */}
+                    {/* Filter Siêu thị và Vai trò (Vai trò cũng là bộ phận) */}
                     <div className="flex flex-wrap items-center gap-2 flex-1">
                         <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
                             <Store className="w-4 h-4 text-blue-600" />
@@ -167,7 +199,7 @@ export default function EmployeeListSection({
                         <select
                             value={selectedStoreFilter}
                             onChange={e => setSelectedStoreFilter(e.target.value)}
-                            className="text-xs font-semibold px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white text-slate-800"
+                            className="text-xs font-semibold px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white text-slate-800"
                         >
                             <option value="all">🏢 Tất cả siêu thị ({stores.length})</option>
                             {stores.map(s => (
@@ -177,17 +209,21 @@ export default function EmployeeListSection({
                             ))}
                         </select>
 
+                        {/* Filter Vai trò */}
+                        <div className="flex items-center gap-1 text-xs font-bold text-slate-700 ml-1">
+                            <Briefcase className="w-3.5 h-3.5 text-indigo-600" />
+                            <span>Vai trò:</span>
+                        </div>
                         <select
                             value={selectedRoleFilter}
                             onChange={e => setSelectedRoleFilter(e.target.value)}
-                            className="text-xs font-semibold px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white text-slate-800"
+                            className="text-xs font-semibold px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white text-slate-800"
                         >
-                            <option value="all">💼 Mọi chức danh</option>
-                            <option value="quản lý">👑 Quản lý</option>
-                            <option value="trưởng ca">⭐ Trưởng ca</option>
-                            <option value="tư vấn">👤 Tư vấn bán hàng</option>
-                            <option value="AIO">📱 AIO</option>
-                            <option value="thu ngân">💳 Thu ngân</option>
+                            <option value="all">Mọi vai trò</option>
+                            <option value="quản lý">👑 Quản Lý</option>
+                            <option value="trưởng ca">⭐ Trưởng Ca</option>
+                            <option value="nhân viên">👤 Nhân Viên</option>
+                            <option value="aio">📱 AIO (Tất cả)</option>
                         </select>
                     </div>
 
@@ -226,7 +262,7 @@ export default function EmployeeListSection({
                     <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
                     <input
                         type="text"
-                        placeholder="Tìm kiếm theo mã nhân viên, họ và tên, chức danh..."
+                        placeholder="Tìm kiếm theo mã NV, họ tên, vai trò (AIO, Quản lý, Nhân viên...)..."
                         value={searchQuery}
                         onChange={e => setSearchQuery(e.target.value)}
                         className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500 text-slate-800"
@@ -236,27 +272,27 @@ export default function EmployeeListSection({
 
             {/* Bảng Danh sách nhân viên */}
             <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
-                <div className="px-4 py-2.5 bg-slate-50/50 border-b border-slate-200 flex items-center justify-between text-xs">
+                <div className="px-4 py-2 bg-slate-50/50 border-b border-slate-200 flex items-center justify-between text-xs">
                     <span className="font-bold text-slate-700 flex items-center gap-1.5">
                         <Users className="w-4 h-4 text-blue-600" />
                         <span>Tổng số nhân sự: {filteredEmployees.length} nhân viên</span>
                     </span>
                     <span className="text-slate-400 text-[11px]">
-                        Hiển thị theo bộ lọc đang chọn
+                        Hệ thống vận hành theo 3 vai trò: Quản Lý • Trưởng Ca • Nhân Viên
                     </span>
                 </div>
 
                 <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
                     <table className="w-full text-left text-xs border-collapse">
-                        <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider font-extrabold border-b border-slate-200 sticky top-0 z-10">
+                        <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider font-extrabold border-b border-slate-200 sticky top-0 z-10 text-[11px]">
                             <tr>
-                                <th className="py-2.5 px-3.5 w-12 text-center">STT</th>
-                                <th className="py-2.5 px-3.5 w-24">Mã NV</th>
-                                <th className="py-2.5 px-3.5">Họ và Tên</th>
-                                <th className="py-2.5 px-3.5">Siêu Thị Trực Thuộc</th>
-                                <th className="py-2.5 px-3.5">Chức Danh / Vai Trò</th>
-                                <th className="py-2.5 px-3.5 w-28 text-center">Trạng Thái</th>
-                                <th className="py-2.5 px-3.5 w-24 text-right">Thao Tác</th>
+                                <th className="py-2 px-2.5 w-10 text-center">STT</th>
+                                <th className="py-2 px-2.5 w-20">Mã NV</th>
+                                <th className="py-2 px-2.5">Họ và Tên</th>
+                                <th className="py-2 px-2.5">Siêu Thị</th>
+                                <th className="py-2 px-2.5 w-36">Vai Trò</th>
+                                <th className="py-2 px-2.5 w-24 text-center">Trạng Thái</th>
+                                <th className="py-2 px-2.5 w-20 text-right">Thao Tác</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
@@ -267,73 +303,84 @@ export default function EmployeeListSection({
                                     </td>
                                 </tr>
                             ) : (
-                                filteredEmployees.map((emp, index) => (
-                                    <tr key={emp.id || emp.employee_id} className="hover:bg-slate-50/80 transition">
-                                        <td className="py-2.5 px-3.5 text-center font-mono text-slate-400 font-semibold">
-                                            {index + 1}
-                                        </td>
-                                        <td className="py-2.5 px-3.5 font-mono font-bold text-blue-700">
-                                            {emp.employee_id}
-                                        </td>
-                                        <td className="py-2.5 px-3.5 font-extrabold text-slate-800">
-                                            {emp.full_name}
-                                        </td>
-                                        <td className="py-2.5 px-3.5 text-slate-600 font-medium">
-                                            {emp.store_name}
-                                        </td>
-                                        <td className="py-2.5 px-3.5">
-                                            <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold ${
-                                                (emp.role || '').toLowerCase().includes('quản lý')
-                                                    ? 'bg-amber-50 text-amber-800 border border-amber-200'
-                                                    : (emp.role || '').toLowerCase().includes('trưởng ca')
-                                                    ? 'bg-blue-50 text-blue-800 border border-blue-200'
-                                                    : 'bg-slate-100 text-slate-700'
-                                            }`}>
-                                                {emp.role || emp.job_title || 'Tư vấn bán hàng'}
-                                            </span>
-                                        </td>
-                                        <td className="py-2.5 px-3.5 text-center">
-                                            <button
-                                                onClick={() => handleToggleActive(emp)}
-                                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold cursor-pointer transition ${
-                                                    emp.is_active !== false
-                                                        ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                                                        : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                                                }`}
-                                            >
-                                                {emp.is_active !== false ? (
-                                                    <>
-                                                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                                                        <span>Làm việc</span>
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <XCircle className="w-3 h-3 text-slate-400" />
-                                                        <span>Nghỉ việc</span>
-                                                    </>
-                                                )}
-                                            </button>
-                                        </td>
-                                        <td className="py-2.5 px-3.5 text-right">
-                                            <div className="flex items-center justify-end gap-1.5">
+                                filteredEmployees.map((emp, index) => {
+                                    const roleStr = emp.role || emp.job_title || 'Nhân viên';
+                                    const lower = roleStr.toLowerCase();
+                                    const isAIO = lower.includes('aio');
+                                    const isManager = lower.includes('quản lý') || lower.includes('quan_ly');
+                                    const isShiftLeader = lower.includes('trưởng ca') || lower.includes('truong_ca');
+
+                                    return (
+                                        <tr key={emp.id || emp.employee_id} className="hover:bg-slate-50/80 transition">
+                                            <td className="py-2 px-2.5 text-center font-mono text-slate-400 font-semibold">
+                                                {index + 1}
+                                            </td>
+                                            <td className="py-2 px-2.5 font-mono font-bold text-blue-700">
+                                                {emp.employee_id}
+                                            </td>
+                                            <td className="py-2 px-2.5 font-extrabold text-slate-800">
+                                                {emp.full_name}
+                                            </td>
+                                            <td className="py-2 px-2.5 text-slate-600 font-medium max-w-[150px] truncate" title={emp.store_name}>
+                                                {emp.store_name}
+                                            </td>
+                                            <td className="py-2 px-2.5">
+                                                <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-bold ${
+                                                    isAIO
+                                                        ? 'bg-purple-50 text-purple-700 border border-purple-200 font-extrabold'
+                                                        : isManager
+                                                        ? 'bg-amber-50 text-amber-800 border border-amber-200 font-extrabold'
+                                                        : isShiftLeader
+                                                        ? 'bg-blue-50 text-blue-800 border border-blue-200 font-extrabold'
+                                                        : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                                                }`}>
+                                                    <span>{isAIO ? '📱' : isManager ? '👑' : isShiftLeader ? '⭐' : '👤'}</span>
+                                                    <span>{roleStr}</span>
+                                                </span>
+                                            </td>
+                                            <td className="py-2 px-2.5 text-center">
                                                 <button
-                                                    onClick={() => handleOpenEdit(emp)}
-                                                    className="p-1.5 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition cursor-pointer"
-                                                    title="Sửa nhân viên"
+                                                    onClick={() => handleToggleActive(emp)}
+                                                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold cursor-pointer transition ${
+                                                        emp.is_active !== false
+                                                            ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                                                            : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                                                    }`}
                                                 >
-                                                    <Edit2 className="w-3.5 h-3.5" />
+                                                    {emp.is_active !== false ? (
+                                                        <>
+                                                            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                                            <span>Làm việc</span>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <XCircle className="w-3 h-3 text-slate-400" />
+                                                            <span>Nghỉ</span>
+                                                        </>
+                                                    )}
                                                 </button>
-                                                <button
-                                                    onClick={() => handleDelete(emp)}
-                                                    className="p-1.5 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
-                                                    title="Xóa nhân viên"
-                                                >
-                                                    <Trash2 className="w-3.5 h-3.5" />
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))
+                                            </td>
+                                            <td className="py-2 px-2.5 text-right">
+                                                <div className="flex items-center justify-end gap-1">
+                                                    <button
+                                                        onClick={() => handleOpenEdit(emp)}
+                                                        className="p-1.5 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition cursor-pointer"
+                                                        title="Sửa nhân viên"
+                                                    >
+                                                        <Edit2 className="w-3.5 h-3.5" />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDelete(emp)}
+                                                        className="p-1.5 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+                                                        title="Xóa nhân viên"
+                                                    >
+                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                })
                             )}
                         </tbody>
                     </table>
@@ -347,9 +394,12 @@ export default function EmployeeListSection({
                         <div className="bg-gradient-to-r from-blue-700 to-indigo-800 p-4 text-white flex items-center justify-between">
                             <div className="flex items-center gap-2">
                                 <Users className="w-5 h-5 text-amber-300" />
-                                <h3 className="font-extrabold text-sm">
-                                    {editingEmp.id ? 'Chỉnh Sửa Nhân Viên' : 'Thêm Nhân Viên Mới'}
-                                </h3>
+                                <div>
+                                    <h3 className="font-extrabold text-sm">
+                                        {editingEmp.id ? 'Chỉnh Sửa Nhân Viên' : 'Thêm Nhân Viên Mới'}
+                                    </h3>
+                                    <p className="text-[11px] text-blue-200">Vai trò vận hành: Quản Lý • Trưởng Ca • Nhân Viên (AIO)</p>
+                                </div>
                             </div>
                             <button
                                 onClick={() => setIsModalOpen(false)}
@@ -406,18 +456,20 @@ export default function EmployeeListSection({
                                 </select>
                             </div>
 
+                            {/* VAI TRÒ (VAI TRÒ CŨNG LÀ BỘ PHẬN) */}
                             <div>
-                                <label className="text-[11px] font-bold text-slate-600 block mb-1">
-                                    Chức Danh / Vai Trò
+                                <label className="text-[11px] font-bold text-slate-700 block mb-1 flex items-center gap-1">
+                                    <Briefcase className="w-3.5 h-3.5 text-blue-600" />
+                                    <span>Vai Trò Nhân Sự:</span>
                                 </label>
                                 <select
-                                    value={editingEmp.role || 'Tư vấn bán hàng'}
+                                    value={editingEmp.role || 'Nhân viên'}
                                     onChange={e => setEditingEmp({ ...editingEmp, role: e.target.value })}
-                                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500 text-slate-800"
+                                    className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 font-bold text-slate-900"
                                 >
                                     {COMMON_ROLES.map(r => (
-                                        <option key={r} value={r}>
-                                            {r}
+                                        <option key={r.value} value={r.value}>
+                                            {r.icon} {r.label}
                                         </option>
                                     ))}
                                 </select>

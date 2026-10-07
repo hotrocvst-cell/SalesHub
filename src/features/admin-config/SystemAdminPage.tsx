@@ -4,6 +4,8 @@ import { usePermissions } from '../../shared/contexts/PermissionContext';
 import { type UserRole } from '../../shared/contexts/AuthContext';
 import {
     SYSTEM_PAGE_PERMISSIONS_SQL,
+    auditRouteCoverage,
+    syncMissingPagesToPermissions,
     type SystemPagePermission
 } from '../../core/lib/permissions';
 import { AUTH_SYSTEM_SQL } from '../../core/lib/authService';
@@ -28,7 +30,8 @@ import {
     RefreshCw,
     ExternalLink,
     UserCheck,
-    Users
+    Users,
+    Sparkles
 } from 'lucide-react';
 
 export default function SystemAdminPage() {
@@ -63,6 +66,17 @@ export default function SystemAdminPage() {
             setPageList(permissions);
         }
     }, [permissions]);
+
+    // Kiểm toán tính toàn vẹn giữa các trang thực tế và danh sách phân quyền
+    const routeAudit = useMemo(() => auditRouteCoverage(pageList), [pageList]);
+
+    // Đồng bộ nhanh tất cả trang thực tế chưa được quản trị
+    const handleSyncMissingRoutes = () => {
+        const full = syncMissingPagesToPermissions(pageList);
+        setPageList(full);
+        setHasChanges(true);
+        showToast(`⚡ Đã bổ sung ${routeAudit.unmanagedRoutes.length} trang mới vào danh sách! Nhấn "Lưu lên Supabase Cloud" để hoàn tất.`);
+    };
 
     const showToast = (msg: string) => {
         setToastMessage(msg);
@@ -344,12 +358,82 @@ export default function SystemAdminPage() {
                 </div>
             )}
 
+            {/* Khối Kiểm Soát Tính Toàn Vẹn Tuyến Đường (Route Audit & Registry Monitor) */}
+            <div className={`rounded-2xl p-4 border transition-all ${
+                routeAudit.isFullyAudited
+                    ? 'bg-emerald-50/70 border-emerald-200 text-emerald-900 shadow-2xs'
+                    : 'bg-amber-50/90 border-amber-300 text-amber-950 shadow-sm'
+            }`}>
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                    <div className="flex items-start gap-3">
+                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-xs ${
+                            routeAudit.isFullyAudited ? 'bg-emerald-200/80 text-emerald-800' : 'bg-amber-200/90 text-amber-900'
+                        }`}>
+                            <ShieldCheck className="w-5 h-5 stroke-[2.5]" />
+                        </div>
+                        <div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-extrabold text-xs uppercase tracking-wider text-slate-500">
+                                    Kiểm Soát Tính Toàn Vẹn Tuyến Đường (Route Audit)
+                                </span>
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                                    routeAudit.isFullyAudited
+                                        ? 'bg-emerald-600 text-white'
+                                        : 'bg-amber-500 text-white animate-pulse'
+                                }`}>
+                                    {routeAudit.isFullyAudited
+                                        ? '✓ 100% HOÀN TOÀN ĐỒNG BỘ'
+                                        : `⚠️ CÒN ${routeAudit.unmanagedRoutes.length} TRANG CHƯA ĐĂNG KÝ`}
+                                </span>
+                            </div>
+                            <p className="text-xs mt-0.5 text-slate-700">
+                                Hệ thống có <b>{routeAudit.totalAppRoutes}</b> trang thực tế. Đã đăng ký quản trị:{' '}
+                                <b>{routeAudit.managedRoutesCount}/{routeAudit.totalAppRoutes}</b> ({routeAudit.coveragePercent}% độ phủ).
+                            </p>
+                        </div>
+                    </div>
+
+                    {!routeAudit.isFullyAudited && (
+                        <button
+                            type="button"
+                            onClick={handleSyncMissingRoutes}
+                            className="px-3.5 py-1.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white font-extrabold text-xs rounded-xl shadow-sm transition flex items-center gap-1.5 shrink-0 self-start md:self-auto cursor-pointer"
+                            title="Tự động bổ sung các trang còn thiếu vào danh sách phân quyền"
+                        >
+                            <Sparkles className="w-3.5 h-3.5" />
+                            <span>Đồng Bộ {routeAudit.unmanagedRoutes.length} Trang Thiếu</span>
+                        </button>
+                    )}
+                </div>
+
+                {/* Danh sách các trang chưa được đăng ký vào Quản trị */}
+                {!routeAudit.isFullyAudited && (
+                    <div className="mt-3 pt-3 border-t border-amber-200/80 flex items-center gap-2 flex-wrap text-xs">
+                        <span className="font-bold text-[11px] text-amber-900 shrink-0">Các trang thiếu:</span>
+                        {routeAudit.unmanagedRoutes.map(missing => (
+                            <span
+                                key={missing.path}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-amber-300 text-amber-900 font-bold text-[11px] shadow-2xs"
+                            >
+                                <span>{missing.page_name}</span>
+                                <code className="text-[10px] text-amber-700 font-mono font-normal">({missing.path})</code>
+                            </span>
+                        ))}
+                    </div>
+                )}
+            </div>
+
             {/* Thống kê nhanh & Trạng thái đồng bộ */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs flex items-center justify-between">
                     <div>
-                        <div className="text-[11px] font-bold text-slate-400 uppercase">Tổng số trang</div>
-                        <div className="text-xl font-black text-slate-800">{pageList.length} phân hệ</div>
+                        <div className="text-[11px] font-bold text-slate-400 uppercase">Kiểm soát trang</div>
+                        <div className="text-xl font-black text-slate-800">
+                            {pageList.length}/{routeAudit.totalAppRoutes} phân hệ
+                        </div>
+                        <div className={`text-[10px] font-bold ${routeAudit.isFullyAudited ? 'text-emerald-600' : 'text-amber-600'}`}>
+                            {routeAudit.coveragePercent}% độ phủ
+                        </div>
                     </div>
                     <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600">
                         <Layers className="w-5 h-5" />

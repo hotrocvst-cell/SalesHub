@@ -124,6 +124,17 @@ export default function QuickNavigationGrid() {
             iconColor: 'text-teal-600'
         },
         {
+            title: 'Trạng Thái Dữ Liệu',
+            path: '/trang-thai-du-lieu',
+            badge: 'Live',
+            badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+            description: 'Tổng hợp và kiểm soát tình trạng chốt phiên n-1 của dữ liệu doanh thu, thi đua siêu thị và nhân viên',
+            icon: ShieldCheck,
+            gradient: 'from-emerald-500/10 via-teal-500/5 to-transparent hover:border-emerald-300',
+            iconBg: 'bg-emerald-100 text-emerald-700',
+            iconColor: 'text-emerald-600'
+        },
+        {
             title: 'Cập Nhật Số Liệu LK',
             path: '/cap-nhat',
             badge: 'Import',

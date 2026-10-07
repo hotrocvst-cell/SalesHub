@@ -17,6 +17,7 @@ import {
 import { getStoreOperatingConfig, getShortenedEmployeeName } from '../../employee-performance/utils/performanceConfig';
 import { resolveCanonicalCampaign, isEmployeeInStore, normalizeCampaignToken } from '../../campaign-summary/utils/campaignSummaryStorage';
 import { formatDate, getYesterdayDateString, isStoreMatch } from '../../../core/lib/formatters';
+import { useAuth } from '../../../shared/contexts/AuthContext';
 import type {
     CampaignProgressItem,
     EmployeeCampaignProgressDetail,
@@ -26,10 +27,16 @@ import type {
 } from '../types';
 
 export function useCampaignProgressData() {
+    const { currentUser } = useAuth();
     const today = new Date();
     const [selectedMonth, setSelectedMonth] = useState<number>(today.getMonth() + 1);
     const [selectedYear, setSelectedYear] = useState<number>(today.getFullYear());
-    const [selectedStore, setSelectedStore] = useState<string>('all');
+    const [selectedStore, setSelectedStore] = useState<string>(() => {
+        if (currentUser?.role === 'NHAN_VIEN' && currentUser.store_name) {
+            return currentUser.store_name;
+        }
+        return 'all';
+    });
 
     const [stores, setStores] = useState<StoreItem[]>([]);
     const [employees, setEmployees] = useState<EmployeeItem[]>([]);
@@ -95,6 +102,18 @@ export function useCampaignProgressData() {
         loadData();
     }, [selectedMonth, selectedYear]);
 
+    // Bản đồ nhân viên: empId -> Store Name & Full Name
+    const empInfoMap = useMemo(() => {
+        const map: Record<string, { storeName: string; fullName: string }> = {};
+        employees.forEach(e => {
+            const id = e.employee_id.trim();
+            if (id) {
+                map[id] = { storeName: e.store_name || '', fullName: e.full_name || '' };
+            }
+        });
+        return map;
+    }, [employees]);
+
     // 2. Danh sách phiên phù hợp theo siêu thị
     const availableSessions = useMemo<EmployeeDataSession[]>(() => {
         if (selectedStore === 'all') {
@@ -136,9 +155,19 @@ export function useCampaignProgressData() {
 
                 return [clusterSession, ...sessions];
             }
+            return sessions;
         }
-        return sessions.filter(s => selectedStore === 'all' || s.store_name === selectedStore);
-    }, [sessions, selectedStore, selectedMonth, selectedYear]);
+
+        return sessions.filter(s => {
+            if (isStoreMatch(s.store_name, selectedStore, stores)) return true;
+            if (s.store_name === 'Toàn Cụm Siêu Thị' || !s.store_name) {
+                const empStoreMap: Record<string, string> = {};
+                Object.entries(empInfoMap).forEach(([k, v]) => { empStoreMap[k] = v.storeName; });
+                return (s.records || []).some(r => isEmployeeInStore(r.employee_id, selectedStore, empStoreMap, s.store_name, stores));
+            }
+            return false;
+        });
+    }, [sessions, selectedStore, stores, selectedMonth, selectedYear, empInfoMap]);
 
     // Phiên đang chọn (mặc định lấy phiên đầu tiên nếu chưa chọn hoặc phiên cũ không còn)
     const activeSession = useMemo<EmployeeDataSession | undefined>(() => {
@@ -166,18 +195,6 @@ export function useCampaignProgressData() {
             passedDays: Math.max(1, passedDays)
         };
     }, [selectedStore, selectedMonth, selectedYear, activeSession]);
-
-    // Bản đồ nhân viên: empId -> Store Name & Full Name
-    const empInfoMap = useMemo(() => {
-        const map: Record<string, { storeName: string; fullName: string }> = {};
-        employees.forEach(e => {
-            const id = e.employee_id.trim();
-            if (id) {
-                map[id] = { storeName: e.store_name || '', fullName: e.full_name || '' };
-            }
-        });
-        return map;
-    }, [employees]);
 
     // 4. Tổng hợp tiến độ theo từng chương trình thi đua
     const allCampaignProgressItems = useMemo<CampaignProgressItem[]>(() => {

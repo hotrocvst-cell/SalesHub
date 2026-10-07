@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
-import type { EmployeeItem } from '../../core/lib/storage';
+import { type EmployeeItem, parseEmployeeRoleAndDept } from '../../core/lib/storage';
 import { supabase } from '../../core/lib/supabase';
 import { isStoreMatch } from '../../core/lib/formatters';
 import {
@@ -65,6 +65,7 @@ interface AuthContextType {
         full_name: string;
         phone?: string;
         employee_id?: string;
+        department?: string;
         role?: UserRole;
         store_name?: string;
         is_new_store?: boolean;
@@ -422,6 +423,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         full_name: string;
         phone?: string;
         employee_id?: string;
+        department?: string;
         role?: UserRole;
         store_name?: string;
         is_new_store?: boolean;
@@ -432,6 +434,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         try {
             let authUserId: string | undefined;
 
+            // KIỂM TRA ĐỐI CHIẾU NHÂN SỰ ĐÃ KHAI BÁO TRƯỚC VỚI SIÊU THỊ:
+            // Nếu mã NV khớp với nhân sự đã có trong hệ thống, mặc định sử dụng họ tên và bộ phận đã lưu trước!
+            let resolvedFullName = params.full_name.trim();
+            let resolvedDept = params.department?.trim();
+            const cleanEmpId = (params.employee_id || '').trim();
+
+            if (cleanEmpId) {
+                try {
+                    const { data: matchedEmp } = await supabase
+                        .from('employees')
+                        .select('*')
+                        .eq('employee_id', cleanEmpId)
+                        .maybeSingle();
+
+                    if (matchedEmp && matchedEmp.full_name?.trim()) {
+                        resolvedFullName = matchedEmp.full_name.trim();
+                        if (!resolvedDept) {
+                            resolvedDept = (matchedEmp.role || matchedEmp.job_title || matchedEmp.department || '').trim();
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Lỗi kiểm tra nhân viên tồn tại khi đăng ký:', e);
+                }
+            }
+
             // 1. Thử đăng ký Supabase Auth nếu có mật khẩu
             if (params.password) {
                 try {
@@ -440,7 +467,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                         password: params.password,
                         options: {
                             data: {
-                                full_name: params.full_name,
+                                full_name: resolvedFullName,
                                 phone: params.phone,
                                 employee_id: params.employee_id
                             }
@@ -461,9 +488,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             // 2. Tạo hồ sơ người dùng mới
             const profile = await createUserProfile({
                 email: params.email,
-                full_name: params.full_name,
+                full_name: resolvedFullName,
                 phone: params.phone,
                 employee_id: params.employee_id,
+                department: resolvedDept,
                 auth_user_id: authUserId,
                 password: params.password || '123456',
                 role: chosenRole,
@@ -476,6 +504,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 await submitOnboardingRequest({
                     user: profile,
                     requested_role: chosenRole,
+                    department: resolvedDept,
                     store_name: chosenStore,
                     is_new_store: Boolean(params.is_new_store),
                     new_store_code: params.new_store_code,
@@ -488,6 +517,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 await submitOnboardingRequest({
                     user: profile,
                     requested_role: chosenRole,
+                    department: resolvedDept,
                     store_name: 'Chưa gắn siêu thị (Chờ Onboard)',
                     is_new_store: false,
                     phone: params.phone,
@@ -597,16 +627,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const loginAsEmployee = (employee: EmployeeItem, roleOverride?: UserRole) => {
         let determinedRole: UserRole = roleOverride || 'NHAN_VIEN';
         if (!roleOverride) {
-            const title = (employee.role || employee.job_title || '').toLowerCase();
-            if (title.includes('admin') || title.includes('quản trị')) {
-                determinedRole = 'ADMIN';
-            } else if (title.includes('quản lý') || title.includes('boss') || title.includes('cụm')) {
-                determinedRole = 'QUAN_LY';
-            } else if (title.includes('trưởng ca') || title.includes('leader') || title.includes('ca trưởng')) {
-                determinedRole = 'TRUONG_CA';
-            } else {
-                determinedRole = 'NHAN_VIEN';
-            }
+            const normalized = parseEmployeeRoleAndDept(employee);
+            determinedRole = normalized.role;
         }
 
         setRawUser({

@@ -16,7 +16,13 @@ import {
     type UserProfile,
     ROLE_LABELS
 } from '../../core/lib/authService';
-import { fetchStores, type StoreItem } from '../../core/lib/storage';
+import {
+    fetchStores,
+    fetchEmployees,
+    type StoreItem,
+    type EmployeeItem,
+    parseEmployeeRoleAndDept
+} from '../../core/lib/storage';
 import ApprovalModal from '../auth/components/ApprovalModal';
 import {
     Users,
@@ -56,6 +62,7 @@ export default function UserManagementPage() {
     const { currentUser } = useAuth();
     const [users, setUsers] = useState<UserProfile[]>([]);
     const [stores, setStores] = useState<StoreItem[]>([]);
+    const [allEmployees, setAllEmployees] = useState<EmployeeItem[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
     // Filters
@@ -97,18 +104,21 @@ export default function UserManagementPage() {
         employee_id: '',
         phone: ''
     });
+    const [matchedEmpInfo, setMatchedEmpInfo] = useState<string | null>(null);
 
     const loadData = async () => {
         setIsLoading(true);
-        const [userList, storeRes, cStatus, unsyncedRes] = await Promise.all([
+        const [userList, storeRes, cStatus, unsyncedRes, empList] = await Promise.all([
             fetchAllUserProfiles(),
             fetchStores(),
             checkSupabaseUserProfilesTable(),
-            getUnsyncedUserProfiles()
+            getUnsyncedUserProfiles(),
+            fetchEmployees()
         ]);
         setUsers(userList);
         setCloudStatus(cStatus);
         setUnsyncedUsers(unsyncedRes.unsynced || []);
+        setAllEmployees(empList.data || []);
         if (storeRes.success) {
             setStores(storeRes.data);
             if (storeRes.data.length > 0 && !createForm.store_name) {
@@ -291,6 +301,30 @@ export default function UserManagementPage() {
         }
     };
 
+    // Tự động nhận diện nhân viên đã khai báo khi nhập mã NV
+    const handleCreateEmployeeIdChange = (empId: string) => {
+        const trimmed = empId.trim();
+        setCreateForm(prev => {
+            const next = { ...prev, employee_id: empId };
+            if (trimmed && allEmployees.length > 0) {
+                const found = allEmployees.find(e => e.employee_id.trim().toLowerCase() === trimmed.toLowerCase());
+                if (found) {
+                    const parsed = parseEmployeeRoleAndDept(found);
+                    setMatchedEmpInfo(`✓ Khớp nhân sự hệ thống: [${found.full_name}] • Siêu thị: ${found.store_name} • Vai trò: ${found.role || 'Nhân viên'}`);
+                    // MẶC ĐỊNH SỬ DỤNG HỌ TÊN VÀ VAI TRÒ THEO HỆ THỐNG ĐÃ LƯU TRƯỚC
+                    next.full_name = found.full_name;
+                    next.store_name = found.store_name;
+                    if (next.role !== 'ADMIN') {
+                        next.role = parsed.operationalRole as UserRole;
+                    }
+                    return next;
+                }
+            }
+            setMatchedEmpInfo(null);
+            return next;
+        });
+    };
+
     // Admin tạo tài khoản mới trực tiếp
     const handleCreateUser = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -304,6 +338,7 @@ export default function UserManagementPage() {
             showMsg('success', `Đã tạo mới tài khoản ${createForm.full_name}!`);
             setResetSuccessData({ user: res.data, pass: createForm.password });
             setIsCreateModalOpen(false);
+            setMatchedEmpInfo(null);
             setCreateForm({
                 full_name: '',
                 email: '',
@@ -1100,23 +1135,23 @@ export default function UserManagementPage() {
                                 </div>
                             </div>
 
-                            <div>
-                                <label className="block text-xs font-bold text-slate-700 mb-1">
-                                    Đơn vị Siêu thị công tác:
-                                </label>
-                                <select
-                                    value={editUser.store_name || ''}
-                                    onChange={(e) => setEditUser({ ...editUser, store_name: e.target.value })}
-                                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                >
-                                    <option value="">-- Chưa gán siêu thị --</option>
-                                    {stores.map(st => (
-                                        <option key={st.id || st.code} value={st.name}>
-                                            {st.name} {st.code ? `(${st.code})` : ''}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                                        Đơn vị Siêu thị công tác:
+                                    </label>
+                                    <select
+                                        value={editUser.store_name || ''}
+                                        onChange={(e) => setEditUser({ ...editUser, store_name: e.target.value })}
+                                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    >
+                                        <option value="">-- Chưa gán siêu thị --</option>
+                                        {stores.map(st => (
+                                            <option key={st.id || st.code} value={st.name}>
+                                                {st.name} {st.code ? `(${st.code})` : ''}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
 
                             <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
                                 <button
@@ -1144,7 +1179,7 @@ export default function UserManagementPage() {
             {/* ========================================================= */}
             {isCreateModalOpen && (
                 <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
-                    <div className="bg-white rounded-3xl max-w-lg w-full p-6 space-y-5 shadow-2xl border border-slate-200 animate-in zoom-in-95 duration-200">
+                    <div className="bg-white rounded-3xl max-w-lg w-full p-6 space-y-5 shadow-2xl border border-slate-200 animate-in zoom-in-95 duration-200 max-h-[92vh] overflow-y-auto">
                         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                             <div className="flex items-center gap-2">
                                 <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
@@ -1167,6 +1202,42 @@ export default function UserManagementPage() {
                         </div>
 
                         <form onSubmit={handleCreateUser} className="space-y-4">
+                            {/* Mã NV đặt trước để tự động tra cứu họ tên chuẩn */}
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                                        Mã nhân viên (nếu có):
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={createForm.employee_id}
+                                        onChange={(e) => handleCreateEmployeeIdChange(e.target.value)}
+                                        placeholder="ví dụ: 260732"
+                                        className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                                        Số điện thoại:
+                                    </label>
+                                    <input
+                                        type="tel"
+                                        value={createForm.phone}
+                                        onChange={(e) => setCreateForm({ ...createForm, phone: e.target.value })}
+                                        placeholder="0901234567"
+                                        className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Banner thông báo tìm thấy nhân sự */}
+                            {matchedEmpInfo && (
+                                <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-bold text-emerald-800 flex items-center gap-1.5 animate-in fade-in duration-150">
+                                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                                    <span>{matchedEmpInfo}</span>
+                                </div>
+                            )}
+
                             <div>
                                 <label className="block text-xs font-bold text-slate-700 mb-1">
                                     Họ và tên nhân sự: <span className="text-rose-500">*</span>
@@ -1228,33 +1299,20 @@ export default function UserManagementPage() {
 
                                 <div>
                                     <label className="block text-xs font-bold text-slate-700 mb-1">
-                                        Mã nhân viên (nếu có):
+                                        Siêu thị công tác:
                                     </label>
-                                    <input
-                                        type="text"
-                                        value={createForm.employee_id}
-                                        onChange={(e) => setCreateForm({ ...createForm, employee_id: e.target.value })}
-                                        placeholder="ví dụ: 260732"
-                                        className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    />
+                                    <select
+                                        value={createForm.store_name}
+                                        onChange={(e) => setCreateForm({ ...createForm, store_name: e.target.value })}
+                                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    >
+                                        {stores.map(st => (
+                                            <option key={st.id || st.code} value={st.name}>
+                                                {st.name} {st.code ? `(${st.code})` : ''}
+                                            </option>
+                                        ))}
+                                    </select>
                                 </div>
-                            </div>
-
-                            <div>
-                                <label className="block text-xs font-bold text-slate-700 mb-1">
-                                    Siêu thị công tác:
-                                </label>
-                                <select
-                                    value={createForm.store_name}
-                                    onChange={(e) => setCreateForm({ ...createForm, store_name: e.target.value })}
-                                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                >
-                                    {stores.map(st => (
-                                        <option key={st.id || st.code} value={st.name}>
-                                            {st.name} {st.code ? `(${st.code})` : ''}
-                                        </option>
-                                    ))}
-                                </select>
                             </div>
 
                             <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">

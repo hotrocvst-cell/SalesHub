@@ -9,13 +9,58 @@ export interface EmployeeItem {
     employee_id: string;      // Mã nhân viên
     full_name: string;        // Họ và tên
     store_name: string;       // Tên siêu thị
-    job_title?: string;       // Chức danh
-    role?: string;            // Vai trò/Chức danh trong DB
+    job_title?: string;       // Chức danh / Bộ phận
+    role?: string;            // Vai trò: QUAN_LY | TRUONG_CA | NHAN_VIEN (hoặc Quản lý, Trưởng ca, Nhân viên)
+    department?: string;      // Bộ phận: AIO, Tư vấn bán hàng, Thu ngân, Kho / Kỹ thuật...
     status?: string;          // active / inactive
     is_active?: boolean;      // Trạng thái hoạt động
     cluster?: string;         // Cụm
     created_at?: string;
     updated_at?: string;
+}
+
+export type OperationalRole = 'QUAN_LY' | 'TRUONG_CA' | 'NHAN_VIEN';
+
+export interface NormalizedEmployeeRoleInfo {
+    role: OperationalRole;
+    operationalRole: OperationalRole;
+    department: string;
+}
+
+/**
+ * Chuẩn hóa vai trò & bộ phận của nhân sự:
+ * - VẬN HÀNH DUY NHẤT 3 VAI TRÒ: QUAN_LY, TRUONG_CA, NHAN_VIEN
+ * - BỘ PHẬN: AIO (AIO - TZ, AIO - TGD, AIO - ĐMX), Tư vấn bán hàng, Thu ngân, Kho / Kỹ thuật...
+ */
+export function parseEmployeeRoleAndDept(emp: Partial<EmployeeItem>): NormalizedEmployeeRoleInfo {
+    const rawRole = (emp.role || '').trim();
+    const rawDept = (emp.department || emp.job_title || '').trim();
+    const combined = `${rawRole} ${rawDept}`.toLowerCase();
+
+    // 1. Xác định vai trò (chỉ 1 trong 3: QUAN_LY, TRUONG_CA, NHAN_VIEN)
+    let role: OperationalRole = 'NHAN_VIEN';
+    if (combined.includes('quản lý') || combined.includes('quan_ly') || rawRole === 'QUAN_LY' || rawRole === 'ADMIN') {
+        role = 'QUAN_LY';
+    } else if (combined.includes('trưởng ca') || combined.includes('truong_ca') || rawRole === 'TRUONG_CA' || combined.includes('leader')) {
+        role = 'TRUONG_CA';
+    } else {
+        role = 'NHAN_VIEN';
+    }
+
+    // 2. Xác định bộ phận (AIO, Tư vấn bán hàng, Thu ngân, Kho / Kỹ thuật, ...)
+    let department = rawDept;
+    if (!department) {
+        if (combined.includes('aio - tz') || rawRole.toLowerCase().includes('aio - tz')) department = 'AIO - TZ';
+        else if (combined.includes('aio - tgd') || rawRole.toLowerCase().includes('aio - tgd')) department = 'AIO - TGD';
+        else if (combined.includes('aio - đmx') || combined.includes('aio - dmx')) department = 'AIO - ĐMX';
+        else if (combined.includes('aio')) department = 'AIO';
+        else if (combined.includes('thu ngân') || combined.includes('thu ngan')) department = 'Thu ngân';
+        else if (combined.includes('kho') || combined.includes('kỹ thuật') || combined.includes('ky thuat')) department = 'Kho / Kỹ thuật';
+        else if (combined.includes('quản lý')) department = 'Quản lý';
+        else department = 'Tư vấn bán hàng';
+    }
+
+    return { role, operationalRole: role, department };
 }
 
 export interface StoreItem {
@@ -401,11 +446,14 @@ export async function fetchEmployees(storeName?: string) {
 
 export async function upsertEmployee(emp: Partial<EmployeeItem>) {
     try {
+        const { role: normalizedRole, department: normalizedDept } = parseEmployeeRoleAndDept(emp);
         const payload: any = {
             employee_id: emp.employee_id?.trim(),
             full_name: emp.full_name?.trim(),
             store_name: emp.store_name?.trim(),
-            role: emp.role?.trim() || emp.job_title?.trim() || 'Tư vấn bán hàng',
+            role: normalizedRole,
+            department: normalizedDept,
+            job_title: normalizedDept,
             is_active: emp.is_active ?? true,
             updated_at: new Date().toISOString()
         };
@@ -413,12 +461,24 @@ export async function upsertEmployee(emp: Partial<EmployeeItem>) {
             payload.id = emp.id;
         }
 
+        // 1. Thử upsert có cả trường department
         const { data, error } = await supabase
             .from('employees')
             .upsert(payload, { onConflict: 'employee_id' })
             .select();
 
-        if (error) throw error;
+        if (error) {
+            // 2. Dự phòng an toàn nếu bảng employees trên Supabase chưa có cột department
+            const fallbackPayload = { ...payload };
+            delete fallbackPayload.department;
+            const { data: fbData, error: fbError } = await supabase
+                .from('employees')
+                .upsert(fallbackPayload, { onConflict: 'employee_id' })
+                .select();
+            if (fbError) throw fbError;
+            return { success: true, data: fbData?.[0] || null };
+        }
+
         return { success: true, data: data?.[0] || null };
     } catch (err: any) {
         console.error('Lỗi upsertEmployee:', err);
@@ -429,22 +489,38 @@ export async function upsertEmployee(emp: Partial<EmployeeItem>) {
 export async function upsertEmployeesBatch(emps: Partial<EmployeeItem>[]) {
     if (!emps || emps.length === 0) return { success: true, count: 0 };
     try {
-        const payloads = emps.map(emp => ({
-            ...(emp.id ? { id: emp.id } : {}),
-            employee_id: emp.employee_id?.trim(),
-            full_name: emp.full_name?.trim(),
-            store_name: emp.store_name?.trim() || '',
-            role: emp.role?.trim() || emp.job_title?.trim() || 'Tư vấn bán hàng',
-            is_active: emp.is_active ?? true,
-            updated_at: new Date().toISOString()
-        }));
+        const payloads = emps.map(emp => {
+            const { role: normalizedRole, department: normalizedDept } = parseEmployeeRoleAndDept(emp);
+            return {
+                ...(emp.id ? { id: emp.id } : {}),
+                employee_id: emp.employee_id?.trim(),
+                full_name: emp.full_name?.trim(),
+                store_name: emp.store_name?.trim() || '',
+                role: normalizedRole,
+                department: normalizedDept,
+                job_title: normalizedDept,
+                is_active: emp.is_active ?? true,
+                updated_at: new Date().toISOString()
+            };
+        });
 
+        // 1. Thử upsert đầy đủ
         const { data, error } = await supabase
             .from('employees')
             .upsert(payloads, { onConflict: 'employee_id' })
             .select();
 
-        if (error) throw error;
+        if (error) {
+            // 2. Dự phòng an toàn nếu chưa có cột department
+            const fallbackPayloads = payloads.map(({ department, ...rest }) => rest);
+            const { data: fbData, error: fbError } = await supabase
+                .from('employees')
+                .upsert(fallbackPayloads, { onConflict: 'employee_id' })
+                .select();
+            if (fbError) throw fbError;
+            return { success: true, data: fbData, count: fallbackPayloads.length };
+        }
+
         return { success: true, data, count: payloads.length };
     } catch (err: any) {
         console.error('Lỗi upsertEmployeesBatch:', err);

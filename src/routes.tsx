@@ -21,6 +21,7 @@ const CampaignProgressPage = lazy(() => import('./features/campaign-progress/Cam
 const SystemAdminPage = lazy(() => import('./features/admin-config/SystemAdminPage'));
 const UserManagementPage = lazy(() => import('./features/admin-config/UserManagementPage'));
 const UserStorePermissionPage = lazy(() => import('./features/admin-config/UserStorePermissionPage'));
+const DataStatusPage = lazy(() => import('./features/data-status/DataStatusPage'));
 
 const LoginPage = lazy(() => import('./features/auth/LoginPage'));
 const RegisterPage = lazy(() => import('./features/auth/RegisterPage'));
@@ -65,6 +66,7 @@ export function AppRoutes() {
                     <Route path="/cap-nhat-luy-ke-nhan-vien" element={<EmployeeCumulativePage />} />
 
                     {/* Tuyến đường Quản Lý Dữ Liệu & Phiên */}
+                    <Route path="/trang-thai-du-lieu" element={<DataStatusPage />} />
                     <Route path="/quan-ly-du-lieu" element={<DataManagerPage />} />
                     <Route path="/quan-ly-phien-nhan-vien" element={<EmployeeSessionManagerPage />} />
 
