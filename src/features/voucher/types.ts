@@ -36,6 +36,7 @@ export interface VoucherCampaignSummary {
 
 export interface VoucherClaimRequest {
     store_name: string;
+    accessible_stores?: string[];      // Danh sách siêu thị trong cụm được phân quyền
     campaign_name: string;
     denomination: number;
     order_id: string;

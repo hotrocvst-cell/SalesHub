@@ -1495,7 +1495,7 @@ export default function EmployeeDetailReportPage() {
 
                         {/* Tiêu đề chính */}
                         <h2 className="text-lg sm:text-xl font-black text-amber-300 uppercase tracking-wide drop-shadow-xs">
-                            {currentEmployee ? cleanEmployeeName(currentEmployee.full_name).toUpperCase() : 'NGUYỄN THỊ NHẬN'} - {selectedEmployeeId || '12803'}
+                            {currentEmployee ? cleanEmployeeName(currentEmployee.full_name).toUpperCase() : 'NHÂN VIÊN'} - {selectedEmployeeId || 'USER'}
                         </h2>
 
                         {/* Dòng phụ đề luỹ kế và tỷ lệ đạt */}

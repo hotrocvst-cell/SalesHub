@@ -64,16 +64,19 @@ export default function VoucherAdminPage() {
     const [filterStatusFromStats, setFilterStatusFromStats] = useState<string>('ALL');
     const [showSqlModal, setShowSqlModal] = useState<boolean>(false);
 
+    const accessible = useMemo(() => {
+        return currentUser.accessible_stores && currentUser.accessible_stores.length > 0
+            ? currentUser.accessible_stores
+            : (currentUser.store_name ? [currentUser.store_name] : []);
+    }, [currentUser]);
+
     // Phân quyền siêu thị cho quản lý xem số liệu
     const allowedStores = useMemo<StoreItem[]>(() => {
         if (!stores || stores.length === 0) return [];
         if (isAdmin) return stores;
-        const accessible = currentUser.accessible_stores && currentUser.accessible_stores.length > 0
-            ? currentUser.accessible_stores
-            : (currentUser.store_name ? [currentUser.store_name] : []);
         if (accessible.length === 0) return stores;
         return stores.filter(s => accessible.some(acc => isStoreMatch(s.name, acc, stores)));
-    }, [stores, currentUser, isAdmin]);
+    }, [stores, accessible, isAdmin]);
 
     const showToast = (msg: string) => {
         setToastMessage(msg);
@@ -85,7 +88,7 @@ export default function VoucherAdminPage() {
         try {
             const [storesRes, voucherList, statusRes] = await Promise.all([
                 fetchStores(),
-                fetchStoreVouchers(selectedStore),
+                fetchStoreVouchers(selectedStore, accessible),
                 checkSupabaseVoucherTable()
             ]);
             if (storesRes.success) setStores(storesRes.data);
@@ -113,7 +116,7 @@ export default function VoucherAdminPage() {
 
     useEffect(() => {
         loadData();
-    }, [selectedStore]);
+    }, [selectedStore, accessible]);
 
     // Các chương trình hiện có để gợi ý trong modal nạp
     const existingCampaigns = useMemo(() => {
@@ -124,14 +127,14 @@ export default function VoucherAdminPage() {
 
     // Danh sách cảnh báo đầu cơ
     const hoardingAlerts = useMemo(() => {
-        return analyzeHoardingRisks(vouchers, selectedStore);
-    }, [vouchers, selectedStore]);
+        return analyzeHoardingRisks(vouchers, selectedStore, accessible);
+    }, [vouchers, selectedStore, accessible]);
 
     const handleResetVoucher = async (code: string) => {
         const confirm = window.confirm(`Bạn có chắc muốn reset mã "${code}" về danh sách chờ khả dụng?`);
         if (!confirm) return;
 
-        const res = await resetClaimedVoucher(code, currentUser.full_name || 'Quản lý', selectedStore);
+        const res = await resetClaimedVoucher(code, currentUser.full_name || 'Quản lý', selectedStore, accessible);
         if (res.success) {
             showToast(`✅ Đã reset mã "${code}" về kho chờ!`);
             loadData();
@@ -506,6 +509,7 @@ export default function VoucherAdminPage() {
                 onClose={() => setIsCleanModalOpen(false)}
                 vouchers={vouchers}
                 currentStoreName={selectedStore}
+                accessibleStores={accessible}
                 onSuccess={(affected, msg) => {
                     showToast(msg);
                     loadData();
@@ -518,7 +522,7 @@ export default function VoucherAdminPage() {
                 onClose={() => setIsQrModalOpen(false)}
                 vouchers={qrModalVouchers}
                 onResetVoucher={async (code) => {
-                    const res = await resetClaimedVoucher(code, currentUser.full_name || 'Quản lý', selectedStore);
+                    const res = await resetClaimedVoucher(code, currentUser.full_name || 'Quản lý', selectedStore, accessible);
                     if (res.success) {
                         showToast(`✅ Đã reset mã "${code}" về kho chờ!`);
                         loadData();

@@ -150,19 +150,83 @@ export function setLocalVouchers(list: VoucherItem[]): void {
 }
 
 /**
- * Tải danh sách voucher theo siêu thị (Đồng bộ Cloud Supabase + LocalStorage)
+ * Kiểm tra đối chiếu tên siêu thị / cụm siêu thị cho voucher
+ * Hỗ trợ:
+ * 1. Mã nạp cho Toàn Cụm Siêu Thị / Toàn Cụm / all -> Luôn khả dụng cho mọi nhân viên ở tất cả siêu thị trong cụm
+ * 2. Mã thuộc đúng siêu thị của nhân viên
+ * 3. Mã thuộc bất kỳ siêu thị nào trong danh sách accessible_stores của nhân viên
+ * 4. Cụm siêu thị cùng địa chỉ vật lý (ví dụ: 10335 AAR và 111 TGD cùng tại 290 Trương Công Định)
  */
-export async function fetchStoreVouchers(storeName?: string): Promise<VoucherItem[]> {
+export function isStoreOrClusterMatch(
+    voucherStoreName: string | undefined | null,
+    userStoreName?: string | undefined | null,
+    accessibleStores?: string[]
+): boolean {
+    if (!voucherStoreName) return false;
+    const vStore = voucherStoreName.trim();
+
+    // 1. Mã nạp cho Toàn Cụm / all -> Luôn khớp với mọi siêu thị
+    const isGlobalCluster = (
+        vStore === 'Toàn Cụm Siêu Thị' ||
+        vStore === 'Toàn Cụm' ||
+        vStore.toLowerCase().includes('toàn cụm') ||
+        vStore === 'all'
+    );
+    if (isGlobalCluster) return true;
+
+    // 2. Không có storeName giới hạn hoặc chọn xem toàn bộ 'all'
+    if (!userStoreName || userStoreName === 'all') return true;
+
+    // 3. Khớp trực tiếp tên siêu thị
+    if (isStoreMatch(vStore, userStoreName)) return true;
+
+    // 4. Khớp với bất kỳ siêu thị nào trong accessibleStores
+    if (accessibleStores && accessibleStores.length > 0) {
+        if (accessibleStores.some(s => isStoreMatch(vStore, s))) {
+            return true;
+        }
+    }
+
+    // 5. Khớp cụm siêu thị qua địa chỉ dùng chung (ví dụ cụm BRV_VTA: 10335 & 111 cùng tại 290 Trương Công Định)
+    const extractAddress = (name: string) => {
+        const parts = name.split('-');
+        if (parts.length >= 3) {
+            return parts.slice(2).join('-').trim().toLowerCase();
+        }
+        return '';
+    };
+
+    const addrV = extractAddress(vStore);
+    const addrU = extractAddress(userStoreName);
+    if (addrV && addrU && addrV === addrU) {
+        return true;
+    }
+
+    if (accessibleStores && accessibleStores.length > 0 && addrV) {
+        if (accessibleStores.some(s => extractAddress(s) === addrV)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * Tải danh sách voucher theo siêu thị / cụm siêu thị (Đồng bộ Cloud Supabase + LocalStorage)
+ */
+export async function fetchStoreVouchers(
+    storeName?: string,
+    accessibleStores?: string[]
+): Promise<VoucherItem[]> {
     let localList = getLocalVouchers();
 
-    // Thử đồng bộ từ Supabase nếu có kết nối
+    // Đồng bộ từ Supabase nếu có kết nối (truy vấn toàn bộ kho mã của Cụm)
     try {
-        let query = supabase.from('store_vouchers').select('*');
-        if (storeName && storeName !== 'all') {
-            query = query.eq('store_name', storeName);
-        }
+        const { data, error } = await supabase
+            .from('store_vouchers')
+            .select('*')
+            .order('created_at', { ascending: false });
 
-        const { data, error } = await query;
         if (!error && data && Array.isArray(data)) {
             const cloudMap = new Map<string, VoucherItem>();
             data.forEach((item: any) => {
@@ -186,11 +250,8 @@ export async function fetchStoreVouchers(storeName?: string): Promise<VoucherIte
 
     if (storeName && storeName !== 'all') {
         return localList.filter(v =>
-            isStoreMatch(v.store_name, storeName) ||
-            (v.claimed_by_store && isStoreMatch(v.claimed_by_store, storeName)) ||
-            v.store_name === 'Toàn Cụm Siêu Thị' ||
-            v.store_name === 'Toàn Cụm' ||
-            v.store_name === 'all'
+            isStoreOrClusterMatch(v.store_name, storeName, accessibleStores) ||
+            (v.claimed_by_store && isStoreOrClusterMatch(v.claimed_by_store, storeName, accessibleStores))
         );
     }
     return localList;
@@ -292,38 +353,62 @@ export async function claimVoucher(
     req: VoucherClaimRequest
 ): Promise<{ success: boolean; voucher?: VoucherItem; error?: string }> {
     try {
+        // Đồng bộ dữ liệu mới nhất từ Supabase Cloud để chống tranh chấp mã
+        try {
+            const { data: cloudData, error: cloudErr } = await supabase
+                .from('store_vouchers')
+                .select('*')
+                .order('created_at', { ascending: false });
+
+            if (!cloudErr && cloudData && Array.isArray(cloudData)) {
+                setLocalVouchers(cloudData as VoucherItem[]);
+            }
+        } catch (e) {
+            console.warn('Fallback local khi claim voucher:', e);
+        }
+
         const all = getLocalVouchers();
         const todayStr = new Date().toISOString().slice(0, 10);
         const isNotExpired = (v: VoucherItem) => !v.expires_at || v.expires_at >= todayStr;
-
-        // 1. Ưu tiên tìm mã riêng của siêu thị nhân viên đang làm việc (nếu có)
-        let index = all.findIndex(v =>
-            isStoreMatch(v.store_name, req.store_name) &&
+        const matchesCampaignAndDenom = (v: VoucherItem) =>
             v.campaign_name.trim().toLowerCase() === req.campaign_name.trim().toLowerCase() &&
             Number(v.denomination) === Number(req.denomination) &&
             v.status === 'AVAILABLE' &&
-            isNotExpired(v)
+            isNotExpired(v);
+
+        // 1. Ưu tiên tìm mã riêng của siêu thị nhân viên đang làm việc (nếu có)
+        let index = all.findIndex(v =>
+            isStoreMatch(v.store_name, req.store_name) && matchesCampaignAndDenom(v)
         );
 
-        // 2. Nếu siêu thị không có mã riêng, tìm trong kho mã dùng chung cho Toàn Cụm
-        if (index === -1) {
+        // 2. Tìm trong danh sách siêu thị được phân quyền (accessible_stores)
+        if (index === -1 && req.accessible_stores && req.accessible_stores.length > 0) {
             index = all.findIndex(v =>
-                (v.store_name === 'Toàn Cụm Siêu Thị' || v.store_name === 'Toàn Cụm' || v.store_name === 'all') &&
-                v.campaign_name.trim().toLowerCase() === req.campaign_name.trim().toLowerCase() &&
-                Number(v.denomination) === Number(req.denomination) &&
-                v.status === 'AVAILABLE' &&
-                isNotExpired(v)
+                req.accessible_stores!.some(s => isStoreMatch(v.store_name, s)) && matchesCampaignAndDenom(v)
             );
         }
 
-        // 3. Fallback: Nếu kho cụm vẫn còn bất kỳ mã nào khả dụng của chương trình & mệnh giá đó, cho phép lấy ngay
+        // 3. Tìm trong kho mã dùng chung cho Toàn Cụm Siêu Thị
         if (index === -1) {
             index = all.findIndex(v =>
-                v.campaign_name.trim().toLowerCase() === req.campaign_name.trim().toLowerCase() &&
-                Number(v.denomination) === Number(req.denomination) &&
-                v.status === 'AVAILABLE' &&
-                isNotExpired(v)
+                (v.store_name === 'Toàn Cụm Siêu Thị' ||
+                    v.store_name === 'Toàn Cụm' ||
+                    v.store_name === 'all' ||
+                    v.store_name.toLowerCase().includes('toàn cụm')) &&
+                matchesCampaignAndDenom(v)
             );
+        }
+
+        // 4. Tìm theo cụm dùng chung địa chỉ (ví dụ: AAR & TGD cùng 290 Trương Công Định)
+        if (index === -1) {
+            index = all.findIndex(v =>
+                isStoreOrClusterMatch(v.store_name, req.store_name, req.accessible_stores) && matchesCampaignAndDenom(v)
+            );
+        }
+
+        // 5. Fallback: Nếu kho cụm vẫn còn bất kỳ mã nào khả dụng của chương trình & mệnh giá đó, cho phép lấy ngay
+        if (index === -1) {
+            index = all.findIndex(v => matchesCampaignAndDenom(v));
         }
 
         if (index === -1) {
@@ -348,7 +433,7 @@ export async function claimVoucher(
         all[index] = updatedVoucher;
         setLocalVouchers(all);
 
-        // Sync Supabase
+        // Đồng bộ trực tiếp lên Supabase Cloud
         try {
             await supabase.from('store_vouchers').upsert([updatedVoucher], { onConflict: 'id' });
         } catch (e) {
@@ -367,7 +452,8 @@ export async function claimVoucher(
 export async function resetClaimedVoucher(
     code: string,
     performedBy: string,
-    storeName?: string
+    storeName?: string,
+    accessibleStores?: string[]
 ): Promise<{ success: boolean; voucher?: VoucherItem; error?: string }> {
     try {
         const all = getLocalVouchers();
@@ -378,11 +464,8 @@ export async function resetClaimedVoucher(
             if (!matchCode) return false;
             if (storeName && storeName !== 'all') {
                 return (
-                    isStoreMatch(v.store_name, storeName) ||
-                    (v.claimed_by_store && isStoreMatch(v.claimed_by_store, storeName)) ||
-                    v.store_name === 'Toàn Cụm Siêu Thị' ||
-                    v.store_name === 'Toàn Cụm' ||
-                    v.store_name === 'all'
+                    isStoreOrClusterMatch(v.store_name, storeName, accessibleStores) ||
+                    (v.claimed_by_store && isStoreOrClusterMatch(v.claimed_by_store, storeName, accessibleStores))
                 );
             }
             return true;
@@ -534,17 +617,19 @@ export interface VoucherExpiryStats {
     usedCount: number;               // Số mã đã hoàn tất sử dụng
 }
 
-export function getVoucherExpiryStats(vouchers: VoucherItem[], storeName?: string): VoucherExpiryStats {
+export function getVoucherExpiryStats(
+    vouchers: VoucherItem[],
+    storeName?: string,
+    accessibleStores?: string[]
+): VoucherExpiryStats {
     const todayStr = new Date().toISOString().slice(0, 10);
     const threeDaysLater = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
     let list = vouchers;
     if (storeName && storeName !== 'all') {
         list = list.filter(v =>
-            isStoreMatch(v.store_name, storeName) ||
-            (v.claimed_by_store && isStoreMatch(v.claimed_by_store, storeName)) ||
-            v.store_name === 'Toàn Cụm Siêu Thị' ||
-            v.store_name === 'Toàn Cụm'
+            isStoreOrClusterMatch(v.store_name, storeName, accessibleStores) ||
+            (v.claimed_by_store && isStoreOrClusterMatch(v.claimed_by_store, storeName, accessibleStores))
         );
     }
 
@@ -599,18 +684,17 @@ export async function cleanVouchers(params: {
     type: 'EXPIRED' | 'USED' | 'ALL_INACTIVE';
     mode: 'DELETE' | 'MARK_EXPIRED';
     storeName?: string;
+    accessibleStores?: string[];
 }): Promise<{ success: boolean; affectedCount: number; totalValue: number; error?: string }> {
     try {
-        const { type, mode, storeName } = params;
+        const { type, mode, storeName, accessibleStores } = params;
         const all = getLocalVouchers();
         const todayStr = new Date().toISOString().slice(0, 10);
 
         const matchStore = (v: VoucherItem) => {
             if (!storeName || storeName === 'all') return true;
-            return isStoreMatch(v.store_name, storeName) ||
-                (v.claimed_by_store && isStoreMatch(v.claimed_by_store, storeName)) ||
-                v.store_name === 'Toàn Cụm Siêu Thị' ||
-                v.store_name === 'Toàn Cụm';
+            return isStoreOrClusterMatch(v.store_name, storeName, accessibleStores) ||
+                (v.claimed_by_store && isStoreOrClusterMatch(v.claimed_by_store, storeName, accessibleStores));
         };
 
         const isTarget = (v: VoucherItem) => {
@@ -679,16 +763,16 @@ export async function cleanVouchers(params: {
 /**
  * Tính toán tóm tắt tồn kho mã theo chương trình và từng mệnh giá
  */
-export function getCampaignSummaries(vouchers: VoucherItem[], storeName?: string): VoucherCampaignSummary[] {
+export function getCampaignSummaries(
+    vouchers: VoucherItem[],
+    storeName?: string,
+    accessibleStores?: string[]
+): VoucherCampaignSummary[] {
     let list = vouchers;
     if (storeName && storeName !== 'all') {
         list = list.filter(v =>
-            v.status === 'AVAILABLE' ||
-            isStoreMatch(v.store_name, storeName) ||
-            (v.claimed_by_store && isStoreMatch(v.claimed_by_store, storeName)) ||
-            v.store_name === 'Toàn Cụm Siêu Thị' ||
-            v.store_name === 'Toàn Cụm' ||
-            v.store_name === 'all'
+            isStoreOrClusterMatch(v.store_name, storeName, accessibleStores) ||
+            (v.claimed_by_store && isStoreOrClusterMatch(v.claimed_by_store, storeName, accessibleStores))
         );
     }
 
@@ -743,14 +827,16 @@ export function getCampaignSummaries(vouchers: VoucherItem[], storeName?: string
 /**
  * Phân tích và phát hiện rủi ro đầu cơ, tích trữ voucher theo nhân viên
  */
-export function analyzeHoardingRisks(vouchers: VoucherItem[], storeName?: string): VoucherHoardingAlert[] {
+export function analyzeHoardingRisks(
+    vouchers: VoucherItem[],
+    storeName?: string,
+    accessibleStores?: string[]
+): VoucherHoardingAlert[] {
     let list = vouchers;
     if (storeName && storeName !== 'all') {
         list = list.filter(v =>
-            isStoreMatch(v.store_name, storeName) ||
-            (v.claimed_by_store && isStoreMatch(v.claimed_by_store, storeName)) ||
-            v.store_name === 'Toàn Cụm Siêu Thị' ||
-            v.store_name === 'Toàn Cụm'
+            isStoreOrClusterMatch(v.store_name, storeName, accessibleStores) ||
+            (v.claimed_by_store && isStoreOrClusterMatch(v.claimed_by_store, storeName, accessibleStores))
         );
     }
 

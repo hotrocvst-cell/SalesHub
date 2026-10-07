@@ -9,6 +9,7 @@ interface Props {
     onClose: () => void;
     vouchers: VoucherItem[];
     currentStoreName: string;
+    accessibleStores?: string[];
     onSuccess: (affectedCount: number, message: string) => void;
 }
 
@@ -17,6 +18,7 @@ export default function VoucherCleanModal({
     onClose,
     vouchers,
     currentStoreName,
+    accessibleStores,
     onSuccess
 }: Props) {
     const todayStr = new Date().toISOString().slice(0, 10);
@@ -33,6 +35,7 @@ export default function VoucherCleanModal({
         if (currentStoreName && currentStoreName !== 'all') {
             list = list.filter(v =>
                 isStoreMatch(v.store_name, currentStoreName) ||
+                (accessibleStores && accessibleStores.some(s => isStoreMatch(v.store_name, s))) ||
                 (v.claimed_by_store && isStoreMatch(v.claimed_by_store, currentStoreName)) ||
                 v.store_name === 'Toàn Cụm Siêu Thị' ||
                 v.store_name === 'Toàn Cụm'
@@ -56,7 +59,7 @@ export default function VoucherCleanModal({
             }
             return false;
         });
-    }, [vouchers, currentStoreName, cleanType, selectedCampaign, todayStr]);
+    }, [vouchers, currentStoreName, accessibleStores, cleanType, selectedCampaign, todayStr]);
 
     const totalValue = useMemo(() => {
         return targetVouchers.reduce((sum, v) => sum + (Number(v.denomination) || 0), 0);
@@ -89,7 +92,8 @@ export default function VoucherCleanModal({
             const res = await cleanVouchers({
                 type: cleanType,
                 mode: cleanMode,
-                storeName: currentStoreName
+                storeName: currentStoreName,
+                accessibleStores
             });
 
             if (res.success) {

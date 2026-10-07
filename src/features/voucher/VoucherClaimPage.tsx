@@ -38,11 +38,17 @@ export default function VoucherClaimPage() {
     const [visibleHistoryCount, setVisibleHistoryCount] = useState<number>(5);
 
     const userStoreName = currentUser.store_name || 'Toàn Cụm Siêu Thị';
+    const accessibleStores = useMemo(() => {
+        if (currentUser.accessible_stores && currentUser.accessible_stores.length > 0) {
+            return currentUser.accessible_stores;
+        }
+        return currentUser.store_name ? [currentUser.store_name] : [];
+    }, [currentUser]);
 
     const loadData = async () => {
         setLoading(true);
         try {
-            const list = await fetchStoreVouchers(userStoreName);
+            const list = await fetchStoreVouchers(userStoreName, accessibleStores);
             setVouchers(list);
         } finally {
             setLoading(false);
@@ -51,12 +57,12 @@ export default function VoucherClaimPage() {
 
     useEffect(() => {
         loadData();
-    }, [userStoreName]);
+    }, [userStoreName, accessibleStores]);
 
     // Tóm tắt các chương trình và tồn kho
     const campaignSummaries = useMemo<VoucherCampaignSummary[]>(() => {
-        return getCampaignSummaries(vouchers, userStoreName);
-    }, [vouchers, userStoreName]);
+        return getCampaignSummaries(vouchers, userStoreName, accessibleStores);
+    }, [vouchers, userStoreName, accessibleStores]);
 
     // Các mệnh giá khả dụng của chương trình đang chọn
     const activeCampaignData = useMemo(() => {
@@ -116,6 +122,7 @@ export default function VoucherClaimPage() {
         try {
             const res = await claimVoucher({
                 store_name: userStoreName,
+                accessible_stores: accessibleStores,
                 campaign_name: selectedCampaign,
                 denomination: selectedDenomination,
                 order_id: orderId.trim().toUpperCase(),
@@ -184,8 +191,13 @@ export default function VoucherClaimPage() {
                             <h1 className="text-base sm:text-lg font-black text-amber-300 uppercase tracking-tight">
                                 CẤP MÃ PHIẾU MUA HÀNG
                             </h1>
-                            <div className="text-[11px] text-emerald-100 font-bold">
-                                🏢 {userStoreName}
+                            <div className="text-[11px] text-emerald-100 font-bold flex items-center gap-1.5 flex-wrap">
+                                <span>🏢 {userStoreName}</span>
+                                {accessibleStores.length > 1 && (
+                                    <span className="bg-emerald-950/80 text-amber-300 px-2 py-0.5 rounded-full text-[10px] font-black border border-emerald-600/70">
+                                        Cụm {accessibleStores.length} shop
+                                    </span>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -254,9 +266,24 @@ export default function VoucherClaimPage() {
                             1. Chương Trình Áp Dụng:
                         </label>
                         <div className="grid grid-cols-1 gap-1.5">
-                            {campaignSummaries.length === 0 ? (
-                                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-center text-slate-400 font-bold text-xs">
-                                    Chưa có chương trình nào nạp mã cho siêu thị này.
+                            {loading ? (
+                                <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl text-center text-slate-500 font-bold text-xs flex items-center justify-center gap-2">
+                                    <RefreshCw className="w-4 h-4 animate-spin text-emerald-600" />
+                                    <span>Đang đồng bộ kho mã từ hệ thống...</span>
+                                </div>
+                            ) : campaignSummaries.length === 0 ? (
+                                <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl text-center space-y-2">
+                                    <div className="text-slate-500 font-bold text-xs">
+                                        Chưa có chương trình nào nạp mã khả dụng cho siêu thị này.
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={loadData}
+                                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[11px] font-black inline-flex items-center gap-1.5 transition cursor-pointer shadow-xs"
+                                    >
+                                        <RefreshCw className="w-3.5 h-3.5" />
+                                        <span>Tải lại kho mã</span>
+                                    </button>
                                 </div>
                             ) : (
                                 campaignSummaries.map(c => {
