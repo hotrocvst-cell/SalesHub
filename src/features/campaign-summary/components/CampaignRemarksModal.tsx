@@ -166,7 +166,7 @@ export default function CampaignRemarksModal({
                         <div className="flex items-center justify-between">
                             <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
                                 <Edit3 className="w-4 h-4 text-purple-600" />
-                                <span>Nội dung nhận xét &amp; tin nhắn mẫu Zalo (Boss có thể chỉnh sửa trực tiếp):</span>
+                                <span>Nội dung nhận xét &amp; tin nhắn mẫu Messaging App (Boss có thể chỉnh sửa trực tiếp):</span>
                             </label>
 
                             <button
@@ -192,7 +192,7 @@ export default function CampaignRemarksModal({
                 <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3">
                     <span className="text-[11px] text-slate-500 flex items-center gap-1">
                         <MessageSquare className="w-3.5 h-3.5 text-slate-400" />
-                        Đã sẵn sàng để gửi trực tiếp vào Zalo Siêu thị / Quản lý cụm.
+                        Đã sẵn sàng để gửi trực tiếp vào Messaging App Siêu thị / Quản lý cụm.
                     </span>
 
                     <div className="flex items-center gap-2">
@@ -213,12 +213,12 @@ export default function CampaignRemarksModal({
                             {copied ? (
                                 <>
                                     <CheckCircle2 className="w-4 h-4 text-emerald-300" />
-                                    <span>Đã Copy! Dán ngay vào Zalo</span>
+                                    <span>Đã Copy! Dán ngay vào Messaging App</span>
                                 </>
                             ) : (
                                 <>
                                     <Copy className="w-4 h-4 text-white" />
-                                    <span>Sao Chép Gửi Zalo</span>
+                                    <span>Sao Chép Gửi Messaging App</span>
                                 </>
                             )}
                         </button>

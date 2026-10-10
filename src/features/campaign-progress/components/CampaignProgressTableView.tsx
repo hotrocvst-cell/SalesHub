@@ -1,5 +1,6 @@
 import React from 'react';
 import type { CampaignProgressItem } from '../types';
+import { formatRemainingTarget } from '../../../core/lib/formatters';
 
 interface Props {
     items: CampaignProgressItem[];
@@ -75,9 +76,9 @@ export default function CampaignProgressTableView({ items }: Props) {
                                         {item.totalActual.toLocaleString()}
                                     </td>
                                     <td className={`px-2 py-2 text-right font-mono font-bold ${
-                                        item.totalRemaining > 0 ? 'text-amber-700' : 'text-emerald-700'
+                                        item.totalRemaining === 0 ? 'text-emerald-700 font-extrabold' : 'text-amber-700'
                                     }`}>
-                                        {item.totalRemaining.toLocaleString()}
+                                        {formatRemainingTarget(item.totalRemaining, false)}
                                     </td>
                                     <td className="px-2 py-2 text-right font-mono font-semibold text-slate-700">
                                         {item.completionRate}%
@@ -123,8 +124,10 @@ export default function CampaignProgressTableView({ items }: Props) {
                             <td className="px-2 py-2.5 text-right font-mono text-blue-800">
                                 {totalActualSum.toLocaleString()}
                             </td>
-                            <td className="px-2 py-2.5 text-right font-mono text-amber-800">
-                                {totalRemainingSum.toLocaleString()}
+                            <td className={`px-2 py-2.5 text-right font-mono font-bold ${
+                                totalRemainingSum === 0 ? 'text-emerald-800' : 'text-amber-800'
+                            }`}>
+                                {formatRemainingTarget(totalRemainingSum, false)}
                             </td>
                             <td className="px-2 py-2.5 text-right font-mono text-slate-800">
                                 {avgCompletionRate}%

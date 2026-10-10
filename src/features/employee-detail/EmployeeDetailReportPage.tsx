@@ -31,10 +31,13 @@ import {
     formatDate,
     getYesterdayDateString,
     isStoreMatch,
-    getShortStoreName
+    getShortStoreName,
+    calculateRemainingTarget,
+    formatRemainingTarget
 } from '../../core/lib/formatters';
 import { useAuth } from '../../shared/contexts/AuthContext';
 import { useUserStoreFilter } from '../../shared/hooks/useUserStoreFilter';
+import ReportDataFreshnessBar from '../../shared/components/report/ReportDataFreshnessBar';
 import {
     UserCheck,
     Store,
@@ -709,8 +712,8 @@ export default function EmployeeDetailReportPage() {
                 realRate = 100;
             }
 
-            // 4. C.LẠI = Target - Actual (khoảng cách còn lại)
-            const remaining = Math.max(0, targetVal - actualVal);
+            // 4. C.LẠI: nếu thực tế đã hoàn thành mục tiêu (actualVal >= targetVal) -> 0, chưa đạt -> targetVal - actualVal (số dương)
+            const remaining = calculateRemainingTarget(targetVal, actualVal, 1);
 
             // 5. Điểm và +/-Điểm: Nếu %DK >= 100% -> Có trọn vẹn điểm, ngược lại 0 điểm
             const pointsWeight = getCampaignPoints(cKey, scoreConfig);
@@ -878,6 +881,10 @@ export default function EmployeeDetailReportPage() {
                 windowWidth: contentWidth + 60,
                 scrollX: 0,
                 scrollY: 0,
+                ignoreElements: (el) =>
+                    el.getAttribute('data-html2canvas-ignore') === 'true' ||
+                    el.getAttribute('data-export-ignore') === 'true' ||
+                    el.getAttribute('data-freshness-bar') === 'true',
                 // KHÔNG giới hạn height và windowHeight để html2canvas tự động mở rộng theo toàn bộ chiều dài tự nhiên của báo cáo
                 onclone: (clonedDoc) => {
                     const fontStyle = clonedDoc.createElement('style');
@@ -915,6 +922,11 @@ export default function EmployeeDetailReportPage() {
 
                     const clonedReport = clonedDoc.querySelector('[data-report-container="true"]') as HTMLElement;
                     if (clonedReport) {
+                        // Loại bỏ khối trạng thái dữ liệu và các nút thao tác khỏi ảnh xuất
+                        clonedReport.querySelectorAll('[data-html2canvas-ignore="true"], [data-export-ignore="true"], [data-freshness-bar="true"]').forEach(el => {
+                            (el as HTMLElement).remove();
+                        });
+
                         clonedReport.style.width = `${contentWidth}px`;
                         clonedReport.style.maxWidth = `${contentWidth}px`;
                         clonedReport.style.height = 'auto';
@@ -964,7 +976,7 @@ export default function EmployeeDetailReportPage() {
         }
     };
 
-    // Copy ảnh vào clipboard để dán Zalo
+    // Copy ảnh vào clipboard để dán Messaging App
     const handleCopyImageToClipboard = async () => {
         setIsExporting(true);
         try {
@@ -983,7 +995,7 @@ export default function EmployeeDetailReportPage() {
                     await navigator.clipboard.write([
                         new ClipboardItem({ 'image/png': blob })
                     ]);
-                    showToast(`✅ Đã copy ảnh ${exportResolution} vào bộ nhớ tạm! Bạn có thể dán (Ctrl + V) ngay vào Zalo.`);
+                    showToast(`✅ Đã copy ảnh ${exportResolution} vào bộ nhớ tạm! Bạn có thể dán (Ctrl + V) ngay vào Messaging App.`);
                 } catch (clipErr) {
                     const link = document.createElement('a');
                     link.download = `ChiTietNV_${selectedEmployeeId}.png`;
@@ -1087,7 +1099,7 @@ export default function EmployeeDetailReportPage() {
         setBatchExport(prev => ({ ...prev, isCancelled: true }));
     };
 
-    // Copy tóm tắt Zalo
+    // Copy tóm tắt Messaging App
     const handleCopyZaloSummary = () => {
         const empName = currentEmployee?.full_name || selectedEmployeeId;
         const storeName = currentEmployee?.store_name || selectedStore;
@@ -1122,7 +1134,7 @@ export default function EmployeeDetailReportPage() {
         });
 
         navigator.clipboard.writeText(text);
-        showToast('📋 Đã copy nội dung tóm tắt Zalo vào bộ nhớ tạm!');
+        showToast('📋 Đã copy nội dung tóm tắt Messaging App vào bộ nhớ tạm!');
     };
 
     return (
@@ -1220,7 +1232,7 @@ export default function EmployeeDetailReportPage() {
                         onClick={handleCopyImageToClipboard}
                         disabled={isExporting || batchExport.isRunning}
                         className="px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-800 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer border border-blue-200 shadow-2xs"
-                        title="Copy ảnh độ nét cao vào Clipboard để dán trực tiếp vào Zalo"
+                        title="Copy ảnh độ nét cao vào Clipboard để dán trực tiếp vào Messaging App"
                     >
                         <Copy className="w-4 h-4 text-blue-600" />
                         <span>{isExporting ? `Đang xuất ${exportResolution}...` : `Copy Ảnh`}</span>
@@ -1259,7 +1271,7 @@ export default function EmployeeDetailReportPage() {
                         type="button"
                         onClick={handleCopyZaloSummary}
                         className="px-3 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs"
-                        title="Copy tóm tắt kết quả dạng văn bản gửi Zalo"
+                        title="Copy tóm tắt kết quả dạng văn bản gửi Messaging App"
                     >
                         <Sparkles className="w-4 h-4" />
                         <span>Copy Nhận xét</span>
@@ -1488,6 +1500,19 @@ export default function EmployeeDetailReportPage() {
                     data-report-container="true"
                     className="w-full max-w-[660px] bg-white rounded-3xl p-4 sm:p-5 pb-8 border border-slate-200/90 shadow-sm space-y-4 font-avo"
                 >
+                    {/* THANH TRẠNG THÁI CẬP NHẬT PHIÊN DỮ LIỆU */}
+                    <ReportDataFreshnessBar
+                        latestDataDate={employeeLatestSessionRecord?.session?.report_date}
+                        expectedDate={getYesterdayDateString()}
+                        sessionTitle={employeeLatestSessionRecord?.session?.session_title}
+                        lastUpdatedAt={employeeLatestSessionRecord?.session?.created_at}
+                        lastUpdatedBy={employeeLatestSessionRecord?.session?.created_by}
+                        storeName={selectedStore}
+                        actionUrl="/cap-nhat-luy-ke-nhan-vien"
+                        actionLabel="Cập nhật số liệu NV"
+                        canUpdate={canConfigure || isAdmin}
+                    />
+
                     {/* 3.1. HERO HEADER BANNER */}
                     <div className="bg-gradient-to-r from-emerald-800 via-emerald-700 to-teal-800 text-white rounded-2xl p-5 sm:p-6 shadow-md border border-emerald-600/50 text-center relative overflow-hidden">
                         <div className="absolute -top-12 -right-12 w-48 h-48 bg-white/5 rounded-full blur-2xl pointer-events-none" />
@@ -1508,12 +1533,12 @@ export default function EmployeeDetailReportPage() {
                             <span className="text-emerald-50">
                                 {isPointsMode ? (
                                     <>
-                                        ĐẠT: <strong className="text-amber-300 font-mono">{campaignSummaryStats.achievedPoints}/{campaignSummaryStats.totalPoints} ĐIỂM</strong> ({campaignSummaryStats.pointsPercentage}%)
+                                        DK ĐẠT: <strong className="text-amber-300 font-mono">{campaignSummaryStats.achievedPoints}/{campaignSummaryStats.totalPoints} ĐIỂM</strong> ({campaignSummaryStats.pointsPercentage}%)
                                         <span className="text-emerald-300 text-[11px] ml-1 font-normal">({campaignSummaryStats.achieved}/{campaignSummaryStats.total} CT)</span>
                                     </>
                                 ) : (
                                     <>
-                                        ĐẠT: <strong className="text-amber-300 font-mono">{campaignSummaryStats.achieved}/{campaignSummaryStats.total}</strong> ({campaignSummaryStats.percentage}%)
+                                        DK ĐẠT: <strong className="text-amber-300 font-mono">{campaignSummaryStats.achieved}/{campaignSummaryStats.total}</strong> ({campaignSummaryStats.percentage}%)
                                     </>
                                 )}
                             </span>
@@ -1532,11 +1557,6 @@ export default function EmployeeDetailReportPage() {
                             {employeeKpis.workHours > 0 && (
                                 <span className="px-2.5 py-0.5 rounded-full bg-emerald-900/60 border border-emerald-500/40">
                                     ⏱️ {employeeKpis.workHours}h công ({employeeKpis.prodQdPerHour} tr/h)
-                                </span>
-                            )}
-                            {activeSession && (
-                                <span className="px-2.5 py-0.5 rounded-full bg-amber-400/20 text-amber-200 border border-amber-400/40 font-bold" title={activeSession.session_title || 'Phiên dữ liệu'}>
-                                    ⚡ Phiên: {activeSession.store_name === 'Toàn Cụm Siêu Thị' ? 'Toàn Cụm' : getShortStoreName(activeSession.store_name)} ({reportDateString})
                                 </span>
                             )}
                         </div>
@@ -1619,7 +1639,7 @@ export default function EmployeeDetailReportPage() {
                                 {isPointsMode ? (
                                     <span>ĐẠT: {campaignSummaryStats.achievedPoints}/{campaignSummaryStats.totalPoints} Đ ({campaignSummaryStats.pointsPercentage}%)</span>
                                 ) : (
-                                    <span>ĐẠT: {campaignSummaryStats.achieved}/{campaignSummaryStats.total} CT ({campaignSummaryStats.percentage}%)</span>
+                                    <span>ĐẠT: {campaignSummaryStats.achieved}/{campaignSummaryStats.total} NH ({campaignSummaryStats.percentage}%)</span>
                                 )}
                             </div>
                         </div>
@@ -1851,9 +1871,9 @@ export default function EmployeeDetailReportPage() {
                                                     </td>
 
                                                     {/* 6. C.LẠI */}
-                                                    <td className={`py-2.5 px-1 text-right font-mono font-bold text-[11.5px] border-r border-slate-100 ${row.remaining > 0 ? 'text-rose-600' : 'text-emerald-700'
+                                                    <td className={`py-2.5 px-1 text-right font-mono font-bold text-[11.5px] border-r border-slate-100 ${row.remaining === 0 ? 'text-emerald-700' : 'text-rose-600'
                                                         }`}>
-                                                        {formatNumberVn(row.remaining, 1)}
+                                                        {formatRemainingTarget(row.remaining, false, false)}
                                                     </td>
 
                                                     {/* 7. %HT */}
@@ -1915,7 +1935,7 @@ export default function EmployeeDetailReportPage() {
                             <div className="flex items-center justify-between font-bold text-slate-800">
                                 <div className="flex items-center gap-2">
                                     <Sparkles className="w-4 h-4 text-amber-500" />
-                                    <span>Ghi Chú Phân Tích Hiệu Quả Cá Nhân:</span>
+                                    <span>Phân Tích Hiệu Quả Cá Nhân:</span>
                                 </div>
                                 <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100/70 px-2 py-0.5 rounded-full border border-emerald-200">
                                     Xuất All
@@ -1926,7 +1946,7 @@ export default function EmployeeDetailReportPage() {
                                 <div className="p-3 bg-emerald-50/60 rounded-xl border border-emerald-200/60 text-emerald-950">
                                     <span className="font-bold flex items-center gap-1.5 text-emerald-800">
                                         <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                                        <span>Thế mạnh &amp; Ngành hàng dự kiến về đích:</span>
+                                        <span>Nhóm thế mạnh:</span>
                                     </span>
                                     <div className="mt-1.5 pl-5 space-y-0.5">
                                         {campaignDetailRows.filter(r => r.isAchieved).length === 0 ? (
@@ -1945,7 +1965,7 @@ export default function EmployeeDetailReportPage() {
                                 <div className="p-3 bg-rose-50/60 rounded-xl border border-rose-200/60 text-rose-950">
                                     <span className="font-bold flex items-center gap-1.5 text-rose-800">
                                         <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-                                        <span>Trọng tâm cần tăng tốc:</span>
+                                        <span>Trọng tâm cần cải thiện:</span>
                                     </span>
                                     <div className="mt-1.5 pl-5 space-y-0.5">
                                         {campaignDetailRows.filter(r => !r.isAchieved && r.target > 0).length === 0 ? (

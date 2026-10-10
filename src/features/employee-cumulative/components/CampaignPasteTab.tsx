@@ -72,7 +72,7 @@ export default function CampaignPasteTab({
 
         const { campaigns, employee_campaign_matrix } = parseEmployeeCampaignText(text);
         if (campaigns.length === 0) {
-            setErrorMsg('Không tìm thấy khối chiến dịch thi đua nào hợp lệ! Hãy kiểm tra định dạng text.');
+            setErrorMsg('Không tìm thấy NHÓM thi đua nào hợp lệ! Hãy kiểm tra định dạng text.');
             setCampaignList([]);
             setMatrix({});
         } else {
@@ -110,7 +110,7 @@ export default function CampaignPasteTab({
                         onClick={handleConfirm}
                         className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer shrink-0"
                     >
-                        <span>Áp Dụng {campaignList.length} Chiến Dịch ({totalEmpsCount} NV)</span>
+                        <span>Áp Dụng {campaignList.length} NHÓM thi đua ({totalEmpsCount} NV)</span>
                         <ArrowRight className="w-4 h-4" />
                     </button>
                 )}
@@ -146,13 +146,13 @@ export default function CampaignPasteTab({
                 </div>
             )}
 
-            {/* Bảng xem trước các chiến dịch bóc tách được */}
+            {/* Bảng xem trước các NHÓM thi đua bóc tách được */}
             {campaignList.length > 0 && (
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
                     <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between text-xs">
                         <span className="font-bold text-slate-800 flex items-center gap-1.5">
                             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                            <span>Nhận diện thành công {campaignList.length} chiến dịch thi đua cho {totalEmpsCount} nhân sự</span>
+                            <span>Nhận diện thành công {campaignList.length} NHÓM thi đua cho {totalEmpsCount} nhân sự</span>
                         </span>
                     </div>
 

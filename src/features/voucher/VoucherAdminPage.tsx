@@ -35,12 +35,15 @@ import {
     STORE_VOUCHERS_SQL
 } from './services/voucherService';
 import VoucherAdminStats from './components/VoucherAdminStats';
+import VoucherStockSummaryTable from './components/VoucherStockSummaryTable';
 import VoucherHoardingTable from './components/VoucherHoardingTable';
 import VoucherListTable from './components/VoucherListTable';
 import VoucherImportModal from './components/VoucherImportModal';
 import VoucherResetModal from './components/VoucherResetModal';
 import VoucherQrDoubleCheckModal from './components/VoucherQrDoubleCheckModal';
 import VoucherCleanModal from './components/VoucherCleanModal';
+import VoucherEditModal from './components/VoucherEditModal';
+import VoucherBatchEditModal from './components/VoucherBatchEditModal';
 
 export default function VoucherAdminPage() {
     const { currentUser, isAdmin, canConfigure } = useAuth();
@@ -56,6 +59,11 @@ export default function VoucherAdminPage() {
 
     // Modal state
     const [isImportModalOpen, setIsImportModalOpen] = useState<boolean>(false);
+    const [importPreset, setImportPreset] = useState<{
+        campaignName: string;
+        denomination: number;
+        description?: string;
+    } | null>(null);
     const [isResetModalOpen, setIsResetModalOpen] = useState<boolean>(false);
     const [isQrModalOpen, setIsQrModalOpen] = useState<boolean>(false);
     const [isCleanModalOpen, setIsCleanModalOpen] = useState<boolean>(false);
@@ -63,6 +71,9 @@ export default function VoucherAdminPage() {
     const [filterEmployeeId, setFilterEmployeeId] = useState<string>('');
     const [filterStatusFromStats, setFilterStatusFromStats] = useState<string>('ALL');
     const [showSqlModal, setShowSqlModal] = useState<boolean>(false);
+    // Edit / Batch-edit modal
+    const [editingVoucher, setEditingVoucher] = useState<VoucherItem | null>(null);
+    const [batchEditVouchers, setBatchEditVouchers] = useState<VoucherItem[]>([]);
 
     const accessible = useMemo(() => {
         return currentUser.accessible_stores && currentUser.accessible_stores.length > 0
@@ -104,7 +115,7 @@ export default function VoucherAdminPage() {
         try {
             const res = await syncLocalVouchersToCloud();
             if (res.success) {
-                showToast(`✅ Đã đồng bộ thành công ${res.syncedCount} mã lên Supabase Cloud!`);
+                showToast(`✅ Đã đồng bộ thành công ${res.syncedCount} mã lên CLOUD!`);
                 await loadData();
             } else {
                 showToast(`❌ Lỗi đồng bộ: ${res.error}`);
@@ -328,9 +339,13 @@ export default function VoucherAdminPage() {
 
                     <button
                         type="button"
-                        onClick={loadData}
+                        onClick={() => {
+                            setFilterEmployeeId('');
+                            setFilterStatusFromStats('ALL');
+                            loadData();
+                        }}
                         className="p-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 transition cursor-pointer"
-                        title="Tải lại số liệu"
+                        title="Tải lại số liệu & Làm mới toàn bộ bộ lọc"
                     >
                         <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-emerald-600' : ''}`} />
                     </button>
@@ -347,7 +362,7 @@ export default function VoucherAdminPage() {
                         <div className="flex-1">
                             <div className="flex items-center gap-2 flex-wrap">
                                 <h3 className="text-sm font-black text-amber-950 uppercase tracking-wide">
-                                    Cảnh Báo: Bảng Lưu Trữ Voucher Chưa Được Tạo Trên Supabase Cloud
+                                    Cảnh Báo: Bảng Lưu Trữ Voucher Chưa Được Tạo Trên CLOUD
                                 </h3>
                                 <span className="text-[10px] font-bold bg-amber-200 text-amber-900 px-2 py-0.5 rounded-full">
                                     Đang lưu tạm LocalStorage
@@ -389,7 +404,10 @@ export default function VoucherAdminPage() {
                     <span className="font-bold text-slate-600">Phạm Vi Xem:</span>
                     <select
                         value={selectedStore}
-                        onChange={(e) => setSelectedStore(e.target.value)}
+                        onChange={(e) => {
+                            setSelectedStore(e.target.value);
+                            setFilterEmployeeId('');
+                        }}
                         className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 font-bold text-slate-800 cursor-pointer max-w-[240px] truncate"
                     >
                         <option value="all">
@@ -473,41 +491,67 @@ export default function VoucherAdminPage() {
                 onOpenCleanModal={() => setIsCleanModalOpen(true)}
             />
 
-            {/* 4. BẢNG THEO DÕI & CẢNH BÁO ĐẦU CƠ TÍCH TRỮ */}
+            {/* 4. BẢNG TỔNG HỢP SỐ LƯỢNG MÃ & DỰ BÁO TIÊU THỤ (BURN RATE & CẢNH BÁO BỔ SUNG) */}
+            <VoucherStockSummaryTable
+                vouchers={vouchers}
+                onOpenImportModalWithPreset={(cName, denom, desc) => {
+                    setImportPreset({
+                        campaignName: cName,
+                        denomination: denom,
+                        description: desc
+                    });
+                    setIsImportModalOpen(true);
+                }}
+            />
+
+            {/* 5. BẢNG THEO DÕI & CẢNH BÁO ĐẦU CƠ TÍCH TRỮ */}
             <VoucherHoardingTable
                 alerts={hoardingAlerts}
+                currentFilteredEmployeeId={filterEmployeeId}
                 onFilterEmployee={(empId) => setFilterEmployeeId(empId)}
             />
 
-            {/* 5. DANH SÁCH MÃ VÀ DOUBLE CHECK */}
+            {/* 6. DANH SÁCH MÃ VÀ DOUBLE CHECK */}
             <VoucherListTable
                 vouchers={vouchers}
                 onResetVoucher={handleResetVoucher}
                 onMarkUsed={handleMarkUsed}
                 onDeleteVoucher={handleDeleteSingleVoucher}
                 onDeleteMultiple={handleDeleteMultipleVouchers}
+                onEditVoucher={(v) => setEditingVoucher(v)}
+                onBatchEdit={(targets) => setBatchEditVouchers(targets)}
                 onOpenCleanModal={() => setIsCleanModalOpen(true)}
                 prefilterEmployeeId={filterEmployeeId}
                 prefilterStatus={filterStatusFromStats}
                 onOpenQrModal={handleOpenQrDoubleCheck}
+                onClearEmployeeFilter={() => setFilterEmployeeId('')}
+                onFilterEmployee={(empId) => setFilterEmployeeId(empId)}
             />
 
             {/* MODAL NẠP MÃ */}
             <VoucherImportModal
                 isOpen={isImportModalOpen}
-                onClose={() => setIsImportModalOpen(false)}
+                onClose={() => {
+                    setIsImportModalOpen(false);
+                    setImportPreset(null);
+                }}
                 currentUserDisplayName={currentUser.full_name || 'Admin'}
                 existingCampaigns={existingCampaigns}
+                existingVouchers={vouchers}
                 allowedStores={allowedStores}
                 accessibleStores={accessible}
                 isAdmin={isAdmin}
                 currentStoreName={selectedStore}
+                presetCampaignName={importPreset?.campaignName}
+                presetDenomination={importPreset?.denomination}
+                presetDescription={importPreset?.description}
                 onSuccess={(added, dup, cloudWarning) => {
                     if (cloudWarning) {
                         showToast(`🎉 Đã nạp ${added} mã! ⚠️ ${cloudWarning}`);
                     } else {
                         showToast(`🎉 Đã nạp thành công ${added} mã voucher (${dup} mã trùng bị bỏ qua)!`);
                     }
+                    setImportPreset(null);
                     loadData();
                 }}
             />
@@ -540,6 +584,40 @@ export default function VoucherAdminPage() {
                 }}
             />
 
+            {/* MODAL CHỈNH SỬA ĐƠN LẺ MÃ COUPON */}
+            <VoucherEditModal
+                isOpen={editingVoucher !== null}
+                onClose={() => setEditingVoucher(null)}
+                voucher={editingVoucher}
+                currentUserDisplayName={currentUser.full_name || 'Admin'}
+                allowedStores={allowedStores}
+                accessibleStores={accessible}
+                isAdmin={isAdmin}
+                existingCampaigns={existingCampaigns}
+                onSuccess={(updated) => {
+                    showToast(`✅ Đã cập nhật mã "${updated.code}" thành công!`);
+                    setEditingVoucher(null);
+                    loadData();
+                }}
+            />
+
+            {/* MODAL CẬP NHẬT HÀNG LOẠT MÃ COUPON */}
+            <VoucherBatchEditModal
+                isOpen={batchEditVouchers.length > 0}
+                onClose={() => setBatchEditVouchers([])}
+                selectedVouchers={batchEditVouchers}
+                currentUserDisplayName={currentUser.full_name || 'Admin'}
+                allowedStores={allowedStores}
+                accessibleStores={accessible}
+                isAdmin={isAdmin}
+                existingCampaigns={existingCampaigns}
+                onSuccess={(updatedCount) => {
+                    showToast(`✅ Đã cập nhật hàng loạt ${updatedCount} mã coupon thành công!`);
+                    setBatchEditVouchers([]);
+                    loadData();
+                }}
+            />
+
             {/* MODAL QR DOUBLE CHECK */}
             <VoucherQrDoubleCheckModal
                 isOpen={isQrModalOpen}
@@ -556,13 +634,15 @@ export default function VoucherAdminPage() {
                         return false;
                     }
                 }}
-                onMarkUsed={async (code) => {
-                    const res = await markVoucherUsed(code);
+                onMarkUsed={async (code, newOrderId) => {
+                    const res = await markVoucherUsed(code, newOrderId);
                     if (res.success) {
-                        showToast(`🎉 Đã đánh dấu mã "${code}" là ĐÃ DÙNG!`);
+                        const orderText = newOrderId ? ` (Đơn: ${newOrderId})` : '';
+                        showToast(`🎉 Đã đánh dấu mã "${code}" là ĐÃ DÙNG${orderText}!`);
                         loadData();
                         return true;
                     }
+                    showToast(`❌ Lỗi: ${res.error || 'Không thể cập nhật'}`);
                     return false;
                 }}
             />

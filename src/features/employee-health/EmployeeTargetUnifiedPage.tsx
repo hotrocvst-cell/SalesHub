@@ -68,7 +68,7 @@ export default function EmployeeTargetUnifiedPage() {
 
             if (empRes.success) setEmployees(empRes.data);
 
-            // Lọc các chiến dịch thi đua đang active
+            // Lọc các NHÓM thi đua đang active
             const activeCamps = (campRes.data || []).filter(c => c.is_active);
             setCampaigns(activeCamps);
 
@@ -298,7 +298,7 @@ export default function EmployeeTargetUnifiedPage() {
                     now.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) +
                     ' (' + now.toLocaleDateString('vi-VN') + ')'
                 );
-                showToast('✅ Đã lưu toàn bộ mục tiêu doanh thu & thi đua lên Supabase Cloud thành công!');
+                showToast('✅ Đã lưu toàn bộ mục tiêu doanh thu & thi đua lên CLOUD thành công!');
             } else {
                 setSyncStatus('error');
                 setLastSyncError(res.error || 'Lỗi khi cập nhật mục tiêu lên Supabase');
@@ -386,7 +386,7 @@ export default function EmployeeTargetUnifiedPage() {
                                 ? 'bg-blue-600 hover:bg-blue-700 text-white ring-2 ring-blue-500/30 animate-pulse'
                                 : 'bg-slate-800 hover:bg-slate-900 text-white'
                         }`}
-                        title="Lưu toàn bộ chỉ tiêu Doanh thu & Thi đua lên Supabase Cloud"
+                        title="Lưu toàn bộ chỉ tiêu Doanh thu & Thi đua lên CLOUD"
                     >
                         {isSaving ? (
                             <RefreshCw className="w-4 h-4 animate-spin text-white" />

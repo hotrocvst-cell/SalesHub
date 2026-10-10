@@ -1,11 +1,11 @@
-import React from 'react';
 import {
     Activity,
     RefreshCw,
     Store,
     Calendar,
     CheckCircle2,
-    Clock
+    Clock,
+    Lock
 } from 'lucide-react';
 import type { StoreItem } from '../../../core/lib/storage';
 import { getShortStoreName, formatDate } from '../../../core/lib/formatters';
@@ -23,6 +23,9 @@ interface DataStatusHeaderProps {
     todayDate: string;
     loading: boolean;
     onRefresh: () => void;
+    isLockedToSingleStore?: boolean;
+    canViewAllStores?: boolean;
+    isAdmin?: boolean;
 }
 
 export default function DataStatusHeader({
@@ -37,7 +40,10 @@ export default function DataStatusHeader({
     onChangeExpectedDate,
     todayDate,
     loading,
-    onRefresh
+    onRefresh,
+    isLockedToSingleStore = false,
+    canViewAllStores = true,
+    isAdmin = false
 }: DataStatusHeaderProps) {
     const months = Array.from({ length: 12 }, (_, i) => i + 1);
     const years = [2024, 2025, 2026, 2027];
@@ -86,21 +92,47 @@ export default function DataStatusHeader({
             <div className="flex flex-wrap items-center justify-between gap-2.5 pt-0.5">
                 {/* Bộ lọc Siêu thị */}
                 <div className="flex items-center gap-2 flex-wrap">
-                    <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-xl">
-                        <Store className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                    <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border transition-all ${
+                        isLockedToSingleStore
+                            ? 'bg-amber-50/90 border-amber-200 text-amber-900 shadow-2xs'
+                            : 'bg-slate-50 border-slate-200 text-slate-700'
+                    }`}>
+                        {isLockedToSingleStore ? (
+                            <Lock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                        ) : (
+                            <Store className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                        )}
                         <span className="text-xs font-medium text-slate-600">Siêu thị:</span>
                         <select
                             value={selectedStore}
                             onChange={e => onSelectStore(e.target.value)}
-                            className="bg-transparent text-xs font-bold text-slate-900 focus:outline-none cursor-pointer"
+                            disabled={isLockedToSingleStore}
+                            title={isLockedToSingleStore ? 'Tài khoản nhân viên được cố định theo siêu thị đã đăng ký' : undefined}
+                            className={`bg-transparent text-xs font-bold focus:outline-none ${
+                                isLockedToSingleStore
+                                    ? 'cursor-not-allowed text-amber-950 font-black'
+                                    : 'cursor-pointer text-slate-900'
+                            }`}
                         >
-                            <option value="all">🏢 Toàn Cụm (Tất cả ST)</option>
+                            {canViewAllStores && (
+                                <option value="all">
+                                    {isAdmin
+                                        ? `🏢 Toàn Cụm (${stores.length} ST)`
+                                        : `🏢 Cụm Phụ Trách (${stores.length} ST)`
+                                    }
+                                </option>
+                            )}
                             {stores.map(s => (
                                 <option key={s.id || s.code} value={s.name}>
                                     {getShortStoreName(s.name)}
                                 </option>
                             ))}
                         </select>
+                        {isLockedToSingleStore && (
+                            <span className="text-[10px] bg-amber-200/80 text-amber-900 px-1.5 py-0.2 rounded font-extrabold uppercase tracking-wider hidden sm:inline">
+                                Khóa
+                            </span>
+                        )}
                     </div>
 
                     {/* Bộ lọc Tháng & Năm */}

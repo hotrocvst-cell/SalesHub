@@ -3,6 +3,7 @@ import { useNavigate, Navigate } from 'react-router-dom';
 import { useAuth, type UserRole } from '../../shared/contexts/AuthContext';
 import { fetchStores, type StoreItem } from '../../core/lib/storage';
 import { submitOnboardingRequest, ROLE_LABELS } from '../../core/lib/authService';
+import SearchableStoreSelect from '../../shared/components/common/SearchableStoreSelect';
 import {
     Shield,
     Users,
@@ -39,7 +40,7 @@ export default function OnboardingPage() {
         return <Navigate to="/" replace />;
     }
 
-    if (currentUser.status === 'PENDING_APPROVAL' || currentUser.status === 'REJECTED') {
+    if (currentUser.status === 'PENDING_APPROVAL') {
         return <Navigate to="/cho-xet-duyet" replace />;
     }
 
@@ -66,7 +67,7 @@ export default function OnboardingPage() {
             const res = await fetchStores();
             if (res.success && res.data.length > 0) {
                 setStores(res.data);
-                setSelectedStoreName(res.data[0].name);
+                // Để trống selectedStoreName để người dùng tự tìm kiếm và chọn
             }
             setIsLoadingStores(false);
         }
@@ -279,28 +280,15 @@ export default function OnboardingPage() {
 
                             {!isNewStore ? (
                                 <div className="space-y-2">
-                                    <div className="relative">
-                                        <Building2 className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
-                                        <select
-                                            value={selectedStoreName}
-                                            onChange={(e) => setSelectedStoreName(e.target.value)}
-                                            className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition cursor-pointer"
-                                        >
-                                            {isLoadingStores && <option>Đang tải danh sách siêu thị...</option>}
-                                            {stores.map((st) => (
-                                                <option key={st.id || st.code} value={st.name}>
-                                                    {st.name} {st.code ? `(${st.code})` : ''}
-                                                </option>
-                                            ))}
-                                            {stores.length === 0 && !isLoadingStores && (
-                                                <option value="AAR_BRV_VTA - 290 Trương Công Định">
-                                                    AAR_BRV_VTA - 290 Trương Công Định (Mặc định)
-                                                </option>
-                                            )}
-                                        </select>
-                                    </div>
+                                    <SearchableStoreSelect
+                                        stores={stores}
+                                        value={selectedStoreName}
+                                        onChange={setSelectedStoreName}
+                                        placeholder="-- Nhập mã hoặc tên siêu thị để tìm kiếm --"
+                                        disabled={isLoadingStores}
+                                    />
                                     <p className="text-[11px] text-slate-500">
-                                        💡 Nếu không tìm thấy siêu thị của bạn trong danh sách, hãy bấm nút <b>"Khai báo siêu thị mới"</b> ở góc trên bên phải.
+                                        💡 Gõ mã siêu thị (ví dụ: 10335) hoặc tên siêu thị để tìm nhanh. Nếu không tìm thấy, bấm <b>"Khai báo siêu thị mới"</b> ở trên.
                                     </p>
                                 </div>
                             ) : (

@@ -56,7 +56,7 @@ export default function EmployeeCampaignMatrixPage() {
 
         if (empRes.success) setEmployees(empRes.data);
 
-        // Chỉ lấy các chiến dịch thi đua đang kích hoạt (is_active)
+        // Chỉ lấy các NHÓM thi đua đang kích hoạt (is_active)
         const activeCamps = (campRes.data || []).filter((c: any) => c.is_active);
         setCampaigns(activeCamps);
 

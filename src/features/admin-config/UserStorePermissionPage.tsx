@@ -190,7 +190,7 @@ export default function UserStorePermissionPage() {
                     accessible_stores: storeList
                 });
             }
-            const modeText = res.storageMode === 'NATIVE' ? '(Cột JSONB gốc)' : '(Lưu Supabase Cloud vĩnh viễn)';
+            const modeText = res.storageMode === 'NATIVE' ? '(Cột JSONB gốc)' : '(Lưu Cloud vĩnh viễn)';
             showToast(`✅ Đã lưu phân quyền ${storeList.length} siêu thị cho ${editingUser.full_name} lên Supabase ${modeText}!`);
             setEditingUser(null);
         } else {
@@ -339,7 +339,7 @@ export default function UserStorePermissionPage() {
                     </div>
                     <div>
                         <div className="font-extrabold flex items-center gap-1.5">
-                            <span>Đồng bộ Supabase Cloud:</span>
+                            <span>Đồng bộ Cloud:</span>
                             {hasNativeColumn === true ? (
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-[11px] font-black">
                                     <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Cột JSONB gốc sẵn sàng
@@ -932,7 +932,7 @@ export default function UserStorePermissionPage() {
                                 </div>
                                 <div>
                                     <h3 className="font-black text-base text-slate-900">
-                                        Cấu Hình Cột Supabase Cloud
+                                        Cấu Hình Cột Cloud
                                     </h3>
                                     <p className="text-xs text-slate-500">
                                         Bổ sung cột accessible_stores (JSONB) cho bảng user_profiles
@@ -952,10 +952,10 @@ export default function UserStorePermissionPage() {
                             <div className="p-3 bg-emerald-50 rounded-2xl border border-emerald-200 text-emerald-900">
                                 <p className="font-extrabold flex items-center gap-1.5">
                                     <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                                    <span>Dữ liệu phân quyền của bạn đã được bảo vệ trên Supabase Cloud</span>
+                                    <span>Dữ liệu phân quyền của bạn đã được bảo vệ trên Cloud</span>
                                 </p>
                                 <p className="text-[11px] text-emerald-800 mt-1 leading-relaxed">
-                                    Hệ thống hiện tại đã kết nối trực tiếp với Supabase. Khi lưu phân quyền, dữ liệu được ghi lên Supabase ngay lập tức và giữ nguyên trạng thái khi F5 tải lại trang.
+                                    Hệ thống hiện tại đã kết nối trực tiếp với Cloud. Khi lưu phân quyền, dữ liệu được ghi lên Cloud ngay lập tức và giữ nguyên trạng thái khi F5 tải lại trang.
                                 </p>
                             </div>
 

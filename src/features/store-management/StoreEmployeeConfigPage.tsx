@@ -57,7 +57,7 @@ export default function StoreEmployeeConfigPage() {
             setStores(storesRes.data);
         } else {
             hasErr = true;
-            setCloudError('Không thể tải danh sách siêu thị từ Supabase Cloud');
+            setCloudError('Không thể tải danh sách siêu thị từ CLOUD');
             showToast('⚠️ Không thể tải danh sách siêu thị!');
         }
 
@@ -65,7 +65,7 @@ export default function StoreEmployeeConfigPage() {
             setEmployees(empsRes.data);
         } else {
             hasErr = true;
-            setCloudError(prev => prev ? `${prev} & nhân viên` : 'Không thể tải danh sách nhân viên từ Supabase Cloud');
+            setCloudError(prev => prev ? `${prev} & nhân viên` : 'Không thể tải danh sách nhân viên từ CLOUD');
             showToast('⚠️ Không thể tải danh sách nhân viên!');
         }
 
@@ -229,7 +229,7 @@ export default function StoreEmployeeConfigPage() {
                     <div className="flex items-center gap-2.5">
                         <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
                         <div>
-                            <span className="font-extrabold block text-xs">⚠️ Mất kết nối Supabase Cloud!</span>
+                            <span className="font-extrabold block text-xs">⚠️ Mất kết nối CLOUD!</span>
                             <span className="text-amber-800 text-[11px]">{cloudError}. Dữ liệu có thể chưa được đồng bộ từ máy chủ đám mây.</span>
                         </div>
                     </div>
@@ -250,7 +250,7 @@ export default function StoreEmployeeConfigPage() {
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                             <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                         </span>
-                        <span><b>Supabase Cloud:</b> Đã đồng bộ trực tuyến ({stores.length} siêu thị, {employees.length} nhân sự trên đám mây).</span>
+                        <span><b>CLOUD:</b> Đã đồng bộ trực tuyến ({stores.length} siêu thị, {employees.length} nhân sự trên đám mây).</span>
                     </div>
                     <button
                         type="button"

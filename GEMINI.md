@@ -2,7 +2,7 @@
 
 ## 1. NGUYÊN TẮC THIẾT KẾ GIAO DIỆN & TỐI ƯU SMARTPHONE (MOBILE-FIRST UI CONVENTIONS)
 - **NGƯỜI DÙNG MỤC TIÊU LÀ SMARTPHONE (MOBILE-FIRST PERSPECTIVE)**:
-  - Đối tượng sử dụng chính là Quản lý siêu thị, Quản lý khu vực và Nhân viên xem báo cáo và ảnh báo cáo trực tiếp trên điện thoại thông minh (smartphone / Zalo chat).
+  - Đối tượng sử dụng chính là Quản lý siêu thị, Quản lý khu vực và Nhân viên xem báo cáo và ảnh báo cáo trực tiếp trên điện thoại thông minh (smartphone / Messaging App).
   - Mọi thiết kế giao diện, thẻ KPI, bảng biểu và tính năng phải đặt trải nghiệm đọc và tương tác trên smartphone làm ưu tiên số 1.
 - **BỐ CỤC TỊNH TIẾN THEO CHIỀU DỌC (VERTICAL PROGRESSION / PORTRAIT FLOW)**:
   - Báo cáo và giao diện phải được cấu trúc tịnh tiến tự nhiên theo trục dọc, tối ưu hóa cho thao tác cuộn (scroll) trên màn hình dọc smartphone.
@@ -18,8 +18,8 @@
 
 ## 2. NGUYÊN TẮC XUẤT ẢNH BÁO CÁO (IMAGE EXPORT RULES)
 - **TƯƠNG THÍCH HOÀN HẢO MÀN HÌNH DỌC SMARTPHONE (PORTRAIT EXPORT ORIENTATION)**:
-  - Khung hình ảnh báo cáo xuất ra (dùng `html2canvas` để gửi Zalo) phải ưu tiên tỷ lệ theo chiều dọc (Portrait mode), vừa vặn với kích thước màn hình smartphone để người xem nhận ảnh mở ra đọc được ngay, không bị thu nhỏ chữ li ti như khi dàn trang quá rộng theo chiều ngang.
-  - Chiều rộng vùng xuất ảnh (`export-container` / capture area) được cố định ở mức tối ưu cho hiển thị mobile/Zalo (khoảng 800px - 1000px tùy bảng, không vượt quá giới hạn gây tràn ngang).
+  - Khung hình ảnh báo cáo xuất ra (dùng `html2canvas` để gửi Messaging App) phải ưu tiên tỷ lệ theo chiều dọc (Portrait mode), vừa vặn với kích thước màn hình smartphone để người xem nhận ảnh mở ra đọc được ngay, không bị thu nhỏ chữ li ti như khi dàn trang quá rộng theo chiều ngang.
+  - Chiều rộng vùng xuất ảnh (`export-container` / capture area) được cố định ở mức tối ưu cho hiển thị mobile/Messaging App (khoảng 800px - 1000px tùy bảng, không vượt quá giới hạn gây tràn ngang).
 - **TUYỆT ĐỐI KHÔNG CHÈN FOOTER WATERMARK**:
   - Không chèn thêm bất kỳ Footer Watermark nào (thẻ chân trang ghi chú bản quyền, "SalesHub Analytics", "Hệ thống phân tích...", "Độ phân giải 4K/8K...", ngày giờ xuất...) vào ảnh báo cáo khi xuất ảnh (`html2canvas`) trên toàn bộ hệ thống.
   - Ảnh xuất ra phải tinh gọn, sạch sẽ, chỉ bao gồm nội dung báo cáo thực tế, không có khoảng trắng thừa hoặc watermark thừa ở cuối đáy ảnh.
@@ -64,5 +64,5 @@
   - Phải có hàm kiểm tra tính sẵn sàng của bảng (nhận diện lỗi mã `PGRST205: Could not find table in schema cache`) để cảnh báo minh bạch trên giao diện nếu bảng chưa được tạo.
   - Giao diện trang quản trị phải có thông báo trạng thái kết nối Cloud (🟢 Đã kết nối / 🟡 Cảnh báo chưa tạo bảng) và cung cấp modal/nút hỗ trợ sao chép SQL để Quản trị viên dễ dàng dán chạy 1 lần trong Supabase SQL Editor.
 - **ĐỒNG BỘ ĐA THIẾT BỊ XUYÊN SUỐT (CROSS-DEVICE CONSISTENCY)**:
-  - Dữ liệu cấu hình, cấp phát do Quản lý/Admin nạp từ máy tính để bàn (PC) phải phản ánh ngay lập tức và chính xác trên điện thoại di động (smartphone/Zalo) của nhân viên và ngược lại thông qua Supabase Cloud.
+  - Dữ liệu cấu hình, cấp phát do Quản lý/Admin nạp từ máy tính để bàn (PC) phải phản ánh ngay lập tức và chính xác trên điện thoại di động (smartphone/Messaging App) của nhân viên và ngược lại thông qua Supabase Cloud.
 

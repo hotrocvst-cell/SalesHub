@@ -17,6 +17,7 @@ export interface VoucherItem {
     order_id?: string;                 // Mã đơn hàng gắn kèm
     used_at?: string;                  // Thời điểm hoàn tất đơn
     note?: string;                     // Ghi chú / Lịch sử reset
+    description?: string;              // Diễn giải / Điều kiện sử dụng voucher
 }
 
 export interface DenominationStock {
@@ -25,6 +26,7 @@ export interface DenominationStock {
     available: number;
     claimed: number;
     used: number;
+    description?: string;              // Điều kiện sử dụng của mệnh giá
 }
 
 export interface VoucherCampaignSummary {
@@ -32,6 +34,20 @@ export interface VoucherCampaignSummary {
     total_available: number;
     total_vouchers: number;
     denominations: DenominationStock[];
+}
+
+export interface VoucherStockForecast {
+    campaign_name: string;
+    denomination: number;
+    description?: string;
+    total: number;
+    available: number;
+    claimed: number;
+    used: number;
+    avgDailyUsage: number;             // Trung bình sử dụng / ngày
+    daysRemaining: number;             // Số ngày còn lại dự kiến
+    alertLevel: 'OUT_OF_STOCK' | 'CRITICAL' | 'WARNING' | 'SAFE' | 'INACTIVE';
+    alertMessage: string;
 }
 
 export interface VoucherClaimRequest {
@@ -50,7 +66,8 @@ export interface VoucherHoardingAlert {
     store_name: string;
     claimed_today_count: number;       // Số mã đã lấy trong ngày
     unspent_count: number;             // Số mã đã lấy nhưng chưa hoàn tất
-    total_claimed_month: number;       // Tổng số mã đã lấy trong tháng
+    total_month: number;               // Tổng số mã đã lấy trong tháng
+    total_claimed_month?: number;      // Alias cho total_month
     latest_order_ids: string[];        // Các đơn hàng gần nhất
     latest_claimed_at: string;
     risk_level: 'NORMAL' | 'WARNING' | 'CRITICAL';
@@ -64,3 +81,4 @@ export interface VoucherFilterOptions {
     denomination?: number;
     searchQuery?: string;
 }
+

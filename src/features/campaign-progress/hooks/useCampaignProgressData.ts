@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import {
     fetchStores,
     fetchCampaignDictionary,
@@ -16,7 +16,7 @@ import {
 } from '../../employee-cumulative/utils/sessionStorage';
 import { getStoreOperatingConfig, getShortenedEmployeeName } from '../../employee-performance/utils/performanceConfig';
 import { resolveCanonicalCampaign, isEmployeeInStore, normalizeCampaignToken } from '../../campaign-summary/utils/campaignSummaryStorage';
-import { formatDate, getYesterdayDateString, isStoreMatch } from '../../../core/lib/formatters';
+import { formatDate, getYesterdayDateString, isStoreMatch, calculateRemainingTarget } from '../../../core/lib/formatters';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import type {
     CampaignProgressItem,
@@ -128,9 +128,16 @@ export function useCampaignProgressData() {
             if (storeMap.size > 1) {
                 const combinedRecords: any[] = [];
                 let latestReportDate = '';
+                let latestCreatedAt = '';
+                let latestCreatedBy = '';
+
                 storeMap.forEach((sess) => {
                     if (sess.report_date && (!latestReportDate || sess.report_date > latestReportDate)) {
                         latestReportDate = sess.report_date;
+                    }
+                    if (sess.created_at && (!latestCreatedAt || new Date(sess.created_at).getTime() > new Date(latestCreatedAt).getTime())) {
+                        latestCreatedAt = sess.created_at;
+                        latestCreatedBy = sess.created_by || '';
                     }
                     combinedRecords.push(...(sess.records || []));
                 });
@@ -143,8 +150,8 @@ export function useCampaignProgressData() {
                     month: selectedMonth,
                     year: selectedYear,
                     report_date: latestReportDate || getYesterdayDateString(),
-                    created_at: new Date().toISOString(),
-                    created_by: 'Hệ thống SalesHub',
+                    created_at: latestCreatedAt || (storeMap.values().next().value?.created_at) || new Date().toISOString(),
+                    created_by: latestCreatedBy || (storeMap.values().next().value?.created_by) || '',
                     employee_count: combinedRecords.length,
                     total_revenue_actual: combinedRecords.reduce((sum, r) => sum + (r.revenue_actual || 0), 0),
                     total_revenue_qd: combinedRecords.reduce((sum, r) => sum + (r.revenue_qd || 0), 0),
@@ -320,8 +327,8 @@ export function useCampaignProgressData() {
                         }
                     }
 
-                    // Còn lại = Lũy kế - Target (âm nếu còn thiếu, dương nếu đã vượt, theo mẫu tham khảo)
-                    const remaining = Number((empActual - empTarget).toFixed(1));
+                    // Còn lại chuẩn toàn project: hoàn thành thực tế (actual >= target) -> 0, chưa đạt -> target - actual (dương)
+                    const remaining = calculateRemainingTarget(empTarget, empActual, 1);
                     const completionRate = Number(((empActual / empTarget) * 100).toFixed(1));
                     const forecast = (empActual / passedDays) * operatingDays;
                     const forecastRate = Math.round((forecast / empTarget) * 100);
@@ -330,11 +337,14 @@ export function useCampaignProgressData() {
 
                     const fullName = (r.full_name || empInfoMap[empId]?.fullName || empId).trim();
                     const storeName = empInfoMap[empId]?.storeName || activeSession.store_name || '';
+                    const shortName = getShortenedEmployeeName(fullName);
+                    const displayName = `${empId} - ${shortName || fullName}`;
 
                     employeeDetails.push({
                         employeeId: empId,
                         fullName,
-                        displayName: `${empId} - ${fullName.toUpperCase()}`,
+                        shortName,
+                        displayName,
                         storeName,
                         target: empTarget,
                         actual: empActual,
@@ -423,7 +433,8 @@ export function useCampaignProgressData() {
                     forecastRate = totalTarget > 0 ? Math.round((totalForecast / totalTarget) * 100) : 0;
                 }
 
-                const totalRemaining = Number((totalActual - totalTarget).toFixed(1));
+                // Còn lại chuẩn toàn project: hoàn thành thực tế (totalActual >= totalTarget) -> 0, chưa đạt -> totalTarget - totalActual (dương)
+                const totalRemaining = calculateRemainingTarget(totalTarget, totalActual, 1);
                 const completionRate = totalTarget > 0 ? Number(((totalActual / totalTarget) * 100).toFixed(1)) : 0;
                 const isAchieved = forecastRate >= 100;
 
@@ -455,18 +466,34 @@ export function useCampaignProgressData() {
         return items.sort((a, b) => a.orderIndex - b.orderIndex || a.displayName.localeCompare(b.displayName));
     }, [activeSession, targetsMap, campaignDict, selectedStore, empInfoMap, operatingConfig, stores, businessRecords]);
 
-    // Tự động đồng bộ selectedCampaignKeys khi danh sách thi đua tải xong
+    // Theo dõi thay đổi siêu thị để tự động chọn tất cả nhóm thi đua của siêu thị đó
+    const prevStoreRef = useRef<string>(selectedStore);
+    const storeChangedRef = useRef<boolean>(false);
+
+    useEffect(() => {
+        if (prevStoreRef.current !== selectedStore) {
+            prevStoreRef.current = selectedStore;
+            storeChangedRef.current = true;
+        }
+    }, [selectedStore]);
+
+    // Tự động đồng bộ selectedCampaignKeys: nếu user đổi siêu thị hoặc chưa chọn gì -> chọn tất cả
     useEffect(() => {
         if (allCampaignProgressItems.length > 0) {
-            setSelectedCampaignKeys(prev => {
-                // Nếu chưa chọn gì hoặc các key cũ không còn trong danh sách -> chọn tất cả
-                if (!prev.length) {
-                    return allCampaignProgressItems.map(c => c.campaignKey);
-                }
-                const currentValidKeys = new Set(allCampaignProgressItems.map(c => c.campaignKey));
-                const retained = prev.filter(k => currentValidKeys.has(k));
-                return retained.length > 0 ? retained : allCampaignProgressItems.map(c => c.campaignKey);
-            });
+            if (storeChangedRef.current) {
+                storeChangedRef.current = false;
+                setSelectedCampaignKeys(allCampaignProgressItems.map(c => c.campaignKey));
+            } else {
+                setSelectedCampaignKeys(prev => {
+                    // Nếu chưa chọn gì hoặc các key cũ không còn trong danh sách -> chọn tất cả
+                    if (!prev.length) {
+                        return allCampaignProgressItems.map(c => c.campaignKey);
+                    }
+                    const currentValidKeys = new Set(allCampaignProgressItems.map(c => c.campaignKey));
+                    const retained = prev.filter(k => currentValidKeys.has(k));
+                    return retained.length > 0 ? retained : allCampaignProgressItems.map(c => c.campaignKey);
+                });
+            }
         } else {
             setSelectedCampaignKeys([]);
         }

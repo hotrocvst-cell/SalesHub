@@ -110,7 +110,7 @@ export default function QuickPasteEmployeeModal({
                 setRawText('');
                 onClose();
             } else {
-                setImportError(res.error || 'Có lỗi xảy ra khi lưu nhân viên vào Supabase Cloud');
+                setImportError(res.error || 'Có lỗi xảy ra khi lưu nhân viên vào CLOUD');
             }
         } catch (err: unknown) {
             setImportError((err as Error).message || 'Lỗi kết nối khi nạp danh sách nhân viên');

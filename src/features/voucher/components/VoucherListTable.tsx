@@ -12,10 +12,46 @@ import {
     Zap,
     CheckSquare,
     Square,
-    Trash2
+    Trash2,
+    Pencil,
+    Edit3,
+    ChevronDown,
+    ChevronUp
 } from 'lucide-react';
 import type { VoucherItem } from '../types';
-import { formatDate, getShortStoreName, isStoreMatch } from '../../../core/lib/formatters';
+import { formatDate, formatDateTime, getShortStoreName, isStoreMatch } from '../../../core/lib/formatters';
+import { getDenominationHotStyle, formatCurrency, parseConditionLines } from '../voucherFormatters';
+
+/**
+ * Trợ thủ phân tích thời gian thao tác nhập kho của voucher
+ */
+function getImportMeta(createdAt?: string) {
+    if (!createdAt) return { isToday: false, isWithin24h: false, relText: '' };
+    const date = new Date(createdAt);
+    if (isNaN(date.getTime())) return { isToday: false, isWithin24h: false, relText: '' };
+
+    const now = new Date();
+    const isToday = date.getDate() === now.getDate() &&
+        date.getMonth() === now.getMonth() &&
+        date.getFullYear() === now.getFullYear();
+
+    const diffMinutes = Math.floor((now.getTime() - date.getTime()) / (60 * 1000));
+    const isWithin24h = diffMinutes >= 0 && diffMinutes <= 24 * 60;
+
+    let relText = '';
+    if (diffMinutes < 1) {
+        relText = 'Vừa nạp';
+    } else if (diffMinutes < 60) {
+        relText = `${diffMinutes}p trước`;
+    } else if (diffMinutes < 24 * 60 && isToday) {
+        const h = Math.floor(diffMinutes / 60);
+        relText = `${h}h trước`;
+    } else if (isToday) {
+        relText = 'Hôm nay';
+    }
+
+    return { isToday, isWithin24h, relText };
+}
 
 interface Props {
     vouchers: VoucherItem[];
@@ -23,10 +59,14 @@ interface Props {
     onMarkUsed?: (code: string) => void;
     onDeleteVoucher?: (code: string) => void;
     onDeleteMultiple?: (codes: string[]) => void;
+    onEditVoucher?: (voucher: VoucherItem) => void;
+    onBatchEdit?: (selectedVouchers: VoucherItem[]) => void;
     onOpenCleanModal?: () => void;
     prefilterEmployeeId?: string;
     prefilterStatus?: string;
     onOpenQrModal?: (selectedVouchers: VoucherItem[]) => void;
+    onClearEmployeeFilter?: () => void;
+    onFilterEmployee?: (empId: string) => void;
 }
 
 export default function VoucherListTable({
@@ -35,18 +75,30 @@ export default function VoucherListTable({
     onMarkUsed,
     onDeleteVoucher,
     onDeleteMultiple,
+    onEditVoucher,
+    onBatchEdit,
     onOpenCleanModal,
     prefilterEmployeeId,
     prefilterStatus,
-    onOpenQrModal
+    onOpenQrModal,
+    onClearEmployeeFilter,
+    onFilterEmployee
 }: Props) {
     const [searchQuery, setSearchQuery] = useState<string>('');
     const [filterStatus, setFilterStatus] = useState<string>(prefilterStatus || 'ALL');
     const [filterCampaign, setFilterCampaign] = useState<string>('ALL');
     const [filterDenomination, setFilterDenomination] = useState<string>('ALL');
     const [filterStore, setFilterStore] = useState<string>('ALL');
+    const [filterImportTime, setFilterImportTime] = useState<string>('ALL');
+    const [sortBy, setSortBy] = useState<string>('CREATED_DESC');
     const [copiedCode, setCopiedCode] = useState<string>('');
     const [selectedCodes, setSelectedCodes] = useState<Set<string>>(new Set());
+    const [visibleCount, setVisibleCount] = useState<number>(20);
+
+    // Tự động reset số lượng hiển thị về 20 khi thay đổi bất kỳ bộ lọc nào
+    useEffect(() => {
+        setVisibleCount(20);
+    }, [searchQuery, filterStatus, filterCampaign, filterDenomination, filterStore, prefilterEmployeeId, filterImportTime, sortBy]);
 
     useEffect(() => {
         if (prefilterStatus) {
@@ -76,6 +128,25 @@ export default function VoucherListTable({
         });
         return Array.from(set).sort();
     }, [vouchers]);
+
+    // Danh sách nhân viên đã nhận mã
+    const employeeOptions = useMemo(() => {
+        const map = new Map<string, string>();
+        vouchers.forEach(v => {
+            if (v.claimed_by_id) {
+                map.set(v.claimed_by_id.trim(), v.claimed_by_name?.trim() || v.claimed_by_id.trim());
+            }
+        });
+        return Array.from(map.entries())
+            .map(([id, name]) => ({ id, name }))
+            .sort((a, b) => a.name.localeCompare(b.name));
+    }, [vouchers]);
+
+    const filteredEmployeeName = useMemo(() => {
+        if (!prefilterEmployeeId) return '';
+        const found = vouchers.find(v => (v.claimed_by_id || '').trim() === prefilterEmployeeId.trim());
+        return found?.claimed_by_name || prefilterEmployeeId;
+    }, [vouchers, prefilterEmployeeId]);
 
     // Lọc danh sách
     const filteredList = useMemo(() => {
@@ -124,8 +195,19 @@ export default function VoucherListTable({
             );
         }
 
-        return list;
+        // Sắp xếp mã mới nhất lên đầu (theo created_at hoặc claimed_at giảm dần)
+        return [...list].sort((a, b) => {
+            const timeA = new Date(a.created_at || a.claimed_at || 0).getTime();
+            const timeB = new Date(b.created_at || b.claimed_at || 0).getTime();
+            if (timeB !== timeA) return timeB - timeA;
+            return (b.id || '').localeCompare(a.id || '');
+        });
     }, [vouchers, prefilterEmployeeId, filterStatus, filterCampaign, filterDenomination, filterStore, searchQuery]);
+
+    // Danh sách hiển thị thực tế (mặc định 20 mã mới nhất, người dùng có thể nạp thêm 20 mã)
+    const displayedList = useMemo(() => {
+        return filteredList.slice(0, visibleCount);
+    }, [filteredList, visibleCount]);
 
     // Các mã CLAIMED (chưa double check) trong danh sách đang lọc
     const unclaimedFilteredCodes = useMemo(() => {
@@ -143,6 +225,24 @@ export default function VoucherListTable({
     };
 
     // Chọn tất cả mã đang hiển thị
+    const isAllDisplayedSelected = displayedList.length > 0 && displayedList.every(v => selectedCodes.has(v.code));
+    const toggleSelectAllDisplayed = () => {
+        if (isAllDisplayedSelected) {
+            setSelectedCodes(prev => {
+                const next = new Set(prev);
+                displayedList.forEach(v => next.delete(v.code));
+                return next;
+            });
+        } else {
+            setSelectedCodes(prev => {
+                const next = new Set(prev);
+                displayedList.forEach(v => next.add(v.code));
+                return next;
+            });
+        }
+    };
+
+    // Chọn tất cả mã theo toàn bộ bộ lọc
     const isAllFilteredSelected = filteredList.length > 0 && filteredList.every(v => selectedCodes.has(v.code));
     const toggleSelectAllFiltered = () => {
         if (isAllFilteredSelected) {
@@ -201,6 +301,39 @@ export default function VoucherListTable({
         <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden font-avo">
             {/* Thanh Công Cụ & Bộ Lọc Đa Chiều */}
             <div className="p-3 sm:p-4 border-b border-slate-200 space-y-3 bg-slate-50/50">
+                {/* Banner cảnh báo đang lọc theo NV (Kèm nút xóa lọc quay lại tức thì) */}
+                {prefilterEmployeeId && (
+                    <div className="bg-gradient-to-r from-indigo-50 to-blue-50 border-2 border-indigo-300 text-indigo-950 p-3 rounded-2xl flex items-center justify-between gap-3 flex-wrap animate-in fade-in">
+                        <div className="flex items-center gap-2.5">
+                            <span className="w-3 h-3 rounded-full bg-indigo-600 animate-ping shrink-0"></span>
+                            <div>
+                                <div className="text-xs font-black flex items-center gap-1.5 flex-wrap">
+                                    <span>👤 Đang lọc danh sách theo nhân sự:</span>
+                                    <span className="bg-white px-2 py-0.5 rounded-lg border border-indigo-200 font-black text-indigo-800">
+                                        {filteredEmployeeName}
+                                    </span>
+                                    <span className="font-mono text-[11px] text-slate-500">
+                                        (Mã: {prefilterEmployeeId})
+                                    </span>
+                                </div>
+                                <div className="text-[11px] text-indigo-800 font-bold mt-0.5">
+                                    Đang hiển thị {filteredList.length} mã đã nhận bởi nhân sự này
+                                </div>
+                            </div>
+                        </div>
+
+                        <button
+                            type="button"
+                            onClick={() => onClearEmployeeFilter && onClearEmployeeFilter()}
+                            className="px-3.5 py-2 rounded-xl bg-white hover:bg-rose-50 text-rose-700 border-2 border-rose-200 hover:border-rose-400 text-xs font-black transition cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-[0.98]"
+                            title="Xóa bộ lọc để quay lại xem toàn bộ mã"
+                        >
+                            <RotateCcw className="w-4 h-4 text-rose-600" />
+                            <span>✕ Quay Lại Xem Tất Cả Mã</span>
+                        </button>
+                    </div>
+                )}
+
                 <div className="flex flex-wrap items-center justify-between gap-2.5">
                     <div className="flex flex-wrap items-center gap-2 flex-1 min-w-[260px]">
                         {/* Tìm kiếm */}
@@ -280,6 +413,34 @@ export default function VoucherListTable({
                                 ))}
                             </select>
                         )}
+
+                        {/* Lọc theo Nhân Viên nhận mã trực tiếp */}
+                        {employeeOptions.length > 0 && (
+                            <select
+                                value={prefilterEmployeeId || 'ALL'}
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    if (val === 'ALL') {
+                                        if (onClearEmployeeFilter) onClearEmployeeFilter();
+                                    } else {
+                                        if (onFilterEmployee) onFilterEmployee(val);
+                                    }
+                                }}
+                                className={`border rounded-xl px-2.5 py-1.5 text-xs font-bold cursor-pointer max-w-[180px] truncate ${
+                                    prefilterEmployeeId
+                                        ? 'bg-indigo-50 border-indigo-400 text-indigo-900 font-black'
+                                        : 'bg-white border-slate-200 text-slate-700'
+                                }`}
+                                title="Lọc danh sách mã theo nhân viên đã nhận"
+                            >
+                                <option value="ALL">👤 Tất cả nhân viên</option>
+                                {employeeOptions.map(emp => (
+                                    <option key={emp.id} value={emp.id}>
+                                        👤 {emp.name} ({emp.id})
+                                    </option>
+                                ))}
+                            </select>
+                        )}
                     </div>
 
                     <div className="text-xs font-black text-slate-500 shrink-0">
@@ -334,6 +495,22 @@ export default function VoucherListTable({
                                     Bỏ chọn
                                 </button>
                             </div>
+                        )}
+
+                        {/* Nút Sửa các mã đã chọn (Cập nhật hàng loạt) */}
+                        {selectedCodes.size > 0 && onBatchEdit && (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    const targets = vouchers.filter(v => selectedCodes.has(v.code));
+                                    onBatchEdit(targets);
+                                }}
+                                className="px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 active:scale-[0.99] text-white text-xs font-black transition cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                                title="Cập nhật hàng loạt cụm/kho, chương trình, mệnh giá, HSD cho các mã đã chọn"
+                            >
+                                <Edit3 className="w-3.5 h-3.5 text-amber-300" />
+                                <span>Sửa ({selectedCodes.size}) mã</span>
+                            </button>
                         )}
 
                         {/* Nút Xóa các mã đã chọn */}
@@ -399,10 +576,10 @@ export default function VoucherListTable({
                             <th className="py-2 px-2 text-center" style={{ width: '36px' }}>
                                 <input
                                     type="checkbox"
-                                    checked={isAllFilteredSelected}
-                                    onChange={toggleSelectAllFiltered}
+                                    checked={isAllDisplayedSelected}
+                                    onChange={toggleSelectAllDisplayed}
                                     className="w-3.5 h-3.5 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
-                                    title="Chọn/Bỏ chọn tất cả"
+                                    title={isAllDisplayedSelected ? "Bỏ chọn tất cả mã đang hiển thị" : "Chọn tất cả mã đang hiển thị"}
                                 />
                             </th>
                             <th className="py-2 px-1 text-center" style={{ width: '36px' }}>STT</th>
@@ -423,7 +600,7 @@ export default function VoucherListTable({
                                 </td>
                             </tr>
                         ) : (
-                            filteredList.map((item, idx) => {
+                            displayedList.map((item, idx) => {
                                 const isAvailable = item.status === 'AVAILABLE';
                                 const isClaimed = item.status === 'CLAIMED';
                                 const isUsed = item.status === 'USED';
@@ -470,14 +647,38 @@ export default function VoucherListTable({
                                             </div>
                                         </td>
 
-                                        {/* Chương trình */}
-                                        <td className="py-2 px-2 font-bold text-slate-700 max-w-[140px] truncate" title={item.campaign_name}>
-                                            {item.campaign_name}
+                                        {/* Chương trình & Điều kiện áp dụng */}
+                                        <td className="py-2 px-2 max-w-[160px]">
+                                            <div className="font-bold text-slate-800 truncate" title={item.campaign_name}>
+                                                {item.campaign_name}
+                                            </div>
+                                            {item.description ? (
+                                                <div className="mt-0.5 space-y-0.5" title={item.description}>
+                                                    {parseConditionLines(item.description).map((cond, cIdx) => (
+                                                        <div key={cIdx} className="text-[9.5px] font-medium text-amber-950 flex items-start gap-1 leading-tight">
+                                                            <span className="text-amber-500 font-bold shrink-0">•</span>
+                                                            <span className="truncate max-w-[150px]">{cond}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : null}
                                         </td>
 
-                                        {/* Mệnh giá */}
-                                        <td className="py-2 px-2 text-right font-mono font-black text-rose-600">
-                                            {Number(item.denomination).toLocaleString('vi-VN')}đ
+                                        {/* Mệnh giá (Định dạng màu theo độ hot) */}
+                                        <td className="py-2 px-2 text-right">
+                                            {(() => {
+                                                const hot = getDenominationHotStyle(item.denomination);
+                                                return (
+                                                    <div className="inline-flex flex-col items-end">
+                                                        <span className={`inline-block font-mono font-black text-xs px-1.5 py-0.5 rounded border ${hot.badgeClass}`}>
+                                                            {formatCurrency(item.denomination)}
+                                                        </span>
+                                                        <span className="text-[9px] font-bold text-slate-400 mt-0.5">
+                                                            {hot.tagIcon} {hot.label}
+                                                        </span>
+                                                    </div>
+                                                );
+                                            })()}
                                         </td>
 
                                         {/* Hạn Dùng */}
@@ -583,6 +784,17 @@ export default function VoucherListTable({
                                         {/* Thao tác */}
                                         <td className="py-2 px-2 text-right">
                                             <div className="flex items-center justify-end gap-1">
+                                                {/* Nút chỉnh sửa mã - luôn hiển thị */}
+                                                {onEditVoucher && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => onEditVoucher(item)}
+                                                        className="p-1 rounded bg-indigo-50 hover:bg-indigo-100 text-indigo-500 hover:text-indigo-700 transition cursor-pointer"
+                                                        title="Chỉnh sửa / cập nhật thông tin mã này"
+                                                    >
+                                                        <Pencil className="w-3.5 h-3.5" />
+                                                    </button>
+                                                )}
                                                 {isClaimed && (
                                                     <button
                                                         type="button"
@@ -628,6 +840,57 @@ export default function VoucherListTable({
                     </tbody>
                 </table>
             </div>
+
+            {/* Phân trang / Nạp thêm 20 mã tiếp theo */}
+            {filteredList.length > 0 && (
+                <div className="p-3 sm:p-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+                    <div className="text-slate-500 font-medium text-center sm:text-left">
+                        Đang hiển thị <span className="font-black text-slate-900">{displayedList.length}</span> / <span className="font-black text-slate-900">{filteredList.length}</span> mã voucher mới nhất
+                        {visibleCount < filteredList.length && (
+                            <span className="text-slate-400 ml-1">
+                                (còn {filteredList.length - visibleCount} mã chưa hiển thị)
+                            </span>
+                        )}
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-wrap justify-center">
+                        {visibleCount < filteredList.length && (
+                            <button
+                                type="button"
+                                onClick={() => setVisibleCount(prev => Math.min(prev + 20, filteredList.length))}
+                                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white rounded-xl font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer text-xs"
+                            >
+                                <ChevronDown className="w-3.5 h-3.5" />
+                                <span>Nạp thêm 20 mã tiếp theo</span>
+                                <span className="bg-emerald-700/80 text-[10.5px] px-2 py-0.5 rounded-full font-black">
+                                    +{Math.min(20, filteredList.length - visibleCount)}
+                                </span>
+                            </button>
+                        )}
+                        {visibleCount < filteredList.length && (
+                            <button
+                                type="button"
+                                onClick={() => setVisibleCount(filteredList.length)}
+                                className="px-3 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl font-bold transition cursor-pointer text-xs shadow-2xs"
+                                title="Hiển thị tất cả mã voucher thỏa mãn bộ lọc"
+                            >
+                                Xem tất cả ({filteredList.length})
+                            </button>
+                        )}
+                        {visibleCount > 20 && (
+                            <button
+                                type="button"
+                                onClick={() => setVisibleCount(20)}
+                                className="px-3 py-2 bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-xl font-medium transition cursor-pointer text-xs flex items-center gap-1"
+                                title="Thu gọn danh sách về 20 mã mới nhất"
+                            >
+                                <ChevronUp className="w-3.5 h-3.5 text-slate-400" />
+                                <span>Thu gọn về 20 mã</span>
+                            </button>
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

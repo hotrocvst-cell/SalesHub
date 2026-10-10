@@ -7,7 +7,7 @@
 - **Nguyên tắc làm việc với AI**: Mỗi lần chỉ xử lý duy nhất 1 trang hoặc 1 tính năng nhỏ (One-Feature-At-A-Time).
 - **Tầng bảo mật**: Frontend chỉ để hiển thị. Row Level Security (RLS) tại Supabase là chốt chặn bảo mật cuối cùng.
 - **Quy chuẩn Người dùng & Smartphone (Mobile-First)**:
-  1. Người dùng chủ yếu sử dụng smartphone để xem báo cáo (qua tin nhắn và ảnh báo cáo Zalo).
+  1. Người dùng chủ yếu sử dụng smartphone để xem báo cáo (qua tin nhắn và ảnh báo cáo Messaging App).
   2. Bố cục báo cáo ưu tiên tịnh tiến theo chiều dọc (Vertical Flow / Portrait Mode), dễ dàng xem tổng quan khi cuộn dọc màn hình điện thoại.
   3. Xuất hình ảnh báo cáo (html2canvas) ưu tiên tỷ lệ dọc tương thích màn hình smartphone, chữ rõ nét khi mở ảnh trên điện thoại; TUYỆT ĐỐI không chèn footer watermark; tự động mở rộng 100% chiều dài tự nhiên (không giới hạn height canvas).
   4. Giao diện trang luôn tối ưu không gian chiều ngang, đặc biệt là co gọn khoảng cách và chiều rộng giữa các cột dữ liệu trong bảng.

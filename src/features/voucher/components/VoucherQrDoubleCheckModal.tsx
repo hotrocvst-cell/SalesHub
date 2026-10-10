@@ -25,7 +25,7 @@ interface Props {
     onClose: () => void;
     vouchers: VoucherItem[];
     onResetVoucher: (code: string) => Promise<boolean> | void;
-    onMarkUsed?: (code: string) => Promise<boolean> | void;
+    onMarkUsed?: (code: string, newOrderId?: string) => Promise<boolean> | void;
 }
 
 export default function VoucherQrDoubleCheckModal({
@@ -40,6 +40,7 @@ export default function VoucherQrDoubleCheckModal({
     const [copiedCode, setCopiedCode] = useState<string>('');
     const [actionFeedback, setActionFeedback] = useState<string>('');
     const [isActionLoading, setIsActionLoading] = useState<boolean>(false);
+    const [orderIdInput, setOrderIdInput] = useState<string>('');
 
     // Lưu trạng thái thao tác cục bộ để cập nhật UI ngay lập tức
     const [statusOverrides, setStatusOverrides] = useState<Record<string, 'AVAILABLE' | 'USED'>>({});
@@ -55,6 +56,15 @@ export default function VoucherQrDoubleCheckModal({
 
     const currentVoucher = vouchers[currentIndex] || null;
     const currentStatus = (currentVoucher && statusOverrides[currentVoucher.code]) || currentVoucher?.status;
+
+    // Đồng bộ mã đơn hàng vào input text khi mở modal hoặc chuyển sang mã khác
+    useEffect(() => {
+        if (currentVoucher) {
+            setOrderIdInput(currentVoucher.order_id || '');
+        } else {
+            setOrderIdInput('');
+        }
+    }, [currentVoucher?.code, currentVoucher?.order_id]);
 
     // Tạo mã QR Code khi mã hiện tại thay đổi
     useEffect(() => {
@@ -137,12 +147,15 @@ export default function VoucherQrDoubleCheckModal({
     const handleMarkUsed = async () => {
         if (!currentVoucher || !onMarkUsed || isActionLoading) return;
         setIsActionLoading(true);
-        setActionFeedback('Đang cập nhật trạng thái...');
+        setActionFeedback('Đang cập nhật trạng thái & mã đơn...');
 
         try {
-            await onMarkUsed(currentVoucher.code);
+            const finalOrderId = orderIdInput.trim().toUpperCase();
+            await onMarkUsed(currentVoucher.code, finalOrderId);
+            currentVoucher.order_id = finalOrderId || undefined;
+            currentVoucher.status = 'USED';
             setStatusOverrides((prev) => ({ ...prev, [currentVoucher.code]: 'USED' }));
-            setActionFeedback(`🎉 Đã đánh dấu mã "${currentVoucher.code}" là ĐÃ DÙNG!`);
+            setActionFeedback(`🎉 Đã đánh dấu mã "${currentVoucher.code}" là ĐÃ DÙNG${finalOrderId ? ` (Đơn: ${finalOrderId})` : ''}!`);
 
             // Tự động chuyển sang mã kế tiếp sau 600ms
             setTimeout(() => {
@@ -351,33 +364,65 @@ export default function VoucherQrDoubleCheckModal({
                         </div>
                     </div>
 
-                    {/* Chi tiết người nhận & siêu thị */}
-                    {currentVoucher?.claimed_by_name && (
-                        <div className="bg-slate-50 rounded-2xl p-3 border border-slate-200 text-[11px] space-y-1.5 text-slate-600">
-                            <div className="flex items-center justify-between flex-wrap gap-1">
-                                <div className="flex items-center gap-1.5">
-                                    <UserCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                                    <span>NV lấy mã: <strong className="text-slate-900">{currentVoucher.claimed_by_name}</strong> ({currentVoucher.claimed_by_id})</span>
-                                </div>
-                                {currentVoucher.claimed_by_store && (
-                                    <span className="font-bold text-emerald-800 bg-emerald-100/70 px-2 py-0.5 rounded border border-emerald-200 text-[10px]">
-                                        🏪 {getShortStoreName(currentVoucher.claimed_by_store)}
-                                    </span>
-                                )}
-                            </div>
-
-                            <div className="flex items-center justify-between text-[10.5px] pt-1 border-t border-slate-200/60 flex-wrap gap-1">
-                                {currentVoucher.order_id && (
-                                    <div className="flex items-center gap-1 text-indigo-700 font-bold font-mono">
-                                        <ShoppingBag className="w-3 h-3 shrink-0" />
-                                        <span>Đơn: {currentVoucher.order_id}</span>
+                    {/* Chi tiết người nhận & siêu thị & Mã đơn hàng */}
+                    {currentVoucher && (
+                        <div className="bg-slate-50 rounded-2xl p-3 border border-slate-200 text-[11px] space-y-2 text-slate-600">
+                            {currentVoucher.claimed_by_name && (
+                                <div className="flex items-center justify-between flex-wrap gap-1">
+                                    <div className="flex items-center gap-1.5">
+                                        <UserCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                        <span>NV lấy mã: <strong className="text-slate-900">{currentVoucher.claimed_by_name}</strong> ({currentVoucher.claimed_by_id})</span>
                                     </div>
-                                )}
-                                {currentVoucher.claimed_at && (
-                                    <span className="text-slate-400">
-                                        ⏱️ {formatDate(currentVoucher.claimed_at)} {new Date(currentVoucher.claimed_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
-                                    </span>
-                                )}
+                                    {currentVoucher.claimed_by_store && (
+                                        <span className="font-bold text-emerald-800 bg-emerald-100/70 px-2 py-0.5 rounded border border-emerald-200 text-[10px]">
+                                            🏪 {getShortStoreName(currentVoucher.claimed_by_store)}
+                                        </span>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Ô nhập / chỉnh sửa Mã đơn hàng POS */}
+                            <div className={currentVoucher.claimed_by_name ? "pt-1.5 border-t border-slate-200/60" : ""}>
+                                <div className="flex items-center justify-between mb-1">
+                                    <label className="flex items-center gap-1 text-[10.5px] font-bold text-indigo-800">
+                                        <ShoppingBag className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                                        Mã đơn hàng POS:
+                                    </label>
+                                    {currentVoucher.claimed_at && (
+                                        <span className="text-[10px] text-slate-400 font-normal">
+                                            ⏱️ {formatDate(currentVoucher.claimed_at)} {new Date(currentVoucher.claimed_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="relative flex items-center">
+                                    <input
+                                        type="text"
+                                        value={orderIdInput}
+                                        onChange={(e) => setOrderIdInput(e.target.value.toUpperCase())}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                e.preventDefault();
+                                                handleMarkUsed();
+                                            }
+                                        }}
+                                        placeholder="Nhập hoặc sửa mã đơn hàng..."
+                                        disabled={isActionLoading || currentStatus === 'USED'}
+                                        className="w-full pl-3 pr-8 py-1.5 bg-white border border-slate-300 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-400 rounded-xl text-xs font-mono font-bold text-indigo-900 placeholder:text-slate-400 uppercase transition outline-none disabled:bg-slate-100 disabled:text-slate-500"
+                                    />
+                                    {orderIdInput && currentStatus !== 'USED' && !isActionLoading && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setOrderIdInput('')}
+                                            className="absolute right-2 text-slate-400 hover:text-slate-600 text-xs p-1 cursor-pointer"
+                                            title="Xóa mã đơn"
+                                        >
+                                            ✕
+                                        </button>
+                                    )}
+                                </div>
+                                <p className="text-[9.5px] text-slate-400 mt-1 italic">
+                                    * Quản trị có thể hiệu chỉnh mã đơn hàng trước khi bấm &quot;ĐÃ DÙNG&quot; (Enter để lưu &amp; duyệt)
+                                </p>
                             </div>
                         </div>
                     )}

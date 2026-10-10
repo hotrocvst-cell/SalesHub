@@ -54,9 +54,9 @@ export default function SystemAdminPage() {
         if (sqlTab === 'PERMISSIONS') return SYSTEM_PAGE_PERMISSIONS_SQL;
         if (sqlTab === 'AUTH') return AUTH_SYSTEM_SQL;
         if (sqlTab === 'SESSIONS') return EMPLOYEE_DATA_SESSIONS_SQL;
-        return `-- ==================================================\n-- TOÀN BỘ LỆNH TẠO BẢNG SUPABASE CHO SALES HUB\n-- ==================================================\n\n` + 
-            SYSTEM_PAGE_PERMISSIONS_SQL + '\n\n' + 
-            AUTH_SYSTEM_SQL + '\n\n' + 
+        return `-- ==================================================\n-- TOÀN BỘ LỆNH TẠO BẢNG SUPABASE CHO SALES HUB\n-- ==================================================\n\n` +
+            SYSTEM_PAGE_PERMISSIONS_SQL + '\n\n' +
+            AUTH_SYSTEM_SQL + '\n\n' +
             EMPLOYEE_DATA_SESSIONS_SQL;
     };
 
@@ -75,7 +75,7 @@ export default function SystemAdminPage() {
         const full = syncMissingPagesToPermissions(pageList);
         setPageList(full);
         setHasChanges(true);
-        showToast(`⚡ Đã bổ sung ${routeAudit.unmanagedRoutes.length} trang mới vào danh sách! Nhấn "Lưu lên Supabase Cloud" để hoàn tất.`);
+        showToast(`⚡ Đã bổ sung ${routeAudit.unmanagedRoutes.length} trang mới vào danh sách! Nhấn "Lưu lên Cloud" để hoàn tất.`);
     };
 
     const showToast = (msg: string) => {
@@ -89,7 +89,7 @@ export default function SystemAdminPage() {
         const res = await checkCloudConnection();
         setIsCheckingCloud(false);
         if (res.exists) {
-            showToast(`✅ Kết nối Supabase Cloud hoàn tất! Bảng [system_page_permissions] đã sẵn sàng (${res.count} bản ghi).`);
+            showToast(`✅ Kết nối Cloud hoàn tất! Bảng [system_page_permissions] đã sẵn sàng (${res.count} bản ghi).`);
         } else {
             showToast(`⚠️ Chưa tìm thấy bảng [system_page_permissions] trên Supabase! Đang mở hướng dẫn tạo bảng...`);
             setIsSqlModalOpen(true);
@@ -168,7 +168,7 @@ export default function SystemAdminPage() {
         if (res.success) {
             setHasChanges(false);
             if (res.fromSupabase) {
-                showToast('☁️ Đã lưu cấu hình lên Supabase Cloud thành công! Áp dụng ngay cho mọi thiết bị.');
+                showToast('☁️ Đã lưu cấu hình lên Cloud thành công! Áp dụng ngay cho mọi thiết bị.');
             } else {
                 showToast('⚠️ Đã lưu cấu hình tạm vào máy này (Chưa tạo bảng trên Cloud). Bấm "Mã SQL Supabase" để khởi tạo.');
             }
@@ -318,7 +318,7 @@ export default function SystemAdminPage() {
                             }`}
                     >
                         {isSaving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <CloudUpload className="w-4 h-4" />}
-                        <span>{isSaving ? 'ĐANG LƯU LÊN CLOUD...' : '☁️ LƯU LÊN SUPABASE CLOUD'}</span>
+                        <span>{isSaving ? 'ĐANG LƯU LÊN CLOUD...' : '☁️ LƯU LÊN CLOUD'}</span>
                     </button>
                 </div>
             </div>
@@ -332,7 +332,7 @@ export default function SystemAdminPage() {
                             <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
                         </span>
                         <span>
-                            <b>Supabase Cloud Realtime:</b> Cấu hình phân quyền đã đồng bộ trực tuyến. Mọi thay đổi bạn lưu sẽ tự động cập nhật ngay lập tức đến thiết bị của mọi nhân sự mà không cần tải lại trang.
+                            <b>Cloud Realtime:</b> Cấu hình phân quyền đã đồng bộ trực tuyến. Mọi thay đổi bạn lưu sẽ tự động cập nhật ngay lập tức đến thiết bị của mọi nhân sự mà không cần tải lại trang.
                         </span>
                     </div>
                 </div>
@@ -343,7 +343,7 @@ export default function SystemAdminPage() {
                         <div>
                             <span className="font-extrabold block">Đang lưu tạm tại bộ nhớ cục bộ (Local Cache)</span>
                             <span className="text-amber-800 text-[11px]">
-                                Bảng <code className="bg-amber-100 px-1 py-0.2 rounded font-mono font-bold">system_page_permissions</code> chưa được tạo trên Supabase Cloud. Để lưu và đồng bộ ma trận phân quyền cho toàn hệ thống, vui lòng chạy lệnh SQL tạo bảng (chỉ mất 30 giây).
+                                Bảng <code className="bg-amber-100 px-1 py-0.2 rounded font-mono font-bold">system_page_permissions</code> chưa được tạo trên Cloud. Để lưu và đồng bộ ma trận phân quyền cho toàn hệ thống, vui lòng chạy lệnh SQL tạo bảng (chỉ mất 30 giây).
                             </span>
                         </div>
                     </div>
@@ -359,16 +359,14 @@ export default function SystemAdminPage() {
             )}
 
             {/* Khối Kiểm Soát Tính Toàn Vẹn Tuyến Đường (Route Audit & Registry Monitor) */}
-            <div className={`rounded-2xl p-4 border transition-all ${
-                routeAudit.isFullyAudited
+            <div className={`rounded-2xl p-4 border transition-all ${routeAudit.isFullyAudited
                     ? 'bg-emerald-50/70 border-emerald-200 text-emerald-900 shadow-2xs'
                     : 'bg-amber-50/90 border-amber-300 text-amber-950 shadow-sm'
-            }`}>
+                }`}>
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
                     <div className="flex items-start gap-3">
-                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-xs ${
-                            routeAudit.isFullyAudited ? 'bg-emerald-200/80 text-emerald-800' : 'bg-amber-200/90 text-amber-900'
-                        }`}>
+                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-xs ${routeAudit.isFullyAudited ? 'bg-emerald-200/80 text-emerald-800' : 'bg-amber-200/90 text-amber-900'
+                            }`}>
                             <ShieldCheck className="w-5 h-5 stroke-[2.5]" />
                         </div>
                         <div>
@@ -376,11 +374,10 @@ export default function SystemAdminPage() {
                                 <span className="font-extrabold text-xs uppercase tracking-wider text-slate-500">
                                     Kiểm Soát Tính Toàn Vẹn Tuyến Đường (Route Audit)
                                 </span>
-                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
-                                    routeAudit.isFullyAudited
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${routeAudit.isFullyAudited
                                         ? 'bg-emerald-600 text-white'
                                         : 'bg-amber-500 text-white animate-pulse'
-                                }`}>
+                                    }`}>
                                     {routeAudit.isFullyAudited
                                         ? '✓ 100% HOÀN TOÀN ĐỒNG BỘ'
                                         : `⚠️ CÒN ${routeAudit.unmanagedRoutes.length} TRANG CHƯA ĐĂNG KÝ`}
@@ -708,7 +705,7 @@ export default function SystemAdminPage() {
                             <div className="flex items-center gap-2">
                                 <Code className="w-5 h-5 text-indigo-600" />
                                 <h3 className="font-extrabold text-base text-slate-800">
-                                    Mã Lệnh SQL Khởi Tạo Supabase Cloud
+                                    Mã Lệnh SQL Khởi Tạo Cloud
                                 </h3>
                             </div>
                             <button
@@ -725,44 +722,40 @@ export default function SystemAdminPage() {
                             <button
                                 type="button"
                                 onClick={() => setSqlTab('PERMISSIONS')}
-                                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
-                                    sqlTab === 'PERMISSIONS'
+                                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${sqlTab === 'PERMISSIONS'
                                         ? 'bg-indigo-600 text-white shadow-xs'
                                         : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                                }`}
+                                    }`}
                             >
                                 1. Phân Quyền Trang (system_page_permissions)
                             </button>
                             <button
                                 type="button"
                                 onClick={() => setSqlTab('AUTH')}
-                                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
-                                    sqlTab === 'AUTH'
+                                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${sqlTab === 'AUTH'
                                         ? 'bg-indigo-600 text-white shadow-xs'
                                         : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                                }`}
+                                    }`}
                             >
                                 2. Tài Khoản &amp; Xét Duyệt (user_profiles)
                             </button>
                             <button
                                 type="button"
                                 onClick={() => setSqlTab('SESSIONS')}
-                                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
-                                    sqlTab === 'SESSIONS'
+                                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${sqlTab === 'SESSIONS'
                                         ? 'bg-indigo-600 text-white shadow-xs'
                                         : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                                }`}
+                                    }`}
                             >
                                 3. Phiên Dữ Liệu Nhân Sự (employee_data_sessions)
                             </button>
                             <button
                                 type="button"
                                 onClick={() => setSqlTab('ALL')}
-                                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
-                                    sqlTab === 'ALL'
+                                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${sqlTab === 'ALL'
                                         ? 'bg-blue-600 text-white shadow-xs'
                                         : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                                }`}
+                                    }`}
                             >
                                 ⚡ Tất Cả Bảng (Trọn Bộ)
                             </button>
@@ -770,7 +763,7 @@ export default function SystemAdminPage() {
 
                         <div className="space-y-2 text-xs text-slate-600 bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
                             <p className="font-bold text-slate-800">
-                                📌 3 Bước để kích hoạt lưu cấu hình lên Supabase Cloud:
+                                📌 3 Bước để kích hoạt lưu cấu hình lên Cloud:
                             </p>
                             <ol className="list-decimal list-inside space-y-1 text-slate-600">
                                 <li>Nhấn nút <b>"Copy Mã SQL"</b> ở bên dưới.</li>

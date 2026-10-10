@@ -111,9 +111,9 @@ export default function SupabaseSyncStatusBar({
                         <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-black text-xs uppercase tracking-wider flex items-center gap-1.5">
                                 {effectiveStatus === 'PENDING_CHANGES' && '⚠️ CÓ THAY ĐỔI CHƯA LƯU / CHƯA SYNC CLOUD'}
-                                {effectiveStatus === 'READY' && '🟢 SUPABASE CLOUD: SẴN SÀNG (ĐÃ KẾT NỐI)'}
+                                {effectiveStatus === 'READY' && '🟢 CLOUD: SẴN SÀNG (ĐÃ KẾT NỐI)'}
                                 {(effectiveStatus === 'SYNCING' || effectiveStatus === 'CHECKING') && '🔄 ĐANG KẾT NỐI & ĐỒNG BỘ DỮ LIỆU...'}
-                                {effectiveStatus === 'OFFLINE' && '❌ MẤT KẾT NỐI SUPABASE CLOUD (CHẾ ĐỘ OFFLINE)'}
+                                {effectiveStatus === 'OFFLINE' && '❌ MẤT KẾT NỐI CLOUD (CHẾ ĐỘ OFFLINE)'}
                             </span>
 
                             {effectiveStatus === 'PENDING_CHANGES' && (
@@ -145,7 +145,7 @@ export default function SupabaseSyncStatusBar({
                             )}
                             {(effectiveStatus === 'SYNCING' || effectiveStatus === 'CHECKING') && (
                                 <>
-                                    Đang truyền tải và đồng bộ các thay đổi mới nhất lên cơ sở dữ liệu Supabase Cloud...
+                                    Đang truyền tải và đồng bộ các thay đổi mới nhất lên cơ sở dữ liệu CLOUD...
                                 </>
                             )}
                             {effectiveStatus === 'OFFLINE' && (
@@ -183,7 +183,7 @@ export default function SupabaseSyncStatusBar({
                                     ? 'bg-white hover:bg-emerald-100/60 text-emerald-800 border-emerald-300'
                                     : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-300'
                         }`}
-                        title="Kiểm tra lại trạng thái kết nối với Supabase Cloud"
+                        title="Kiểm tra lại trạng thái kết nối với CLOUD"
                     >
                         <RefreshCw className={`w-3.5 h-3.5 ${isSyncing || status === 'CHECKING' ? 'animate-spin text-indigo-600' : ''}`} />
                         <span className="hidden sm:inline">Kiểm tra kết nối</span>
@@ -208,7 +208,7 @@ export default function SupabaseSyncStatusBar({
                     <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                         <span className="font-extrabold text-slate-700 flex items-center gap-1.5">
                             <Database className="w-4 h-4 text-indigo-600" />
-                            CHI TIẾT KẾT NỐI BẢNG DỮ LIỆU TRÊN SUPABASE CLOUD
+                            CHI TIẾT KẾT NỐI BẢNG DỮ LIỆU TRÊN CLOUD
                         </span>
                         <span className="text-[11px] text-slate-400">
                             Lần kiểm tra cuối: <b>{lastCheckedTime || 'Chưa kiểm tra'}</b>
@@ -256,7 +256,7 @@ export default function SupabaseSyncStatusBar({
                     <div className="p-2.5 rounded-xl bg-indigo-50/70 border border-indigo-200 text-indigo-950 text-[11px] flex items-start gap-2">
                         <Info className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
                         <div className="leading-relaxed">
-                            Hệ thống hoạt động với kiến trúc <b>Offline-First & Cloud-Synced</b>: Dữ liệu được lưu ngay lập tức vào LocalStorage của bạn để thao tác cực nhanh, đồng thời tự động đồng bộ lên Supabase Cloud để dữ liệu không bị mất và xem được trên nhiều thiết bị.
+                            Hệ thống hoạt động với kiến trúc <b>Offline-First & Cloud-Synced</b>: Dữ liệu được lưu ngay lập tức vào LocalStorage của bạn để thao tác cực nhanh, đồng thời tự động đồng bộ lên CLOUD để dữ liệu không bị mất và xem được trên nhiều thiết bị.
                         </div>
                     </div>
                 </div>

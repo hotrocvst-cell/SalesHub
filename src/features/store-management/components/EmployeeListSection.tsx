@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import type { EmployeeItem, StoreItem } from '../../../core/lib/storage';
+import { formatCapitalizeWords } from '../../../core/lib/formatters';
 import {
     Users,
     Plus,
@@ -133,6 +134,7 @@ export default function EmployeeListSection({
         const chosenRole = editingEmp.role?.trim() || 'Nhân viên';
         const payload: Partial<EmployeeItem> = {
             ...editingEmp,
+            full_name: formatCapitalizeWords(editingEmp.full_name.trim()),
             role: chosenRole,
             job_title: chosenRole
         };
@@ -142,7 +144,7 @@ export default function EmployeeListSection({
             setIsModalOpen(false);
             setEditingEmp(null);
         } else {
-            setErrorMsg('Lưu thất bại! Mã nhân viên có thể đã tồn tại.');
+            setErrorMsg('Lưu thất bại! Vui lòng kiểm tra lại kết nối mạng hoặc dữ liệu nhập.');
         }
     };
 
@@ -433,6 +435,7 @@ export default function EmployeeListSection({
                                     placeholder="Ví dụ: Nguyễn Thị Hồng Loan"
                                     value={editingEmp.full_name || ''}
                                     onChange={e => setEditingEmp({ ...editingEmp, full_name: e.target.value })}
+                                    onBlur={() => setEditingEmp(prev => prev ? { ...prev, full_name: formatCapitalizeWords(prev.full_name || '') } : prev)}
                                     className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500 font-semibold text-slate-900"
                                     required
                                 />

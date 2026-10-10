@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../shared/contexts/AuthContext';
 import { sendPasswordResetEmail } from '../../core/lib/authService';
-import { Store, LogIn, Lock, Mail, ChevronRight, AlertCircle, Send, CheckCircle2, KeyRound } from 'lucide-react';
+import AccountStatusLookupModal from './components/AccountStatusLookupModal';
+import { Store, LogIn, Lock, Mail, ChevronRight, AlertCircle, Send, CheckCircle2, KeyRound, Search } from 'lucide-react';
 
 export default function LoginPage() {
     const navigate = useNavigate();
@@ -32,6 +33,9 @@ export default function LoginPage() {
     const [isSendingReset, setIsSendingReset] = useState(false);
     const [forgotSuccess, setForgotSuccess] = useState(false);
     const [forgotError, setForgotError] = useState('');
+
+    // Tra cứu trạng thái modal state
+    const [isLookupModalOpen, setIsLookupModalOpen] = useState(false);
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -174,14 +178,26 @@ export default function LoginPage() {
                         </button>
                     </form>
 
-                    <div className="text-center pt-2 border-t border-slate-100">
-                        <span className="text-xs text-slate-500">Chưa có tài khoản trên hệ thống? </span>
-                        <Link
-                            to="/dang-ky"
-                            className="text-xs font-black text-blue-600 hover:text-blue-700 hover:underline transition"
-                        >
-                            Đăng ký tài khoản mới &rarr;
-                        </Link>
+                    <div className="text-center pt-2 border-t border-slate-100 space-y-2">
+                        <div>
+                            <span className="text-xs text-slate-500">Chưa có tài khoản trên hệ thống? </span>
+                            <Link
+                                to="/dang-ky"
+                                className="text-xs font-black text-blue-600 hover:text-blue-700 hover:underline transition"
+                            >
+                                Đăng ký tài khoản mới &rarr;
+                            </Link>
+                        </div>
+                        <div>
+                            <button
+                                type="button"
+                                onClick={() => setIsLookupModalOpen(true)}
+                                className="text-[11px] font-bold text-slate-500 hover:text-blue-600 hover:underline inline-flex items-center gap-1 cursor-pointer transition"
+                            >
+                                <Search className="w-3.5 h-3.5" />
+                                <span>Đang chờ duyệt hoặc bị từ chối? Tra cứu trạng thái tài khoản</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -290,6 +306,13 @@ export default function LoginPage() {
                     </div>
                 </div>
             )}
+
+            {/* Modal Tra Cứu Trạng Thái Xét Duyệt Tài Khoản */}
+            <AccountStatusLookupModal
+                isOpen={isLookupModalOpen}
+                onClose={() => setIsLookupModalOpen(false)}
+                initialSearchKey={accountKey}
+            />
         </div>
     );
 }

@@ -16,8 +16,11 @@ import {
 import { getYesterdayDateString } from '../../../core/lib/formatters';
 import { calculateDataStatus } from '../utils/statusCalculator';
 import type { DataStreamStatus, StoreMatrixRow, OverallReadinessSummary } from '../types';
+import { useAuth } from '../../../shared/contexts/AuthContext';
+import { useUserStoreFilter } from '../../../shared/hooks/useUserStoreFilter';
 
 export function useDataStatus() {
+    const { currentUser, isAdmin } = useAuth();
     const today = useMemo(() => new Date(), []);
     const [selectedMonth, setSelectedMonth] = useState<number>(() => today.getMonth() + 1);
     const [selectedYear, setSelectedYear] = useState<number>(() => today.getFullYear());
@@ -39,6 +42,13 @@ export function useDataStatus() {
     const [empCampaignTargets, setEmpCampaignTargets] = useState<any[]>([]);
     const [stores, setStores] = useState<StoreItem[]>([]);
     const [employees, setEmployees] = useState<EmployeeItem[]>([]);
+
+    // Phân quyền siêu thị theo tài khoản người dùng
+    const { allowedStores, isLockedToSingleStore, canViewAllStores } = useUserStoreFilter(
+        stores,
+        selectedStore,
+        setSelectedStore
+    );
 
     const [loading, setLoading] = useState<boolean>(true);
     const [lastRefreshedAt, setLastRefreshedAt] = useState<Date>(new Date());
@@ -96,14 +106,14 @@ export function useDataStatus() {
         loadAllData();
     }, [loadAllData]);
 
-    // Tính toán kết quả trạng thái
+    // Tính toán kết quả trạng thái (Chỉ tính trên phạm vi siêu thị được phân quyền của user)
     const calculated = useMemo(() => {
         return calculateDataStatus({
             records,
             sessions,
             empRevenueTargets,
             empCampaignTargets,
-            stores,
+            stores: allowedStores,
             employees,
             targetStore: selectedStore,
             expectedDate,
@@ -116,7 +126,7 @@ export function useDataStatus() {
         sessions,
         empRevenueTargets,
         empCampaignTargets,
-        stores,
+        allowedStores,
         employees,
         selectedStore,
         expectedDate,
@@ -139,7 +149,13 @@ export function useDataStatus() {
         lastRefreshedAt,
         error,
         refresh: loadAllData,
-        stores,
+        stores: allowedStores,
+        allStores: stores,
+        allowedStores,
+        isLockedToSingleStore,
+        canViewAllStores,
+        currentUser,
+        isAdmin,
         streams: calculated.streams,
         matrix: calculated.matrix,
         summary: calculated.summary

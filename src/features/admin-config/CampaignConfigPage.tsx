@@ -109,11 +109,11 @@ export default function CampaignConfigPage() {
             if (res.isConnected) {
                 setCloudStatus('READY');
                 setCloudError(undefined);
-                showToast('🟢 Kết nối Supabase Cloud: Sẵn sàng và ổn định!');
+                showToast('🟢 Kết nối Cloud: Sẵn sàng và ổn định!');
             } else {
                 setCloudStatus('OFFLINE');
-                setCloudError(res.error || 'Không thể kết nối Supabase Cloud');
-                showToast(`⚠️ Không thể kết nối Supabase: ${res.error || 'Lỗi mạng'}`);
+                setCloudError(res.error || 'Không thể kết nối Cloud');
+                showToast(`⚠️ Không thể kết nối Cloud: ${res.error || 'Lỗi mạng'}`);
             }
         } catch (err: any) {
             setCloudStatus('OFFLINE');
@@ -154,7 +154,7 @@ export default function CampaignConfigPage() {
             }
 
             // Đồng bộ ngầm cấu hình điểm từ Supabase nếu có
-            syncStoreCampaignScoresFromCloud().catch(() => {});
+            syncStoreCampaignScoresFromCloud().catch(() => { });
         } finally {
             setHasChanges(false);
             setIsCheckingCloud(false);
@@ -453,7 +453,7 @@ export default function CampaignConfigPage() {
                     syncStoreCampaignScoresFromCloud()
                 ]);
                 await handleCheckCloudConnection();
-                showToast('⚡ Đã kiểm tra và đồng bộ dữ liệu mới nhất từ Supabase Cloud!');
+                showToast('⚡ Đã kiểm tra và đồng bộ dữ liệu mới nhất từ Cloud!');
             }
         } finally {
             setIsSyncingAll(false);
@@ -489,16 +489,15 @@ export default function CampaignConfigPage() {
                         type="button"
                         onClick={handleCheckCloudConnection}
                         disabled={isCheckingCloud}
-                        title={`Bấm để kiểm tra lại kết nối Supabase Cloud. Lần kiểm tra cuối: ${lastCheckedTime || 'Chưa kiểm tra'}`}
-                        className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-2 transition cursor-pointer shadow-2xs ${
-                            (hasChanges || hasScoreChanges)
+                        title={`Bấm để kiểm tra lại kết nối Cloud. Lần kiểm tra cuối: ${lastCheckedTime || 'Chưa kiểm tra'}`}
+                        className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-2 transition cursor-pointer shadow-2xs ${(hasChanges || hasScoreChanges)
                                 ? 'bg-amber-50 border-amber-300 text-amber-900 hover:bg-amber-100 ring-1 ring-amber-400/50'
                                 : cloudStatus === 'READY'
                                     ? 'bg-emerald-50 border-emerald-300 text-emerald-900 hover:bg-emerald-100'
                                     : cloudStatus === 'OFFLINE'
                                         ? 'bg-rose-50 border-rose-300 text-rose-900 hover:bg-rose-100'
                                         : 'bg-blue-50 border-blue-300 text-blue-900 hover:bg-blue-100'
-                        }`}
+                            }`}
                     >
                         <span className="relative flex h-2 w-2">
                             {(hasChanges || hasScoreChanges) ? (
@@ -535,11 +534,10 @@ export default function CampaignConfigPage() {
                         <button
                             type="button"
                             onClick={() => setActiveMainTab('store_scores')}
-                            className={`px-3.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition cursor-pointer ${
-                                activeMainTab === 'store_scores'
+                            className={`px-3.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition cursor-pointer ${activeMainTab === 'store_scores'
                                     ? 'bg-white text-amber-900 shadow-xs'
                                     : 'text-slate-600 hover:text-slate-900'
-                            }`}
+                                }`}
                         >
                             <Award className="w-4 h-4 text-amber-600" />
                             <span>🎯 Điểm thi đua Siêu thị</span>
@@ -548,11 +546,10 @@ export default function CampaignConfigPage() {
                         <button
                             type="button"
                             onClick={() => setActiveMainTab('dictionary')}
-                            className={`px-3.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition cursor-pointer ${
-                                activeMainTab === 'dictionary'
+                            className={`px-3.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition cursor-pointer ${activeMainTab === 'dictionary'
                                     ? 'bg-white text-indigo-900 shadow-xs'
                                     : 'text-slate-600 hover:text-slate-900'
-                            }`}
+                                }`}
                         >
                             <BookOpen className="w-4 h-4 text-indigo-600" />
                             <span>📖 Từ điển viết tắt ({campaignList.length})</span>
@@ -650,333 +647,333 @@ export default function CampaignConfigPage() {
                                 <div className="p-2 rounded-xl bg-amber-100 text-amber-700 shrink-0">
                                     <AlertCircle className="w-5 h-5 text-amber-600" />
                                 </div>
-                        <div>
-                            <h3 className="font-extrabold text-xs uppercase tracking-wider text-amber-900 flex items-center gap-2">
-                                <span>⚠️ Có thay đổi về từ điển thi đua chưa được đồng bộ lên Supabase Cloud!</span>
-                            </h3>
-                            <p className="text-xs text-amber-800 mt-0.5 leading-relaxed">
-                                Bạn vừa sửa đổi thông tin, trạng thái hoặc sắp xếp lại thứ tự. Hãy bấm nút lưu để cập nhật vào hệ thống.
-                            </p>
+                                <div>
+                                    <h3 className="font-extrabold text-xs uppercase tracking-wider text-amber-900 flex items-center gap-2">
+                                        <span>⚠️ Có thay đổi về từ điển thi đua chưa được đồng bộ lên Cloud!</span>
+                                    </h3>
+                                    <p className="text-xs text-amber-800 mt-0.5 leading-relaxed">
+                                        Bạn vừa sửa đổi thông tin, trạng thái hoặc sắp xếp lại thứ tự. Hãy bấm nút lưu để cập nhật vào hệ thống.
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                                <button
+                                    type="button"
+                                    onClick={handleBatchSave}
+                                    disabled={isSaving}
+                                    className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl text-xs font-black flex items-center gap-1.5 shadow-sm transition cursor-pointer disabled:opacity-50"
+                                >
+                                    <Save className={`w-4 h-4 ${isSaving ? 'animate-spin' : ''}`} />
+                                    <span>{isSaving ? 'ĐANG ĐỒNG BỘ...' : '⚡ ĐỒNG BỘ LÊN CLOUD NGAY'}</span>
+                                </button>
+                            </div>
                         </div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                        <button
-                            type="button"
-                            onClick={handleBatchSave}
-                            disabled={isSaving}
-                            className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl text-xs font-black flex items-center gap-1.5 shadow-sm transition cursor-pointer disabled:opacity-50"
-                        >
-                            <Save className={`w-4 h-4 ${isSaving ? 'animate-spin' : ''}`} />
-                            <span>{isSaving ? 'ĐANG ĐỒNG BỘ...' : '⚡ ĐỒNG BỘ LÊN CLOUD NGAY'}</span>
-                        </button>
-                    </div>
-                </div>
-            )}
+                    )}
 
-            {/* THANH ĐIỀU KHIỂN: TÌM KIẾM, BỘ LỌC TRẠNG THÁI & SẮP XẾP */}
-            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3">
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-                    {/* Ô Tìm kiếm */}
-                    <div className="relative flex-1 max-w-md">
-                        <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-                        <input
-                            type="text"
-                            placeholder="Tìm theo Mã gốc, Tên hiển thị viết tắt hoặc Đơn vị..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-medium outline-none focus:ring-2 focus:ring-indigo-500"
-                        />
-                        {searchQuery && (
-                            <button
-                                onClick={() => setSearchQuery('')}
-                                className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 text-xs font-bold"
-                            >
-                                ✕
-                            </button>
-                        )}
-                    </div>
-
-                    {/* Bộ lọc trạng thái dạng Tabs / Pills */}
-                    <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl text-xs font-bold">
-                        <button
-                            onClick={() => setStatusFilter('ALL')}
-                            className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${statusFilter === 'ALL'
-                                ? 'bg-white text-slate-800 shadow-xs'
-                                : 'text-slate-500 hover:text-slate-800'
-                                }`}
-                        >
-                            Tất cả ({campaignList.length})
-                        </button>
-                        <button
-                            onClick={() => setStatusFilter('ACTIVE')}
-                            className={`px-3 py-1.5 rounded-lg transition cursor-pointer flex items-center gap-1 ${statusFilter === 'ACTIVE'
-                                ? 'bg-white text-emerald-700 shadow-xs'
-                                : 'text-slate-500 hover:text-emerald-700'
-                                }`}
-                        >
-                            <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
-                            Đang áp dụng ({countActive})
-                        </button>
-                        <button
-                            onClick={() => setStatusFilter('INACTIVE')}
-                            className={`px-3 py-1.5 rounded-lg transition cursor-pointer flex items-center gap-1 ${statusFilter === 'INACTIVE'
-                                ? 'bg-white text-slate-700 shadow-xs'
-                                : 'text-slate-500 hover:text-slate-700'
-                                }`}
-                        >
-                            <span className="w-2 h-2 rounded-full bg-slate-400 inline-block" />
-                            Tạm ẩn ({countInactive})
-                        </button>
-                    </div>
-
-                    {/* Bộ chọn Sắp xếp nhanh */}
-                    <div className="flex items-center gap-2">
-                        <div className="flex items-center gap-1.5 text-xs font-bold text-slate-600">
-                            <SlidersHorizontal className="w-3.5 h-3.5 text-slate-400" />
-                            <span>Sắp xếp:</span>
-                        </div>
-                        <select
-                            value={`${sortField}_${sortDirection}`}
-                            onChange={(e) => {
-                                const [field, dir] = e.target.value.split('_') as [SortField, SortDirection];
-                                setSortField(field);
-                                setSortDirection(dir);
-                            }}
-                            className="px-3 py-1.5 text-xs font-bold rounded-xl border border-slate-300 bg-slate-50 text-slate-700 outline-none cursor-pointer focus:ring-2 focus:ring-indigo-500"
-                        >
-                            <option value="order_index_asc">🔢 Thứ tự mặc định (1 → N)</option>
-                            <option value="order_index_desc">🔢 Thứ tự ngược (N → 1)</option>
-                            <option value="raw_key_asc">🔤 Tên gốc báo cáo (A → Z)</option>
-                            <option value="raw_key_desc">🔤 Tên gốc báo cáo (Z → A)</option>
-                            <option value="display_name_asc">🏷️ Tên viết tắt (A → Z)</option>
-                            <option value="display_name_desc">🏷️ Tên viết tắt (Z → A)</option>
-                            <option value="unit_asc">📏 Đơn vị tính (A → Z)</option>
-                            <option value="is_active_desc">✅ Đang áp dụng lên trước</option>
-                            <option value="is_active_asc">📦 Tạm ẩn lên trước</option>
-                        </select>
-                    </div>
-                </div>
-
-                {/* Hàng công cụ phụ: Đánh lại số thứ tự và nút Tải lại */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-slate-100 text-xs text-slate-500">
-                    <div className="flex items-center gap-2">
-                        <span>Hiển thị: <b>{filteredAndSortedList.length}</b> / {campaignList.length} mục</span>
-                        <span>•</span>
-                        <span className="text-slate-400">
-                            Mẹo: Bấm trực tiếp vào tiêu đề cột bên dưới để sắp xếp nhanh (A-Z hoặc Z-A).
-                        </span>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                        <button
-                            onClick={handleAutoReindex}
-                            title="Tự động gán lại thứ tự 1, 2, 3... theo đúng thứ tự đang sắp xếp hiện tại"
-                            className="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs flex items-center gap-1 transition cursor-pointer border border-indigo-200"
-                        >
-                            <Hash className="w-3 h-3 text-indigo-600" />
-                            <span>Đánh lại số thứ tự (1, 2, 3...)</span>
-                        </button>
-
-                        <button
-                            onClick={loadData}
-                            disabled={loading}
-                            className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition cursor-pointer"
-                            title="Tải lại từ điển từ máy chủ"
-                        >
-                            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            {/* Bảng Từ Điển Thi Đua */}
-            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
-                <div className="overflow-x-auto no-scrollbar">
-                    <table className="w-full text-xs text-left min-w-[880px]">
-                        <thead className="bg-slate-100 text-slate-700 uppercase text-[10px] font-black tracking-wider border-b border-slate-200 select-none">
-                            <tr>
-                                {/* Cột Thứ tự */}
-                                <th
-                                    onClick={() => handleSortToggle('order_index')}
-                                    className="py-3 px-3 w-20 text-center cursor-pointer hover:bg-slate-200/70 transition group"
-                                    title="Bấm để sắp xếp theo Thứ tự"
-                                >
-                                    <div className="flex items-center justify-center gap-1">
-                                        <span>THỨ TỰ</span>
-                                        {renderSortIcon('order_index')}
-                                    </div>
-                                </th>
-
-                                {/* Cột Mã gốc báo cáo */}
-                                <th
-                                    onClick={() => handleSortToggle('raw_key')}
-                                    className="py-3 px-3 w-72 cursor-pointer hover:bg-slate-200/70 transition group"
-                                    title="Bấm để sắp xếp theo Mã gốc báo cáo"
-                                >
-                                    <div className="flex items-center gap-1">
-                                        <span>MÃ GỐC BÁO CÁO (RAW KEY)</span>
-                                        {renderSortIcon('raw_key')}
-                                    </div>
-                                </th>
-
-                                {/* Cột Tên hiển thị viết tắt */}
-                                <th
-                                    onClick={() => handleSortToggle('display_name')}
-                                    className="py-3 px-3 cursor-pointer hover:bg-slate-200/70 transition group"
-                                    title="Bấm để sắp xếp theo Tên hiển thị viết tắt"
-                                >
-                                    <div className="flex items-center gap-1">
-                                        <span>TÊN HIỂN THỊ VIẾT TẮT</span>
-                                        {renderSortIcon('display_name')}
-                                    </div>
-                                </th>
-
-                                {/* Cột Đơn vị */}
-                                <th
-                                    onClick={() => handleSortToggle('unit')}
-                                    className="py-3 px-3 w-32 cursor-pointer hover:bg-slate-200/70 transition group"
-                                    title="Bấm để sắp xếp theo Đơn vị tính"
-                                >
-                                    <div className="flex items-center gap-1">
-                                        <span>ĐƠN VỊ</span>
-                                        {renderSortIcon('unit')}
-                                    </div>
-                                </th>
-
-                                {/* Cột Trạng thái */}
-                                <th
-                                    onClick={() => handleSortToggle('is_active')}
-                                    className="py-3 px-3 w-36 text-center cursor-pointer hover:bg-slate-200/70 transition group"
-                                    title="Bấm để sắp xếp theo Trạng thái áp dụng"
-                                >
-                                    <div className="flex items-center justify-center gap-1">
-                                        <span>TRẠNG THÁI</span>
-                                        {renderSortIcon('is_active')}
-                                    </div>
-                                </th>
-
-                                {/* Cột Xóa / Tạm ẩn */}
-                                <th className="py-3 px-3 w-16 text-center">XÓA</th>
-                            </tr>
-                        </thead>
-
-                        <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
-                            {loading ? (
-                                <tr>
-                                    <td colSpan={6} className="py-12 text-center text-slate-400 font-semibold">
-                                        <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-500" />
-                                        Đang nạp từ điển thi đua...
-                                    </td>
-                                </tr>
-                            ) : filteredAndSortedList.length === 0 ? (
-                                <tr>
-                                    <td colSpan={6} className="py-12 text-center text-slate-400 font-semibold">
-                                        Không tìm thấy mục thi đua nào phù hợp với điều kiện lọc!
-                                    </td>
-                                </tr>
-                            ) : (
-                                filteredAndSortedList.map((item, idx) => (
-                                    <tr
-                                        key={item.id || idx}
-                                        className={`hover:bg-indigo-50/30 transition ${item.isNew
-                                            ? 'bg-amber-50/50'
-                                            : !item.is_active
-                                                ? 'bg-slate-50/60 opacity-80'
-                                                : ''
-                                            }`}
+                    {/* THANH ĐIỀU KHIỂN: TÌM KIẾM, BỘ LỌC TRẠNG THÁI & SẮP XẾP */}
+                    <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+                        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                            {/* Ô Tìm kiếm */}
+                            <div className="relative flex-1 max-w-md">
+                                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                                <input
+                                    type="text"
+                                    placeholder="Tìm theo Mã gốc, Tên hiển thị viết tắt hoặc Đơn vị..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+                                />
+                                {searchQuery && (
+                                    <button
+                                        onClick={() => setSearchQuery('')}
+                                        className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 text-xs font-bold"
                                     >
-                                        {/* Thứ tự hiển thị */}
-                                        <td className="py-2 px-3 text-center">
-                                            <input
-                                                type="number"
-                                                value={item.order_index ?? idx + 1}
-                                                onChange={(e) => handleFieldChange(item.id, 'order_index', parseInt(e.target.value) || 0)}
-                                                className="w-14 bg-slate-50 border border-slate-300 rounded-md py-1 text-center font-mono text-xs font-bold text-slate-700 outline-none focus:ring-1 focus:ring-indigo-500"
-                                            />
-                                        </td>
+                                        ✕
+                                    </button>
+                                )}
+                            </div>
 
-                                        {/* Mã gốc (RAW KEY) */}
-                                        <td className="py-2 px-3">
-                                            <input
-                                                type="text"
-                                                value={item.raw_key}
-                                                placeholder="VD: Điện thoại Vivo"
-                                                onChange={(e) => handleFieldChange(item.id, 'raw_key', e.target.value)}
-                                                className="w-full bg-slate-50 hover:bg-white focus:bg-white border border-slate-300 focus:border-indigo-500 rounded-lg px-2.5 py-1 font-mono font-bold text-indigo-700 outline-none"
-                                            />
-                                        </td>
+                            {/* Bộ lọc trạng thái dạng Tabs / Pills */}
+                            <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl text-xs font-bold">
+                                <button
+                                    onClick={() => setStatusFilter('ALL')}
+                                    className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${statusFilter === 'ALL'
+                                        ? 'bg-white text-slate-800 shadow-xs'
+                                        : 'text-slate-500 hover:text-slate-800'
+                                        }`}
+                                >
+                                    Tất cả ({campaignList.length})
+                                </button>
+                                <button
+                                    onClick={() => setStatusFilter('ACTIVE')}
+                                    className={`px-3 py-1.5 rounded-lg transition cursor-pointer flex items-center gap-1 ${statusFilter === 'ACTIVE'
+                                        ? 'bg-white text-emerald-700 shadow-xs'
+                                        : 'text-slate-500 hover:text-emerald-700'
+                                        }`}
+                                >
+                                    <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
+                                    Đang áp dụng ({countActive})
+                                </button>
+                                <button
+                                    onClick={() => setStatusFilter('INACTIVE')}
+                                    className={`px-3 py-1.5 rounded-lg transition cursor-pointer flex items-center gap-1 ${statusFilter === 'INACTIVE'
+                                        ? 'bg-white text-slate-700 shadow-xs'
+                                        : 'text-slate-500 hover:text-slate-700'
+                                        }`}
+                                >
+                                    <span className="w-2 h-2 rounded-full bg-slate-400 inline-block" />
+                                    Tạm ẩn ({countInactive})
+                                </button>
+                            </div>
 
-                                        {/* Tên hiển thị viết tắt */}
-                                        <td className="py-2 px-3">
-                                            <input
-                                                type="text"
-                                                value={item.display_name}
-                                                placeholder="VD: Bảo hiểm ĐMX"
-                                                onChange={(e) => handleFieldChange(item.id, 'display_name', e.target.value)}
-                                                className="w-full bg-slate-50 hover:bg-white focus:bg-white border border-slate-300 focus:border-emerald-500 rounded-lg px-2.5 py-1 font-bold text-slate-800 outline-none"
-                                            />
-                                        </td>
+                            {/* Bộ chọn Sắp xếp nhanh */}
+                            <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-1.5 text-xs font-bold text-slate-600">
+                                    <SlidersHorizontal className="w-3.5 h-3.5 text-slate-400" />
+                                    <span>Sắp xếp:</span>
+                                </div>
+                                <select
+                                    value={`${sortField}_${sortDirection}`}
+                                    onChange={(e) => {
+                                        const [field, dir] = e.target.value.split('_') as [SortField, SortDirection];
+                                        setSortField(field);
+                                        setSortDirection(dir);
+                                    }}
+                                    className="px-3 py-1.5 text-xs font-bold rounded-xl border border-slate-300 bg-slate-50 text-slate-700 outline-none cursor-pointer focus:ring-2 focus:ring-indigo-500"
+                                >
+                                    <option value="order_index_asc">🔢 Thứ tự mặc định (1 → N)</option>
+                                    <option value="order_index_desc">🔢 Thứ tự ngược (N → 1)</option>
+                                    <option value="raw_key_asc">🔤 Tên gốc báo cáo (A → Z)</option>
+                                    <option value="raw_key_desc">🔤 Tên gốc báo cáo (Z → A)</option>
+                                    <option value="display_name_asc">🏷️ Tên viết tắt (A → Z)</option>
+                                    <option value="display_name_desc">🏷️ Tên viết tắt (Z → A)</option>
+                                    <option value="unit_asc">📏 Đơn vị tính (A → Z)</option>
+                                    <option value="is_active_desc">✅ Đang áp dụng lên trước</option>
+                                    <option value="is_active_asc">📦 Tạm ẩn lên trước</option>
+                                </select>
+                            </div>
+                        </div>
 
-                                        {/* Đơn vị tính */}
-                                        <td className="py-2 px-3">
-                                            <div className="relative">
-                                                <input
-                                                    type="text"
-                                                    list={`units_${item.id}`}
-                                                    value={item.unit || 'Cái'}
-                                                    onChange={(e) => handleFieldChange(item.id, 'unit', e.target.value)}
-                                                    className="w-full bg-slate-50 hover:bg-white focus:bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-xs font-semibold text-slate-700 outline-none focus:ring-1 focus:ring-indigo-500"
-                                                />
-                                                <datalist id={`units_${item.id}`}>
-                                                    {COMMON_UNITS.map(u => (
-                                                        <option key={u} value={u} />
-                                                    ))}
-                                                </datalist>
+                        {/* Hàng công cụ phụ: Đánh lại số thứ tự và nút Tải lại */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-slate-100 text-xs text-slate-500">
+                            <div className="flex items-center gap-2">
+                                <span>Hiển thị: <b>{filteredAndSortedList.length}</b> / {campaignList.length} mục</span>
+                                <span>•</span>
+                                <span className="text-slate-400">
+                                    Mẹo: Bấm trực tiếp vào tiêu đề cột bên dưới để sắp xếp nhanh (A-Z hoặc Z-A).
+                                </span>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={handleAutoReindex}
+                                    title="Tự động gán lại thứ tự 1, 2, 3... theo đúng thứ tự đang sắp xếp hiện tại"
+                                    className="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs flex items-center gap-1 transition cursor-pointer border border-indigo-200"
+                                >
+                                    <Hash className="w-3 h-3 text-indigo-600" />
+                                    <span>Đánh lại số thứ tự (1, 2, 3...)</span>
+                                </button>
+
+                                <button
+                                    onClick={loadData}
+                                    disabled={loading}
+                                    className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition cursor-pointer"
+                                    title="Tải lại từ điển từ máy chủ"
+                                >
+                                    <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Bảng Từ Điển Thi Đua */}
+                    <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
+                        <div className="overflow-x-auto no-scrollbar">
+                            <table className="w-full text-xs text-left min-w-[880px]">
+                                <thead className="bg-slate-100 text-slate-700 uppercase text-[10px] font-black tracking-wider border-b border-slate-200 select-none">
+                                    <tr>
+                                        {/* Cột Thứ tự */}
+                                        <th
+                                            onClick={() => handleSortToggle('order_index')}
+                                            className="py-3 px-3 w-20 text-center cursor-pointer hover:bg-slate-200/70 transition group"
+                                            title="Bấm để sắp xếp theo Thứ tự"
+                                        >
+                                            <div className="flex items-center justify-center gap-1">
+                                                <span>THỨ TỰ</span>
+                                                {renderSortIcon('order_index')}
                                             </div>
-                                        </td>
+                                        </th>
 
-                                        {/* Trạng thái Bật/Tắt */}
-                                        <td className="py-2 px-3 text-center">
-                                            <button
-                                                onClick={() => handleFieldChange(item.id, 'is_active', !item.is_active)}
-                                                className={`px-3 py-1 rounded-full text-[11px] font-bold transition cursor-pointer flex items-center justify-center gap-1 mx-auto ${item.is_active
-                                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
-                                                    : 'bg-slate-100 text-slate-500 border border-slate-300 hover:bg-slate-200'
-                                                    }`}
-                                                title={item.is_active ? 'Bấm để Tạm ẩn mục này' : 'Bấm để Áp dụng lại mục này'}
-                                            >
-                                                {item.is_active ? (
-                                                    <>
-                                                        <Check className="w-3 h-3 text-emerald-600" />
-                                                        <span>Áp dụng</span>
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <Archive className="w-3 h-3 text-slate-400" />
-                                                        <span>Tạm ẩn</span>
-                                                    </>
-                                                )}
-                                            </button>
-                                        </td>
+                                        {/* Cột Mã gốc báo cáo */}
+                                        <th
+                                            onClick={() => handleSortToggle('raw_key')}
+                                            className="py-3 px-3 w-72 cursor-pointer hover:bg-slate-200/70 transition group"
+                                            title="Bấm để sắp xếp theo Mã gốc báo cáo"
+                                        >
+                                            <div className="flex items-center gap-1">
+                                                <span>MÃ GỐC BÁO CÁO (RAW KEY)</span>
+                                                {renderSortIcon('raw_key')}
+                                            </div>
+                                        </th>
 
-                                        {/* Nút Xóa */}
-                                        <td className="py-2 px-3 text-center">
-                                            <button
-                                                onClick={() => handleDeleteClick(item)}
-                                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
-                                                title="Xóa hoặc Tạm ẩn mục này"
-                                            >
-                                                <Trash2 className="w-4 h-4" />
-                                            </button>
-                                        </td>
+                                        {/* Cột Tên hiển thị viết tắt */}
+                                        <th
+                                            onClick={() => handleSortToggle('display_name')}
+                                            className="py-3 px-3 cursor-pointer hover:bg-slate-200/70 transition group"
+                                            title="Bấm để sắp xếp theo Tên hiển thị viết tắt"
+                                        >
+                                            <div className="flex items-center gap-1">
+                                                <span>TÊN HIỂN THỊ VIẾT TẮT</span>
+                                                {renderSortIcon('display_name')}
+                                            </div>
+                                        </th>
+
+                                        {/* Cột Đơn vị */}
+                                        <th
+                                            onClick={() => handleSortToggle('unit')}
+                                            className="py-3 px-3 w-32 cursor-pointer hover:bg-slate-200/70 transition group"
+                                            title="Bấm để sắp xếp theo Đơn vị tính"
+                                        >
+                                            <div className="flex items-center gap-1">
+                                                <span>ĐƠN VỊ</span>
+                                                {renderSortIcon('unit')}
+                                            </div>
+                                        </th>
+
+                                        {/* Cột Trạng thái */}
+                                        <th
+                                            onClick={() => handleSortToggle('is_active')}
+                                            className="py-3 px-3 w-36 text-center cursor-pointer hover:bg-slate-200/70 transition group"
+                                            title="Bấm để sắp xếp theo Trạng thái áp dụng"
+                                        >
+                                            <div className="flex items-center justify-center gap-1">
+                                                <span>TRẠNG THÁI</span>
+                                                {renderSortIcon('is_active')}
+                                            </div>
+                                        </th>
+
+                                        {/* Cột Xóa / Tạm ẩn */}
+                                        <th className="py-3 px-3 w-16 text-center">XÓA</th>
                                     </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
+                                </thead>
+
+                                <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                                    {loading ? (
+                                        <tr>
+                                            <td colSpan={6} className="py-12 text-center text-slate-400 font-semibold">
+                                                <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-500" />
+                                                Đang nạp từ điển thi đua...
+                                            </td>
+                                        </tr>
+                                    ) : filteredAndSortedList.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={6} className="py-12 text-center text-slate-400 font-semibold">
+                                                Không tìm thấy mục thi đua nào phù hợp với điều kiện lọc!
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        filteredAndSortedList.map((item, idx) => (
+                                            <tr
+                                                key={item.id || idx}
+                                                className={`hover:bg-indigo-50/30 transition ${item.isNew
+                                                    ? 'bg-amber-50/50'
+                                                    : !item.is_active
+                                                        ? 'bg-slate-50/60 opacity-80'
+                                                        : ''
+                                                    }`}
+                                            >
+                                                {/* Thứ tự hiển thị */}
+                                                <td className="py-2 px-3 text-center">
+                                                    <input
+                                                        type="number"
+                                                        value={item.order_index ?? idx + 1}
+                                                        onChange={(e) => handleFieldChange(item.id, 'order_index', parseInt(e.target.value) || 0)}
+                                                        className="w-14 bg-slate-50 border border-slate-300 rounded-md py-1 text-center font-mono text-xs font-bold text-slate-700 outline-none focus:ring-1 focus:ring-indigo-500"
+                                                    />
+                                                </td>
+
+                                                {/* Mã gốc (RAW KEY) */}
+                                                <td className="py-2 px-3">
+                                                    <input
+                                                        type="text"
+                                                        value={item.raw_key}
+                                                        placeholder="VD: Điện thoại Vivo"
+                                                        onChange={(e) => handleFieldChange(item.id, 'raw_key', e.target.value)}
+                                                        className="w-full bg-slate-50 hover:bg-white focus:bg-white border border-slate-300 focus:border-indigo-500 rounded-lg px-2.5 py-1 font-mono font-bold text-indigo-700 outline-none"
+                                                    />
+                                                </td>
+
+                                                {/* Tên hiển thị viết tắt */}
+                                                <td className="py-2 px-3">
+                                                    <input
+                                                        type="text"
+                                                        value={item.display_name}
+                                                        placeholder="VD: Bảo hiểm ĐMX"
+                                                        onChange={(e) => handleFieldChange(item.id, 'display_name', e.target.value)}
+                                                        className="w-full bg-slate-50 hover:bg-white focus:bg-white border border-slate-300 focus:border-emerald-500 rounded-lg px-2.5 py-1 font-bold text-slate-800 outline-none"
+                                                    />
+                                                </td>
+
+                                                {/* Đơn vị tính */}
+                                                <td className="py-2 px-3">
+                                                    <div className="relative">
+                                                        <input
+                                                            type="text"
+                                                            list={`units_${item.id}`}
+                                                            value={item.unit || 'Cái'}
+                                                            onChange={(e) => handleFieldChange(item.id, 'unit', e.target.value)}
+                                                            className="w-full bg-slate-50 hover:bg-white focus:bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-xs font-semibold text-slate-700 outline-none focus:ring-1 focus:ring-indigo-500"
+                                                        />
+                                                        <datalist id={`units_${item.id}`}>
+                                                            {COMMON_UNITS.map(u => (
+                                                                <option key={u} value={u} />
+                                                            ))}
+                                                        </datalist>
+                                                    </div>
+                                                </td>
+
+                                                {/* Trạng thái Bật/Tắt */}
+                                                <td className="py-2 px-3 text-center">
+                                                    <button
+                                                        onClick={() => handleFieldChange(item.id, 'is_active', !item.is_active)}
+                                                        className={`px-3 py-1 rounded-full text-[11px] font-bold transition cursor-pointer flex items-center justify-center gap-1 mx-auto ${item.is_active
+                                                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
+                                                            : 'bg-slate-100 text-slate-500 border border-slate-300 hover:bg-slate-200'
+                                                            }`}
+                                                        title={item.is_active ? 'Bấm để Tạm ẩn mục này' : 'Bấm để Áp dụng lại mục này'}
+                                                    >
+                                                        {item.is_active ? (
+                                                            <>
+                                                                <Check className="w-3 h-3 text-emerald-600" />
+                                                                <span>Áp dụng</span>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <Archive className="w-3 h-3 text-slate-400" />
+                                                                <span>Tạm ẩn</span>
+                                                            </>
+                                                        )}
+                                                    </button>
+                                                </td>
+
+                                                {/* Nút Xóa */}
+                                                <td className="py-2 px-3 text-center">
+                                                    <button
+                                                        onClick={() => handleDeleteClick(item)}
+                                                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                                                        title="Xóa hoặc Tạm ẩn mục này"
+                                                    >
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
-            </div>
-            </div>
             )}
 
             {/* MODAL XÓA THÔNG MINH (SMART DELETE / ARCHIVE MODAL) */}

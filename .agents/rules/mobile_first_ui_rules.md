@@ -1,9 +1,13 @@
+---
+trigger: always_on
+---
+
 # QUY CHUẨN THIẾT KẾ GIAO DIỆN & BÁO CÁO SMARTPHONE (MOBILE-FIRST CONVENTIONS)
 
 ## 1. MỤC TIÊU & ĐỐI TƯỢNG NGƯỜI DÙNG (SMARTPHONE-FIRST)
 - **Đối tượng cốt lõi**: Quản lý siêu thị, Quản lý khu vực, Giám đốc kinh doanh và Nhân viên bán hàng.
 - **Thiết bị tiêu thụ chính**: Điện thoại thông minh (smartphone).
-- **Kênh tiếp nhận chính**: Trực tiếp trên trình duyệt mobile và qua hình ảnh báo cáo được chia sẻ vào nhóm chat Zalo.
+- **Kênh tiếp nhận chính**: Trực tiếp trên trình duyệt mobile và qua hình ảnh báo cáo được chia sẻ vào nhóm chat Messaging App.
 - **Tiêu chuẩn cao nhất**: Mọi trang báo cáo và hình ảnh xuất ra phải đạt độ sắc nét, dễ đọc, xem nhanh được trên màn hình dọc smartphone mà không cần phải zoom in/zoom out hay xoay ngang máy.
 
 ---
@@ -46,7 +50,7 @@
 ## 4. QUY CHUẨN XUẤT HÌNH ẢNH BÁO CÁO (IMAGE EXPORT FOR SMARTPHONE)
 1. **Tỷ lệ dọc tương thích Smartphone (Portrait Aspect Ratio)**:
    - Chiều rộng vùng capture khi xuất ảnh được thiết kế trong khoảng **800px đến 1000px**.
-   - Bố cục dọc giúp ảnh khi gửi vào Zalo hiển thị vừa khít khung màn hình điện thoại, chữ và số hiển thị to rõ, không bị thu nhỏ li ti như ảnh ngang 1920px.
+   - Bố cục dọc giúp ảnh khi gửi vào Messaging App hiển thị vừa khít khung màn hình điện thoại, chữ và số hiển thị to rõ, không bị thu nhỏ li ti như ảnh ngang 1920px.
 2. **Không giới hạn chiều dài ảnh (Unlimited Canvas Height)**:
    - Không truyền `height` hay `windowHeight` cố định vào cấu hình `html2canvas`.
    - Trong callback `onclone`:

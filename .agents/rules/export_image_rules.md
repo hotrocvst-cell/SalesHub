@@ -1,3 +1,7 @@
+---
+trigger: always_on
+---
+
 # QUY TẮC XUẤT HÌNH ẢNH BÁO CÁO (EXPORT IMAGE RULES)
 
 ## NGUYÊN TẮC BẤT BIẾN: TUYỆT ĐỐI KHÔNG CHÈN FOOTER WATERMARK
@@ -11,7 +15,7 @@
 
 2. **Mục đích**:
    - Giữ cho hình ảnh báo cáo tinh gọn, thẩm mỹ, sạch sẽ và tối ưu tối đa không gian hiển thị theo chiều dọc màn hình smartphone (portrait) cũng như màn hình desktop.
-   - Tránh phát sinh khoảng trắng thừa ở cuối ảnh và tránh gây rối mắt cho người dùng khi chia sẻ qua Zalo/mạng xã hội.
+   - Tránh phát sinh khoảng trắng thừa ở cuối ảnh và tránh gây rối mắt cho người dùng khi chia sẻ qua Messaging App.
 
 3. **Phạm vi áp dụng**:
    - Tất cả các trang hiện tại và các trang/tính năng mới phát triển có công cụ xuất hình ảnh báo cáo (Lưu ảnh, Copy ảnh vào clipboard, Tải ảnh 4K/8K, Xuất ảnh hàng loạt).
@@ -26,5 +30,5 @@
 
 5. **Tối ưu tỷ lệ dọc tương thích màn hình Smartphone (Portrait Aspect Ratio)**:
    - Khung hình ảnh xuất báo cáo (`export-container`) phải ưu tiên bố cục theo chiều dọc (Portrait mode), độ rộng tối ưu khoảng **800px - 1000px**.
-   - Mục đích: Khi gửi ảnh vào Zalo và người dùng mở xem trên điện thoại, toàn bộ ảnh hiển thị vừa khít màn hình dọc smartphone, chữ và số to rõ, dễ đọc, không bị thu nhỏ li ti như ảnh dàn quá rộng theo chiều ngang.
+   - Mục đích: Khi gửi ảnh vào Messaging App và người dùng mở xem trên điện thoại, toàn bộ ảnh hiển thị vừa khít màn hình dọc smartphone, chữ và số to rõ, dễ đọc, không bị thu nhỏ li ti như ảnh dàn quá rộng theo chiều ngang.
 

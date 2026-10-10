@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { formatCapitalizeWords } from './formatters';
 
 // ==========================================
 // 1. CÁC KIỂU DỮ LIỆU CỐT LÕI (INTERFACES)
@@ -447,9 +448,12 @@ export async function fetchEmployees(storeName?: string) {
 export async function upsertEmployee(emp: Partial<EmployeeItem>) {
     try {
         const { role: normalizedRole, department: normalizedDept } = parseEmployeeRoleAndDept(emp);
+        const rawName = emp.full_name?.trim() || '';
+        const capitalizedFullName = formatCapitalizeWords(rawName);
+
         const payload: any = {
             employee_id: emp.employee_id?.trim(),
-            full_name: emp.full_name?.trim(),
+            full_name: capitalizedFullName,
             store_name: emp.store_name?.trim(),
             role: normalizedRole,
             department: normalizedDept,
@@ -457,29 +461,100 @@ export async function upsertEmployee(emp: Partial<EmployeeItem>) {
             is_active: emp.is_active ?? true,
             updated_at: new Date().toISOString()
         };
+
+        let resultData: any = null;
+
+        // 1. Nếu có emp.id: Cập nhật trực tiếp theo khóa chính id (tránh lỗi xung đột onConflict)
         if (emp.id) {
             payload.id = emp.id;
-        }
-
-        // 1. Thử upsert có cả trường department
-        const { data, error } = await supabase
-            .from('employees')
-            .upsert(payload, { onConflict: 'employee_id' })
-            .select();
-
-        if (error) {
-            // 2. Dự phòng an toàn nếu bảng employees trên Supabase chưa có cột department
-            const fallbackPayload = { ...payload };
-            delete fallbackPayload.department;
-            const { data: fbData, error: fbError } = await supabase
+            let { data, error } = await supabase
                 .from('employees')
-                .upsert(fallbackPayload, { onConflict: 'employee_id' })
+                .update(payload)
+                .eq('id', emp.id)
                 .select();
-            if (fbError) throw fbError;
-            return { success: true, data: fbData?.[0] || null };
+
+            if (error) {
+                // Dự phòng nếu bảng employees trên Supabase chưa có cột department
+                const fallbackPayload = { ...payload };
+                delete fallbackPayload.department;
+                const { data: fbData, error: fbError } = await supabase
+                    .from('employees')
+                    .update(fallbackPayload)
+                    .eq('id', emp.id)
+                    .select();
+                if (fbError) throw fbError;
+                resultData = fbData?.[0] || null;
+            } else {
+                resultData = data?.[0] || null;
+            }
+        } else {
+            // 2. Nếu không có emp.id: Kiểm tra xem nhân viên này đã có trong bảng chưa
+            const { data: existing } = await supabase
+                .from('employees')
+                .select('id')
+                .eq('employee_id', payload.employee_id)
+                .maybeSingle();
+
+            if (existing?.id) {
+                // Đã có -> Cập nhật theo existing.id
+                let { data, error } = await supabase
+                    .from('employees')
+                    .update(payload)
+                    .eq('id', existing.id)
+                    .select();
+
+                if (error) {
+                    const fallbackPayload = { ...payload };
+                    delete fallbackPayload.department;
+                    const { data: fbData, error: fbError } = await supabase
+                        .from('employees')
+                        .update(fallbackPayload)
+                        .eq('id', existing.id)
+                        .select();
+                    if (fbError) throw fbError;
+                    resultData = fbData?.[0] || null;
+                } else {
+                    resultData = data?.[0] || null;
+                }
+            } else {
+                // Chưa có -> Thêm mới bản ghi nhân viên
+                let { data, error } = await supabase
+                    .from('employees')
+                    .insert(payload)
+                    .select();
+
+                if (error) {
+                    const fallbackPayload = { ...payload };
+                    delete fallbackPayload.department;
+                    const { data: fbData, error: fbError } = await supabase
+                        .from('employees')
+                        .insert(fallbackPayload)
+                        .select();
+                    if (fbError) throw fbError;
+                    resultData = fbData?.[0] || null;
+                } else {
+                    resultData = data?.[0] || null;
+                }
+            }
         }
 
-        return { success: true, data: data?.[0] || null };
+        // 3. ĐỒNG BỘ 2 CHIỀU: Nếu có tài khoản trong user_profiles cùng employee_id, cập nhật luôn tên mới
+        if (payload.employee_id && payload.full_name) {
+            try {
+                await supabase
+                    .from('user_profiles')
+                    .update({
+                        full_name: payload.full_name,
+                        store_name: payload.store_name,
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('employee_id', payload.employee_id);
+            } catch (syncErr) {
+                console.warn('Lỗi đồng bộ sang user_profiles:', syncErr);
+            }
+        }
+
+        return { success: true, data: resultData };
     } catch (err: any) {
         console.error('Lỗi upsertEmployee:', err);
         return { success: false, error: err.message || err };

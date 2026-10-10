@@ -26,6 +26,7 @@ interface Props {
     onRefresh: () => void;
     onExportImage: () => void;
     isExporting: boolean;
+    exportProgress?: { current: number; total: number } | null;
     totalTablesCount?: number;
 }
 
@@ -46,6 +47,7 @@ export default function CampaignProgressHeader({
     onRefresh,
     onExportImage,
     isExporting,
+    exportProgress,
     totalTablesCount = 0
 }: Props) {
     const { currentUser, isAdmin, canConfigure } = useAuth();
@@ -53,7 +55,7 @@ export default function CampaignProgressHeader({
     const { allowedStores, isLockedToSingleStore, canViewAllStores } = useUserStoreFilter(stores, selectedStore, setSelectedStore);
 
     return (
-        <div className="bg-white rounded-xl border border-slate-200 p-3 sm:p-4 shadow-2xs space-y-3">
+        <div className="bg-white rounded-xl border border-slate-200 p-3 sm:p-4 shadow-2xs space-y-3 font-avo">
             {/* Hàng 1: Tiêu đề và nút Tác vụ */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
                 <div className="space-y-0.5">
@@ -74,24 +76,30 @@ export default function CampaignProgressHeader({
                     <button
                         type="button"
                         onClick={onRefresh}
-                        disabled={loading}
+                        disabled={loading || isExporting}
                         className="p-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition-colors shadow-2xs"
                         title="Tải lại dữ liệu"
                     >
                         <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-blue-600' : ''}`} />
                     </button>
 
-                    {/* Nút Xuất Tất Cả Các Bảng Thi Đua (Chỉ hiển thị với Admin/QL/TC) */}
+                    {/* Nút Xuất Tất Cả Các Bảng Thi Đua Thành Từng File (Chỉ hiển thị với Admin/QL/TC) */}
                     {canExportAllTables && (
                         <button
                             type="button"
                             onClick={onExportImage}
-                            disabled={isExporting || loading}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 text-white font-bold text-xs hover:bg-rose-700 disabled:opacity-50 transition-all shadow-xs cursor-pointer"
-                            title="Xuất tất cả các bảng thi đua đang được chọn xem thành 1 ảnh dài gửi Zalo"
+                            disabled={isExporting || loading || totalTablesCount === 0}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 text-white font-bold text-xs hover:bg-rose-700 disabled:opacity-50 transition-all shadow-xs cursor-pointer active:scale-95"
+                            title="Xuất riêng từng bảng thi đua thành từng file ảnh PNG độc lập theo số lượng bảng đang xem"
                         >
                             <Camera className="w-3.5 h-3.5" />
-                            <span>{isExporting ? 'Đang xuất toàn bộ...' : `Xuất tất cả (${totalTablesCount} bảng)`}</span>
+                            <span>
+                                {exportProgress
+                                    ? `Đang xuất ${exportProgress.current}/${exportProgress.total} bảng...`
+                                    : isExporting
+                                    ? 'Đang chuẩn bị...'
+                                    : `Xuất tất cả (${totalTablesCount} bảng)`}
+                            </span>
                         </button>
                     )}
                 </div>

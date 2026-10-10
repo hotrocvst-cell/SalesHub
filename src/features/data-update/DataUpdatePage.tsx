@@ -233,7 +233,7 @@ export default function DataUpdatePage() {
                 isSynced: true,
                 updatedAt: now.toISOString()
             });
-            showToast(`💾 Đã bóc tách & lưu ${finalRecords.length} siêu thị thành công lên Supabase Cloud!`);
+            showToast(`💾 Đã bóc tách & lưu ${finalRecords.length} siêu thị thành công lên CLOUD!`);
         } else {
             setIsDraftSynced(false);
             saveLocalDraft({
@@ -297,11 +297,11 @@ export default function DataUpdatePage() {
                         </div>
                         <div>
                             <h3 className="font-extrabold text-xs uppercase tracking-wider text-amber-900 flex items-center gap-2">
-                                <span>⚠️ Bản nháp dữ liệu kinh doanh chưa đồng bộ lên Supabase Cloud!</span>
+                                <span>⚠️ Bản nháp dữ liệu kinh doanh chưa đồng bộ lên CLOUD!</span>
                             </h3>
                             <p className="text-xs text-amber-800 mt-0.5 leading-relaxed">
                                 {savedTime ? `Đã lưu bản nháp cục bộ lúc ${savedTime}. ` : 'Dữ liệu mới nhập chưa được lưu. '}
-                                Dữ liệu chưa được đồng bộ lên Supabase Cloud. Báo cáo tổng thể và biểu đồ cụm sẽ chưa có số liệu này.
+                                Dữ liệu chưa được đồng bộ lên CLOUD. Báo cáo tổng thể và biểu đồ cụm sẽ chưa có số liệu này.
                             </p>
                         </div>
                     </div>
@@ -326,7 +326,7 @@ export default function DataUpdatePage() {
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                             <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                         </span>
-                        <span><b>Supabase Cloud:</b> Bản ghi dữ liệu ngày <b>{formatDate(reportDate)}</b> ({detectedStores.length} siêu thị) đã đồng bộ trực tuyến.</span>
+                        <span><b>CLOUD:</b> Bản ghi dữ liệu ngày <b>{formatDate(reportDate)}</b> ({detectedStores.length} siêu thị) đã đồng bộ trực tuyến.</span>
                     </div>
                 </div>
             )}

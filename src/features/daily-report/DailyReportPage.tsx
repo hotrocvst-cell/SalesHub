@@ -298,7 +298,7 @@ export default function DailyReportPage() {
         };
     }, [filteredCampaigns]);
 
-    // 4. TẠO VĂN BẢN TÓM TẮT GỬI ZALO
+    // 4. TẠO VĂN BẢN TÓM TẮT GỬI Messaging App
     const summaryText = useMemo(() => {
         if (allData.length === 0 && !currentRevenue) return '';
 
@@ -362,7 +362,7 @@ export default function DailyReportPage() {
     const handleCopyText = () => {
         if (!summaryText) return;
         navigator.clipboard.writeText(summaryText);
-        showToast('Đã copy văn bản tóm tắt Zalo!');
+        showToast('Đã copy văn bản tóm tắt Messaging App!');
     };
 
     const handleCaptureImage = async (mode: 'save' | 'copy') => {
@@ -688,13 +688,13 @@ export default function DailyReportPage() {
                 </div>
             </div>
 
-            {/* TÓM TẮT ZALO */}
+            {/* TÓM TẮT Messaging App */}
             {summaryText && (
                 <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-xs space-y-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="flex flex-wrap items-center gap-2">
                             <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                                📋 Tóm tắt mục tiêu Zalo
+                                📋 Tóm tắt mục tiêu Messaging App
                             </span>
 
                             <div className="inline-flex p-0.5 bg-slate-100 rounded-lg text-[11px] font-bold border border-slate-200">

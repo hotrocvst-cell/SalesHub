@@ -1,6 +1,7 @@
 export interface EmployeeCampaignProgressDetail {
     employeeId: string;
     fullName: string;
+    shortName?: string;
     displayName: string;
     storeName: string;
     target: number;

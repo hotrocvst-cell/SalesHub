@@ -126,7 +126,7 @@ function SupabaseSyncStatusBar({
                                 {isUnsaved && '⚠️ Chưa lưu lên Supabase'}
                                 {isSavingStatus && '⚡ Đang đồng bộ...'}
                                 {isError && '❌ Lỗi kết nối Supabase'}
-                                {isSynced && '✅ Đã lưu Supabase Cloud'}
+                                {isSynced && '✅ Đã lưu CLOUD'}
                             </span>
 
                             <span className="text-[11px] font-bold text-slate-500">
@@ -230,7 +230,7 @@ function SupabaseSyncStatusBar({
                             onClick={onSaveAll}
                             disabled={isSaving}
                             className="px-4 py-2 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 hover:to-indigo-800 text-white rounded-xl text-xs font-black flex items-center gap-2 shadow-sm shadow-blue-500/30 transition cursor-pointer hover:scale-[1.02] active:scale-[0.98] shrink-0"
-                            title="Lưu ngay toàn bộ chỉ tiêu đã chỉnh sửa lên Supabase Cloud"
+                            title="Lưu ngay toàn bộ chỉ tiêu đã chỉnh sửa lên CLOUD"
                         >
                             <CloudUpload className={`w-4 h-4 ${isSaving ? 'animate-bounce' : ''}`} />
                             <span>{isSaving ? 'ĐANG LƯU...' : '⚡ LƯU LÊN SUPABASE NGAY'}</span>

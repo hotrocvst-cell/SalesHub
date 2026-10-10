@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import { fetchEmployees, fetchStores, type EmployeeItem, type StoreItem } from '../../core/lib/storage';
 import { getYesterdayDateString, formatDateTime, getShortStoreName } from '../../core/lib/formatters';
+import { useAuth } from '../../shared/contexts/AuthContext';
 import RevenuePasteTab from './components/RevenuePasteTab';
 import CampaignPasteTab from './components/CampaignPasteTab';
 import WorkHoursPasteTab from './components/WorkHoursPasteTab';
@@ -35,6 +36,18 @@ import {
 
 export default function EmployeeCumulativePage() {
     const location = useLocation();
+    const { currentUser } = useAuth();
+
+    // Định danh người dùng thực hiện cập nhật theo dữ liệu tài khoản Supabase (Họ tên + Mã NV)
+    const userDisplayName = useMemo(() => {
+        if (currentUser?.full_name) {
+            return currentUser.employee_id
+                ? `${currentUser.full_name} (${currentUser.employee_id})`
+                : currentUser.full_name;
+        }
+        return currentUser?.email || 'Quản lý';
+    }, [currentUser]);
+
     const [selectedMonth, setSelectedMonth] = useState<number>(() => new Date().getMonth() + 1);
     const [selectedYear, setSelectedYear] = useState<number>(() => new Date().getFullYear());
     const [reportDate] = useState<string>(() => getYesterdayDateString());
@@ -101,7 +114,7 @@ export default function EmployeeCumulativePage() {
                 if (stored) {
                     payload = JSON.parse(stored);
                 }
-            } catch (e) {}
+            } catch (e) { }
         }
 
         if (payload && payload.editingSession) {
@@ -231,7 +244,7 @@ export default function EmployeeCumulativePage() {
         let targetStore = selectedStore;
         if (detectedStoreName) {
             // Tự động tìm siêu thị tương ứng trong danh sách stores
-            const matched = stores.find(s => 
+            const matched = stores.find(s =>
                 (s.code && detectedStoreName.toLowerCase().includes(s.code.toLowerCase())) ||
                 detectedStoreName.toLowerCase().includes(s.name.toLowerCase()) ||
                 s.name.toLowerCase().includes(detectedStoreName.toLowerCase())
@@ -251,7 +264,7 @@ export default function EmployeeCumulativePage() {
         setCampaignBlocks(camps);
         setCampaignMatrix(matrix);
         saveDraft({ campaignBlocks: camps, campaignMatrix: matrix });
-        showToast(`✅ Đã bóc tách ${camps.length} chiến dịch thi đua!`);
+        showToast(`✅ Đã bóc tách ${camps.length} NH thi đua!`);
         setActiveTab('hours');
     };
 
@@ -338,7 +351,7 @@ export default function EmployeeCumulativePage() {
                     month: selectedMonth,
                     year: selectedYear,
                     report_date: reportDate,
-                    created_by: 'Quản lý',
+                    created_by: userDisplayName,
                     employee_count: groupRecords.length,
                     total_revenue_actual: 0,
                     total_revenue_qd: 0,
@@ -384,7 +397,7 @@ export default function EmployeeCumulativePage() {
             month: selectedMonth,
             year: selectedYear,
             report_date: reportDate,
-            created_by: 'Quản lý',
+            created_by: userDisplayName,
             employee_count: Object.keys(workHoursMap).length,
             total_revenue_actual: 0,
             total_revenue_qd: 0,
@@ -432,7 +445,7 @@ export default function EmployeeCumulativePage() {
                 updatedAt: new Date().toISOString(),
                 isSavedSession: true
             }));
-        } catch (e) {}
+        } catch (e) { }
 
         if (res && res.error) {
             showToast(`⚠️ ${res.error}`);
@@ -466,7 +479,7 @@ export default function EmployeeCumulativePage() {
             month: selectedMonth,
             year: selectedYear,
             report_date: reportDate,
-            created_by: 'Quản lý',
+            created_by: userDisplayName,
             employee_count: revenueData.length,
             total_revenue_actual: totalRevAct,
             total_revenue_qd: totalRevQd,
@@ -515,7 +528,7 @@ export default function EmployeeCumulativePage() {
                 updatedAt: new Date().toISOString(),
                 isSavedSession: true
             }));
-        } catch (e) {}
+        } catch (e) { }
 
         if (res && res.error) {
             showToast(`⚠️ ${res.error}`);
@@ -764,14 +777,13 @@ export default function EmployeeCumulativePage() {
             <div className="flex border-b border-slate-200 bg-white rounded-t-2xl px-3 pt-2 overflow-x-auto">
                 <button
                     onClick={() => setActiveTab('revenue')}
-                    className={`flex items-center gap-2 px-4 py-2.5 border-b-2 text-xs font-extrabold transition cursor-pointer whitespace-nowrap ${
-                        activeTab === 'revenue'
-                            ? 'border-blue-600 text-blue-600 bg-blue-50/50 rounded-t-xl'
-                            : 'border-transparent text-slate-500 hover:text-slate-800'
-                    }`}
+                    className={`flex items-center gap-2 px-4 py-2.5 border-b-2 text-xs font-extrabold transition cursor-pointer whitespace-nowrap ${activeTab === 'revenue'
+                        ? 'border-blue-600 text-blue-600 bg-blue-50/50 rounded-t-xl'
+                        : 'border-transparent text-slate-500 hover:text-slate-800'
+                        }`}
                 >
                     <Coins className="w-4 h-4" />
-                    <span>1. Lũy Kế Doanh Thu (Theo ST)</span>
+                    <span>1. Doanh Thu (Theo ST)</span>
                     {revenueData.length > 0 && (
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-blue-100 text-blue-700">
                             {revenueData.length} NV
@@ -781,14 +793,13 @@ export default function EmployeeCumulativePage() {
 
                 <button
                     onClick={() => setActiveTab('campaign')}
-                    className={`flex items-center gap-2 px-4 py-2.5 border-b-2 text-xs font-extrabold transition cursor-pointer whitespace-nowrap ${
-                        activeTab === 'campaign'
-                            ? 'border-amber-600 text-amber-600 bg-amber-50/50 rounded-t-xl'
-                            : 'border-transparent text-slate-500 hover:text-slate-800'
-                    }`}
+                    className={`flex items-center gap-2 px-4 py-2.5 border-b-2 text-xs font-extrabold transition cursor-pointer whitespace-nowrap ${activeTab === 'campaign'
+                        ? 'border-amber-600 text-amber-600 bg-amber-50/50 rounded-t-xl'
+                        : 'border-transparent text-slate-500 hover:text-slate-800'
+                        }`}
                 >
                     <Trophy className="w-4 h-4" />
-                    <span>2. Lũy Kế Thi Đua (Theo ST)</span>
+                    <span>2. Thi Đua (Theo ST)</span>
                     {campaignBlocks.length > 0 && (
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-100 text-amber-700">
                             {campaignBlocks.length} mục
@@ -798,14 +809,13 @@ export default function EmployeeCumulativePage() {
 
                 <button
                     onClick={() => setActiveTab('hours')}
-                    className={`flex items-center gap-2 px-4 py-2.5 border-b-2 text-xs font-extrabold transition cursor-pointer whitespace-nowrap ${
-                        activeTab === 'hours'
-                            ? 'border-emerald-600 text-emerald-600 bg-emerald-50/50 rounded-t-xl'
-                            : 'border-transparent text-slate-500 hover:text-slate-800'
-                    }`}
+                    className={`flex items-center gap-2 px-4 py-2.5 border-b-2 text-xs font-extrabold transition cursor-pointer whitespace-nowrap ${activeTab === 'hours'
+                        ? 'border-emerald-600 text-emerald-600 bg-emerald-50/50 rounded-t-xl'
+                        : 'border-transparent text-slate-500 hover:text-slate-800'
+                        }`}
                 >
                     <Clock className="w-4 h-4" />
-                    <span>3. Lũy Kế Giờ Công (Toàn Cụm)</span>
+                    <span>3. Giờ Công (Cụm/ST)</span>
                     {Object.keys(workHoursMap).length > 0 && (
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-100 text-emerald-700">
                             {Object.keys(workHoursMap).length} NV
@@ -815,23 +825,21 @@ export default function EmployeeCumulativePage() {
 
                 <button
                     onClick={() => setActiveTab('summary')}
-                    className={`flex items-center gap-2 px-4 py-2.5 border-b-2 text-xs font-extrabold transition cursor-pointer whitespace-nowrap ${
-                        activeTab === 'summary'
-                            ? 'border-indigo-600 text-indigo-600 bg-indigo-50/50 rounded-t-xl'
-                            : 'border-transparent text-slate-500 hover:text-slate-800'
-                    }`}
+                    className={`flex items-center gap-2 px-4 py-2.5 border-b-2 text-xs font-extrabold transition cursor-pointer whitespace-nowrap ${activeTab === 'summary'
+                        ? 'border-indigo-600 text-indigo-600 bg-indigo-50/50 rounded-t-xl'
+                        : 'border-transparent text-slate-500 hover:text-slate-800'
+                        }`}
                 >
                     <LayoutDashboard className="w-4 h-4" />
-                    <span>4. Bảng Tổng Hợp & Đối Soát</span>
+                    <span>4. Tổng Hợp & Đối Soát</span>
                 </button>
 
                 <button
                     onClick={() => setActiveTab('history')}
-                    className={`flex items-center gap-2 px-4 py-2.5 border-b-2 text-xs font-extrabold transition cursor-pointer whitespace-nowrap ${
-                        activeTab === 'history'
-                            ? 'border-purple-600 text-purple-600 bg-purple-50/50 rounded-t-xl'
-                            : 'border-transparent text-slate-500 hover:text-slate-800'
-                    }`}
+                    className={`flex items-center gap-2 px-4 py-2.5 border-b-2 text-xs font-extrabold transition cursor-pointer whitespace-nowrap ${activeTab === 'history'
+                        ? 'border-purple-600 text-purple-600 bg-purple-50/50 rounded-t-xl'
+                        : 'border-transparent text-slate-500 hover:text-slate-800'
+                        }`}
                 >
                     <History className="w-4 h-4" />
                     <span>5. Lịch Sử Phiên</span>

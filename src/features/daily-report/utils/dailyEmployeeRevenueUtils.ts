@@ -269,7 +269,7 @@ export function processDailyEmployeeRevenueData(
 }
 
 /**
- * Tạo văn bản tin nhắn báo cáo Zalo chuẩn phong cách TGDD/ĐMX
+ * Tạo văn bản tin nhắn báo cáo Messaging App chuẩn phong cách TGDD/ĐMX
  */
 export function generateDailyZaloText(
     storeName: string,

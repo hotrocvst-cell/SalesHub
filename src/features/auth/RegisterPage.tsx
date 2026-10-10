@@ -3,6 +3,9 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuth, type UserRole } from '../../shared/contexts/AuthContext';
 import { fetchStores, fetchEmployees, type StoreItem, type EmployeeItem, parseEmployeeRoleAndDept } from '../../core/lib/storage';
 import { ROLE_LABELS } from '../../core/lib/authService';
+import { formatCapitalizeWords } from '../../core/lib/formatters';
+import SearchableStoreSelect from '../../shared/components/common/SearchableStoreSelect';
+import AccountStatusLookupModal from './components/AccountStatusLookupModal';
 import {
     Store,
     UserPlus,
@@ -22,7 +25,8 @@ import {
     PlusCircle,
     Info,
     Sparkles,
-    Send
+    Send,
+    Search
 } from 'lucide-react';
 
 export default function RegisterPage() {
@@ -66,6 +70,7 @@ export default function RegisterPage() {
 
     const [errorMsg, setErrorMsg] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isLookupModalOpen, setIsLookupModalOpen] = useState(false);
 
     // Tải danh sách siêu thị & nhân sự đã khai báo trong hệ thống
     useEffect(() => {
@@ -77,7 +82,7 @@ export default function RegisterPage() {
             ]);
             if (storesRes.success && storesRes.data.length > 0) {
                 setStores(storesRes.data);
-                setSelectedStoreName(storesRes.data[0].name);
+                // Giữ selectedStoreName rỗng để user tự chủ động tìm kiếm và chọn đúng siêu thị
             }
             if (empsRes.success && empsRes.data.length > 0) {
                 setEmployees(empsRes.data);
@@ -98,7 +103,7 @@ export default function RegisterPage() {
     useEffect(() => {
         if (matchedEmployee) {
             if (matchedEmployee.full_name) {
-                setFullName(matchedEmployee.full_name);
+                setFullName(formatCapitalizeWords(matchedEmployee.full_name));
             }
             if (matchedEmployee.store_name) {
                 setSelectedStoreName(matchedEmployee.store_name);
@@ -113,7 +118,10 @@ export default function RegisterPage() {
         e.preventDefault();
         setErrorMsg('');
 
-        if (!fullName.trim()) {
+        const formattedName = formatCapitalizeWords(fullName);
+        setFullName(formattedName);
+
+        if (!formattedName.trim()) {
             setErrorMsg('Vui lòng nhập Họ và tên của bạn!');
             return;
         }
@@ -150,8 +158,8 @@ export default function RegisterPage() {
             return;
         }
 
-        // ƯU TIÊN MẶC ĐỊNH SỬ DỤNG HỌ TÊN & BỘ PHẬN THEO HỆ THỐNG ĐÃ LƯU TRƯỚC
-        const finalFullName = matchedEmployee?.full_name?.trim() || fullName.trim();
+        // ƯU TIÊN MẶC ĐỊNH SỬ DỤNG HỌ TÊN & BỘ PHẬN THEO HỆ THỐNG ĐÃ LƯU TRƯỚC (VIẾT HOA CHỮ ĐẦU)
+        const finalFullName = formatCapitalizeWords(matchedEmployee?.full_name?.trim() || fullName.trim());
         const finalDepartment = matchedEmployee?.department || matchedEmployee?.job_title || undefined;
 
         setIsSubmitting(true);
@@ -268,6 +276,7 @@ export default function RegisterPage() {
                                         required
                                         value={fullName}
                                         onChange={(e) => setFullName(e.target.value)}
+                                        onBlur={() => setFullName(formatCapitalizeWords(fullName))}
                                         readOnly={Boolean(matchedEmployee)}
                                         placeholder="ví dụ: Nguyễn Văn An"
                                         className={`w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition ${
@@ -488,25 +497,17 @@ export default function RegisterPage() {
                                 </div>
 
                                 {!isNewStore ? (
-                                    <div className="relative">
-                                        <Building2 className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
-                                        <select
+                                    <div className="space-y-1">
+                                        <SearchableStoreSelect
+                                            stores={stores}
                                             value={selectedStoreName}
-                                            onChange={(e) => setSelectedStoreName(e.target.value)}
-                                            className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition cursor-pointer"
-                                        >
-                                            {isLoadingStores && <option>Đang tải danh sách siêu thị...</option>}
-                                            {stores.map((st) => (
-                                                <option key={st.id || st.code} value={st.name}>
-                                                    {st.name} {st.code ? `(${st.code})` : ''}
-                                                </option>
-                                            ))}
-                                            {stores.length === 0 && !isLoadingStores && (
-                                                <option value="AAR_BRV_VTA - 290 Trương Công Định">
-                                                    AAR_BRV_VTA - 290 Trương Công Định (Mặc định)
-                                                </option>
-                                            )}
-                                        </select>
+                                            onChange={setSelectedStoreName}
+                                            placeholder="-- Nhập mã hoặc tên siêu thị để tìm kiếm --"
+                                            disabled={isLoadingStores}
+                                        />
+                                        <p className="text-[10px] text-slate-400 pl-1">
+                                            💡 Gõ mã siêu thị (ví dụ: 10335) hoặc tên siêu thị để tìm nhanh.
+                                        </p>
                                     </div>
                                 ) : (
                                     <div className="p-3.5 bg-amber-50/70 rounded-2xl border border-amber-200 space-y-3 animate-in fade-in duration-150">
@@ -606,17 +607,37 @@ export default function RegisterPage() {
                         </form>
                     )}
 
-                    <div className="text-center pt-2 border-t border-slate-100">
-                        <span className="text-xs text-slate-500">Đã có tài khoản? </span>
-                        <Link
-                            to="/dang-nhap"
-                            className="text-xs font-black text-blue-600 hover:text-blue-700 hover:underline transition"
-                        >
-                            Đăng nhập ngay &rarr;
-                        </Link>
+                    <div className="text-center pt-2 border-t border-slate-100 space-y-2">
+                        <div>
+                            <span className="text-xs text-slate-500">Đã có tài khoản? </span>
+                            <Link
+                                to="/dang-nhap"
+                                className="text-xs font-black text-blue-600 hover:text-blue-700 hover:underline transition"
+                            >
+                                Đăng nhập ngay &rarr;
+                            </Link>
+                        </div>
+                        <div>
+                            <button
+                                type="button"
+                                onClick={() => setIsLookupModalOpen(true)}
+                                className="text-[11px] font-bold text-slate-500 hover:text-blue-600 hover:underline inline-flex items-center gap-1 cursor-pointer transition"
+                            >
+                                <Search className="w-3.5 h-3.5" />
+                                <span>Đã đăng ký trước đó? Tra cứu tiến trình xét duyệt hồ sơ tại đây</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
+
+            {/* Modal Tra Cứu Trạng Thái & Chỉnh Sửa Hồ Sơ */}
+            <AccountStatusLookupModal
+                isOpen={isLookupModalOpen}
+                onClose={() => setIsLookupModalOpen(false)}
+                onLoginRedirect={() => navigate('/dang-nhap')}
+                initialSearchKey={email || employeeId}
+            />
         </div>
     );
 }

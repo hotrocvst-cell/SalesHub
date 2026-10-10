@@ -85,24 +85,57 @@ export async function checkSupabaseSessionTable(): Promise<{ exists: boolean; co
 }
 
 /**
- * Tải danh sách phiên từ Supabase Cloud
+ * Tải danh sách phiên từ Supabase Cloud (hỗ trợ lọc trực tiếp trên Cloud)
  */
-export async function fetchCloudEmployeeDataSessions(): Promise<{ success: boolean; data: EmployeeDataSession[]; error?: string }> {
+export async function fetchCloudEmployeeDataSessions(filters?: {
+    month?: number;
+    year?: number;
+    storeName?: string;
+    sessionType?: string;
+}): Promise<{ success: boolean; data: EmployeeDataSession[]; error?: string }> {
     try {
-        const { data, error } = await supabase
+        let query = supabase
             .from('employee_data_sessions')
             .select('*')
             .order('created_at', { ascending: false });
 
+        if (filters) {
+            // month === 0 nghĩa là "Tất cả các tháng"
+            if (filters.month !== undefined && filters.month > 0) {
+                query = query.eq('month', filters.month);
+            }
+            // year === 0 nghĩa là "Tất cả các năm"
+            if (filters.year !== undefined && filters.year > 0) {
+                query = query.eq('year', filters.year);
+            }
+            if (filters.sessionType && filters.sessionType !== 'all') {
+                query = query.eq('session_type', filters.sessionType);
+            }
+        }
+
+        const { data, error } = await query;
         if (error) throw error;
-        return { success: true, data: (data || []) as EmployeeDataSession[] };
+
+        let list = (data || []) as EmployeeDataSession[];
+
+        // Lọc theo tên siêu thị (hỗ trợ so khớp linh hoạt theo mã/tên/cụm)
+        if (filters?.storeName && filters.storeName !== 'all') {
+            const targetStore = filters.storeName.trim();
+            list = list.filter(s => {
+                if (!s.store_name) return false;
+                return isStoreMatch(s.store_name, targetStore);
+            });
+        }
+
+        return { success: true, data: list };
     } catch (e: any) {
         return { success: false, data: [], error: e.message || String(e) };
     }
 }
 
 /**
- * Tải toàn bộ danh sách phiên từ Supabase Cloud và hợp nhất vào LocalStorage
+ * Tải toàn bộ danh sách phiên từ Supabase Cloud và đồng bộ vào LocalStorage làm cache
+ * (Chỉ lưu các phiên thực tế tồn tại trên Supabase Cloud, loại bỏ toàn bộ bản ghi rác thuần local)
  */
 export async function pullCloudSessionsToLocal(): Promise<{ success: boolean; count: number; error?: string }> {
     try {
@@ -112,26 +145,13 @@ export async function pullCloudSessionsToLocal(): Promise<{ success: boolean; co
         }
 
         const cloudSessions = cloudRes.data;
-        const localSessions = fetchEmployeeDataSessions(); // Danh sách hiện có trong local
+        const sorted = [...cloudSessions].sort(
+            (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
 
-        // Tạo map theo ID để hợp nhất (ưu tiên Cloud, giữ lại các bản ghi local chưa kịp sync)
-        const sessionMap = new Map<string, EmployeeDataSession>();
-        
-        // 1. Nạp từ local trước
-        localSessions.forEach(s => {
-            if (s.id) sessionMap.set(s.id, s);
-        });
-
-        // 2. Ghi đè/Bổ sung từ Cloud
-        cloudSessions.forEach(s => {
-            if (s.id) sessionMap.set(s.id, s);
-        });
-
-        const merged = Array.from(sessionMap.values())
-            .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(merged.slice(0, 300)));
-        return { success: true, count: merged.length };
+        // Ghi đè bộ nhớ đệm LocalStorage chỉ với dữ liệu từ Supabase Cloud
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(sorted.slice(0, 300)));
+        return { success: true, count: sorted.length };
     } catch (e: any) {
         console.warn('Lỗi pullCloudSessionsToLocal:', e);
         return { success: false, count: 0, error: e.message || String(e) };
@@ -139,7 +159,7 @@ export async function pullCloudSessionsToLocal(): Promise<{ success: boolean; co
 }
 
 /**
- * Tải và lọc danh sách phiên dữ liệu (tự động đồng bộ với Cloud nếu có kết nối)
+ * Tải và lọc danh sách phiên dữ liệu (ưu tiên tuyệt đối Supabase Cloud)
  */
 export async function syncAndFetchEmployeeDataSessions(filters?: {
     month?: number;
@@ -147,14 +167,18 @@ export async function syncAndFetchEmployeeDataSessions(filters?: {
     storeName?: string;
     sessionType?: string;
 }): Promise<EmployeeDataSession[]> {
-    // 1. Thử kéo dữ liệu mới nhất từ Cloud về
     try {
-        await pullCloudSessionsToLocal();
+        const cloudRes = await fetchCloudEmployeeDataSessions(filters);
+        if (cloudRes.success) {
+            // Đồng bộ cache local chỉ chứa các phiên trên Cloud
+            pullCloudSessionsToLocal().catch(() => {});
+            return cloudRes.data;
+        }
     } catch (e) {
-        console.warn('Không thể đồng bộ Cloud lúc này, dùng cache cục bộ:', e);
+        console.warn('Lỗi truy vấn CLOUD:', e);
     }
 
-    // 2. Trả về kết quả sau khi lọc
+    // Dự phòng offline chỉ lấy từ cache (nếu có)
     return fetchEmployeeDataSessions(filters);
 }
 
@@ -305,7 +329,7 @@ export async function saveEmployeeDataSession(
             });
 
         if (error) {
-            console.warn('Lưu session lên Supabase Cloud có lỗi:', error.message);
+            console.warn('Lưu session lên CLOUD có lỗi:', error.message);
             return {
                 success: true,
                 session: newSession,

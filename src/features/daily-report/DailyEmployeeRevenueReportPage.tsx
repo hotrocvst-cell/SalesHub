@@ -532,7 +532,7 @@ export default function DailyEmployeeRevenueReportPage() {
                 new ClipboardItem({ 'image/png': blob })
             ]);
 
-            showToast(`📋 Đã sao chép ảnh ${exportResolution} vào Clipboard! Bạn có thể dán (Ctrl+V) ngay vào Zalo.`);
+            showToast(`📋 Đã sao chép ảnh ${exportResolution} vào Clipboard! Bạn có thể dán (Ctrl+V) ngay vào Messaging App.`);
         } catch (err: any) {
             console.error('Lỗi copy ảnh:', err);
             showToast(`⚠️ Lỗi copy ảnh: ${err.message || 'Hãy dùng nút Tải File Ảnh'}`);
@@ -541,10 +541,10 @@ export default function DailyEmployeeRevenueReportPage() {
         }
     };
 
-    // Sao chép văn bản Zalo
+    // Sao chép văn bản Messaging App
     const handleCopyZaloText = async () => {
         if (allShiftEmployees.length === 0) {
-            showToast('⚠️ Không có dữ liệu để tạo tin nhắn Zalo!');
+            showToast('⚠️ Không có dữ liệu để tạo tin nhắn Messaging App!');
             return;
         }
 
@@ -560,7 +560,7 @@ export default function DailyEmployeeRevenueReportPage() {
             );
 
             await navigator.clipboard.writeText(text);
-            showToast(`📝 Đã sao chép tin nhắn Zalo! Bạn có thể dán ngay vào nhóm chat.`);
+            showToast(`📝 Đã sao chép tin nhắn Messaging App! Bạn có thể dán ngay vào nhóm chat.`);
         } catch (err: any) {
             console.error('Lỗi copy text:', err);
             showToast('⚠️ Không thể copy text vào bộ nhớ tạm.');
@@ -758,19 +758,19 @@ export default function DailyEmployeeRevenueReportPage() {
                             onClick={handleCopyImageClipboard}
                             disabled={isExporting || allShiftEmployees.length === 0}
                             className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95 disabled:opacity-50"
-                            title="Sao chép ảnh vào Clipboard để dán ngay vào Zalo"
+                            title="Sao chép ảnh vào Clipboard để dán ngay vào Messaging App"
                         >
                             <Copy className="w-4 h-4" />
                             <span className="hidden sm:inline">Copy Ảnh</span>
                         </button>
 
-                        {/* 6. Nút Copy Text Zalo */}
+                        {/* 6. Nút Copy Text Messaging App */}
                         <button
                             type="button"
                             onClick={handleCopyZaloText}
                             disabled={allShiftEmployees.length === 0}
                             className="px-3.5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95 disabled:opacity-50"
-                            title="Sao chép tin nhắn báo cáo Zalo chuẩn format"
+                            title="Sao chép tin nhắn báo cáo Messaging App chuẩn format"
                         >
                             <FileText className="w-4 h-4" />
                             <span>Copy Text</span>
@@ -1181,7 +1181,7 @@ export default function DailyEmployeeRevenueReportPage() {
                                     <span className="w-2.5 h-5 bg-orange-500 rounded-full inline-block" />
                                     <h3 className="text-xs sm:text-sm font-black text-slate-900 uppercase tracking-wide flex items-center gap-1.5">
                                         <Zap className="w-4 h-4 text-orange-500 shrink-0 fill-orange-500" />
-                                        <span>TRỌNG TÂM NHẮC NHỞ & TĂNG TỐC</span>
+                                        <span>TRỌNG TÂM NHẮC NHỞ:</span>
                                     </h3>
                                 </div>
 

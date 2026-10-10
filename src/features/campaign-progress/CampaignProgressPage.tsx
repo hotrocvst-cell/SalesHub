@@ -6,12 +6,15 @@ import CampaignProgressHeader from './components/CampaignProgressHeader';
 import CampaignMultiSelectDropdown from './components/CampaignMultiSelectDropdown';
 import CampaignProgressCard from './components/CampaignProgressCard';
 import { AlertTriangle, CheckCircle2, ListFilter } from 'lucide-react';
+import { getYesterdayDateString } from '../../core/lib/formatters';
+import ReportDataFreshnessBar from '../../shared/components/report/ReportDataFreshnessBar';
 
 export default function CampaignProgressPage() {
     const reportRef = useRef<HTMLDivElement>(null);
     const { currentUser, isAdmin, canConfigure } = useAuth();
     const canExportAllTables = isAdmin || canConfigure || ['ADMIN', 'QUAN_LY', 'TRUONG_CA'].includes(currentUser?.role);
     const [isExporting, setIsExporting] = useState<boolean>(false);
+    const [exportProgress, setExportProgress] = useState<{ current: number; total: number } | null>(null);
 
     const {
         selectedMonth,
@@ -52,48 +55,63 @@ export default function CampaignProgressPage() {
         return `${day}-${month}-${selectedYear}`;
     }, [activeSession?.report_date, operatingConfig.passedDays, selectedMonth, selectedYear]);
 
-    // Xuất ảnh báo cáo gửi Zalo (Tuân thủ triệt để GEMINI.md: Unlimited height, No footer watermark)
+    // Chức năng xuất tất cả bảng: Xuất riêng từng bảng thành từng file ảnh theo số lượng bảng đang xem
     const handleExportImage = async () => {
         if (!canExportAllTables) return;
-        if (!reportRef.current) return;
+        if (!displayedCampaigns.length) return;
         setIsExporting(true);
 
         try {
-            const canvas = await html2canvas(reportRef.current, {
-                scale: 2,
-                useCORS: true,
-                backgroundColor: '#ffffff',
-                logging: false,
-                ignoreElements: (el) => el.getAttribute('data-html2canvas-ignore') === 'true',
-                onclone: (clonedDoc) => {
-                    clonedDoc.documentElement.style.height = 'auto';
-                    clonedDoc.body.style.height = 'auto';
-                    const el = clonedDoc.querySelector('#campaign-progress-capture-area') as HTMLElement;
-                    if (el) {
-                        el.style.height = 'auto';
-                        el.style.maxHeight = 'none';
-                        el.style.overflow = 'visible';
-                        el.style.width = '850px'; // Tối ưu chiều dọc màn hình smartphone
-                        el.style.padding = '12px';
-                    }
-                }
-            });
+            const total = displayedCampaigns.length;
+            for (let i = 0; i < total; i++) {
+                const item = displayedCampaigns[i];
+                setExportProgress({ current: i + 1, total });
 
-            const link = document.createElement('a');
-            const storeLabel = selectedStore === 'all' ? 'Toan_Cum' : selectedStore.replace(/\s+/g, '_');
-            link.download = `Tien_Do_Thi_Dua_${storeLabel}_${reportDateDisplay}.png`;
-            link.href = canvas.toDataURL('image/png');
-            link.click();
+                // Tìm phần tử DOM của riêng bảng thi đua đó
+                const cardEl = document.querySelector(`[data-campaign-card-key="${item.campaignKey}"]`) as HTMLElement;
+                if (!cardEl) continue;
+
+                const canvas = await html2canvas(cardEl, {
+                    scale: 2,
+                    useCORS: true,
+                    backgroundColor: '#ffffff',
+                    logging: false,
+                    ignoreElements: (el) =>
+                        el.getAttribute('data-html2canvas-ignore') === 'true' ||
+                        el.getAttribute('data-export-ignore') === 'true' ||
+                        el.getAttribute('data-freshness-bar') === 'true',
+                    onclone: (clonedDoc) => {
+                        clonedDoc.querySelectorAll('[data-html2canvas-ignore="true"], [data-export-ignore="true"], [data-freshness-bar="true"]').forEach(el => {
+                            (el as HTMLElement).remove();
+                        });
+                        clonedDoc.documentElement.style.height = 'auto';
+                        clonedDoc.body.style.height = 'auto';
+                    }
+                });
+
+                const cleanName = item.displayName.replace(/[^a-zA-Z0-9\u00C0-\u1EF9]/g, '_').slice(0, 30);
+                const storeLabel = selectedStore === 'all' ? 'Toan_Cum' : selectedStore.replace(/\s+/g, '_');
+                const link = document.createElement('a');
+                link.download = `Tien_Do_${i + 1}_${cleanName}_${storeLabel}_${reportDateDisplay}.png`;
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+
+                // Khoảng nghỉ nhỏ 350ms giữa các lần tải để trình duyệt không bị chặn tải nhiều file
+                if (i < total - 1) {
+                    await new Promise(resolve => setTimeout(resolve, 350));
+                }
+            }
         } catch (err) {
-            console.error('Lỗi xuất ảnh báo cáo:', err);
-            alert('Có lỗi xảy ra khi xuất ảnh báo cáo. Vui lòng thử lại.');
+            console.error('Lỗi xuất ảnh từng bảng thi đua:', err);
+            alert('Có lỗi xảy ra khi xuất ảnh các bảng thi đua. Vui lòng thử lại.');
         } finally {
             setIsExporting(false);
+            setExportProgress(null);
         }
     };
 
     return (
-        <div className="space-y-3 pb-12 max-w-5xl mx-auto px-2 sm:px-4 pt-2">
+        <div className="space-y-3 pb-12 max-w-5xl mx-auto px-2 sm:px-4 pt-2 font-avo">
             {/* 1. Header Điều Khiển Tinh Gọn */}
             <CampaignProgressHeader
                 selectedMonth={selectedMonth}
@@ -112,6 +130,7 @@ export default function CampaignProgressPage() {
                 onRefresh={loadData}
                 onExportImage={handleExportImage}
                 isExporting={isExporting}
+                exportProgress={exportProgress}
                 totalTablesCount={displayedCampaigns.length}
             />
 
@@ -186,6 +205,19 @@ export default function CampaignProgressPage() {
 
             {/* 3. Vùng Nội Dung Báo Cáo - Danh Sách Thẻ Thi Đua Theo Chuẩn Ảnh Mẫu */}
             <div id="campaign-progress-capture-area" ref={reportRef} className="space-y-4 pt-1">
+                {/* THANH TRẠNG THÁI CẬP NHẬT PHIÊN DỮ LIỆU */}
+                <ReportDataFreshnessBar
+                    latestDataDate={activeSession?.report_date}
+                    expectedDate={getYesterdayDateString()}
+                    sessionTitle={activeSession?.session_title}
+                    lastUpdatedAt={activeSession?.created_at}
+                    lastUpdatedBy={activeSession?.created_by}
+                    storeName={selectedStore}
+                    actionUrl="/cap-nhat-luy-ke-nhan-vien"
+                    actionLabel="Cập nhật số liệu NV"
+                    canUpdate={canExportAllTables}
+                />
+
                 {loading ? (
                     <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-400 text-xs">
                         Đang đồng bộ dữ liệu chỉ tiêu và tiến độ thi đua...
@@ -206,6 +238,7 @@ export default function CampaignProgressPage() {
                             key={item.campaignKey}
                             item={item}
                             reportDateDisplay={reportDateDisplay}
+                            storeName={selectedStore}
                         />
                     ))
                 )}

@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Copy, Check, Sparkles, Tag, ShoppingBag, Clock, UserCheck, Store, Calendar, RotateCcw } from 'lucide-react';
 import type { VoucherItem } from '../types';
 import { formatDate, getShortStoreName } from '../../../core/lib/formatters';
+import { getDenominationHotStyle, formatCurrency, parseConditionLines } from '../voucherFormatters';
 
 interface Props {
     voucher: VoucherItem;
@@ -13,6 +14,8 @@ interface Props {
 
 export default function VoucherCard({ voucher, onCopySuccess, compact = false, onReturn, isReturning = false }: Props) {
     const [copied, setCopied] = useState<boolean>(false);
+    const hotStyle = getDenominationHotStyle(voucher.denomination);
+    const conditionLines = useMemo(() => parseConditionLines(voucher.description), [voucher.description]);
 
     const handleCopy = async () => {
         try {
@@ -54,13 +57,21 @@ export default function VoucherCard({ voucher, onCopySuccess, compact = false, o
                             <div className="text-xs sm:text-sm font-black text-slate-900 line-clamp-1">
                                 {voucher.campaign_name}
                             </div>
+                            {voucher.description && (
+                                <div className="text-[10.5px] font-bold text-amber-900 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 mt-0.5 inline-block max-w-[200px] truncate" title={`Điều kiện: ${voucher.description}`}>
+                                    📝 {voucher.description}
+                                </div>
+                            )}
                         </div>
                     </div>
                     <div className="text-right shrink-0">
-                        <div className="text-base sm:text-xl font-black text-rose-600 font-mono tracking-tight">
-                            {Number(voucher.denomination).toLocaleString('vi-VN')}đ
+                        <div className="flex items-center justify-end gap-1">
+                            <span className="text-[10px]">{hotStyle.tagIcon}</span>
+                            <div className={`text-base sm:text-xl font-black font-mono tracking-tight ${hotStyle.textClass}`}>
+                                {formatCurrency(voucher.denomination)}
+                            </div>
                         </div>
-                        <span className="text-[9.5px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                        <span className="text-[9.5px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 inline-block mt-0.5">
                             {voucher.status === 'CLAIMED' ? 'Đã Cấp Thành Công' : voucher.status === 'USED' ? 'Đã Dùng' : 'Khả Dụng'}
                         </span>
                     </div>
@@ -141,6 +152,24 @@ export default function VoucherCard({ voucher, onCopySuccess, compact = false, o
                             )}
                         </div>
 
+                        {/* KHỐI ĐIỀU KIỆN SỬ DỤNG NHIỀU DÒNG */}
+                        {conditionLines.length > 0 && (
+                            <div className="mt-2 bg-amber-50/80 border border-amber-200/90 rounded-xl p-2.5 space-y-1 text-left">
+                                <div className="text-[10px] font-black uppercase text-amber-900 flex items-center gap-1">
+                                    <span>📝</span>
+                                    <span>Điều Kiện Sử Dụng ({conditionLines.length}):</span>
+                                </div>
+                                <div className="space-y-0.5 pl-0.5">
+                                    {conditionLines.map((cond, idx) => (
+                                        <div key={idx} className="text-[11px] font-semibold text-amber-950 flex items-start gap-1.5 leading-snug">
+                                            <span className="text-amber-600 font-bold shrink-0">•</span>
+                                            <span>{cond}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
                         {/* Nút trả lại mã cho voucher vừa cấp nếu lỡ lấy nhầm */}
                         {onReturn && voucher.status === 'CLAIMED' && (
                             <div className="mt-3 pt-2.5 border-t border-dashed border-amber-200/90 flex items-center justify-between gap-2 flex-wrap">
@@ -172,6 +201,16 @@ export default function VoucherCard({ voucher, onCopySuccess, compact = false, o
                                     <span>{getShortStoreName(voucher.claimed_by_store)}</span>
                                 </span>
                             )}
+                            {conditionLines.length === 1 && (
+                                <span className="font-bold text-amber-900 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200" title={`Điều kiện: ${voucher.description}`}>
+                                    📝 {conditionLines[0]}
+                                </span>
+                            )}
+                            {conditionLines.length > 1 && (
+                                <span className="font-bold text-amber-900 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200" title={conditionLines.join('\n')}>
+                                    📝 {conditionLines.length} điều kiện
+                                </span>
+                            )}
                             {voucher.order_id && (
                                 <span className="font-mono font-bold text-indigo-700">
                                     Đơn: {voucher.order_id}
@@ -188,6 +227,18 @@ export default function VoucherCard({ voucher, onCopySuccess, compact = false, o
                                 </span>
                             )}
                         </div>
+
+                        {/* Danh sách điều kiện ở compact mode nếu có nhiều điều kiện */}
+                        {conditionLines.length > 1 && (
+                            <div className="bg-amber-50/70 border border-amber-200/70 rounded-lg p-1.5 space-y-0.5 text-left">
+                                {conditionLines.map((cond, idx) => (
+                                    <div key={idx} className="text-[10px] font-medium text-amber-950 flex items-start gap-1 leading-tight">
+                                        <span className="text-amber-500 font-bold shrink-0">•</span>
+                                        <span>{cond}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
 
                         {/* THANH TÁC VỤ HOÀN TRẢ MÃ KHO (NẾU CHƯA DÙNG) TRONG LỊCH SỬ */}
                         {onReturn && voucher.status === 'CLAIMED' && (

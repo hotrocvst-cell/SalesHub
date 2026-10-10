@@ -24,9 +24,9 @@ export function normalizeCampaignToken(str: string): string {
 }
 
 /**
- * Tìm chiến dịch thi đua chuẩn (canonical campaign) từ rawKey dựa vào campaignDict:
- * - Ưu tiên khớp chính xác với chiến dịch ĐANG HOẠT ĐỘNG (is_active)
- * - Tiếp theo đối chiếu token chuẩn hóa (để gom "Ví trả sau", "T10 - VÍ TRẢ SAU", "VÍ_TRẢ_SAU" về cùng 1 chiến dịch chuẩn)
+ * Tìm NHÓM thi đua chuẩn (canonical campaign) từ rawKey dựa vào campaignDict:
+ * - Ưu tiên khớp chính xác với NHÓM thi đua ĐANG HOẠT ĐỘNG (is_active)
+ * - Tiếp theo đối chiếu token chuẩn hóa (để gom "Ví trả sau", "T10 - VÍ TRẢ SAU", "VÍ_TRẢ_SAU" về cùng 1 NHÓM thi đua chuẩn)
  * - Nếu không có trong active, tìm trong toàn bộ từ điển
  */
 export function resolveCanonicalCampaign(
@@ -355,7 +355,7 @@ export function buildCampaignSummaryFromSession(
 }
 
 /**
- * Thuật toán phân tích số liệu thông minh & tạo văn bản nhận xét Zalo
+ * Thuật toán phân tích số liệu thông minh & tạo văn bản nhận xét Messaging App
  */
 export function generateSmartRemarks(
     data: CampaignSummaryData,
@@ -427,7 +427,7 @@ export function generateSmartRemarks(
             under50Count: c.under50Count
         }));
 
-    // 4. Mẫu tin nhắn Zalo chuẩn phong cách TGDD/DMX
+    // 4. Mẫu tin nhắn Messaging App chuẩn phong cách TGDD/DMX
     const topNames = topEmployees.map((t, idx) => `   ${idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉'} ${t.name}: dự kiến đạt ${t.achieved} (${t.rate}%)`).join('\n');
     const bottomNames = bottomEmployees.map(b => `   👉 ${b.name}: dự kiến đạt ${b.achieved} (${b.rate}%)`).join('\n');
     const bestCatText = bestCategories.map(c => `   🔥 ${c.name}: ${c.passedCount}/${data.rows.length} bạn hoàn thành (${c.passRate}%)`).join('\n');

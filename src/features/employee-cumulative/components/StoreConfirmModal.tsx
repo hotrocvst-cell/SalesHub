@@ -191,7 +191,7 @@ export default function StoreConfirmModal({
                         </div>
                         <div className="flex justify-between text-slate-600">
                             <span>Số lượng mục thi đua:</span>
-                            <span className="font-bold text-amber-700">{campaignCount} chiến dịch</span>
+                            <span className="font-bold text-amber-700">{campaignCount} NHÓM thi đua</span>
                         </div>
                     </div>
 

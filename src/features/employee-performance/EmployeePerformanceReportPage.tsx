@@ -7,8 +7,11 @@ import {
     type EmployeeItem
 } from '../../core/lib/storage';
 import {
-    syncAndFetchEmployeeDataSessions
+    syncAndFetchEmployeeDataSessions,
+    type EmployeeDataSession
 } from '../employee-cumulative/utils/sessionStorage';
+import { getYesterdayDateString, isStoreMatch } from '../../core/lib/formatters';
+import ReportDataFreshnessBar from '../../shared/components/report/ReportDataFreshnessBar';
 import type { EmployeePerformanceRow, StorePerformanceSummary } from './types';
 import PerformanceKpiCards from './components/PerformanceKpiCards';
 import PerformanceTable from './components/PerformanceTable';
@@ -74,6 +77,7 @@ export default function EmployeePerformanceReportPage() {
     const [revenueTargets, setRevenueTargets] = useState<Record<string, number>>({});
     const [revenueDataMap, setRevenueDataMap] = useState<Record<string, any>>({});
     const [workHoursMap, setWorkHoursMap] = useState<Record<string, number>>({});
+    const [latestSession, setLatestSession] = useState<EmployeeDataSession | null>(null);
 
     const [loading, setLoading] = useState<boolean>(true);
     const [isExporting, setIsExporting] = useState<boolean>(false);
@@ -154,6 +158,17 @@ export default function EmployeePerformanceReportPage() {
 
         // Quét qua các phiên lưu trữ (tự động đồng bộ với Cloud Supabase)
         const allSessions = await syncAndFetchEmployeeDataSessions({ month: selectedMonth, year: selectedYear });
+
+        // Xác định phiên mới nhất
+        const revSessions = allSessions.filter(sess =>
+            (sess.session_type === 'REVENUE_CAMPAIGN' || sess.session_type === 'FULL_SYNC') &&
+            (selectedStore === 'all' || isStoreMatch(sess.store_name, selectedStore, storesRes.data || stores))
+        );
+        const newest = revSessions.slice().sort((a, b) =>
+            (b.report_date || '').localeCompare(a.report_date || '') ||
+            (b.created_at || '').localeCompare(a.created_at || '')
+        )[0] || null;
+        setLatestSession(newest);
         allSessions.forEach(sess => {
             if (sess.session_type === 'REVENUE_CAMPAIGN') {
                 if (selectedStore === 'all' || sess.store_name === selectedStore) {
@@ -502,6 +517,10 @@ export default function EmployeePerformanceReportPage() {
             allowTaint: true,
             width: contentWidth,
             windowWidth: contentWidth + 100,
+            ignoreElements: (el) =>
+                el.getAttribute('data-html2canvas-ignore') === 'true' ||
+                el.getAttribute('data-export-ignore') === 'true' ||
+                el.getAttribute('data-freshness-bar') === 'true',
             onclone: (clonedDoc) => {
                 // Nạp trực tiếp định nghĩa font chữ UTM Avo vào iframe clone và cấu hình chống cắt chữ
                 const fontStyle = clonedDoc.createElement('style');
@@ -514,18 +533,6 @@ export default function EmployeePerformanceReportPage() {
                     }
                     @font-face {
                         font-family: 'UTM Avo';
-                        src: url('/fonts/UTM-AvoBold.ttf') format('truetype');
-                        font-weight: 700;
-                        font-style: normal;
-                    }
-                    @font-face {
-                        font-family: 'UTM-Avo';
-                        src: url('/fonts/UTM-Avo.ttf') format('truetype');
-                        font-weight: 400;
-                        font-style: normal;
-                    }
-                    @font-face {
-                        font-family: 'UTM-Avo';
                         src: url('/fonts/UTM-AvoBold.ttf') format('truetype');
                         font-weight: 700;
                         font-style: normal;
@@ -555,6 +562,11 @@ export default function EmployeePerformanceReportPage() {
 
                 const clonedReport = clonedDoc.querySelector('[data-report-table="true"]') as HTMLElement;
                 if (!clonedReport) return;
+
+                // Loại bỏ khối trạng thái dữ liệu và các nút thao tác khỏi ảnh xuất
+                clonedReport.querySelectorAll('[data-html2canvas-ignore="true"], [data-export-ignore="true"], [data-freshness-bar="true"]').forEach(el => {
+                    (el as HTMLElement).remove();
+                });
 
                 // Cố định chiều rộng đầy đủ cho container và tài liệu
                 clonedDoc.documentElement.style.width = `${contentWidth}px`;
@@ -672,7 +684,7 @@ export default function EmployeePerformanceReportPage() {
                         await navigator.clipboard.write([
                             new ClipboardItem({ 'image/png': blob })
                         ]);
-                        showToast(`📋 Đã sao chép ảnh ${exportResolution} vào Clipboard! Boss hãy nhấn Ctrl + V để dán ngay vào Zalo/Telegram.`);
+                        showToast(`📋 Đã sao chép ảnh ${exportResolution} vào Clipboard! Boss hãy nhấn Ctrl + V để dán ngay vào Messaging App.`);
                     } catch (err: any) {
                         console.warn('Lỗi ghi clipboard trực tiếp, tự động chuyển sang tải file:', err);
                         const imgData = canvas.toDataURL('image/png', 1.0);
@@ -780,7 +792,7 @@ export default function EmployeePerformanceReportPage() {
                         onClick={handleCopyImageToClipboard}
                         disabled={isExporting}
                         className="px-3.5 py-2 bg-blue-50 hover:bg-blue-100 text-blue-800 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer border border-blue-200 shadow-2xs"
-                        title={`Copy ảnh độ phân giải ${exportResolution} vào bộ nhớ tạm để dán (Ctrl+V) vào Zalo`}
+                        title={`Copy ảnh độ phân giải ${exportResolution} vào bộ nhớ tạm để dán (Ctrl+V) vào Messaging App`}
                     >
                         <Copy className="w-4 h-4 text-blue-600" />
                         <span>{isExporting ? `Đang xuất ${exportResolution}...` : `Copy Ảnh ${exportResolution}`}</span>
@@ -1008,6 +1020,19 @@ export default function EmployeePerformanceReportPage() {
 
             {/* Container xuất ảnh chuẩn 4K */}
             <div ref={reportRef} data-report-table="true" className="space-y-4 bg-slate-50/50 p-1.5 rounded-2xl font-avo">
+                {/* THANH TRẠNG THÁI CẬP NHẬT PHIÊN DỮ LIỆU */}
+                <ReportDataFreshnessBar
+                    latestDataDate={latestSession?.report_date}
+                    expectedDate={getYesterdayDateString()}
+                    sessionTitle={latestSession?.session_title}
+                    lastUpdatedAt={latestSession?.created_at}
+                    lastUpdatedBy={latestSession?.created_by}
+                    storeName={selectedStore}
+                    actionUrl="/cap-nhat-luy-ke-nhan-vien"
+                    actionLabel="Cập nhật số liệu NV"
+                    canUpdate={canManage}
+                />
+
                 {/* 4 Thẻ Vinh Danh Thành Tích Cá Nhân Xuất Sắc */}
                 <PerformanceKpiCards summary={summary} />
 

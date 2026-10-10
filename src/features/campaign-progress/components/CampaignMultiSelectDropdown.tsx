@@ -45,7 +45,7 @@ export default function CampaignMultiSelectDropdown({
     const isNoneSelected = selectedKeys.length === 0;
 
     return (
-        <div className="relative inline-block text-left" ref={dropdownRef}>
+        <div className="relative inline-block text-left font-avo" ref={dropdownRef}>
             {/* Nút Trigger Dropdown */}
             <button
                 type="button"

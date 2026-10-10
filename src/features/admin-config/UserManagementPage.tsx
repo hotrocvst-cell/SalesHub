@@ -23,6 +23,7 @@ import {
     type EmployeeItem,
     parseEmployeeRoleAndDept
 } from '../../core/lib/storage';
+import { formatCapitalizeWords } from '../../core/lib/formatters';
 import ApprovalModal from '../auth/components/ApprovalModal';
 import {
     Users,
@@ -133,10 +134,10 @@ export default function UserManagementPage() {
         const res = await syncLocalProfilesToCloud();
         setIsSyncingCloud(false);
         if (res.success) {
-            showMsg('success', `Đã đồng bộ thành công ${res.count} tài khoản lên Supabase Cloud!`);
+            showMsg('success', `Đã đồng bộ thành công ${res.count} tài khoản lên Cloud!`);
             await loadData();
         } else {
-            showMsg('error', res.error || 'Lỗi đồng bộ tài khoản lên Supabase');
+            showMsg('error', res.error || 'Lỗi đồng bộ tài khoản lên Cloud');
         }
     };
 
@@ -230,7 +231,7 @@ export default function UserManagementPage() {
         }
     };
 
-    // Sao chép thông tin tài khoản để gửi Zalo
+    // Sao chép thông tin tài khoản để gửi Messaging App
     const handleCopyAccountInfo = () => {
         if (!resetSuccessData) return;
         const text = `🔐 THÔNG TIN ĐĂNG NHẬP SALES HUB:\n- Họ tên: ${resetSuccessData.user.full_name}\n- Tài khoản: ${resetSuccessData.user.email}${resetSuccessData.user.employee_id ? ` (hoặc Mã NV: ${resetSuccessData.user.employee_id})` : ''}\n- Mật khẩu mới: ${resetSuccessData.pass}\n- Đơn vị: ${resetSuccessData.user.store_name}\n- Link đăng nhập: ${window.location.origin}/dang-nhap`;
@@ -272,12 +273,15 @@ export default function UserManagementPage() {
         e.preventDefault();
         if (!editUser) return;
 
+        const formattedName = formatCapitalizeWords(editUser.full_name);
+        const userToSave = { ...editUser, full_name: formattedName };
+
         setIsProcessing(true);
-        const res = await adminUpdateUserProfile(editUser.id, editUser);
+        const res = await adminUpdateUserProfile(userToSave.id, userToSave);
         setIsProcessing(false);
 
         if (res.success) {
-            showMsg('success', `Đã cập nhật thông tin tài khoản ${editUser.full_name}!`);
+            showMsg('success', `Đã cập nhật thông tin tài khoản ${userToSave.full_name}!`);
             setEditUser(null);
             await loadData();
         } else {
@@ -312,7 +316,7 @@ export default function UserManagementPage() {
                     const parsed = parseEmployeeRoleAndDept(found);
                     setMatchedEmpInfo(`✓ Khớp nhân sự hệ thống: [${found.full_name}] • Siêu thị: ${found.store_name} • Vai trò: ${found.role || 'Nhân viên'}`);
                     // MẶC ĐỊNH SỬ DỤNG HỌ TÊN VÀ VAI TRÒ THEO HỆ THỐNG ĐÃ LƯU TRƯỚC
-                    next.full_name = found.full_name;
+                    next.full_name = formatCapitalizeWords(found.full_name);
                     next.store_name = found.store_name;
                     if (next.role !== 'ADMIN') {
                         next.role = parsed.operationalRole as UserRole;
@@ -330,12 +334,15 @@ export default function UserManagementPage() {
         e.preventDefault();
         if (!createForm.full_name || !createForm.email) return;
 
+        const formattedName = formatCapitalizeWords(createForm.full_name);
+        const formToCreate = { ...createForm, full_name: formattedName };
+
         setIsProcessing(true);
-        const res = await adminCreateUserProfile(createForm);
+        const res = await adminCreateUserProfile(formToCreate);
         setIsProcessing(false);
 
         if (res.success && res.data) {
-            showMsg('success', `Đã tạo mới tài khoản ${createForm.full_name}!`);
+            showMsg('success', `Đã tạo mới tài khoản ${formattedName}!`);
             setResetSuccessData({ user: res.data, pass: createForm.password });
             setIsCreateModalOpen(false);
             setMatchedEmpInfo(null);
@@ -371,9 +378,9 @@ export default function UserManagementPage() {
                                 🛡️ Admin Only
                             </span>
                             {cloudStatus.exists ? (
-                                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1.5" title="Bảng user_profiles đã kết nối thành công với Supabase Cloud">
+                                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1.5" title="Bảng user_profiles đã kết nối thành công với Cloud">
                                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                                    <span>☁️ Supabase Cloud ({cloudStatus.count} TK)</span>
+                                    <span>☁️ Cloud ({cloudStatus.count} TK)</span>
                                 </span>
                             ) : (
                                 <button
@@ -465,11 +472,10 @@ export default function UserManagementPage() {
 
             {/* Thông báo thao tác */}
             {actionMsg && (
-                <div className={`p-3.5 rounded-2xl text-xs font-bold flex items-center gap-2.5 animate-in slide-in-from-top-2 duration-150 ${
-                    actionMsg.type === 'success'
+                <div className={`p-3.5 rounded-2xl text-xs font-bold flex items-center gap-2.5 animate-in slide-in-from-top-2 duration-150 ${actionMsg.type === 'success'
                         ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
                         : 'bg-rose-50 text-rose-800 border border-rose-200'
-                }`}>
+                    }`}>
                     {actionMsg.type === 'success' ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <AlertCircle className="w-4 h-4 text-rose-600" />}
                     <span>{actionMsg.text}</span>
                 </div>
@@ -484,11 +490,11 @@ export default function UserManagementPage() {
                         </div>
                         <div className="space-y-0.5">
                             <div className="font-black text-amber-950 flex items-center gap-2">
-                                <span>Chưa kết nối bảng dữ liệu Supabase Cloud (`user_profiles`)</span>
+                                <span>Chưa kết nối bảng dữ liệu Cloud (`user_profiles`)</span>
                                 <span className="px-2 py-0.5 bg-amber-200/80 text-amber-900 rounded-full text-[10px] font-bold">Chế độ Local Cache</span>
                             </div>
                             <p className="text-amber-800 text-[11px] leading-relaxed">
-                                Dữ liệu tài khoản hiện đang lưu tại trình duyệt này. Để đồng bộ vĩnh viễn lên cơ sở dữ liệu Supabase Cloud và tránh mất dữ liệu khi đổi thiết bị, bạn chỉ cần chạy đoạn mã SQL tạo bảng 1 lần trong Supabase SQL Editor.
+                                Dữ liệu tài khoản hiện đang lưu tại trình duyệt này. Để đồng bộ vĩnh viễn lên cơ sở dữ liệu Cloud và tránh mất dữ liệu khi đổi thiết bị, bạn chỉ cần chạy đoạn mã SQL tạo bảng 1 lần trong Cloud SQL Editor.
                             </p>
                         </div>
                     </div>
@@ -512,11 +518,11 @@ export default function UserManagementPage() {
                         </div>
                         <div className="space-y-0.5">
                             <div className="font-black text-blue-950 flex items-center gap-2">
-                                <span>Phát hiện {unsyncedUsers.length} tài khoản người dùng lưu cục bộ chưa đồng bộ lên Supabase Cloud!</span>
+                                <span>Phát hiện {unsyncedUsers.length} tài khoản người dùng lưu cục bộ chưa đồng bộ lên Cloud!</span>
                                 <span className="px-2 py-0.5 bg-blue-200/80 text-blue-900 rounded-full text-[10px] font-bold">Cần đồng bộ</span>
                             </div>
                             <p className="text-blue-800 text-[11px] leading-relaxed">
-                                Danh sách: <b>{unsyncedUsers.map(u => u.full_name).slice(0, 3).join(', ')}{unsyncedUsers.length > 3 ? ` và ${unsyncedUsers.length - 3} tài khoản khác` : ''}</b> hiện chỉ có ở máy này. Hãy bấm đồng bộ ngay để tài khoản có mặt trên cơ sở dữ liệu Supabase Cloud.
+                                Danh sách: <b>{unsyncedUsers.map(u => u.full_name).slice(0, 3).join(', ')}{unsyncedUsers.length > 3 ? ` và ${unsyncedUsers.length - 3} tài khoản khác` : ''}</b> hiện chỉ có ở máy này. Hãy bấm đồng bộ ngay để tài khoản có mặt trên cơ sở dữ liệu Cloud.
                             </p>
                         </div>
                     </div>
@@ -638,15 +644,14 @@ export default function UserManagementPage() {
                                         {/* TÀI KHOẢN & NHÂN SỰ */}
                                         <td className="py-3 px-4">
                                             <div className="flex items-center gap-3">
-                                                <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-xs shrink-0 ${
-                                                    u.role === 'ADMIN'
+                                                <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-xs shrink-0 ${u.role === 'ADMIN'
                                                         ? 'bg-rose-100 text-rose-800'
                                                         : u.role === 'QUAN_LY'
-                                                        ? 'bg-amber-100 text-amber-800'
-                                                        : u.role === 'TRUONG_CA'
-                                                        ? 'bg-blue-100 text-blue-800'
-                                                        : 'bg-slate-100 text-slate-700'
-                                                }`}>
+                                                            ? 'bg-amber-100 text-amber-800'
+                                                            : u.role === 'TRUONG_CA'
+                                                                ? 'bg-blue-100 text-blue-800'
+                                                                : 'bg-slate-100 text-slate-700'
+                                                    }`}>
                                                     {u.full_name ? u.full_name.charAt(0).toUpperCase() : 'U'}
                                                 </div>
                                                 <div className="min-w-0">
@@ -668,15 +673,14 @@ export default function UserManagementPage() {
 
                                         {/* VAI TRÒ */}
                                         <td className="py-3 px-3">
-                                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider inline-flex items-center gap-1 ${
-                                                u.role === 'ADMIN'
+                                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider inline-flex items-center gap-1 ${u.role === 'ADMIN'
                                                     ? 'bg-rose-50 text-rose-800 border border-rose-200'
                                                     : u.role === 'QUAN_LY'
-                                                    ? 'bg-amber-50 text-amber-800 border border-amber-200'
-                                                    : u.role === 'TRUONG_CA'
-                                                    ? 'bg-blue-50 text-blue-800 border border-blue-200'
-                                                    : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                                            }`}>
+                                                        ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                                                        : u.role === 'TRUONG_CA'
+                                                            ? 'bg-blue-50 text-blue-800 border border-blue-200'
+                                                            : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                                                }`}>
                                                 <span>{u.role === 'ADMIN' ? '🛡️' : u.role === 'QUAN_LY' ? '👑' : u.role === 'TRUONG_CA' ? '⭐' : '👤'}</span>
                                                 <span>{ROLE_LABELS[u.role] || u.role}</span>
                                             </span>
@@ -707,22 +711,21 @@ export default function UserManagementPage() {
 
                                         {/* TRẠNG THÁI */}
                                         <td className="py-3 px-3">
-                                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase inline-block ${
-                                                u.status === 'ACTIVE'
+                                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase inline-block ${u.status === 'ACTIVE'
                                                     ? 'bg-emerald-100 text-emerald-800'
                                                     : u.status === 'PENDING_APPROVAL'
-                                                    ? 'bg-amber-100 text-amber-800'
-                                                    : u.status === 'PENDING_ONBOARDING'
-                                                    ? 'bg-blue-100 text-blue-800'
-                                                    : 'bg-rose-100 text-rose-800'
-                                            }`}>
+                                                        ? 'bg-amber-100 text-amber-800'
+                                                        : u.status === 'PENDING_ONBOARDING'
+                                                            ? 'bg-blue-100 text-blue-800'
+                                                            : 'bg-rose-100 text-rose-800'
+                                                }`}>
                                                 {u.status === 'ACTIVE'
                                                     ? '✓ Hoạt động'
                                                     : u.status === 'PENDING_APPROVAL'
-                                                    ? '⏳ Chờ duyệt'
-                                                    : u.status === 'PENDING_ONBOARDING'
-                                                    ? '📝 Chưa Onboard'
-                                                    : '✕ Bị khóa / Từ chối'}
+                                                        ? '⏳ Chờ duyệt'
+                                                        : u.status === 'PENDING_ONBOARDING'
+                                                            ? '📝 Chưa Onboard'
+                                                            : '✕ Bị khóa / Từ chối'}
                                             </span>
                                         </td>
 
@@ -776,11 +779,10 @@ export default function UserManagementPage() {
                                                 <button
                                                     type="button"
                                                     onClick={() => handleToggleLock(u)}
-                                                    className={`p-1.5 rounded-lg transition cursor-pointer ${
-                                                        u.status === 'ACTIVE'
+                                                    className={`p-1.5 rounded-lg transition cursor-pointer ${u.status === 'ACTIVE'
                                                             ? 'bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-600'
                                                             : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700'
-                                                    }`}
+                                                        }`}
                                                     title={u.status === 'ACTIVE' ? 'Khóa tài khoản này' : 'Mở khóa tài khoản này'}
                                                 >
                                                     {u.status === 'ACTIVE' ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
@@ -858,11 +860,10 @@ export default function UserManagementPage() {
                                     setResetMode('EMAIL');
                                     setResetSuccessData(null);
                                 }}
-                                className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
-                                    resetMode === 'EMAIL'
+                                className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${resetMode === 'EMAIL'
                                         ? 'bg-blue-600 text-white shadow-xs'
                                         : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                                }`}
+                                    }`}
                             >
                                 <Mail className="w-3.5 h-3.5" />
                                 <span>1. Gửi Email Tự Động</span>
@@ -874,11 +875,10 @@ export default function UserManagementPage() {
                                     setResetMode('DIRECT');
                                     setEmailSentSuccess(false);
                                 }}
-                                className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
-                                    resetMode === 'DIRECT'
+                                className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${resetMode === 'DIRECT'
                                         ? 'bg-amber-600 text-white shadow-xs'
                                         : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                                }`}
+                                    }`}
                             >
                                 <KeyRound className="w-3.5 h-3.5" />
                                 <span>2. Cấp MK Trực Tiếp</span>
@@ -993,7 +993,7 @@ export default function UserManagementPage() {
                                     </div>
                                 </form>
                             ) : (
-                                /* Card Kết quả thành công & Nút Copy gửi Zalo */
+                                /* Card Kết quả thành công & Nút Copy gửi Messaging App */
                                 <div className="space-y-4 animate-in fade-in zoom-in-95 duration-150">
                                     <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-2xl text-center space-y-1">
                                         <CheckCircle2 className="w-8 h-8 text-emerald-600 mx-auto" />
@@ -1007,7 +1007,7 @@ export default function UserManagementPage() {
 
                                     <div className="p-3 bg-slate-900 text-slate-200 rounded-2xl text-[11px] font-mono leading-relaxed space-y-1">
                                         <div className="text-slate-400 font-bold border-b border-slate-800 pb-1">
-                                            Nội dung gửi cho nhân sự (Zalo / Email):
+                                            Nội dung gửi cho nhân sự (Messaging App / Email):
                                         </div>
                                         <div>Tài khoản: <b>{resetSuccessData.user.email}</b></div>
                                         <div>Mật khẩu mới: <b className="text-amber-300">{resetSuccessData.pass}</b></div>
@@ -1020,7 +1020,7 @@ export default function UserManagementPage() {
                                         className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition flex items-center justify-center gap-2 shadow-md cursor-pointer"
                                     >
                                         {isCopied ? <Check className="w-4 h-4 text-emerald-300" /> : <Copy className="w-4 h-4" />}
-                                        <span>{isCopied ? 'Đã sao chép vào bộ nhớ tạm!' : 'Sao Chép Thông Tin Gửi Zalo/Email'}</span>
+                                        <span>{isCopied ? 'Đã sao chép vào bộ nhớ tạm!' : 'Sao Chép Thông Tin Gửi Messaging App/Email'}</span>
                                     </button>
 
                                     <div className="text-center pt-1">
@@ -1073,6 +1073,7 @@ export default function UserManagementPage() {
                                     required
                                     value={editUser.full_name}
                                     onChange={(e) => setEditUser({ ...editUser, full_name: e.target.value })}
+                                    onBlur={() => setEditUser({ ...editUser, full_name: formatCapitalizeWords(editUser.full_name) })}
                                     className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 />
                             </div>
@@ -1135,23 +1136,23 @@ export default function UserManagementPage() {
                                 </div>
                             </div>
 
-                                <div>
-                                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                                        Đơn vị Siêu thị công tác:
-                                    </label>
-                                    <select
-                                        value={editUser.store_name || ''}
-                                        onChange={(e) => setEditUser({ ...editUser, store_name: e.target.value })}
-                                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    >
-                                        <option value="">-- Chưa gán siêu thị --</option>
-                                        {stores.map(st => (
-                                            <option key={st.id || st.code} value={st.name}>
-                                                {st.name} {st.code ? `(${st.code})` : ''}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-700 mb-1">
+                                    Đơn vị Siêu thị công tác:
+                                </label>
+                                <select
+                                    value={editUser.store_name || ''}
+                                    onChange={(e) => setEditUser({ ...editUser, store_name: e.target.value })}
+                                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                >
+                                    <option value="">-- Chưa gán siêu thị --</option>
+                                    {stores.map(st => (
+                                        <option key={st.id || st.code} value={st.name}>
+                                            {st.name} {st.code ? `(${st.code})` : ''}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
 
                             <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
                                 <button
@@ -1247,6 +1248,7 @@ export default function UserManagementPage() {
                                     required
                                     value={createForm.full_name}
                                     onChange={(e) => setCreateForm({ ...createForm, full_name: e.target.value })}
+                                    onBlur={() => setCreateForm({ ...createForm, full_name: formatCapitalizeWords(createForm.full_name) })}
                                     placeholder="ví dụ: Nguyễn Văn A"
                                     className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 />
@@ -1387,7 +1389,7 @@ export default function UserManagementPage() {
                                 </div>
                                 <div>
                                     <h3 className="font-extrabold text-sm text-slate-900">
-                                        Khởi Tạo Bảng Cơ Sở Dữ Liệu Trên Supabase Cloud
+                                        Khởi Tạo Bảng Cơ Sở Dữ Liệu Trên Cloud
                                     </h3>
                                     <p className="text-[11px] text-slate-500">Chạy câu lệnh SQL này để đồng bộ tài khoản đa thiết bị</p>
                                 </div>

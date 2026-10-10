@@ -5,8 +5,12 @@ import {
     formatValue,
     getShortStoreName,
     getCampaignLabel,
-    formatDate
+    formatDate,
+    getYesterdayDateString,
+    calculateRemainingTarget,
+    formatRemainingTarget
 } from "../../core/lib/formatters";
+import ReportDataFreshnessBar from "../../shared/components/report/ReportDataFreshnessBar";
 import {
     fetchBusinessRecords,
     fetchCampaignDictionary,
@@ -267,7 +271,7 @@ export default function MonthlyReportPage() {
                             const actual = Number(val.actual) || 0;
                             const pctDK = typeof val.pctDK === 'number' ? val.pctDK : (target > 0 ? (actual / target * 100) : 0);
                             const pctHT = target > 0 ? (actual / target * 100) : (typeof val.pctHT === 'number' ? val.pctHT : 0);
-                            const remaining = Math.max(0, target - actual);
+                            const remaining = calculateRemainingTarget(target, actual, 1);
                             rows.push({
                                 id: `${sName}-${rawKey}`,
                                 storeName: sName,
@@ -293,7 +297,7 @@ export default function MonthlyReportPage() {
                         const actual = Number(val.actual) || 0;
                         const pctDK = typeof val.pctDK === 'number' ? val.pctDK : (target > 0 ? (actual / target * 100) : 0);
                         const pctHT = target > 0 ? (actual / target * 100) : (typeof val.pctHT === 'number' ? val.pctHT : 0);
-                        const remaining = Math.max(0, target - actual);
+                        const remaining = calculateRemainingTarget(target, actual, 1);
                         rows.push({
                             id: `${sName}-${rawKey}`,
                             storeName: sName,
@@ -406,7 +410,7 @@ export default function MonthlyReportPage() {
 
         txt += `\n\n💰 Lũy kế DTQĐ: ${formatValue(currentRecord.revenueActual)} (DKHT: ${(currentRecord.forecastCompletionRate || 0).toFixed(1)}%)`;
         if (currentRecord.revenueActual < currentRecord.revenueTarget) {
-            txt += `\n- Còn lại: ${formatValue(currentRecord.revenueTarget - currentRecord.revenueActual)}`;
+            txt += `\n- Còn lại: ${formatRemainingTarget(currentRecord.revenueTarget - currentRecord.revenueActual)}`;
         }
         if (currentRecord.revenueInstallment > 0 || currentRecord.installmentRate > 0) {
             txt += `\n- DT trả góp: ${formatValue(currentRecord.revenueInstallment)} (${(currentRecord.installmentRate || 0).toFixed(1)}%)`;
@@ -491,10 +495,19 @@ export default function MonthlyReportPage() {
             logging: false,
             imageTimeout: 0,
             ignoreElements: (element) => {
-                // Tự động bỏ qua bất kỳ phần tử nào có cờ data-html2canvas-ignore="true"
-                return element.getAttribute('data-html2canvas-ignore') === 'true';
+                // Tự động bỏ qua bất kỳ phần tử nào có cờ data-html2canvas-ignore="true" hoặc khối trạng thái dữ liệu
+                return (
+                    element.getAttribute('data-html2canvas-ignore') === 'true' ||
+                    element.getAttribute('data-export-ignore') === 'true' ||
+                    element.getAttribute('data-freshness-bar') === 'true'
+                );
             },
             onclone: (clonedDoc) => {
+                // Ẩn/xóa khối trạng thái dữ liệu và các nút thao tác khỏi ảnh xuất
+                clonedDoc.querySelectorAll('[data-html2canvas-ignore="true"], [data-export-ignore="true"], [data-freshness-bar="true"]').forEach(el => {
+                    (el as HTMLElement).remove();
+                });
+
                 const target = clonedDoc.querySelector('[data-capture-target="true"]') as HTMLElement;
                 if (target) {
                     target.style.width = '100%';
@@ -757,6 +770,18 @@ export default function MonthlyReportPage() {
                         data-report-table="true"
                         className="space-y-4 bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-sm font-avo"
                     >
+                        {/* THANH TRẠNG THÁI CẬP NHẬT PHIÊN DỮ LIỆU */}
+                        <ReportDataFreshnessBar
+                            latestDataDate={currentRecord?.reportDate || (availableDates.length > 0 ? availableDates[0] : null)}
+                            expectedDate={getYesterdayDateString()}
+                            lastUpdatedAt={currentRecord?.updatedAt}
+                            lastUpdatedBy={currentRecord?.updatedBy}
+                            storeName={currentRecord?.storeName}
+                            actionUrl="/cap-nhat"
+                            actionLabel="Cập nhật số liệu LK"
+                            canUpdate={isAdmin || ['ADMIN', 'QUAN_LY', 'TRUONG_CA'].includes(currentUser?.role || '')}
+                        />
+
                         {/* 1. BANNER TIÊU ĐỀ BÁO CÁO */}
                         <div className="bg-gradient-to-r from-slate-900 to-slate-800 text-white p-4 sm:p-5 rounded-xl shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                             <div>
@@ -966,8 +991,8 @@ export default function MonthlyReportPage() {
                                                                 {row.pctDK.toFixed(0)}%
                                                             </span>
                                                         </td>
-                                                        <td className={`py-2.5 px-3 text-center font-mono font-bold ${row.remaining > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
-                                                            {formatValue(row.remaining)}
+                                                        <td className={`py-2.5 px-3 text-center font-mono font-bold ${row.remaining === 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                                            {formatRemainingTarget(row.remaining, false)}
                                                         </td>
                                                         <td className="py-2.5 px-3 text-center">
                                                             {isPass ? (

@@ -30,7 +30,8 @@ CREATE TABLE IF NOT EXISTS public.store_vouchers (
     claimed_by_store TEXT,
     order_id TEXT,
     used_at TIMESTAMPTZ,
-    note TEXT
+    note TEXT,
+    description TEXT
 );
 
 -- Kích hoạt RLS & chính sách truy cập công khai/anon
@@ -38,6 +39,9 @@ ALTER TABLE public.store_vouchers ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "store_vouchers_all_policy" ON public.store_vouchers;
 CREATE POLICY "store_vouchers_all_policy" 
 ON public.store_vouchers FOR ALL USING (true) WITH CHECK (true);
+
+-- Đảm bảo tương thích ngược: tự động thêm cột description nếu bảng đã được tạo trước đó
+ALTER TABLE public.store_vouchers ADD COLUMN IF NOT EXISTS description TEXT;
 
 -- Index tăng tốc tra cứu dữ liệu
 CREATE INDEX IF NOT EXISTS idx_store_vouchers_store_status ON public.store_vouchers(store_name, status);
@@ -80,7 +84,7 @@ export async function checkSupabaseVoucherTable(): Promise<SupabaseStorageStatus
                 return {
                     isConnected: true,
                     tableExists: false,
-                    error: 'Bảng "store_vouchers" chưa được tạo trên Supabase Cloud.'
+                    error: 'Bảng "store_vouchers" chưa được tạo trên CLOUD.'
                 };
             }
             return {
@@ -346,6 +350,7 @@ export async function importVouchers(params: {
     expires_at?: string;
     cluster_stores?: string[];
     note?: string;
+    description?: string;
 }): Promise<{
     success: boolean;
     addedCount: number;
@@ -390,7 +395,8 @@ export async function importVouchers(params: {
                 expires_at: effectiveExpiry,
                 created_at: now,
                 created_by: params.created_by,
-                note: noteContent
+                note: noteContent,
+                description: params.description?.trim() || undefined
             };
             newItems.push(item);
         }
@@ -409,13 +415,13 @@ export async function importVouchers(params: {
                     cloudSaved = true;
                 } else {
                     if (cloudErr.code === 'PGRST205' || cloudErr.message?.includes('store_vouchers')) {
-                        cloudWarning = 'Bảng "store_vouchers" chưa được tạo trên Supabase Cloud! Dữ liệu đã lưu tạm ở máy này.';
+                        cloudWarning = 'Bảng "store_vouchers" chưa được tạo trên CLOUD! Dữ liệu đã lưu tạm ở máy này.';
                     } else {
                         cloudWarning = `Chưa đồng bộ Cloud: ${cloudErr.message}`;
                     }
                 }
             } catch (cloudErr: any) {
-                cloudWarning = `Không thể kết nối Supabase Cloud: ${cloudErr.message}`;
+                cloudWarning = `Không thể kết nối CLOUD: ${cloudErr.message}`;
             }
         }
 
@@ -640,9 +646,9 @@ export async function resetClaimedVoucher(
 }
 
 /**
- * Đánh dấu mã đã sử dụng thành công trên hóa đơn thực tế
+ * Đánh dấu mã đã sử dụng thành công trên hóa đơn thực tế và cập nhật mã đơn hàng mới nếu có
  */
-export async function markVoucherUsed(code: string): Promise<{ success: boolean; error?: string }> {
+export async function markVoucherUsed(code: string, newOrderId?: string): Promise<{ success: boolean; error?: string }> {
     try {
         const all = getLocalVouchers();
         const cleanCode = code.trim().toUpperCase();
@@ -652,9 +658,14 @@ export async function markVoucherUsed(code: string): Promise<{ success: boolean;
             return { success: false, error: 'Không tìm thấy mã voucher' };
         }
 
+        const finalOrderId = newOrderId !== undefined
+            ? (newOrderId.trim().toUpperCase() || undefined)
+            : all[index].order_id;
+
         all[index] = {
             ...all[index],
             status: 'USED',
+            order_id: finalOrderId,
             used_at: new Date().toISOString()
         };
         setLocalVouchers(all);
@@ -781,6 +792,300 @@ export async function deleteVouchersBatch(
         return { success: false, deletedCount: 0, error: e.message || 'Lỗi khi xóa mã voucher hàng loạt' };
     }
 }
+
+/**
+ * Trích xuất danh sách siêu thị được gắn trong tag [CỤM: ...] từ ghi chú voucher
+ */
+export function extractClusterStoresFromNote(note?: string | null): string[] {
+    if (!note) return [];
+    const match = note.match(/\[CỤM:\s*([^\]]+)\]/i);
+    if (!match || !match[1]) return [];
+    return match[1].split('|').map(s => s.trim()).filter(Boolean);
+}
+
+/**
+ * Cập nhật chuỗi ghi chú với tag [CỤM: ...] mới, bảo toàn nội dung ghi chú người dùng khác
+ */
+export function formatNoteWithCluster(baseNote?: string | null, clusterStores?: string[]): string {
+    const rawNote = baseNote || '';
+    // Xóa tag CỤM cũ nếu có
+    const cleaned = rawNote.replace(/\[CỤM:\s*[^\]]+\]/gi, '').trim();
+    if (!clusterStores || clusterStores.length === 0) {
+        return cleaned;
+    }
+    const clusterTag = `[CỤM: ${clusterStores.join(' | ')}]`;
+    return cleaned ? `${clusterTag} ${cleaned}` : clusterTag;
+}
+
+export interface UpdateVoucherParams {
+    code?: string;
+    campaign_name?: string;
+    denomination?: number;
+    expires_at?: string;
+    status?: VoucherItem['status'];
+    store_name?: string;
+    cluster_stores?: string[];
+    note?: string;
+    description?: string;
+    resetClaimedInfo?: boolean;
+}
+
+/**
+ * Cập nhật chỉnh sửa thông tin một mã voucher đơn lẻ (Local + Supabase Cloud)
+ */
+export async function updateVoucher(
+    voucherId: string,
+    updates: UpdateVoucherParams,
+    clusterContext?: {
+        userStoreName?: string;
+        accessibleStores?: string[];
+        currentUserDisplayName?: string;
+        isAdmin?: boolean;
+    }
+): Promise<{ success: boolean; voucher?: VoucherItem; error?: string }> {
+    try {
+        const all = getLocalVouchers();
+        const index = all.findIndex(v => v.id === voucherId);
+
+        if (index === -1) {
+            return { success: false, error: 'Không tìm thấy mã voucher cần cập nhật!' };
+        }
+
+        const target = all[index];
+
+        // Kiểm tra phân quyền Cụm nếu không phải Admin
+        if (clusterContext && !clusterContext.isAdmin) {
+            const isOwned = isVoucherInUserCluster(
+                target,
+                clusterContext.userStoreName,
+                clusterContext.accessibleStores,
+                clusterContext.currentUserDisplayName,
+                false
+            );
+            if (!isOwned) {
+                return { success: false, error: 'Bạn không có quyền chỉnh sửa mã voucher thuộc Cụm siêu thị khác!' };
+            }
+        }
+
+        // Nếu thay đổi mã code: kiểm tra trùng lặp với mã khác
+        let finalCode = target.code;
+        if (updates.code && updates.code.trim()) {
+            const cleanNewCode = updates.code.trim().toUpperCase();
+            if (cleanNewCode !== target.code.toUpperCase()) {
+                const duplicate = all.find(v => v.id !== target.id && v.code.toUpperCase() === cleanNewCode);
+                if (duplicate) {
+                    return { success: false, error: `Mã coupon "${cleanNewCode}" đã tồn tại trong hệ thống (thuộc chương trình "${duplicate.campaign_name}")!` };
+                }
+                finalCode = cleanNewCode;
+            }
+        }
+
+        // Xác định ghi chú và tag cụm
+        let finalNote = target.note;
+        if (updates.cluster_stores !== undefined) {
+            finalNote = formatNoteWithCluster(
+                updates.note !== undefined ? updates.note : target.note,
+                updates.cluster_stores
+            );
+        } else if (updates.note !== undefined) {
+            // Giữ lại tag cụm cũ nếu có
+            const currentClusters = extractClusterStoresFromNote(target.note);
+            finalNote = formatNoteWithCluster(updates.note, currentClusters.length > 0 ? currentClusters : undefined);
+        }
+
+        // Xác định tên siêu thị / kho sở hữu
+        let finalStoreName = target.store_name;
+        if (updates.store_name) {
+            finalStoreName = updates.store_name;
+        } else if (updates.cluster_stores && updates.cluster_stores.length > 0) {
+            // Nếu chọn danh sách cụm mà chưa chỉ định store_name, dùng shop đầu tiên
+            finalStoreName = updates.cluster_stores[0] || 'Toàn Cụm Siêu Thị';
+        }
+
+        const willResetClaimed = updates.resetClaimedInfo || (updates.status === 'AVAILABLE' && target.status !== 'AVAILABLE');
+
+        const updatedVoucher: VoucherItem = {
+            ...target,
+            code: finalCode,
+            campaign_name: updates.campaign_name !== undefined ? updates.campaign_name.trim() : target.campaign_name,
+            denomination: updates.denomination !== undefined ? Number(updates.denomination) : target.denomination,
+            expires_at: updates.expires_at !== undefined ? updates.expires_at : target.expires_at,
+            status: updates.status !== undefined ? updates.status : target.status,
+            store_name: finalStoreName,
+            note: finalNote,
+            description: updates.description !== undefined ? (updates.description.trim() || undefined) : target.description,
+            claimed_at: willResetClaimed ? undefined : target.claimed_at,
+            claimed_by_id: willResetClaimed ? undefined : target.claimed_by_id,
+            claimed_by_name: willResetClaimed ? undefined : target.claimed_by_name,
+            claimed_by_store: willResetClaimed ? undefined : target.claimed_by_store,
+            order_id: willResetClaimed ? undefined : target.order_id,
+            used_at: willResetClaimed ? undefined : target.used_at
+        };
+
+        all[index] = updatedVoucher;
+        setLocalVouchers(all);
+
+        // Đồng bộ lên Supabase Cloud
+        try {
+            const dbPayload = {
+                ...updatedVoucher,
+                claimed_at: updatedVoucher.claimed_at ?? null,
+                claimed_by_id: updatedVoucher.claimed_by_id ?? null,
+                claimed_by_name: updatedVoucher.claimed_by_name ?? null,
+                claimed_by_store: updatedVoucher.claimed_by_store ?? null,
+                order_id: updatedVoucher.order_id ?? null,
+                used_at: updatedVoucher.used_at ?? null
+            };
+            await supabase.from('store_vouchers').upsert([dbPayload], { onConflict: 'id' });
+        } catch (e) {
+            console.warn('Lỗi sync cloud khi update voucher:', e);
+        }
+
+        return { success: true, voucher: updatedVoucher };
+    } catch (e: any) {
+        return { success: false, error: e.message || 'Lỗi khi cập nhật mã voucher' };
+    }
+}
+
+export interface UpdateVouchersBatchParams {
+    campaign_name?: string;
+    denomination?: number;
+    expires_at?: string;
+    status?: VoucherItem['status'];
+    store_name?: string;
+    cluster_stores?: string[];
+    note?: string;
+    description?: string;
+    appendNote?: boolean;
+    resetClaimedInfo?: boolean;
+}
+
+/**
+ * Cập nhật hàng loạt nhiều mã voucher (Local + Supabase Cloud)
+ * Hỗ trợ cập nhật đồng loạt: Cụm/Kho được phép sử dụng, CT, Mệnh giá, HSD, Trạng thái, Ghi chú
+ */
+export async function updateVouchersBatch(
+    idsOrCodes: string[],
+    updates: UpdateVouchersBatchParams,
+    clusterContext?: {
+        userStoreName?: string;
+        accessibleStores?: string[];
+        currentUserDisplayName?: string;
+        isAdmin?: boolean;
+    }
+): Promise<{ success: boolean; updatedCount: number; error?: string }> {
+    try {
+        if (!idsOrCodes || idsOrCodes.length === 0) {
+            return { success: true, updatedCount: 0 };
+        }
+
+        const idSet = new Set(idsOrCodes.map(s => s.trim()));
+        const codeSet = new Set(idsOrCodes.map(s => s.trim().toUpperCase()));
+        const all = getLocalVouchers();
+
+        let targets = all.filter(v => idSet.has(v.id) || codeSet.has(v.code.toUpperCase()));
+        if (targets.length === 0) {
+            return { success: false, updatedCount: 0, error: 'Không tìm thấy mã voucher nào thỏa mãn để cập nhật!' };
+        }
+
+        // Lọc theo phân quyền Cụm nếu không phải Admin
+        if (clusterContext && !clusterContext.isAdmin) {
+            targets = targets.filter(t =>
+                isVoucherInUserCluster(
+                    t,
+                    clusterContext.userStoreName,
+                    clusterContext.accessibleStores,
+                    clusterContext.currentUserDisplayName,
+                    false
+                )
+            );
+            if (targets.length === 0) {
+                return { success: false, updatedCount: 0, error: 'Không có mã nào thuộc quyền quản lý của Cụm bạn để cập nhật!' };
+            }
+        }
+
+        const targetIdSet = new Set(targets.map(t => t.id));
+        const updatedList: VoucherItem[] = [];
+
+        for (let i = 0; i < all.length; i++) {
+            if (!targetIdSet.has(all[i].id)) continue;
+
+            const t = all[i];
+
+            // 1. Cụm/Kho & Note
+            let finalNote = t.note;
+            if (updates.cluster_stores !== undefined) {
+                finalNote = formatNoteWithCluster(
+                    updates.note !== undefined
+                        ? (updates.appendNote ? `${t.note || ''} ${updates.note}`.trim() : updates.note)
+                        : t.note,
+                    updates.cluster_stores
+                );
+            } else if (updates.note !== undefined) {
+                const currentClusters = extractClusterStoresFromNote(t.note);
+                const rawNote = updates.appendNote ? `${t.note || ''} | ${updates.note}`.trim() : updates.note;
+                finalNote = formatNoteWithCluster(rawNote, currentClusters.length > 0 ? currentClusters : undefined);
+            }
+
+            let finalStoreName = t.store_name;
+            if (updates.store_name) {
+                finalStoreName = updates.store_name;
+            } else if (updates.cluster_stores && updates.cluster_stores.length > 0) {
+                finalStoreName = updates.cluster_stores[0] || 'Toàn Cụm Siêu Thị';
+            }
+
+            // 2. Trạng thái & Reset cấp phát
+            const willResetClaimed = updates.resetClaimedInfo || (updates.status === 'AVAILABLE' && t.status !== 'AVAILABLE');
+
+            const updatedItem: VoucherItem = {
+                ...t,
+                campaign_name: updates.campaign_name !== undefined ? updates.campaign_name.trim() : t.campaign_name,
+                denomination: updates.denomination !== undefined ? Number(updates.denomination) : t.denomination,
+                expires_at: updates.expires_at !== undefined ? updates.expires_at : t.expires_at,
+                status: updates.status !== undefined ? updates.status : t.status,
+                store_name: finalStoreName,
+                note: finalNote,
+                description: updates.description !== undefined ? (updates.description.trim() || undefined) : t.description,
+                claimed_at: willResetClaimed ? undefined : t.claimed_at,
+                claimed_by_id: willResetClaimed ? undefined : t.claimed_by_id,
+                claimed_by_name: willResetClaimed ? undefined : t.claimed_by_name,
+                claimed_by_store: willResetClaimed ? undefined : t.claimed_by_store,
+                order_id: willResetClaimed ? undefined : t.order_id,
+                used_at: willResetClaimed ? undefined : t.used_at
+            };
+
+            all[i] = updatedItem;
+            updatedList.push(updatedItem);
+        }
+
+        setLocalVouchers(all);
+
+        // Đồng bộ Supabase Cloud theo chunk 150 records
+        try {
+            const dbPayloads = updatedList.map(item => ({
+                ...item,
+                claimed_at: item.claimed_at ?? null,
+                claimed_by_id: item.claimed_by_id ?? null,
+                claimed_by_name: item.claimed_by_name ?? null,
+                claimed_by_store: item.claimed_by_store ?? null,
+                order_id: item.order_id ?? null,
+                used_at: item.used_at ?? null
+            }));
+
+            for (let idx = 0; idx < dbPayloads.length; idx += 150) {
+                const chunk = dbPayloads.slice(idx, idx + 150);
+                await supabase.from('store_vouchers').upsert(chunk, { onConflict: 'id' });
+            }
+        } catch (e) {
+            console.warn('Lỗi sync cloud batch update:', e);
+        }
+
+        return { success: true, updatedCount: updatedList.length };
+    } catch (e: any) {
+        return { success: false, updatedCount: 0, error: e.message || 'Lỗi khi cập nhật mã voucher hàng loạt' };
+    }
+}
+
 
 /**
  * Thống kê các chỉ số hết hạn và tồn kho mã voucher
@@ -980,12 +1285,16 @@ export function getCampaignSummaries(
                 total: 0,
                 available: 0,
                 claimed: 0,
-                used: 0
+                used: 0,
+                description: v.description
             });
         }
 
         const isExpired = Boolean(v.expires_at && v.expires_at < todayStr);
         const stock = denomMap.get(denom)!;
+        if (!stock.description && v.description) {
+            stock.description = v.description;
+        }
         stock.total++;
         if (v.status === 'AVAILABLE' && !isExpired) stock.available++;
         else if (v.status === 'CLAIMED') stock.claimed++;
@@ -1103,6 +1412,7 @@ export function analyzeHoardingRisks(
             store_name: e.store_name,
             claimed_today_count: todayCount,
             unspent_count: unspentCount,
+            total_month: totalMonth,
             total_claimed_month: totalMonth,
             latest_order_ids,
             latest_claimed_at: sortedClaimed[0]?.claimed_at || '',

@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { formatCapitalizeWords } from './formatters';
 
 export type UserRole = 'ADMIN' | 'QUAN_LY' | 'TRUONG_CA' | 'NHAN_VIEN';
 export type UserAccountStatus = 'PENDING_ONBOARDING' | 'PENDING_APPROVAL' | 'ACTIVE' | 'REJECTED';
@@ -409,7 +410,7 @@ export async function createUserProfile(params: {
     status?: UserAccountStatus;
 }): Promise<UserProfile> {
     const role = params.role || 'NHAN_VIEN';
-    let finalFullName = params.full_name.trim();
+    let finalFullName = formatCapitalizeWords(params.full_name);
     let finalDept = params.department?.trim() || '';
 
     // TRƯỜNG HỢP USER ĐĂNG KÝ TRÙNG VỚI USER ĐÃ KHAI BÁO TRONG SIÊU THỊ:
@@ -423,7 +424,7 @@ export async function createUserProfile(params: {
                 .maybeSingle();
 
             if (matchedEmp && matchedEmp.full_name?.trim()) {
-                finalFullName = matchedEmp.full_name.trim();
+                finalFullName = formatCapitalizeWords(matchedEmp.full_name);
                 if (!finalDept) {
                     finalDept = (matchedEmp.role || matchedEmp.job_title || matchedEmp.department || '').trim();
                 }
@@ -520,7 +521,7 @@ export async function submitOnboardingRequest(params: {
             ? 'QUAN_LY'
             : 'ADMIN';
 
-        let finalFullName = user.full_name;
+        let finalFullName = formatCapitalizeWords(user.full_name);
         const cleanEmpId = (employee_id || user.employee_id || '').trim();
         if (cleanEmpId) {
             try {
@@ -530,7 +531,7 @@ export async function submitOnboardingRequest(params: {
                     .eq('employee_id', cleanEmpId)
                     .maybeSingle();
                 if (matchedEmp && matchedEmp.full_name?.trim()) {
-                    finalFullName = matchedEmp.full_name.trim();
+                    finalFullName = formatCapitalizeWords(matchedEmp.full_name);
                 }
             } catch (e) {
                 console.warn('Lỗi kiểm tra matchedEmp trong submitOnboardingRequest:', e);
@@ -1404,9 +1405,11 @@ export async function adminUpdateUserProfile(
         }
 
         const newRole = updates.role || current.role;
+        const newFullName = updates.full_name !== undefined ? formatCapitalizeWords(updates.full_name) : current.full_name;
         const updated: UserProfile = {
             ...current,
             ...updates,
+            full_name: newFullName,
             role: newRole,
             role_title: ROLE_LABELS[newRole] || current.role_title,
             updated_at: new Date().toISOString()
@@ -1473,8 +1476,28 @@ export async function adminUpdateUserProfile(
                         .eq('id', userId);
                 }
             }
+
+            // Đồng bộ 2 chiều sang bảng employees nếu có mã NV để các trang báo cáo doanh thu & thi đua hiển thị đúng tên mới
+            if (updated.employee_id && updated.employee_id.trim()) {
+                try {
+                    const empSyncPayload: Record<string, any> = {
+                        full_name: updated.full_name,
+                        store_name: updated.store_name,
+                        role: updated.role,
+                        updated_at: new Date().toISOString()
+                    };
+                    if (updated.department) empSyncPayload.department = updated.department;
+
+                    await supabase
+                        .from('employees')
+                        .update(empSyncPayload)
+                        .eq('employee_id', updated.employee_id.trim());
+                } catch (empSyncErr) {
+                    console.warn('Lỗi đồng bộ sang bảng employees từ adminUpdateUserProfile:', empSyncErr);
+                }
+            }
         } catch (cloudErr: any) {
-            console.error('Lỗi đồng bộ Supabase Cloud:', cloudErr);
+            console.error('Lỗi đồng bộ Cloud:', cloudErr);
             return {
                 success: false,
                 data: updated,
@@ -1531,7 +1554,7 @@ export async function adminCreateUserProfile(data: {
             throw new Error(`Email "${email}" đã tồn tại trên hệ thống.`);
         }
 
-        let finalFullName = data.full_name.trim();
+        let finalFullName = formatCapitalizeWords(data.full_name);
         let finalDept = data.department?.trim() || '';
 
         // Mặc định sử dụng thông tin theo nhân sự đã lưu trước nếu có
@@ -1544,7 +1567,7 @@ export async function adminCreateUserProfile(data: {
                     .maybeSingle();
 
                 if (matchedEmp && matchedEmp.full_name?.trim()) {
-                    finalFullName = matchedEmp.full_name.trim();
+                    finalFullName = formatCapitalizeWords(matchedEmp.full_name);
                     if (!finalDept) {
                         finalDept = (matchedEmp.role || matchedEmp.job_title || matchedEmp.department || '').trim();
                     }
@@ -1594,6 +1617,23 @@ export async function adminCreateUserProfile(data: {
                 delete payload.department;
                 await supabase.from('user_profiles').insert(payload);
             }
+
+            // Đồng bộ sang bảng employees nếu có mã NV
+            if (newProfile.employee_id) {
+                try {
+                    await supabase
+                        .from('employees')
+                        .update({
+                            full_name: newProfile.full_name,
+                            store_name: newProfile.store_name,
+                            role: newProfile.role,
+                            updated_at: new Date().toISOString()
+                        })
+                        .eq('employee_id', newProfile.employee_id.trim());
+                } catch (empSyncErr) {
+                    console.warn('Lỗi đồng bộ employees từ adminCreateUserProfile:', empSyncErr);
+                }
+            }
         } catch {
             // Safe fallback
         }
@@ -1604,4 +1644,305 @@ export async function adminCreateUserProfile(data: {
         return { success: false, error: err.message || String(err) };
     }
 }
+
+/**
+ * Tra cứu thông tin hồ sơ tài khoản và tiến trình xét duyệt công khai
+ * Tìm kiếm theo: Email, Mã nhân viên (employee_id) hoặc Số điện thoại
+ */
+export async function lookupUserAccountStatus(searchKey: string): Promise<{
+    success: boolean;
+    data?: {
+        user: UserProfile;
+        approvalRequest?: UserApprovalRequest;
+    };
+    error?: string;
+}> {
+    try {
+        const cleanKey = searchKey.trim().toLowerCase();
+        if (!cleanKey) {
+            return { success: false, error: 'Vui lòng nhập Email, Mã nhân viên hoặc Số điện thoại để tra cứu' };
+        }
+
+        let foundUser: UserProfile | null = null;
+
+        // 1. Tìm trên Supabase user_profiles
+        try {
+            // Thử tìm theo email
+            const { data: byEmail } = await supabase
+                .from('user_profiles')
+                .select('*')
+                .ilike('email', cleanKey)
+                .maybeSingle();
+
+            if (byEmail) {
+                foundUser = parseRawUserProfile(byEmail);
+            }
+
+            // Thử tìm theo employee_id nếu chưa tìm thấy
+            if (!foundUser) {
+                const { data: byEmpId } = await supabase
+                    .from('user_profiles')
+                    .select('*')
+                    .ilike('employee_id', cleanKey)
+                    .maybeSingle();
+
+                if (byEmpId) {
+                    foundUser = parseRawUserProfile(byEmpId);
+                }
+            }
+
+            // Thử tìm theo phone nếu chưa tìm thấy
+            if (!foundUser) {
+                const { data: byPhone } = await supabase
+                    .from('user_profiles')
+                    .select('*')
+                    .ilike('phone', cleanKey)
+                    .maybeSingle();
+
+                if (byPhone) {
+                    foundUser = parseRawUserProfile(byPhone);
+                }
+            }
+        } catch (cloudErr) {
+            console.warn('Lỗi tra cứu Supabase user_profiles:', cloudErr);
+        }
+
+        // 2. Fallback sang local cache nếu không tìm thấy trên Cloud
+        if (!foundUser) {
+            const locals = getLocalProfiles();
+            const matched = locals.find(u =>
+                (u.email && u.email.toLowerCase() === cleanKey) ||
+                (u.employee_id && u.employee_id.toLowerCase() === cleanKey) ||
+                (u.phone && u.phone.toLowerCase() === cleanKey)
+            );
+            if (matched) {
+                foundUser = matched;
+            }
+        }
+
+        if (!foundUser) {
+            return {
+                success: false,
+                error: `Không tìm thấy tài khoản với thông tin "${searchKey}". Vui lòng kiểm tra lại Email, Mã nhân viên hoặc Số điện thoại đã đăng ký.`
+            };
+        }
+
+        // 3. Tìm yêu cầu xét duyệt mới nhất liên quan
+        let approvalReq: UserApprovalRequest | undefined;
+        try {
+            const { data: reqData } = await supabase
+                .from('user_approval_requests')
+                .select('*')
+                .or(`user_id.eq.${foundUser.id},email.eq.${foundUser.email}`)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+
+            if (reqData) {
+                approvalReq = reqData as UserApprovalRequest;
+            }
+        } catch (e) {
+            console.warn('Lỗi tìm approval request:', e);
+        }
+
+        if (!approvalReq) {
+            const localReqs = getLocalRequests();
+            const localMatch = localReqs.find(r => r.user_id === foundUser?.id || r.email === foundUser?.email);
+            if (localMatch) {
+                approvalReq = localMatch;
+            }
+        }
+
+        return {
+            success: true,
+            data: {
+                user: foundUser,
+                approvalRequest: approvalReq
+            }
+        };
+    } catch (err: any) {
+        return { success: false, error: err.message || String(err) };
+    }
+}
+
+/**
+ * Người dùng cập nhật lại thông tin cá nhân và gửi lại yêu cầu xét duyệt
+ * (Áp dụng khi tài khoản bị REJECTED hoặc PENDING_APPROVAL cần chỉnh sửa)
+ */
+export async function resubmitUserApproval(params: {
+    userId: string;
+    full_name: string;
+    phone?: string;
+    employee_id?: string;
+    store_name: string;
+    requested_role: UserRole;
+    department?: string;
+    is_new_store?: boolean;
+    new_store_code?: string;
+    new_store_address?: string;
+}): Promise<{ success: boolean; data?: UserProfile; error?: string }> {
+    try {
+        const {
+            userId,
+            full_name,
+            phone,
+            employee_id,
+            store_name,
+            requested_role,
+            department,
+            is_new_store = false,
+            new_store_code,
+            new_store_address
+        } = params;
+
+        const formattedName = formatCapitalizeWords(full_name);
+        const cleanEmpId = (employee_id || '').trim();
+        const cleanPhone = (phone || '').trim();
+        const cleanStore = store_name.trim();
+
+        if (!formattedName) {
+            return { success: false, error: 'Vui lòng nhập Họ và tên!' };
+        }
+        if (!cleanStore) {
+            return { success: false, error: 'Vui lòng chọn Đơn vị Siêu thị làm việc!' };
+        }
+
+        // Lấy thông tin user hiện tại
+        const profiles = getLocalProfiles();
+        let current = profiles.find(p => p.id === userId);
+        if (!current) {
+            const cloudUser = await getUserProfile(userId);
+            if (cloudUser) {
+                current = cloudUser;
+                profiles.push(current);
+            }
+        }
+
+        if (!current) {
+            return { success: false, error: `Không tìm thấy hồ sơ tài khoản ID: ${userId}` };
+        }
+
+        const updatedUser: UserProfile = {
+            ...current,
+            full_name: formattedName,
+            phone: cleanPhone || current.phone,
+            employee_id: cleanEmpId || current.employee_id,
+            store_name: cleanStore,
+            role: requested_role,
+            role_title: ROLE_LABELS[requested_role] || current.role_title,
+            department: department || current.department,
+            status: 'PENDING_APPROVAL', // Đặt lại trạng thái chờ duyệt
+            rejection_reason: undefined, // Xóa lý do từ chối trước đó
+            updated_at: new Date().toISOString()
+        };
+
+        // Cập nhật local profiles
+        const uIdx = profiles.findIndex(p => p.id === userId);
+        if (uIdx >= 0) profiles[uIdx] = updatedUser;
+        else profiles.push(updatedUser);
+        saveLocalProfiles(profiles);
+
+        // Cập nhật Supabase user_profiles
+        try {
+            await supabase
+                .from('user_profiles')
+                .update({
+                    full_name: updatedUser.full_name,
+                    phone: updatedUser.phone,
+                    employee_id: updatedUser.employee_id,
+                    store_name: updatedUser.store_name,
+                    role: updatedUser.role,
+                    status: 'PENDING_APPROVAL',
+                    rejection_reason: null,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', userId);
+        } catch (upErr) {
+            console.warn('Lỗi update user_profiles Supabase:', upErr);
+        }
+
+        // Đồng bộ 2 chiều sang bảng employees nếu có mã NV
+        if (updatedUser.employee_id) {
+            try {
+                await supabase
+                    .from('employees')
+                    .update({
+                        full_name: updatedUser.full_name,
+                        store_name: updatedUser.store_name,
+                        role: updatedUser.role,
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('employee_id', updatedUser.employee_id.trim());
+            } catch (empErr) {
+                console.warn('Lỗi đồng bộ employees từ resubmitUserApproval:', empErr);
+            }
+        }
+
+        // Phân quyền người duyệt:
+        // NV vào siêu thị đã có -> Giao Quản lý siêu thị và Admin
+        // QL / TC / Siêu thị mới -> Giao Admin
+        const assigned_approver_role: 'ADMIN' | 'QUAN_LY' = (requested_role === 'NHAN_VIEN' && !is_new_store)
+            ? 'QUAN_LY'
+            : 'ADMIN';
+
+        const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+        const approvalRequest: UserApprovalRequest = {
+            id: requestId,
+            user_id: updatedUser.id,
+            full_name: updatedUser.full_name,
+            email: updatedUser.email,
+            phone: updatedUser.phone,
+            employee_id: updatedUser.employee_id,
+            department: updatedUser.department,
+            requested_role,
+            store_name: cleanStore,
+            is_new_store,
+            new_store_code,
+            new_store_address,
+            assigned_approver_role,
+            approver_store_name: assigned_approver_role === 'QUAN_LY' ? cleanStore : undefined,
+            status: 'PENDING',
+            created_at: new Date().toISOString()
+        };
+
+        const requests = getLocalRequests();
+        const rIdx = requests.findIndex(r => r.user_id === userId || r.email === updatedUser.email);
+        if (rIdx >= 0) requests[rIdx] = approvalRequest;
+        else requests.unshift(approvalRequest);
+        saveLocalRequests(requests);
+
+        try {
+            await supabase
+                .from('user_approval_requests')
+                .upsert(approvalRequest as any);
+        } catch (reqErr) {
+            console.warn('Lỗi upsert user_approval_requests Supabase:', reqErr);
+        }
+
+        // Tạo thông báo cho Admin
+        try {
+            const adminNotifId = `notif_adm_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+            await supabase
+                .from('system_notifications')
+                .insert({
+                    id: adminNotifId,
+                    target_role: 'ADMIN',
+                    title: `Cập nhật hồ sơ xét duyệt: ${updatedUser.full_name}`,
+                    message: `${updatedUser.full_name} (${updatedUser.email}) đã cập nhật lại thông tin hồ sơ và gửi lại yêu cầu xét duyệt [${ROLE_LABELS[requested_role]} - ${cleanStore}].`,
+                    type: 'APPROVAL_REQUEST',
+                    link_path: '/quan-tri-tai-khoan',
+                    is_read: false,
+                    created_at: new Date().toISOString()
+                });
+        } catch (notifErr) {
+            console.warn('Lỗi tạo notification:', notifErr);
+        }
+
+        return { success: true, data: updatedUser };
+    } catch (err: any) {
+        console.error('Lỗi resubmitUserApproval:', err);
+        return { success: false, error: err.message || String(err) };
+    }
+}
+
 

@@ -30,7 +30,11 @@ export default function DataStatusPage() {
         stores,
         streams,
         matrix,
-        summary
+        summary,
+        isLockedToSingleStore,
+        canViewAllStores,
+        currentUser,
+        isAdmin
     } = useDataStatus();
 
     // Tách các nguồn dữ liệu theo nhóm
@@ -60,7 +64,25 @@ export default function DataStatusPage() {
                 todayDate={todayDateStr}
                 loading={loading}
                 onRefresh={refresh}
+                isLockedToSingleStore={isLockedToSingleStore}
+                canViewAllStores={canViewAllStores}
+                isAdmin={isAdmin}
             />
+
+            {/* Thông báo phân quyền hiển thị theo tài khoản */}
+            {isLockedToSingleStore && currentUser?.store_name && (
+                <div className="bg-amber-50/90 border border-amber-200/90 rounded-2xl px-3.5 py-2.5 text-xs text-amber-900 flex items-center justify-between gap-2 shadow-2xs">
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-extrabold flex items-center gap-1">
+                            <span>🔒</span> Phân quyền Nhân viên:
+                        </span>
+                        <span>Trạng thái dữ liệu được tự động khóa và lọc hiển thị riêng cho siêu thị</span>
+                        <strong className="bg-white px-2 py-0.5 rounded-lg border border-amber-300 text-amber-950 font-black">
+                            {currentUser.store_name}
+                        </strong>
+                    </div>
+                </div>
+            )}
 
             {/* Danh sách dữ liệu trạng thái & Ma trận sẵn sàng */}
             <div className="space-y-4">

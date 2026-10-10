@@ -21,6 +21,7 @@ import { useAuth } from '../../shared/contexts/AuthContext';
 import { useUserStoreFilter } from '../../shared/hooks/useUserStoreFilter';
 import CampaignSummaryTable from './components/CampaignSummaryTable';
 import CampaignRemarksModal from './components/CampaignRemarksModal';
+import ReportDataFreshnessBar from '../../shared/components/report/ReportDataFreshnessBar';
 import {
     Sparkles,
     Download,
@@ -43,7 +44,8 @@ export default function CampaignSummaryPage() {
     const navigate = useNavigate();
     const reportRef = useRef<HTMLDivElement>(null);
 
-    const { currentUser } = useAuth();
+    const { currentUser, canConfigure } = useAuth();
+    const canManage = canConfigure || ['ADMIN', 'QUAN_LY', 'TRUONG_CA'].includes(currentUser?.role || '');
     const [selectedMonth, setSelectedMonth] = useState<number>(() => new Date().getMonth() + 1);
     const [selectedYear, setSelectedYear] = useState<number>(() => new Date().getFullYear());
     const [stores, setStores] = useState<StoreItem[]>([]);
@@ -159,9 +161,16 @@ export default function CampaignSummaryPage() {
             if (storeMap.size > 1) {
                 const combinedRecords: any[] = [];
                 let latestReportDate = '';
+                let latestCreatedAt = '';
+                let latestCreatedBy = '';
+
                 storeMap.forEach((sess) => {
                     if (sess.report_date && (!latestReportDate || sess.report_date > latestReportDate)) {
                         latestReportDate = sess.report_date;
+                    }
+                    if (sess.created_at && (!latestCreatedAt || new Date(sess.created_at).getTime() > new Date(latestCreatedAt).getTime())) {
+                        latestCreatedAt = sess.created_at;
+                        latestCreatedBy = sess.created_by || '';
                     }
                     combinedRecords.push(...(sess.records || []));
                 });
@@ -174,8 +183,8 @@ export default function CampaignSummaryPage() {
                     month: selectedMonth,
                     year: selectedYear,
                     report_date: latestReportDate || getYesterdayDateString(),
-                    created_at: new Date().toISOString(),
-                    created_by: 'Hệ thống SalesHub',
+                    created_at: latestCreatedAt || (storeMap.values().next().value?.created_at) || new Date().toISOString(),
+                    created_by: latestCreatedBy || (storeMap.values().next().value?.created_by) || '',
                     employee_count: combinedRecords.length,
                     total_revenue_actual: combinedRecords.reduce((sum, r) => sum + (r.revenue_actual || 0), 0),
                     total_revenue_qd: combinedRecords.reduce((sum, r) => sum + (r.revenue_qd || 0), 0),
@@ -430,9 +439,9 @@ export default function CampaignSummaryPage() {
             clonedSelect.parentElement?.replaceWith(badge);
         }
 
-        // 8. Ẩn các nút hành động (Nhận xét, Copy, Tải file, chọn độ phân giải) trên ảnh báo cáo
-        clonedReport.querySelectorAll<HTMLElement>('[data-export-ignore="true"]').forEach(el => {
-            el.style.display = 'none';
+        // 8. Ẩn/xóa các nút hành động & khối trạng thái dữ liệu trên ảnh báo cáo
+        clonedReport.querySelectorAll<HTMLElement>('[data-export-ignore="true"], [data-html2canvas-ignore="true"], [data-freshness-bar="true"]').forEach(el => {
+            el.remove();
         });
 
         // Đưa vào body để trình duyệt hoàn tất layout computation
@@ -472,7 +481,11 @@ export default function CampaignSummaryPage() {
                 backgroundColor: '#ffffff',
                 useCORS: true,
                 logging: false,
-                allowTaint: true
+                allowTaint: true,
+                ignoreElements: (el) =>
+                    el.getAttribute('data-html2canvas-ignore') === 'true' ||
+                    el.getAttribute('data-export-ignore') === 'true' ||
+                    el.getAttribute('data-freshness-bar') === 'true'
             });
 
             return canvas;
@@ -762,6 +775,19 @@ export default function CampaignSummaryPage() {
             ) : (
                 /* TRƯỜNG HỢP 2: CÓ DỮ LIỆU TỪ PHIÊN HỆ THỐNG -> HIỂN THỊ BẢNG CHUẨN XÁC THEO ẢNH */
                 <div ref={reportRef} data-report-table="true" className="space-y-3 bg-white p-2.5 sm:p-4 rounded-3xl border border-slate-200 shadow-sm font-avo">
+                    {/* THANH TRẠNG THÁI CẬP NHẬT PHIÊN DỮ LIỆU */}
+                    <ReportDataFreshnessBar
+                        latestDataDate={campaignData?.report_date || activeSession?.report_date || availableSessions[0]?.report_date || campaignData?.date_display}
+                        expectedDate={getYesterdayDateString()}
+                        sessionTitle={activeSession?.session_title || availableSessions[0]?.session_title}
+                        lastUpdatedAt={activeSession?.created_at || availableSessions[0]?.created_at}
+                        lastUpdatedBy={activeSession?.created_by || availableSessions[0]?.created_by}
+                        storeName={selectedStore}
+                        actionUrl="/cap-nhat-luy-ke-nhan-vien"
+                        actionLabel="Cập nhật số liệu NV"
+                        canUpdate={canManage}
+                    />
+
                     {/* 1. HEADER BANNER XANH LỤC ĐẬM ĐỈNH CAO VỚI CHỮ VÀNG GOLD */}
                     <div className="rounded-2xl p-4 sm:p-6 bg-gradient-to-b from-[#005a43] to-[#004735] text-white shadow-md relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-4">
                         {/* Hiệu ứng nền */}
@@ -843,7 +869,7 @@ export default function CampaignSummaryPage() {
                                     onClick={handleCopyImageToClipboard}
                                     disabled={isExporting}
                                     className="px-3 py-1.5 hover:bg-[#0f766e] text-white text-xs font-black rounded-lg transition cursor-pointer flex items-center gap-1.5"
-                                    title={`Copy ảnh toàn bộ bảng độ nét ${exportResolution} vào Clipboard để dán (Ctrl+V) vào Zalo`}
+                                    title={`Copy ảnh toàn bộ bảng độ nét ${exportResolution} vào Clipboard để dán (Ctrl+V) vào Messaging App`}
                                 >
                                     <Copy className="w-3.5 h-3.5" />
                                     <span>{isExporting ? 'Đang xuất...' : `Copy ${exportResolution}`}</span>

@@ -106,7 +106,7 @@ export default function EmployeeSessionManagerPage() {
         setIsSyncingCloud(false);
 
         if (res.success) {
-            setMessage(`☁️ Đã đồng bộ thành công ${res.syncedCount} phiên lên Supabase Cloud!`);
+            setMessage(`☁️ Đã đồng bộ thành công ${res.syncedCount} phiên lên CLOUD!`);
             await loadData();
         } else {
             setMessage(`❌ Lỗi đồng bộ: ${res.error || 'Vui lòng liên hệ Quản trị viên để kiểm tra kết nối Cloud!'}`);
@@ -249,7 +249,7 @@ export default function EmployeeSessionManagerPage() {
                                 <span>⚠️ Dữ Liệu Đang Lưu Tạm Bộ Nhớ Trình Duyệt (LocalStorage)</span>
                             </h3>
                             <p className="text-xs text-amber-800 mt-0.5 leading-relaxed">
-                                Dịch vụ lưu trữ đám mây cho phiên nhân sự chưa được thiết lập trên Supabase Cloud. Hiện có <b>{sessions.length}</b> phiên dữ liệu đang được lưu an toàn tại máy này.
+                                Dịch vụ lưu trữ đám mây cho phiên nhân sự chưa được thiết lập trên Cloud. Hiện có <b>{sessions.length}</b> phiên dữ liệu đang được lưu an toàn tại máy này.
                             </p>
                         </div>
                     </div>
@@ -278,7 +278,7 @@ export default function EmployeeSessionManagerPage() {
                                 <span>⚠️ Phát hiện {cloudStatus.unsyncedCount} phiên dữ liệu nhân sự chưa đồng bộ lên Cloud!</span>
                             </h3>
                             <p className="text-xs text-blue-700 mt-0.5 leading-relaxed">
-                                Các phiên này đang được lưu cục bộ trên máy. Hãy bấm nút đồng bộ để đưa toàn bộ lên Supabase Cloud cho toàn bộ nhân sự cùng truy cập.
+                                Các phiên này đang được lưu cục bộ trên máy. Hãy bấm nút đồng bộ để đưa toàn bộ lên CLOUD cho toàn bộ nhân sự cùng truy cập.
                             </p>
                         </div>
                     </div>
@@ -303,7 +303,7 @@ export default function EmployeeSessionManagerPage() {
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                             <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                         </span>
-                        <span><b>Supabase Cloud:</b> Toàn bộ {cloudStatus.count} phiên dữ liệu nhân sự đã được đồng bộ trực tuyến.</span>
+                        <span><b>CLOUD:</b> Toàn bộ {cloudStatus.count} phiên dữ liệu nhân sự đã được đồng bộ trực tuyến.</span>
                     </div>
                 </div>
             )}
@@ -373,7 +373,7 @@ export default function EmployeeSessionManagerPage() {
                         type="button"
                         onClick={handlePullFromCloud}
                         className="px-3 py-1.5 border border-purple-200 bg-purple-50 hover:bg-purple-100 text-purple-800 rounded-xl font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                        title="Tải lại toàn bộ các phiên từ Supabase Cloud về máy"
+                        title="Tải lại toàn bộ các phiên từ CLOUD về máy"
                     >
                         <CloudDownload className="w-3.5 h-3.5 text-purple-600" />
                         <span>Kéo từ Cloud</span>

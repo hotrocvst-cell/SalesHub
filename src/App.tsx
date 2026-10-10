@@ -36,6 +36,7 @@ const RegisterPage = lazy(() => import('./features/auth/RegisterPage'));
 const OnboardingPage = lazy(() => import('./features/auth/OnboardingPage'));
 const PendingApprovalPage = lazy(() => import('./features/auth/PendingApprovalPage'));
 const ResetPasswordCallbackPage = lazy(() => import('./features/auth/ResetPasswordCallbackPage'));
+const AccountLookupPage = lazy(() => import('./features/auth/AccountLookupPage'));
 
 export default function App() {
     return (
@@ -54,6 +55,7 @@ export default function App() {
                             <Route path="/dat-lai-mat-khau" element={<ResetPasswordCallbackPage />} />
                             <Route path="/onboarding" element={<OnboardingPage />} />
                             <Route path="/cho-xet-duyet" element={<PendingApprovalPage />} />
+                            <Route path="/tra-cuu-tai-khoan" element={<AccountLookupPage />} />
 
                             <Route element={<MainLayout />}>
                                 {/* Trang Chủ Hệ Thống (Yêu cầu đăng nhập) */}

@@ -23,6 +23,7 @@ import {
     getCampaignSummaries
 } from './services/voucherService';
 import VoucherCard from './components/VoucherCard';
+import { getDenominationHotStyle, formatCurrency, parseConditionLines } from './voucherFormatters';
 
 export default function VoucherClaimPage() {
     const { currentUser } = useAuth();
@@ -296,8 +297,9 @@ export default function VoucherClaimPage() {
                             Chọn PMH Cần Lấy
                         </h2>
                     </div>
-                    <span className="text-[11px] font-bold text-slate-400">
-                        Kho: {vouchers.filter(v => v.status === 'AVAILABLE').length} mã sẵn sàng
+                    <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                        <span>Kho Sẵn Sàng Cấp</span>
                     </span>
                 </div>
 
@@ -355,9 +357,9 @@ export default function VoucherClaimPage() {
                                                     {c.denominations.length} mức mệnh giá
                                                 </div>
                                             </div>
-                                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${hasStock ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-700'
+                                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold shrink-0 ${hasStock ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-700'
                                                 }`}>
-                                                {hasStock ? `Còn ${c.total_available} mã` : 'Hết mã'}
+                                                {hasStock ? '🟢 Còn mã' : '🔴 Hết mã'}
                                             </span>
                                         </button>
                                     );
@@ -370,12 +372,13 @@ export default function VoucherClaimPage() {
                     {activeCampaignData && (
                         <div>
                             <label className="block text-[11px] font-black uppercase text-slate-600 mb-1.5">
-                                2. Mệnh Giá Voucher:
+                                2. Mệnh Giá Voucher & Điều Kiện Áp Dụng:
                             </label>
                             <div className="grid grid-cols-2 gap-2">
                                 {activeCampaignData.denominations.map(d => {
                                     const isSelected = selectedDenomination === d.denomination;
                                     const isAvailable = d.available > 0;
+                                    const hot = getDenominationHotStyle(d.denomination);
 
                                     return (
                                         <button
@@ -383,18 +386,59 @@ export default function VoucherClaimPage() {
                                             type="button"
                                             disabled={!isAvailable}
                                             onClick={() => setSelectedDenomination(d.denomination)}
-                                            className={`p-2.5 rounded-2xl border text-center transition cursor-pointer ${isSelected
-                                                ? 'bg-amber-500 border-amber-600 text-white shadow-sm ring-2 ring-amber-300'
+                                            className={`p-3 rounded-2xl border text-center transition cursor-pointer relative overflow-hidden flex flex-col justify-between ${isSelected
+                                                ? hot.activeClass
                                                 : isAvailable
-                                                    ? 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-800'
+                                                    ? `${hot.bgClass} ${hot.borderClass} hover:shadow-xs`
                                                     : 'bg-slate-100 border-slate-200 text-slate-400 opacity-50 cursor-not-allowed'
                                                 }`}
                                         >
-                                            <div className="font-mono font-black text-sm">
-                                                {d.denomination.toLocaleString('vi-VN')}đ
+                                            {/* Tag độ hot của mệnh giá */}
+                                            <div className="flex items-center justify-between gap-1 w-full mb-1">
+                                                <span className="text-[11px]">{hot.tagIcon}</span>
+                                                <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded border ${
+                                                    isSelected ? 'bg-white/20 text-white border-white/30' : hot.badgeClass
+                                                }`}>
+                                                    {hot.label}
+                                                </span>
                                             </div>
-                                            <div className={`text-[10px] font-bold mt-0.5 ${isSelected ? 'text-amber-100' : isAvailable ? 'text-emerald-600' : 'text-rose-500'}`}>
-                                                {isAvailable ? `Còn ${d.available} mã` : 'Hết mã'}
+
+                                            {/* Số tiền */}
+                                            <div className={`font-mono font-black text-sm my-0.5 ${isSelected ? 'text-white' : hot.textClass}`}>
+                                                {formatCurrency(d.denomination)}
+                                            </div>
+
+                                            {/* Diễn giải / Điều kiện sử dụng nếu có */}
+                                            {(() => {
+                                                const condLines = d.description ? parseConditionLines(d.description) : [];
+                                                if (condLines.length === 0) return null;
+                                                return (
+                                                    <div
+                                                        className={`text-[10px] my-1 p-1.5 rounded-lg text-left transition ${
+                                                            isSelected
+                                                                ? 'bg-black/25 text-white'
+                                                                : 'bg-white/95 text-slate-700 border border-slate-200/80 shadow-2xs'
+                                                        }`}
+                                                        title={d.description}
+                                                    >
+                                                        <div className="font-bold text-[9px] uppercase tracking-wider opacity-85 mb-0.5 flex items-center gap-0.5">
+                                                            <span>📝</span> Điều kiện:
+                                                        </div>
+                                                        <div className="space-y-0.5">
+                                                            {condLines.map((line, lIdx) => (
+                                                                <div key={lIdx} className="leading-tight flex items-start gap-1 font-medium">
+                                                                    <span className="opacity-70 text-[9px] font-bold shrink-0">•</span>
+                                                                    <span className="line-clamp-2">{line}</span>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })()}
+
+                                            {/* Trạng thái còn / hết mã (Tuyệt đối không để lộ số lượng cụ thể) */}
+                                            <div className={`text-[10px] font-black mt-1 ${isSelected ? 'text-white/95' : isAvailable ? 'text-emerald-700' : 'text-rose-500'}`}>
+                                                {isAvailable ? '🟢 Còn mã' : '🔴 Hết mã'}
                                             </div>
                                         </button>
                                     );

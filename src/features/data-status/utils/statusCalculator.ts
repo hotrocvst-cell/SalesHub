@@ -47,7 +47,12 @@ export function calculateDataStatus(input: StatusCalculationInput): {
     // 1. DOANH THU LŨY KẾ SIÊU THỊ
     // Lọc các bản ghi khớp với tháng/năm và siêu thị được chọn
     const storeRecords = records.filter(r => {
-        if (targetStore !== 'all' && !isStoreMatch(r.storeName, targetStore, stores)) return false;
+        if (targetStore !== 'all') {
+            if (!isStoreMatch(r.storeName, targetStore, stores)) return false;
+        } else {
+            const matchesApp = applicableStores.some(s => isStoreMatch(r.storeName, s.name, stores));
+            if (!matchesApp) return false;
+        }
         return r.month === selectedMonth && r.year === selectedYear;
     });
 
@@ -133,7 +138,12 @@ export function calculateDataStatus(input: StatusCalculationInput): {
 
     // 3. DOANH THU LŨY KẾ NHÂN VIÊN (Sessions)
     const empSessions = sessions.filter(s => {
-        if (targetStore !== 'all' && !isStoreMatch(s.store_name, targetStore, stores)) return false;
+        if (targetStore !== 'all') {
+            if (!isStoreMatch(s.store_name, targetStore, stores)) return false;
+        } else {
+            const matchesApp = applicableStores.some(st => isStoreMatch(s.store_name, st.name, stores));
+            if (!matchesApp) return false;
+        }
         return s.month === selectedMonth && s.year === selectedYear;
     });
 
@@ -229,20 +239,28 @@ export function calculateDataStatus(input: StatusCalculationInput): {
     // 5. CHỈ TIÊU KHOÁN THÁNG (Doanh thu & Thi đua)
     const applicableEmployees = employees.filter(e => {
         if (e.is_active === false) return false;
-        if (targetStore === 'all') return true;
-        return isStoreMatch(e.store_name, targetStore, stores);
+        if (targetStore !== 'all') {
+            return isStoreMatch(e.store_name, targetStore, stores);
+        }
+        return applicableStores.some(st => isStoreMatch(e.store_name, st.name, stores));
     });
 
     const targetRevCount = empRevenueTargets.filter(t => {
-        if (targetStore === 'all') return true;
         const emp = employees.find(e => e.employee_id === t.employee_id);
-        return emp ? isStoreMatch(emp.store_name, targetStore, stores) : false;
+        if (!emp) return false;
+        if (targetStore !== 'all') {
+            return isStoreMatch(emp.store_name, targetStore, stores);
+        }
+        return applicableStores.some(st => isStoreMatch(emp.store_name, st.name, stores));
     }).length;
 
     const targetCampCount = empCampaignTargets.filter(t => {
-        if (targetStore === 'all') return true;
         const emp = employees.find(e => e.employee_id === t.employee_id);
-        return emp ? isStoreMatch(emp.store_name, targetStore, stores) : false;
+        if (!emp) return false;
+        if (targetStore !== 'all') {
+            return isStoreMatch(emp.store_name, targetStore, stores);
+        }
+        return applicableStores.some(st => isStoreMatch(emp.store_name, st.name, stores));
     }).length;
 
     const totalTargetAssigned = targetRevCount + (targetCampCount > 0 ? 1 : 0);

@@ -249,7 +249,7 @@ export default function DataManagementPage() {
                                 <span>⚠️ Phát hiện có bản nháp dữ liệu kinh doanh chưa đồng bộ lên Cloud!</span>
                             </h3>
                             <p className="text-xs text-amber-800 mt-0.5 leading-relaxed">
-                                Trên thiết bị này đang có bản nháp số liệu kinh doanh cục bộ {localDraft.updatedAt ? `(lưu lúc ${formatDateTime(localDraft.updatedAt)})` : ''}. Số liệu này chưa được đưa vào danh sách báo cáo chính thức trên Supabase Cloud.
+                                Trên thiết bị này đang có bản nháp số liệu kinh doanh cục bộ {localDraft.updatedAt ? `(lưu lúc ${formatDateTime(localDraft.updatedAt)})` : ''}. Số liệu này chưa được đưa vào danh sách báo cáo chính thức trên CLOUD.
                             </p>
                         </div>
                     </div>

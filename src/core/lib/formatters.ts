@@ -6,6 +6,42 @@ export function formatValue(num: number | null | undefined): string {
     return Number(num).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
 
+/**
+ * Tính số lượng mục tiêu còn lại chuẩn toàn hệ thống:
+ * - Nếu thực tế đã hoàn thành mục tiêu (actual >= target, không phụ thuộc dự kiến) -> trả về 0
+ * - Nếu chưa hoàn thành (actual < target) -> trả về số dương (target - actual).
+ * Ví dụ: mục tiêu 5, đã bán 2, còn lại 3.
+ */
+export function calculateRemainingTarget(target: number, actual: number, decimals: number = 1): number {
+    const t = Number(target) || 0;
+    const a = Number(actual) || 0;
+    if (a >= t) return 0;
+    const diff = t - a;
+    return Number(diff.toFixed(decimals));
+}
+
+/**
+ * Định dạng hiển thị trường mục tiêu còn lại:
+ * - Nếu thực tế đã hoàn thành mục tiêu (remaining <= 0) -> để trống hoặc '0'
+ * - Nếu chưa hoàn thành -> hiển thị số dương có phân cách hàng nghìn tiếng Việt
+ */
+export function formatRemainingTarget(
+    remaining: number | null | undefined,
+    formatBlank: boolean = false,
+    forceDecimals: boolean = false
+): string {
+    if (remaining === null || remaining === undefined || isNaN(remaining) || remaining <= 0) {
+        return formatBlank ? '' : '0';
+    }
+    const abs = Math.abs(remaining);
+    const formattedStr = forceDecimals
+        ? abs.toFixed(1)
+        : (abs % 1 !== 0 ? abs.toFixed(1) : abs.toString());
+    const [intPart, decPart] = formattedStr.split('.');
+    const formattedInt = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    return decPart !== undefined ? `${formattedInt},${decPart}` : formattedInt;
+}
+
 // Rút gọn tên siêu thị hiển thị trên giao diện
 export function getShortStoreName(name: string): string {
     if (!name) return "Tổng";
@@ -127,6 +163,56 @@ export function getYesterdayDateString(): string {
     const day = String(yesterday.getDate()).padStart(2, '0');
 
     return `${year}-${month}-${day}`;
+}
+
+/**
+ * Chuẩn hóa ngày từ mọi định dạng (YYYY-MM-DD, DD-MM-YYYY, DD/MM/YYYY, Date, timestamp...)
+ * về chuỗi chuẩn ISO YYYY-MM-DD để so sánh logic chính xác.
+ */
+export function normalizeToDateString(input: string | Date | number | null | undefined): string | null {
+    if (!input && input !== 0) return null;
+
+    if (typeof input === 'string') {
+        const trimmed = input.trim();
+        if (!trimmed) return null;
+
+        // Khớp dạng YYYY-MM-DD hoặc YYYY/MM/DD
+        const ymdMatch = trimmed.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+        if (ymdMatch) {
+            const y = ymdMatch[1];
+            const m = ymdMatch[2].padStart(2, '0');
+            const d = ymdMatch[3].padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+
+        // Khớp dạng DD/MM/YYYY hoặc DD-MM-YYYY
+        const dmyMatch = trimmed.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+        if (dmyMatch) {
+            const d = dmyMatch[1].padStart(2, '0');
+            const m = dmyMatch[2].padStart(2, '0');
+            const y = dmyMatch[3];
+            return `${y}-${m}-${d}`;
+        }
+
+        const parsed = new Date(trimmed);
+        if (!isNaN(parsed.getTime())) {
+            const y = parsed.getFullYear();
+            const m = String(parsed.getMonth() + 1).padStart(2, '0');
+            const d = String(parsed.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+        return null;
+    }
+
+    const dObj = typeof input === 'number' ? new Date(input) : input;
+    if (dObj instanceof Date && !isNaN(dObj.getTime())) {
+        const y = dObj.getFullYear();
+        const m = String(dObj.getMonth() + 1).padStart(2, '0');
+        const d = String(dObj.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    }
+
+    return null;
 }
 
 /**
@@ -283,4 +369,17 @@ export function getCampaignLabel(raw: string, dict?: { raw_key: string; display_
     }
 
     return trimmed;
+}
+
+/**
+ * Tự động viết hoa chữ cái đầu tiên của mỗi từ (Capitalize each word)
+ * Ví dụ: "nguyễn văn an" -> "Nguyễn Văn An"
+ */
+export function formatCapitalizeWords(str: string): string {
+    if (!str) return '';
+    return str
+        .toLowerCase()
+        .split(' ')
+        .map(w => w ? w.charAt(0).toUpperCase() + w.slice(1) : '')
+        .join(' ');
 }
