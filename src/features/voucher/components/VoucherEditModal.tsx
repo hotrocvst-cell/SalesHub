@@ -11,7 +11,8 @@ import {
     RotateCcw,
     Sparkles,
     CheckSquare,
-    Square
+    Square,
+    Clock
 } from 'lucide-react';
 import type { VoucherItem, VoucherStatus } from '../types';
 import {
@@ -19,7 +20,7 @@ import {
     getDefaultExpiryDate,
     extractClusterStoresFromNote
 } from '../services/voucherService';
-import { getShortStoreName, isStoreMatch } from '../../../core/lib/formatters';
+import { getShortStoreName, isStoreMatch, formatDateTime } from '../../../core/lib/formatters';
 import { getDenominationHotStyle, formatCurrency, parseCurrencyInput } from '../voucherFormatters';
 
 interface Props {
@@ -280,6 +281,24 @@ export default function VoucherEditModal({
                         <div className="p-3 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 font-bold flex items-center gap-2">
                             <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
                             <span>{errorMsg}</span>
+                        </div>
+                    )}
+
+                    {/* Thông tin nhập kho ban đầu */}
+                    {voucher && (
+                        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 flex items-center justify-between gap-2.5 flex-wrap">
+                            <div className="flex items-center gap-1.5 text-slate-700">
+                                <Clock className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                <span className="text-[11px] text-slate-500 font-medium">Thời gian nhập kho:</span>
+                                <span className="font-mono font-bold text-slate-900 text-xs">
+                                    {voucher.created_at ? formatDateTime(voucher.created_at, true) : 'Chưa ghi nhận'}
+                                </span>
+                            </div>
+                            {voucher.created_by && (
+                                <div className="text-[11px] text-slate-500">
+                                    Người nạp: <strong className="text-slate-800">{voucher.created_by}</strong>
+                                </div>
+                            )}
                         </div>
                     )}
 

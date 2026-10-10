@@ -148,6 +148,19 @@ export default function VoucherListTable({
         return found?.claimed_by_name || prefilterEmployeeId;
     }, [vouchers, prefilterEmployeeId]);
 
+    // Số lượng voucher nạp vào trong hôm nay
+    const todayImportCount = useMemo(() => {
+        const nowDate = new Date();
+        return vouchers.filter(v => {
+            if (!v.created_at) return false;
+            const d = new Date(v.created_at);
+            return !isNaN(d.getTime()) &&
+                d.getDate() === nowDate.getDate() &&
+                d.getMonth() === nowDate.getMonth() &&
+                d.getFullYear() === nowDate.getFullYear();
+        }).length;
+    }, [vouchers]);
+
     // Lọc danh sách
     const filteredList = useMemo(() => {
         let list = vouchers;
@@ -182,6 +195,34 @@ export default function VoucherListTable({
             list = list.filter(v => v.claimed_by_store && isStoreMatch(v.claimed_by_store, filterStore));
         }
 
+        // Lọc theo thời gian thao tác nhập kho
+        if (filterImportTime !== 'ALL') {
+            const now = Date.now();
+            list = list.filter(v => {
+                if (!v.created_at) return false;
+                const time = new Date(v.created_at).getTime();
+                if (isNaN(time)) return false;
+                const diffHours = (now - time) / (1000 * 60 * 60);
+
+                if (filterImportTime === '1H') return diffHours <= 1;
+                if (filterImportTime === 'TODAY') {
+                    const d = new Date(time);
+                    const nowDate = new Date();
+                    return d.getDate() === nowDate.getDate() &&
+                           d.getMonth() === nowDate.getMonth() &&
+                           d.getFullYear() === nowDate.getFullYear();
+                }
+                if (filterImportTime === '3DAYS') return diffHours <= 24 * 3;
+                if (filterImportTime === '7DAYS') return diffHours <= 24 * 7;
+                if (filterImportTime === 'THIS_MONTH') {
+                    const d = new Date(time);
+                    const nowDate = new Date();
+                    return d.getMonth() === nowDate.getMonth() && d.getFullYear() === nowDate.getFullYear();
+                }
+                return true;
+            });
+        }
+
         if (searchQuery.trim()) {
             const q = searchQuery.trim().toLowerCase();
             list = list.filter(v =>
@@ -195,14 +236,26 @@ export default function VoucherListTable({
             );
         }
 
-        // Sắp xếp mã mới nhất lên đầu (theo created_at hoặc claimed_at giảm dần)
+        // Sắp xếp mã theo cấu hình người dùng
         return [...list].sort((a, b) => {
-            const timeA = new Date(a.created_at || a.claimed_at || 0).getTime();
-            const timeB = new Date(b.created_at || b.claimed_at || 0).getTime();
-            if (timeB !== timeA) return timeB - timeA;
+            if (sortBy === 'CREATED_DESC') {
+                const timeA = new Date(a.created_at || a.claimed_at || 0).getTime();
+                const timeB = new Date(b.created_at || b.claimed_at || 0).getTime();
+                if (timeB !== timeA) return timeB - timeA;
+            } else if (sortBy === 'CREATED_ASC') {
+                const timeA = new Date(a.created_at || a.claimed_at || 0).getTime();
+                const timeB = new Date(b.created_at || b.claimed_at || 0).getTime();
+                if (timeA !== timeB) return timeA - timeB;
+            } else if (sortBy === 'DENOM_DESC') {
+                const dDiff = (Number(b.denomination) || 0) - (Number(a.denomination) || 0);
+                if (dDiff !== 0) return dDiff;
+            } else if (sortBy === 'DENOM_ASC') {
+                const dDiff = (Number(a.denomination) || 0) - (Number(b.denomination) || 0);
+                if (dDiff !== 0) return dDiff;
+            }
             return (b.id || '').localeCompare(a.id || '');
         });
-    }, [vouchers, prefilterEmployeeId, filterStatus, filterCampaign, filterDenomination, filterStore, searchQuery]);
+    }, [vouchers, prefilterEmployeeId, filterStatus, filterCampaign, filterDenomination, filterStore, filterImportTime, sortBy, searchQuery]);
 
     // Danh sách hiển thị thực tế (mặc định 20 mã mới nhất, người dùng có thể nạp thêm 20 mã)
     const displayedList = useMemo(() => {
@@ -441,6 +494,38 @@ export default function VoucherListTable({
                                 ))}
                             </select>
                         )}
+
+                        {/* Lọc theo Thời gian nhập kho (Trọng tâm nhận diện mã nạp mới) */}
+                        <select
+                            value={filterImportTime}
+                            onChange={(e) => setFilterImportTime(e.target.value)}
+                            className={`border rounded-xl px-2.5 py-1.5 text-xs font-bold cursor-pointer max-w-[175px] truncate ${
+                                filterImportTime !== 'ALL'
+                                    ? 'bg-amber-50 border-amber-400 text-amber-950 font-black ring-1 ring-amber-300'
+                                    : 'bg-white border-slate-200 text-slate-700'
+                            }`}
+                            title="Lọc voucher theo thời gian thao tác nhập kho"
+                        >
+                            <option value="ALL">⏰ Mọi lúc nhập kho</option>
+                            <option value="1H">⚡ Vừa nạp 1 giờ qua</option>
+                            <option value="TODAY">✨ Nạp hôm nay ({todayImportCount})</option>
+                            <option value="3DAYS">📅 3 ngày gần đây</option>
+                            <option value="7DAYS">📅 7 ngày gần đây</option>
+                            <option value="THIS_MONTH">📆 Trong tháng này</option>
+                        </select>
+
+                        {/* Sắp xếp danh sách */}
+                        <select
+                            value={sortBy}
+                            onChange={(e) => setSortBy(e.target.value)}
+                            className="bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 cursor-pointer max-w-[170px] truncate"
+                            title="Sắp xếp danh sách voucher"
+                        >
+                            <option value="CREATED_DESC">⏱️ Mới nhập kho nhất</option>
+                            <option value="CREATED_ASC">⏱️ Cũ nhất trước</option>
+                            <option value="DENOM_DESC">💵 Mệnh giá giảm dần</option>
+                            <option value="DENOM_ASC">💵 Mệnh giá tăng dần</option>
+                        </select>
                     </div>
 
                     <div className="text-xs font-black text-slate-500 shrink-0">
@@ -451,6 +536,23 @@ export default function VoucherListTable({
                 {/* THANH TÁC VỤ CHỌN NHANH & TẠO QR DOUBLE CHECK */}
                 <div className="pt-2 border-t border-slate-200/70 flex flex-wrap items-center justify-between gap-2">
                     <div className="flex flex-wrap items-center gap-1.5">
+                        {/* Nút lọc nhanh các mã vừa nạp hôm nay */}
+                        {todayImportCount > 0 && (
+                            <button
+                                type="button"
+                                onClick={() => setFilterImportTime(prev => prev === 'TODAY' ? 'ALL' : 'TODAY')}
+                                className={`px-2.5 py-1.5 rounded-xl border text-xs font-black transition cursor-pointer flex items-center gap-1.5 active:scale-95 ${
+                                    filterImportTime === 'TODAY'
+                                        ? 'bg-amber-500 text-slate-950 border-amber-600 shadow-sm'
+                                        : 'bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-300'
+                                }`}
+                                title="Lọc nhanh toàn bộ voucher vừa nhập kho hôm nay để rà soát mệnh giá và chương trình"
+                            >
+                                <Clock className="w-3.5 h-3.5 text-amber-700 fill-amber-300" />
+                                <span>Mã nạp hôm nay ({todayImportCount})</span>
+                            </button>
+                        )}
+
                         {/* Nút Chọn nhanh mã CLAIMED */}
                         {unclaimedFilteredCodes.length > 0 && (
                             <button
@@ -566,6 +668,30 @@ export default function VoucherListTable({
                         </button>
                     )}
                 </div>
+
+                {/* Banner Thông Báo Khi Đang Lọc Theo Thời Gian Nhập Kho */}
+                {filterImportTime !== 'ALL' && (
+                    <div className="bg-amber-50/90 border border-amber-200 text-amber-950 px-3 py-2 rounded-xl flex items-center justify-between text-xs font-bold animate-in fade-in">
+                        <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping shrink-0" />
+                            <span>
+                                Đang lọc <strong>{filteredList.length}</strong> mã nạp kho{' '}
+                                {filterImportTime === '1H' ? 'trong 1 giờ qua' :
+                                 filterImportTime === 'TODAY' ? 'hôm nay' :
+                                 filterImportTime === '3DAYS' ? '3 ngày gần đây' :
+                                 filterImportTime === '7DAYS' ? '7 ngày gần đây' : 'trong tháng này'}.
+                                {' '}Dễ dàng kiểm tra mệnh giá / chương trình, bấm <strong>Sửa</strong> hoặc tích chọn để sửa hàng loạt.
+                            </span>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setFilterImportTime('ALL')}
+                            className="text-amber-800 hover:text-amber-950 underline font-black ml-2 cursor-pointer shrink-0"
+                        >
+                            ✕ Xem tất cả
+                        </button>
+                    </div>
+                )}
             </div>
 
             {/* Bảng Dữ Liệu Tinh Gọn */}
@@ -588,7 +714,7 @@ export default function VoucherListTable({
                             <th className="py-2 px-2 text-right">Mệnh Giá</th>
                             <th className="py-2 px-2 text-center" style={{ width: '90px' }}>Hạn Dùng</th>
                             <th className="py-2 px-2 text-center">Trạng Thái</th>
-                            <th className="py-2 px-2.5">Người Thao Tác & Siêu Thị</th>
+                            <th className="py-2 px-2.5">Thời Gian Nhập Kho & Người Thao Tác</th>
                             <th className="py-2 px-2 text-right">Thao Tác</th>
                         </tr>
                     </thead>
@@ -727,58 +853,99 @@ export default function VoucherListTable({
                                             )}
                                         </td>
 
-                                        {/* Thông Tin Thao Tác & Người Nhận (Kèm Tên Siêu Thị của User) */}
+                                        {/* Thông Tin Thao Tác & Người Nhận (Kèm Thời Gian Nhập Kho) */}
                                         <td className="py-2 px-2.5">
-                                            {item.claimed_by_name ? (
-                                                <div className="text-[11px] space-y-1">
-                                                    {/* Tên nhân viên & Mã NV */}
-                                                    <div className="flex items-center gap-1.5 flex-wrap">
-                                                        <span className="font-black text-slate-900">{item.claimed_by_name}</span>
-                                                        <span className="text-slate-400 font-mono text-[10px]">({item.claimed_by_id})</span>
-                                                    </div>
-
-                                                    {/* Tên siêu thị của user thao tác */}
-                                                    {item.claimed_by_store ? (
-                                                        <div
-                                                            className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded max-w-[190px] truncate"
-                                                            title={`Siêu thị thao tác: ${item.claimed_by_store}`}
-                                                        >
-                                                            <span className="shrink-0">🏪</span>
-                                                            <span className="truncate">{getShortStoreName(item.claimed_by_store)}</span>
+                                            {(() => {
+                                                const importMeta = getImportMeta(item.created_at);
+                                                return item.claimed_by_name ? (
+                                                    <div className="text-[11px] space-y-1">
+                                                        {/* Tên nhân viên & Mã NV */}
+                                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                                            <span className="font-black text-slate-900">{item.claimed_by_name}</span>
+                                                            <span className="text-slate-400 font-mono text-[10px]">({item.claimed_by_id})</span>
                                                         </div>
-                                                    ) : (
-                                                        <div className="text-[10px] text-slate-400 italic">Chưa rõ siêu thị</div>
-                                                    )}
 
-                                                    {/* Mã đơn hàng & Thời gian thao tác */}
-                                                    <div className="flex items-center gap-2 flex-wrap text-[10.5px]">
-                                                        {item.order_id && (
-                                                            <span className="text-indigo-700 font-mono font-bold">
-                                                                Đơn: {item.order_id}
-                                                            </span>
+                                                        {/* Tên siêu thị của user thao tác */}
+                                                        {item.claimed_by_store ? (
+                                                            <div
+                                                                className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded max-w-[190px] truncate"
+                                                                title={`Siêu thị thao tác: ${item.claimed_by_store}`}
+                                                            >
+                                                                <span className="shrink-0">🏪</span>
+                                                                <span className="truncate">{getShortStoreName(item.claimed_by_store)}</span>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="text-[10px] text-slate-400 italic">Chưa rõ siêu thị</div>
                                                         )}
-                                                        {item.claimed_at && (
-                                                            <span className="text-slate-400 text-[10px] flex items-center gap-0.5">
-                                                                <Clock className="w-3 h-3 text-slate-400 inline shrink-0" />
-                                                                <span>
-                                                                    {new Date(item.claimed_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} {formatDate(item.claimed_at)}
+
+                                                        {/* Mã đơn hàng & Thời gian cấp */}
+                                                        <div className="flex items-center gap-2 flex-wrap text-[10.5px]">
+                                                            {item.order_id && (
+                                                                <span className="text-indigo-700 font-mono font-bold">
+                                                                    Đơn: {item.order_id}
                                                                 </span>
-                                                            </span>
+                                                            )}
+                                                            {item.claimed_at && (
+                                                                <span className="text-slate-500 text-[10px] flex items-center gap-0.5" title={`Thời gian cấp: ${formatDateTime(item.claimed_at, true)}`}>
+                                                                    <Clock className="w-3 h-3 text-slate-400 inline shrink-0" />
+                                                                    <span>
+                                                                        Cấp: {formatDateTime(item.claimed_at)}
+                                                                    </span>
+                                                                </span>
+                                                            )}
+                                                        </div>
+
+                                                        {/* Thời gian nhập kho ban đầu */}
+                                                        {item.created_at && (
+                                                            <div className="text-[9.5px] text-slate-400 flex items-center gap-1 pt-0.5 border-t border-slate-100 font-mono" title={`Thời điểm nhập kho: ${formatDateTime(item.created_at, true)}`}>
+                                                                <Clock className="w-2.5 h-2.5 text-slate-400 shrink-0" />
+                                                                <span>Nhập kho: {formatDateTime(item.created_at)}</span>
+                                                            </div>
                                                         )}
                                                     </div>
-                                                </div>
-                                            ) : (
-                                                <div className="text-[11px] text-slate-400 space-y-0.5">
-                                                    <span className="inline-block text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
-                                                        🏢 {item.store_name === 'Toàn Cụm' || item.store_name === 'Toàn Cụm Siêu Thị' ? 'Kho Toàn Cụm' : getShortStoreName(item.store_name)}
-                                                    </span>
-                                                    {item.created_by && (
-                                                        <div className="text-[9.5px] text-slate-400">
-                                                            Nạp bởi: {item.created_by}
+                                                ) : (
+                                                    <div className="text-[11px] space-y-1">
+                                                        {/* Cụm / Kho & Người nạp */}
+                                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                                            <span className="inline-block text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                                                                🏢 {item.store_name === 'Toàn Cụm' || item.store_name === 'Toàn Cụm Siêu Thị' ? 'Kho Toàn Cụm' : getShortStoreName(item.store_name)}
+                                                            </span>
+                                                            {item.created_by && (
+                                                                <div className="text-[10px] text-slate-500 font-medium">
+                                                                    Nạp bởi: <strong className="text-slate-700">{item.created_by}</strong>
+                                                                </div>
+                                                            )}
                                                         </div>
-                                                    )}
-                                                </div>
-                                            )}
+
+                                                        {/* THỜI GIAN THAO TÁC NHẬP KHO */}
+                                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                                            <div
+                                                                className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10.5px] font-mono font-bold ${
+                                                                    importMeta.isToday
+                                                                        ? 'bg-amber-50 text-amber-900 border border-amber-300'
+                                                                        : 'bg-slate-100 text-slate-700 border border-slate-200'
+                                                                }`}
+                                                                title={`Thời gian thao tác nhập kho: ${item.created_at ? formatDateTime(item.created_at, true) : 'Chưa ghi nhận'}`}
+                                                            >
+                                                                <Clock className="w-3 h-3 text-emerald-600 shrink-0" />
+                                                                <span>
+                                                                    {item.created_at ? formatDateTime(item.created_at) : 'Chưa ghi nhận'}
+                                                                </span>
+                                                            </div>
+
+                                                            {/* Huy hiệu nạp mới */}
+                                                            {importMeta.isWithin24h && (
+                                                                <span
+                                                                    className="inline-flex items-center gap-0.5 text-[9.5px] font-black text-emerald-800 bg-emerald-100 border border-emerald-300 px-1.5 py-0.5 rounded-full"
+                                                                    title="Mã vừa được nhập kho gần đây"
+                                                                >
+                                                                    ✨ {importMeta.relText || 'Mới nạp'}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })()}
                                         </td>
 
                                         {/* Thao tác */}
@@ -789,10 +956,11 @@ export default function VoucherListTable({
                                                     <button
                                                         type="button"
                                                         onClick={() => onEditVoucher(item)}
-                                                        className="p-1 rounded bg-indigo-50 hover:bg-indigo-100 text-indigo-500 hover:text-indigo-700 transition cursor-pointer"
-                                                        title="Chỉnh sửa / cập nhật thông tin mã này"
+                                                        className="px-2 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 text-[10.5px] font-black transition cursor-pointer flex items-center gap-1 shadow-2xs hover:shadow-xs active:scale-95"
+                                                        title="Sửa mã này: Đổi mệnh giá, chương trình, HSD, kho..."
                                                     >
-                                                        <Pencil className="w-3.5 h-3.5" />
+                                                        <Pencil className="w-3 h-3 text-indigo-600" />
+                                                        <span>Sửa</span>
                                                     </button>
                                                 )}
                                                 {isClaimed && (
