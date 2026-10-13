@@ -1,0 +1,394 @@
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { fetchStores, fetchEmployees, type StoreItem, type EmployeeItem } from '../../core/lib/storage';
+import { getYesterdayDateString, formatDate } from '../../core/lib/formatters';
+import { useUserStoreFilter } from '../../shared/hooks/useUserStoreFilter';
+import type { CumulativeRankingViewMode, EmployeeCumulativeRankingRow, StoreCumulativeSummary } from './types';
+import { fetchCumulativeRankingData } from './services/cumulativeRankingService';
+import CumulativeRankingFilterBar from './components/CumulativeRankingFilterBar';
+import CumulativeRankingKpiCards from './components/CumulativeRankingKpiCards';
+import CumulativeRankingTable from './components/CumulativeRankingTable';
+import PeriodTargetConfigModal from './components/PeriodTargetConfigModal';
+import { Trophy, CheckCircle2, AlertCircle } from 'lucide-react';
+import ExcelJS from 'exceljs';
+import html2canvas from 'html2canvas';
+
+export default function EmployeeCumulativeRankingPage() {
+    const reportRef = useRef<HTMLDivElement>(null);
+
+    // 1. STATE THỜI GIAN & BỘ LỌC
+    const today = new Date();
+    const currentYear = today.getFullYear();
+    const currentMonth = today.getMonth() + 1;
+    const firstDayOfMonth = `${currentYear}-${String(currentMonth).padStart(2, '0')}-01`;
+    const defaultYesterday = getYesterdayDateString() || `${currentYear}-${String(currentMonth).padStart(2, '0')}-13`;
+
+    const [fromDate, setFromDate] = useState<string>(firstDayOfMonth);
+    const [toDate, setToDate] = useState<string>(defaultYesterday);
+    const [stores, setStores] = useState<StoreItem[]>([]);
+    const [selectedStore, setSelectedStore] = useState<string>('all');
+
+    // Phân quyền siêu thị
+    const { allowedStores, isLockedToSingleStore } = useUserStoreFilter(
+        stores,
+        selectedStore,
+        setSelectedStore
+    );
+
+    // Chế độ xem & Target & Tìm kiếm
+    const [viewMode, setViewMode] = useState<CumulativeRankingViewMode>('CUMULATIVE_ONLY');
+    const [showTarget, setShowTarget] = useState<boolean>(true);
+    const [searchQuery, setSearchQuery] = useState<string>('');
+    const [isPeriodTargetModalOpen, setIsPeriodTargetModalOpen] = useState<boolean>(false);
+    const [employees, setEmployees] = useState<EmployeeItem[]>([]);
+
+    // State Dữ liệu
+    const [rows, setRows] = useState<EmployeeCumulativeRankingRow[]>([]);
+    const [summary, setSummary] = useState<StoreCumulativeSummary>({
+        storeName: 'all',
+        fromDate: firstDayOfMonth,
+        toDate: defaultYesterday,
+        dateList: [],
+        storeCumulativeRevenue: 0,
+        storeDailyRevenue: {},
+        storeTarget: 0,
+        storeCompletionRate: 0,
+        totalEmployeesWithSales: 0,
+        sumOfEmployeesCumulative: 0,
+        unassignedOrOnlineDiff: 0,
+        top1Employee: null,
+        avgRevenuePerEmployee: 0
+    });
+
+    const [loading, setLoading] = useState<boolean>(true);
+    const [isExporting, setIsExporting] = useState<boolean>(false);
+    const [toastMessage, setToastMessage] = useState<string>('');
+
+    const showToast = (msg: string) => {
+        setToastMessage(msg);
+        setTimeout(() => setToastMessage(''), 3500);
+    };
+
+    // 2. TẢI DANH MỤC SIÊU THỊ & NHÂN SỰ
+    useEffect(() => {
+        fetchStores().then(res => {
+            if (res.success && res.data) {
+                setStores(res.data);
+            }
+        });
+    }, []);
+
+    useEffect(() => {
+        fetchEmployees(selectedStore === 'all' ? undefined : selectedStore).then(res => {
+            if (res.success && res.data) {
+                setEmployees(res.data);
+            }
+        });
+    }, [selectedStore]);
+
+    // 3. TẢI DỮ LIỆU BÁO CÁO
+    const loadReportData = async () => {
+        setLoading(true);
+        const res = await fetchCumulativeRankingData({
+            fromDate,
+            toDate,
+            store: selectedStore,
+            storesList: stores
+        });
+
+        if (res.success) {
+            setRows(res.rows);
+            setSummary(res.summary);
+        } else {
+            showToast(res.error || 'Lỗi khi tải dữ liệu báo cáo');
+        }
+        setLoading(false);
+    };
+
+    useEffect(() => {
+        loadReportData();
+    }, [fromDate, toDate, selectedStore]);
+
+    // 4. PRESETS THỜI GIAN NHANH
+    const handleSelectPreset = (preset: 'THIS_MONTH' | 'LAST_7_DAYS' | 'YESTERDAY' | 'LAST_MONTH') => {
+        const d = new Date();
+        const y = d.getFullYear();
+        const m = d.getMonth() + 1;
+        const pad = (n: number) => String(n).padStart(2, '0');
+
+        if (preset === 'THIS_MONTH') {
+            setFromDate(`${y}-${pad(m)}-01`);
+            setToDate(defaultYesterday);
+        } else if (preset === 'YESTERDAY') {
+            setFromDate(defaultYesterday);
+            setToDate(defaultYesterday);
+        } else if (preset === 'LAST_7_DAYS') {
+            const past7 = new Date();
+            past7.setDate(past7.getDate() - 7);
+            setFromDate(`${past7.getFullYear()}-${pad(past7.getMonth() + 1)}-${pad(past7.getDate())}`);
+            setToDate(defaultYesterday);
+        } else if (preset === 'LAST_MONTH') {
+            const prevMonthDate = new Date(y, m - 2, 1);
+            const lastDayOfPrevMonth = new Date(y, m - 1, 0);
+            const prevY = prevMonthDate.getFullYear();
+            const prevM = prevMonthDate.getMonth() + 1;
+            setFromDate(`${prevY}-${pad(prevM)}-01`);
+            setToDate(`${prevY}-${pad(prevM)}-${pad(lastDayOfPrevMonth.getDate())}`);
+        }
+    };
+
+    // 5. LỌC TÌM KIẾM THEO TÊN / MÃ NHÂN VIÊN
+    const filteredRows = useMemo(() => {
+        if (!searchQuery.trim()) return rows;
+        const q = searchQuery.toLowerCase().trim();
+        return rows.filter(r =>
+            r.fullName.toLowerCase().includes(q) ||
+            r.employeeId.toLowerCase().includes(q)
+        );
+    }, [rows, searchQuery]);
+
+    // 6. XUẤT FILE EXCEL
+    const handleExportExcel = async () => {
+        try {
+            showToast('📊 Đang xuất file Excel...');
+            const workbook = new ExcelJS.Workbook();
+            const worksheet = workbook.addWorksheet('XepHangLuyKe');
+
+            const columns: any[] = [
+                { header: 'Hạng', key: 'rank', width: 8 },
+                { header: 'Mã NV', key: 'id', width: 12 },
+                { header: 'Họ và tên', key: 'name', width: 25 },
+                { header: 'Siêu thị', key: 'store', width: 20 },
+            ];
+
+            if (showTarget) {
+                columns.push({ header: 'Target (VNĐ)', key: 'target', width: 16 });
+            }
+
+            columns.push({ header: 'Lũy Kế DT (VNĐ)', key: 'cum_rev', width: 18 });
+
+            if (showTarget) {
+                columns.push({ header: '% Hoàn Thành', key: 'pct_ht', width: 14 });
+            }
+
+            columns.push({ header: '% Đóng Góp Shop', key: 'share', width: 16 });
+
+            if (viewMode === 'WITH_DAILY') {
+                summary.dateList.forEach(d => {
+                    columns.push({ header: d, key: `date_${d}`, width: 14 });
+                });
+            }
+
+            worksheet.columns = columns;
+
+            // Dòng dữ liệu nhân viên
+            filteredRows.forEach(r => {
+                const rowData: any = {
+                    rank: r.rank,
+                    id: r.employeeId,
+                    name: r.fullName,
+                    store: r.storeName,
+                    cum_rev: r.cumulativeRevenue,
+                    share: `${r.storeShareRate.toFixed(1)}%`
+                };
+                if (showTarget) {
+                    rowData.target = r.target;
+                    rowData.pct_ht = r.target > 0 ? `${r.completionRate.toFixed(1)}%` : '-';
+                }
+                if (viewMode === 'WITH_DAILY') {
+                    summary.dateList.forEach(d => {
+                        rowData[`date_${d}`] = r.dailyRevenues[d] || 0;
+                    });
+                }
+                worksheet.addRow(rowData);
+            });
+
+            // HÀNG TỔNG CỘNG: SỐ TỔNG CỦA SIÊU THỊ
+            const footerData: any = {
+                rank: 'TỔNG',
+                id: 'SIÊU THỊ',
+                name: 'TỔNG LŨY KẾ SIÊU THỊ',
+                store: summary.storeName,
+                cum_rev: summary.storeCumulativeRevenue,
+                share: '100%'
+            };
+            if (showTarget) {
+                footerData.target = summary.storeTarget;
+                footerData.pct_ht = summary.storeTarget > 0 ? `${summary.storeCompletionRate.toFixed(1)}%` : '-';
+            }
+            if (viewMode === 'WITH_DAILY') {
+                summary.dateList.forEach(d => {
+                    footerData[`date_${d}`] = summary.storeDailyRevenue[d] || 0;
+                });
+            }
+            const fRow = worksheet.addRow(footerData);
+            fRow.font = { bold: true };
+
+            const buffer = await workbook.xlsx.writeBuffer();
+            const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            const url = window.URL.createObjectURL(blob);
+            const anchor = document.createElement('a');
+            anchor.href = url;
+            anchor.download = `XepHangDoanhThuLuyKe_${fromDate}_den_${toDate}.xlsx`;
+            anchor.click();
+            window.URL.revokeObjectURL(url);
+            showToast('✅ Xuất file Excel thành công!');
+        } catch (err) {
+            console.error('Lỗi xuất Excel:', err);
+            showToast('⚠️ Lỗi khi xuất Excel');
+        }
+    };
+
+    // 7. XUẤT HÌNH ẢNH (PORTRAIT RATIO SMARTPHONE, TUYỆT ĐỐI KHÔNG FOOTER WATERMARK)
+    const handleExportImage = async (mode: 'DOWNLOAD' | 'COPY') => {
+        if (!reportRef.current) return;
+        setIsExporting(true);
+        showToast('📸 Đang tạo hình ảnh báo cáo dọc smartphone...');
+
+        try {
+            if (document.fonts && document.fonts.ready) {
+                await document.fonts.ready;
+            }
+
+            const canvas = await html2canvas(reportRef.current, {
+                scale: 2.5,
+                useCORS: true,
+                allowTaint: true,
+                backgroundColor: '#f8fafc',
+                logging: false,
+                onclone: (clonedDoc) => {
+                    clonedDoc.documentElement.style.height = 'auto';
+                    clonedDoc.body.style.height = 'auto';
+                    const el = clonedDoc.getElementById('cumulative-ranking-export-area');
+                    if (el) {
+                        el.style.height = 'auto';
+                        el.style.maxHeight = 'none';
+                        el.style.overflow = 'visible';
+                        el.style.width = '960px';
+                        el.style.maxWidth = '960px';
+                        el.style.margin = '0 auto';
+                    }
+                }
+            });
+
+            if (mode === 'DOWNLOAD') {
+                const link = document.createElement('a');
+                link.download = `XepHangDoanhThuLuyKe_${fromDate}_den_${toDate}.png`;
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+                showToast('✅ Đã tải xuống ảnh báo cáo thành công!');
+            } else {
+                canvas.toBlob(async (blob) => {
+                    if (blob && navigator.clipboard && navigator.clipboard.write) {
+                        await navigator.clipboard.write([
+                            new ClipboardItem({ 'image/png': blob })
+                        ]);
+                        showToast('📋 Đã sao chép ảnh vào Clipboard! Dán trực tiếp vào Zalo.');
+                    } else {
+                        showToast('⚠️ Trình duyệt chưa hỗ trợ sao chép ảnh tự động.');
+                    }
+                }, 'image/png');
+            }
+        } catch (err) {
+            console.error('Lỗi xuất ảnh:', err);
+            showToast('⚠️ Lỗi khi xuất ảnh báo cáo');
+        } finally {
+            setIsExporting(false);
+        }
+    };
+
+    return (
+        <div className="min-h-screen bg-slate-50/70 p-2 sm:p-4 md:p-6 font-avo" style={{ fontFamily: "'UTM Avo', 'UTM-Avo', sans-serif" }}>
+            {/* TOAST MESSAGE */}
+            {toastMessage && (
+                <div className="fixed top-4 right-4 z-50 bg-slate-900/95 text-white px-4 py-2.5 rounded-xl shadow-xl border border-slate-700 text-xs font-bold flex items-center gap-2 animate-fade-in backdrop-blur-md">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span>{toastMessage}</span>
+                </div>
+            )}
+
+            {/* HEADER TIÊU ĐỀ */}
+            <div className="max-w-[960px] mx-auto mb-4 bg-white rounded-2xl border border-slate-200 shadow-2xs p-3 sm:p-4">
+                <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-indigo-200 shrink-0">
+                        <Trophy className="w-5 h-5" />
+                    </div>
+                    <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <h1 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
+                                XẾP HẠNG DOANH THU LŨY KẾ
+                            </h1>
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-50 text-rose-700 border border-rose-200">
+                                Sức Khỏe Nhân Viên
+                            </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 font-medium">
+                            Xếp hạng doanh thu nhân viên theo mốc thời gian từ ngày A đến ngày B • Số tổng là Doanh thu lũy kế của Siêu thị
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            {/* THANH ĐIỀU KHIỂN & BỘ LỌC */}
+            <div className="max-w-[960px] mx-auto">
+                <CumulativeRankingFilterBar
+                    fromDate={fromDate}
+                    toDate={toDate}
+                    onFromDateChange={setFromDate}
+                    onToDateChange={setToDate}
+                    onSelectPreset={handleSelectPreset}
+                    selectedStore={selectedStore}
+                    onStoreChange={setSelectedStore}
+                    storesList={allowedStores}
+                    isLockedToSingleStore={isLockedToSingleStore}
+                    viewMode={viewMode}
+                    onViewModeChange={setViewMode}
+                    showTarget={showTarget}
+                    onShowTargetChange={setShowTarget}
+                    onOpenPeriodTargetModal={() => setIsPeriodTargetModalOpen(true)}
+                    activePeriodTitle={summary.activePeriodTitle}
+                    targetSource={summary.targetSource}
+                    searchQuery={searchQuery}
+                    onSearchChange={setSearchQuery}
+                    loading={loading}
+                    onRefresh={loadReportData}
+                    onExportExcel={handleExportExcel}
+                    onExportImage={handleExportImage}
+                    isExporting={isExporting}
+                />
+            </div>
+
+            {/* VÙNG BÁO CÁO XUẤT ẢNH & HIỂN THỊ CHÍNH (PORTRAIT CONTAINER) */}
+            <div
+                id="cumulative-ranking-export-area"
+                ref={reportRef}
+                className="max-w-[960px] mx-auto space-y-4"
+            >
+                {/* KHỐI KPI TỔNG HỢP */}
+                <CumulativeRankingKpiCards
+                    summary={summary}
+                    showTarget={showTarget}
+                />
+
+                {/* BẢNG SỐ LIỆU XẾP HẠNG DOANH THU LŨY KẾ */}
+                <CumulativeRankingTable
+                    rows={filteredRows}
+                    summary={summary}
+                    viewMode={viewMode}
+                    showTarget={showTarget}
+                    isMultiStore={selectedStore === 'all'}
+                />
+            </div>
+
+            {/* MODAL CẤU HÌNH TARGET GIAI ĐOẠN RIÊNG BIỆT */}
+            <PeriodTargetConfigModal
+                isOpen={isPeriodTargetModalOpen}
+                onClose={() => setIsPeriodTargetModalOpen(false)}
+                fromDate={fromDate}
+                toDate={toDate}
+                selectedStore={selectedStore}
+                employees={employees}
+                onSaved={loadReportData}
+            />
+        </div>
+    );
+}

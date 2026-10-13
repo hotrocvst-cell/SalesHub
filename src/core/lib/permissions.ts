@@ -137,6 +137,20 @@ export const DEFAULT_PAGE_PERMISSIONS: SystemPagePermission[] = [
         badge_color: 'rose'
     },
     {
+        page_key: 'xep_hang_doanh_thu_luy_ke',
+        page_name: 'Xếp hạng DT lũy kế',
+        path: '/xep-hang-doanh-thu-luy-ke',
+        group_title: 'SỨC KHỎE NHÂN VIÊN',
+        description: 'Báo cáo xếp hạng doanh thu nhân viên theo lũy kế từ ngày A đến ngày B',
+        is_enabled: true,
+        allowed_roles: ['ADMIN', 'QUAN_LY', 'TRUONG_CA', 'NHAN_VIEN'],
+        order_index: 6,
+        badge_enabled: true,
+        badge_icon: '⭐',
+        badge_text: 'Mới',
+        badge_color: 'amber'
+    },
+    {
         page_key: 'tong_hop_thi_dua',
         page_name: 'Tổng hợp thi đua',
         path: '/tong-hop-thi-dua',

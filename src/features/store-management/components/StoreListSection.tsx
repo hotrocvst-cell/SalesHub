@@ -26,6 +26,7 @@ interface Props {
     employees: EmployeeItem[];
     canConfigure: boolean;
     isManager: boolean;
+    isAdmin?: boolean;
     onSaveStore: (store: Partial<StoreItem>) => Promise<boolean>;
     onDeleteStore: (id: string, name: string) => Promise<boolean>;
     onOpenRoleModal: () => void;
@@ -36,6 +37,7 @@ export default function StoreListSection({
     employees,
     canConfigure,
     isManager,
+    isAdmin = false,
     onSaveStore,
     onDeleteStore,
     onOpenRoleModal
@@ -182,13 +184,20 @@ export default function StoreListSection({
 
                 {/* Actions */}
                 <div className="flex items-center gap-2">
-                    <button
-                        onClick={handleOpenAddModal}
-                        className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer"
-                    >
-                        <Plus className="w-4 h-4" />
-                        <span>Thêm Siêu Thị Mới</span>
-                    </button>
+                    {isAdmin ? (
+                        <button
+                            onClick={handleOpenAddModal}
+                            className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+                        >
+                            <Plus className="w-4 h-4" />
+                            <span>Thêm Siêu Thị Mới</span>
+                        </button>
+                    ) : (
+                        <span className="text-[11px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl flex items-center gap-1.5">
+                            <Store className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>{stores.length} siêu thị phụ trách</span>
+                        </span>
+                    )}
                 </div>
             </div>
 
@@ -278,13 +287,15 @@ export default function StoreListSection({
                                                     >
                                                         <Edit2 className="w-3.5 h-3.5" />
                                                     </button>
-                                                    <button
-                                                        onClick={() => handleDelete(store)}
-                                                        className="p-1.5 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
-                                                        title="Xóa siêu thị"
-                                                    >
-                                                        <Trash2 className="w-3.5 h-3.5" />
-                                                    </button>
+                                                    {isAdmin && (
+                                                        <button
+                                                            onClick={() => handleDelete(store)}
+                                                            className="p-1.5 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+                                                            title="Xóa siêu thị"
+                                                        >
+                                                            <Trash2 className="w-3.5 h-3.5" />
+                                                        </button>
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>

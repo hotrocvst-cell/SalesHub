@@ -1,0 +1,331 @@
+import React from 'react';
+import { formatValue } from '../../../core/lib/formatters';
+import type { EmployeeCumulativeRankingRow, StoreCumulativeSummary, CumulativeRankingViewMode } from '../types';
+import { Trophy, Medal, Award, User, Info, Building2 } from 'lucide-react';
+
+interface CumulativeRankingTableProps {
+    rows: EmployeeCumulativeRankingRow[];
+    summary: StoreCumulativeSummary;
+    viewMode: CumulativeRankingViewMode;
+    showTarget: boolean;
+    isMultiStore: boolean;
+}
+
+/**
+ * Format ngày hiển thị dạng dd/MM (ví dụ 2026-10-05 -> 05/10)
+ */
+function formatShortDate(dateStr: string): string {
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+        return `${parts[2]}/${parts[1]}`;
+    }
+    return dateStr;
+}
+
+export default function CumulativeRankingTable({
+    rows,
+    summary,
+    viewMode,
+    showTarget,
+    isMultiStore
+}: CumulativeRankingTableProps) {
+    const { dateList, storeCumulativeRevenue, storeDailyRevenue, storeTarget, storeCompletionRate, sumOfEmployeesCumulative, unassignedOrOnlineDiff } = summary;
+
+    const renderRankBadge = (rank: number) => {
+        if (rank === 1) {
+            return (
+                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-800 font-black text-[10px] border border-amber-300 shadow-2xs">
+                    🥇 #1
+                </span>
+            );
+        }
+        if (rank === 2) {
+            return (
+                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-slate-200 text-slate-800 font-black text-[10px] border border-slate-300">
+                    🥈 #2
+                </span>
+            );
+        }
+        if (rank === 3) {
+            return (
+                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-800 font-black text-[10px] border border-orange-300">
+                    🥉 #3
+                </span>
+            );
+        }
+        return (
+            <span className="text-[10px] font-black text-slate-500 font-mono">
+                #{rank}
+            </span>
+        );
+    };
+
+    return (
+        <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden">
+            <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-[11px] sm:text-xs">
+                    {/* TIÊU ĐỀ CỘT */}
+                    <thead>
+                        <tr className="bg-slate-900 text-white font-bold border-b border-slate-800">
+                            <th className="px-2 py-2.5 text-center w-12 sticky left-0 z-20 bg-slate-900">
+                                Hạng
+                            </th>
+                            <th className="px-2 py-2.5 text-left w-20 sticky left-12 z-20 bg-slate-900">
+                                Mã NV
+                            </th>
+                            <th className="px-2.5 py-2.5 text-left min-w-[130px] sticky left-32 z-20 bg-slate-900">
+                                Họ và Tên
+                            </th>
+
+                            {isMultiStore && (
+                                <th className="px-2 py-2.5 text-left min-w-[100px]">
+                                    Siêu thị
+                                </th>
+                            )}
+
+                            {showTarget && (
+                                <th className="px-2 py-2.5 text-right min-w-[85px] text-amber-300 font-extrabold">
+                                    {summary.targetSource === 'PERIOD' ? 'Target đợt 🎯' : 'Target'}
+                                </th>
+                            )}
+
+                            <th className="px-2.5 py-2.5 text-right min-w-[105px] text-emerald-300 font-black bg-slate-950/60">
+                                Lũy Kế DT
+                            </th>
+
+                            {showTarget && (
+                                <th className="px-2 py-2.5 text-center min-w-[65px] text-amber-300 font-extrabold">
+                                    %HT
+                                </th>
+                            )}
+
+                            <th className="px-2 py-2.5 text-right min-w-[65px] text-slate-300">
+                                % Đóng góp
+                            </th>
+
+                            {/* CÁC CỘT CHI TIẾT TỪNG NGÀY KHI CHẾ ĐỘ WITH_DAILY ĐƯỢC CHỌN */}
+                            {viewMode === 'WITH_DAILY' && dateList.map((d) => (
+                                <th
+                                    key={d}
+                                    className="px-1.5 py-2.5 text-right min-w-[70px] text-slate-300 font-medium whitespace-nowrap border-l border-slate-800"
+                                >
+                                    {formatShortDate(d)}
+                                </th>
+                            ))}
+
+                            {viewMode === 'CUMULATIVE_ONLY' && (
+                                <th className="px-2 py-2.5 text-center min-w-[70px] text-slate-300">
+                                    Số ngày bán
+                                </th>
+                            )}
+                        </tr>
+                    </thead>
+
+                    {/* DỮ LIỆU TỪNG NHÂN VIÊN */}
+                    <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
+                        {rows.length === 0 ? (
+                            <tr>
+                                <td
+                                    colSpan={viewMode === 'WITH_DAILY' ? 8 + dateList.length : 8}
+                                    className="px-4 py-8 text-center text-slate-400 italic"
+                                >
+                                    Không có dữ liệu nhân viên nào trong khoảng thời gian đã chọn.
+                                </td>
+                            </tr>
+                        ) : (
+                            rows.map((row, idx) => {
+                                const isTop3 = row.rank <= 3;
+                                return (
+                                    <tr
+                                        key={row.employeeId || idx}
+                                        className={`hover:bg-slate-50/90 transition-colors ${
+                                            isTop3 ? 'bg-amber-50/20' : idx % 2 === 1 ? 'bg-slate-50/40' : 'bg-white'
+                                        }`}
+                                    >
+                                        {/* HẠNG */}
+                                        <td className="px-2 py-2 text-center sticky left-0 z-10 bg-inherit border-r border-slate-100">
+                                            {renderRankBadge(row.rank)}
+                                        </td>
+
+                                        {/* MÃ NV */}
+                                        <td className="px-2 py-2 font-mono text-[11px] text-slate-600 sticky left-12 z-10 bg-inherit border-r border-slate-100 font-bold">
+                                            {row.employeeId}
+                                        </td>
+
+                                        {/* HỌ VÀ TÊN */}
+                                        <td className="px-2.5 py-2 font-black text-slate-900 sticky left-32 z-10 bg-inherit border-r border-slate-100 whitespace-nowrap">
+                                            <div className="flex items-center gap-1.5">
+                                                <span>{row.fullName}</span>
+                                            </div>
+                                        </td>
+
+                                        {/* SIÊU THỊ */}
+                                        {isMultiStore && (
+                                            <td className="px-2 py-2 text-slate-600 truncate max-w-[120px]">
+                                                {row.storeName}
+                                            </td>
+                                        )}
+
+                                        {/* TARGET */}
+                                        {showTarget && (
+                                            <td className="px-2 py-2 text-right font-mono text-slate-600">
+                                                {row.target > 0 ? formatValue(row.target) : '-'}
+                                            </td>
+                                        )}
+
+                                        {/* DOANH THU LŨY KẾ */}
+                                        <td className="px-2.5 py-2 text-right font-black font-mono text-indigo-950 bg-indigo-50/40">
+                                            {formatValue(row.cumulativeRevenue)}
+                                        </td>
+
+                                        {/* %HT */}
+                                        {showTarget && (
+                                            <td className="px-2 py-2 text-center font-mono">
+                                                {row.target > 0 ? (
+                                                    <span
+                                                        className={`px-1.5 py-0.5 rounded-md text-[10px] font-black ${
+                                                            row.completionRate >= 100
+                                                                ? 'bg-emerald-100 text-emerald-800'
+                                                                : row.completionRate >= 80
+                                                                ? 'bg-blue-100 text-blue-800'
+                                                                : 'bg-rose-100 text-rose-800'
+                                                        }`}
+                                                    >
+                                                        {row.completionRate.toFixed(1)}%
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-slate-400 text-[10px]">-</span>
+                                                )}
+                                            </td>
+                                        )}
+
+                                        {/* % TỶ TRỌNG ĐÓNG GÓP */}
+                                        <td className="px-2 py-2 text-right font-mono text-slate-600 font-semibold">
+                                            {row.storeShareRate.toFixed(1)}%
+                                        </td>
+
+                                        {/* CÁC CỘT CHI TIẾT TỪNG NGÀY */}
+                                        {viewMode === 'WITH_DAILY' && dateList.map((d) => {
+                                            const dayRev = row.dailyRevenues[d] || 0;
+                                            return (
+                                                <td
+                                                    key={d}
+                                                    className={`px-1.5 py-2 text-right font-mono border-l border-slate-100 whitespace-nowrap ${
+                                                        dayRev > 0 ? 'text-slate-800 font-bold' : 'text-slate-300'
+                                                    }`}
+                                                >
+                                                    {dayRev > 0 ? formatValue(dayRev) : '-'}
+                                                </td>
+                                            );
+                                        })}
+
+                                        {viewMode === 'CUMULATIVE_ONLY' && (
+                                            <td className="px-2 py-2 text-center">
+                                                <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[10px] font-bold">
+                                                    {row.activeDaysCount} ngày
+                                                </span>
+                                            </td>
+                                        )}
+                                    </tr>
+                                );
+                            })
+                        )}
+                    </tbody>
+
+                    {/* HÀNG SỐ TỔNG (SUMMARY FOOTER): SỐ TỔNG LÀ DỮ LIỆU LŨY KẾ CỦA SIÊU THỊ */}
+                    <tfoot>
+                        <tr className="bg-slate-900 text-white font-black border-t-2 border-indigo-400">
+                            <td className="px-2 py-3 text-center sticky left-0 z-20 bg-slate-900">
+                                🏢
+                            </td>
+                            <td className="px-2 py-3 text-left sticky left-12 z-20 bg-slate-900 text-[10px] text-amber-300 font-mono">
+                                SIÊU THỊ
+                            </td>
+                            <td className="px-2.5 py-3 text-left sticky left-32 z-20 bg-slate-900 text-amber-300 whitespace-nowrap">
+                                🏢 TỔNG LŨY KẾ SIÊU THỊ
+                            </td>
+
+                            {isMultiStore && (
+                                <td className="px-2 py-3 text-left text-slate-300 text-[10px]">
+                                    (Chốt hệ thống)
+                                </td>
+                            )}
+
+                            {showTarget && (
+                                <td className="px-2 py-3 text-right font-mono text-amber-300">
+                                    {storeTarget > 0 ? formatValue(storeTarget) : '-'}
+                                </td>
+                            )}
+
+                            {/* DOANH THU LŨY KẾ CỦA SIÊU THỊ (SỐ TỔNG CHUẨN) */}
+                            <td className="px-2.5 py-3 text-right font-mono text-emerald-300 text-xs sm:text-sm bg-slate-950">
+                                {formatValue(storeCumulativeRevenue)}
+                            </td>
+
+                            {showTarget && (
+                                <td className="px-2 py-3 text-center font-mono">
+                                    {storeTarget > 0 ? (
+                                        <span className="px-1.5 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px]">
+                                            {storeCompletionRate.toFixed(1)}%
+                                        </span>
+                                    ) : (
+                                        '-'
+                                    )}
+                                </td>
+                            )}
+
+                            <td className="px-2 py-3 text-right font-mono text-slate-300">
+                                100%
+                            </td>
+
+                            {/* CHI TIẾT TỪNG NGÀY CỦA SIÊU THỊ */}
+                            {viewMode === 'WITH_DAILY' && dateList.map((d) => {
+                                const dayStoreRev = storeDailyRevenue[d] || 0;
+                                return (
+                                    <td
+                                        key={d}
+                                        className="px-1.5 py-3 text-right font-mono text-amber-300 border-l border-slate-800 whitespace-nowrap text-[11px]"
+                                    >
+                                        {dayStoreRev > 0 ? formatValue(dayStoreRev) : '-'}
+                                    </td>
+                                );
+                            })}
+
+                            {viewMode === 'CUMULATIVE_ONLY' && (
+                                <td className="px-2 py-3 text-center text-[10px] text-slate-400">
+                                    {dateList.length} ngày
+                                </td>
+                            )}
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+
+            {/* DÒNG ĐỐI CHIẾU MINH BẠCH VÀ CHÚ THÍCH */}
+            <div className="p-2.5 sm:p-3 bg-slate-50 border-t border-slate-200 text-[10px] sm:text-[11px] text-slate-600 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                    <Info className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                    <span className="font-bold text-slate-800">Quy chuẩn dữ liệu:</span>
+                    <span>
+                        Hàng tổng là <strong>Doanh thu lũy kế của Siêu thị</strong> ({formatValue(storeCumulativeRevenue)}), không phải tổng cộng dòng nhân viên.
+                    </span>
+                    {summary.targetSource === 'PERIOD' && (
+                        <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300 font-black text-[9.5px]">
+                            🎯 Target giai đoạn riêng: {summary.activePeriodTitle}
+                        </span>
+                    )}
+                </div>
+                <div className="flex items-center gap-2 flex-wrap text-slate-500 font-mono font-medium">
+                    <span>Tổng dòng NV: <strong className="text-slate-800">{formatValue(sumOfEmployeesCumulative)}</strong></span>
+                    <span>•</span>
+                    <span>
+                        Chênh lệch shop (DT chung/online):{' '}
+                        <strong className={unassignedOrOnlineDiff >= 0 ? 'text-emerald-700' : 'text-rose-600'}>
+                            {unassignedOrOnlineDiff > 0 ? '+' : ''}{formatValue(unassignedOrOnlineDiff)}
+                        </strong>
+                    </span>
+                </div>
+            </div>
+        </div>
+    );
+}

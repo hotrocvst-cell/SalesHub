@@ -14,6 +14,7 @@ import {
     type StoreItem,
     upsertEmployeesBatch
 } from '../../../core/lib/storage';
+import { isStoreMatch } from '../../../core/lib/formatters';
 
 interface Props {
     isOpen: boolean;
@@ -82,7 +83,9 @@ export default function QuickPasteEmployeeModal({
                     role = parts[2].trim() || targetRole;
                 } else if (parts.length >= 4) {
                     // Dòng có: Mã NV, Họ tên, Siêu thị, Vai trò
-                    store = parts[2].trim() || targetStore;
+                    const pastedStore = parts[2].trim();
+                    const matchedStore = stores.find(s => isStoreMatch(s.name, pastedStore, stores));
+                    store = matchedStore ? matchedStore.name : targetStore;
                     role = parts[3].trim() || targetRole;
                 }
 

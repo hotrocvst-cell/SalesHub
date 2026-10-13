@@ -1,6 +1,6 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import type { EmployeeItem, StoreItem } from '../../../core/lib/storage';
-import { formatCapitalizeWords } from '../../../core/lib/formatters';
+import { formatCapitalizeWords, isStoreMatch } from '../../../core/lib/formatters';
 import {
     Users,
     Plus,
@@ -22,6 +22,7 @@ interface Props {
     employees: EmployeeItem[];
     stores: StoreItem[];
     canConfigure: boolean;
+    isAdmin?: boolean;
     onSaveEmployee: (emp: Partial<EmployeeItem>) => Promise<boolean>;
     onDeleteEmployee: (id: string, name: string) => Promise<boolean>;
     onOpenQuickPaste: () => void;
@@ -46,14 +47,29 @@ export default function EmployeeListSection({
     employees,
     stores,
     canConfigure,
+    isAdmin = false,
     onSaveEmployee,
     onDeleteEmployee,
     onOpenQuickPaste,
     onOpenRoleModal
 }: Props) {
-    const [selectedStoreFilter, setSelectedStoreFilter] = useState('all');
+    const [selectedStoreFilter, setSelectedStoreFilter] = useState<string>(() => {
+        if (!isAdmin && stores.length === 1 && stores[0]?.name) {
+            return stores[0].name;
+        }
+        return 'all';
+    });
     const [selectedRoleFilter, setSelectedRoleFilter] = useState('all');
     const [searchQuery, setSearchQuery] = useState('');
+
+    // Khóa bộ lọc siêu thị về đúng 1 shop nếu user không phải Admin và chỉ phụ trách 1 shop
+    useEffect(() => {
+        if (!isAdmin && stores.length === 1 && stores[0]?.name) {
+            if (selectedStoreFilter !== stores[0].name) {
+                setSelectedStoreFilter(stores[0].name);
+            }
+        }
+    }, [stores, isAdmin]);
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingEmp, setEditingEmp] = useState<Partial<EmployeeItem> | null>(null);
@@ -64,7 +80,10 @@ export default function EmployeeListSection({
     const filteredEmployees = useMemo(() => {
         return employees.filter(emp => {
             const roleStr = (emp.role || emp.job_title || '').toLowerCase();
-            const matchStore = selectedStoreFilter === 'all' || emp.store_name === selectedStoreFilter;
+            const matchStore =
+                selectedStoreFilter === 'all'
+                    ? true
+                    : isStoreMatch(emp.store_name, selectedStoreFilter, stores);
             
             let matchRole = true;
             if (selectedRoleFilter !== 'all') {
@@ -203,7 +222,13 @@ export default function EmployeeListSection({
                             onChange={e => setSelectedStoreFilter(e.target.value)}
                             className="text-xs font-semibold px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white text-slate-800"
                         >
-                            <option value="all">🏢 Tất cả siêu thị ({stores.length})</option>
+                            {isAdmin || stores.length > 1 ? (
+                                <option value="all">
+                                    {isAdmin
+                                        ? `🏢 Tất cả siêu thị (${stores.length})`
+                                        : `🏢 Tất cả siêu thị phụ trách (${stores.length})`}
+                                </option>
+                            ) : null}
                             {stores.map(s => (
                                 <option key={s.id || s.code} value={s.name}>
                                     {s.name} ({s.code})

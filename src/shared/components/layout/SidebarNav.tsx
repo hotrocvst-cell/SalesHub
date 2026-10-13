@@ -109,6 +109,12 @@ export const NAVIGATION_GROUPS: NavGroup[] = [
                 badge: '🏆 Mới'
             },
             {
+                name: 'Xếp hạng DT lũy kế',
+                path: '/xep-hang-doanh-thu-luy-ke',
+                icon: Trophy,
+                badge: '⭐ Mới'
+            },
+            {
                 name: 'Doanh thu lũy kế',
                 path: '/bao-cao-hieu-qua-nhan-vien',
                 icon: Trophy,

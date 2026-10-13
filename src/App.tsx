@@ -32,6 +32,7 @@ const DataStatusPage = lazy(() => import('./features/data-status/DataStatusPage'
 const VoucherClaimPage = lazy(() => import('./features/voucher/VoucherClaimPage'));
 const VoucherAdminPage = lazy(() => import('./features/voucher/VoucherAdminPage'));
 const XmusicPlaylistPage = lazy(() => import('./features/xmusic-playlist/XmusicPlaylistPage'));
+const EmployeeCumulativeRankingPage = lazy(() => import('./features/employee-cumulative-ranking/EmployeeCumulativeRankingPage'));
 
 // Các trang Định danh, Đăng ký & Onboarding
 const LoginPage = lazy(() => import('./features/auth/LoginPage'));
@@ -133,6 +134,13 @@ export default function App() {
                                 <Route path="/tien-do-thi-dua" element={
                                     <ProtectedRoute path="/tien-do-thi-dua">
                                         <CampaignProgressPage />
+                                    </ProtectedRoute>
+                                } />
+
+                                {/* Báo Cáo Xếp Hạng Doanh Thu Nhân Viên Lũy Kế */}
+                                <Route path="/xep-hang-doanh-thu-luy-ke" element={
+                                    <ProtectedRoute path="/xep-hang-doanh-thu-luy-ke">
+                                        <EmployeeCumulativeRankingPage />
                                     </ProtectedRoute>
                                 } />
 

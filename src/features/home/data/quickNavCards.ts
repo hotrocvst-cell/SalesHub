@@ -99,6 +99,18 @@ export const QUICK_NAV_CARDS: QuickCard[] = [
 
     // 2. SỨC KHỎE NHÂN VIÊN
     {
+        title: 'Xếp Hạng DT Lũy Kế',
+        path: '/xep-hang-doanh-thu-luy-ke',
+        groupTitle: 'SỨC KHỎE NHÂN VIÊN',
+        badge: '⭐ Mới',
+        badgeColor: 'bg-amber-100 text-amber-800 border-amber-200',
+        description: 'Xếp hạng doanh thu nhân viên lũy kế từ ngày A đến ngày B, số tổng lũy kế siêu thị',
+        icon: Trophy,
+        gradient: 'from-amber-500/10 via-indigo-500/5 to-transparent hover:border-amber-300',
+        iconBg: 'bg-amber-100 text-amber-700',
+        iconColor: 'text-amber-600'
+    },
+    {
         title: 'Hiệu Quả Nhân Viên Lũy Kế',
         path: '/bao-cao-hieu-qua-nhan-vien',
         groupTitle: 'SỨC KHỎE NHÂN VIÊN',

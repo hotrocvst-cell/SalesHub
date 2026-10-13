@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
     fetchStores,
     fetchEmployees,
@@ -10,6 +10,7 @@ import {
     type StoreItem,
     type EmployeeItem
 } from '../../core/lib/storage';
+import { isStoreMatch } from '../../core/lib/formatters';
 import { useAuth } from '../../shared/contexts/AuthContext';
 import StoreListSection from './components/StoreListSection';
 import EmployeeListSection from './components/EmployeeListSection';
@@ -27,7 +28,7 @@ import {
 } from 'lucide-react';
 
 export default function StoreEmployeeConfigPage() {
-    const { currentUser, canConfigure, isManager, isActualAdmin } = useAuth();
+    const { currentUser, isAdmin, canConfigure, isManager, isActualAdmin } = useAuth();
 
     const [activeTab, setActiveTab] = useState<'stores' | 'employees'>('stores');
     const [stores, setStores] = useState<StoreItem[]>([]);
@@ -79,11 +80,51 @@ export default function StoreEmployeeConfigPage() {
         loadData();
     }, []);
 
+    // Danh sách tên siêu thị được phân quyền cho tài khoản hiện tại
+    const userAccessibleList = useMemo<string[]>(() => {
+        if (isAdmin) return [];
+        if (currentUser.accessible_stores && currentUser.accessible_stores.length > 0) {
+            return currentUser.accessible_stores;
+        }
+        return currentUser.store_name ? [currentUser.store_name] : [];
+    }, [currentUser, isAdmin]);
+
+    // Danh sách đối tượng siêu thị (StoreItem) thuộc thẩm quyền của user
+    const allowedStores = useMemo<StoreItem[]>(() => {
+        if (!stores || stores.length === 0) return [];
+        if (isAdmin) return stores;
+        if (userAccessibleList.length === 0) return [];
+        return stores.filter(s => userAccessibleList.some(acc => isStoreMatch(s.name, acc, stores)));
+    }, [stores, userAccessibleList, isAdmin]);
+
+    // Danh sách nhân viên thuộc các siêu thị mà user được phân quyền phụ trách
+    const allowedEmployees = useMemo<EmployeeItem[]>(() => {
+        if (!employees || employees.length === 0) return [];
+        if (isAdmin) return employees;
+        if (allowedStores.length === 0 && userAccessibleList.length === 0) return [];
+
+        return employees.filter(emp => {
+            return (
+                allowedStores.some(s => isStoreMatch(s.name, emp.store_name, stores)) ||
+                userAccessibleList.some(acc => isStoreMatch(acc, emp.store_name, stores))
+            );
+        });
+    }, [employees, allowedStores, userAccessibleList, isAdmin, stores]);
+
     // Lưu / Cập nhật Siêu thị
     const handleSaveStore = async (store: Partial<StoreItem>): Promise<boolean> => {
         if (!canConfigure || !isManager) {
             setIsRoleModalOpen(true);
             return false;
+        }
+        // Ràng buộc bảo mật: User không phải Admin chỉ được chỉnh sửa siêu thị thuộc quyền quản lý
+        if (!isAdmin && store.name) {
+            const isPermitted = allowedStores.some(s => isStoreMatch(s.name, store.name!, stores)) ||
+                                userAccessibleList.some(acc => isStoreMatch(acc, store.name!, stores));
+            if (!isPermitted) {
+                showToast('⚠️ Bạn không có quyền chỉnh sửa siêu thị nằm ngoài phạm vi phụ trách!');
+                return false;
+            }
         }
         const res = await upsertStore(store);
         if (res.success) {
@@ -96,12 +137,9 @@ export default function StoreEmployeeConfigPage() {
 
     // Xóa Siêu thị
     const handleDeleteStore = async (id: string, name: string): Promise<boolean> => {
-        if (!canConfigure || !isManager) {
-            if (isActualAdmin) {
-                setIsRoleModalOpen(true);
-            } else {
-                showToast('⚠️ Bạn không có quyền xóa siêu thị!');
-            }
+        // Ràng buộc bảo mật: Chỉ ADMIN mới được phép xóa siêu thị khỏi cơ sở dữ liệu
+        if (!isAdmin) {
+            showToast('⚠️ Chỉ Quản trị viên (ADMIN) mới có quyền xóa siêu thị khỏi hệ thống!');
             return false;
         }
         const res = await deleteStoreById(id);
@@ -124,6 +162,15 @@ export default function StoreEmployeeConfigPage() {
             }
             return false;
         }
+        // Ràng buộc bảo mật: User không phải Admin chỉ được chỉnh sửa nhân sự thuộc siêu thị mình quản lý
+        if (!isAdmin && emp.store_name) {
+            const isPermitted = allowedStores.some(s => isStoreMatch(s.name, emp.store_name!, stores)) ||
+                                userAccessibleList.some(acc => isStoreMatch(acc, emp.store_name!, stores));
+            if (!isPermitted) {
+                showToast('⚠️ Bạn không có quyền quản lý nhân sự tại siêu thị nằm ngoài phạm vi phụ trách!');
+                return false;
+            }
+        }
         const res = await upsertEmployee(emp);
         if (res.success) {
             showToast('✅ Đã lưu thông tin nhân viên thành công!');
@@ -142,6 +189,18 @@ export default function StoreEmployeeConfigPage() {
                 showToast('⚠️ Bạn không có quyền xóa nhân sự!');
             }
             return false;
+        }
+        // Ràng buộc bảo mật: User không phải Admin chỉ được xóa nhân sự thuộc siêu thị mình quản lý
+        if (!isAdmin) {
+            const targetEmp = employees.find(e => e.id === id);
+            if (targetEmp && targetEmp.store_name) {
+                const isPermitted = allowedStores.some(s => isStoreMatch(s.name, targetEmp.store_name, stores)) ||
+                                    userAccessibleList.some(acc => isStoreMatch(acc, targetEmp.store_name, stores));
+                if (!isPermitted) {
+                    showToast('⚠️ Bạn không có quyền xóa nhân sự tại siêu thị nằm ngoài phạm vi phụ trách!');
+                    return false;
+                }
+            }
         }
         const res = await deleteEmployeeById(id);
         if (res.success) {
@@ -263,6 +322,38 @@ export default function StoreEmployeeConfigPage() {
                 </div>
             )}
 
+            {/* BANNER PHẠM VI SIÊU THỊ PHỤ TRÁCH CỦA TÀI KHOẢN */}
+            {isAdmin ? (
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl px-3.5 py-2 flex items-center justify-between text-xs text-blue-900 shadow-2xs">
+                    <div className="flex items-center gap-2 font-medium">
+                        <span className="p-1 rounded-md bg-blue-100 text-blue-700">👑</span>
+                        <span><b>Phạm vi quản trị:</b> Toàn hệ thống ({stores.length} siêu thị, {employees.length} nhân sự).</span>
+                    </div>
+                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-blue-200/70 text-blue-800">
+                        Admin Toàn Quyền
+                    </span>
+                </div>
+            ) : allowedStores.length > 0 ? (
+                <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 border border-emerald-200 rounded-xl px-3.5 py-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-emerald-900 shadow-2xs">
+                    <div className="flex items-center gap-2 font-medium">
+                        <span className="p-1 rounded-md bg-emerald-100 text-emerald-700">🏢</span>
+                        <span>
+                            <b>Phạm vi phụ trách:</b> {allowedStores.length} siêu thị ({allowedStores.map(s => s.name).join(', ')}) • {allowedEmployees.length} nhân sự.
+                        </span>
+                    </div>
+                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-200/70 text-emerald-800 self-start sm:self-auto shrink-0">
+                        🔒 Đã khóa theo siêu thị phụ trách
+                    </span>
+                </div>
+            ) : (
+                <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-300 rounded-xl px-3.5 py-2.5 flex items-center gap-2 text-xs text-amber-900 shadow-2xs">
+                    <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                    <div>
+                        <b>Chưa gán siêu thị phụ trách:</b> Tài khoản của bạn ({currentUser.employee_id || currentUser.full_name}) chưa được cấu hình siêu thị quản lý. Vui lòng liên hệ Quản trị viên để được phân quyền tại mục <b>Quản Trị Hệ Thống</b>.
+                    </div>
+                </div>
+            )}
+
             {/* Navigation Tabs */}
             <div className="flex border-b border-slate-200 bg-white rounded-t-2xl px-3 pt-2">
                 <button
@@ -276,7 +367,7 @@ export default function StoreEmployeeConfigPage() {
                     <Store className="w-4 h-4" />
                     <span>Danh Sách Siêu Thị</span>
                     <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-slate-100 text-slate-700">
-                        {stores.length}
+                        {allowedStores.length}
                     </span>
                 </button>
 
@@ -291,7 +382,7 @@ export default function StoreEmployeeConfigPage() {
                     <Users className="w-4 h-4" />
                     <span>Danh Sách Nhân Viên</span>
                     <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-slate-100 text-slate-700">
-                        {employees.length}
+                        {allowedEmployees.length}
                     </span>
                 </button>
             </div>
@@ -304,19 +395,21 @@ export default function StoreEmployeeConfigPage() {
                 </div>
             ) : activeTab === 'stores' ? (
                 <StoreListSection
-                    stores={stores}
-                    employees={employees}
+                    stores={allowedStores}
+                    employees={allowedEmployees}
                     canConfigure={canConfigure}
                     isManager={isManager}
+                    isAdmin={isAdmin}
                     onSaveStore={handleSaveStore}
                     onDeleteStore={handleDeleteStore}
                     onOpenRoleModal={() => setIsRoleModalOpen(true)}
                 />
             ) : (
                 <EmployeeListSection
-                    employees={employees}
-                    stores={stores}
+                    employees={allowedEmployees}
+                    stores={allowedStores}
                     canConfigure={canConfigure}
+                    isAdmin={isAdmin}
                     onSaveEmployee={handleSaveEmployee}
                     onDeleteEmployee={handleDeleteEmployee}
                     onOpenQuickPaste={() => setIsQuickPasteOpen(true)}
@@ -328,8 +421,8 @@ export default function StoreEmployeeConfigPage() {
             <QuickPasteEmployeeModal
                 isOpen={isQuickPasteOpen}
                 onClose={() => setIsQuickPasteOpen(false)}
-                stores={stores}
-                defaultStoreName={stores[0]?.name || ''}
+                stores={allowedStores}
+                defaultStoreName={allowedStores[0]?.name || ''}
                 onImportSuccess={handleQuickPasteSuccess}
             />
 
