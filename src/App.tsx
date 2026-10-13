@@ -8,6 +8,7 @@ import ProtectedRoute from './shared/components/layout/ProtectedRoute';
 import UnauthorizedAccessView from './shared/components/layout/UnauthorizedAccessView';
 
 const HomePage = lazy(() => import('./features/home/HomePage'));
+const ClusterReportPage = lazy(() => import('./features/cluster-report/ClusterReportPage'));
 const MonthlyReportPage = lazy(() => import('./features/monthly-report/MonthlyReportPage'));
 const DailyReportPage = lazy(() => import('./features/daily-report/DailyReportPage'));
 const DailyEmployeeRevenueReportPage = lazy(() => import('./features/daily-report/DailyEmployeeRevenueReportPage'));
@@ -18,6 +19,7 @@ const EmployeeTargetUnifiedPage = lazy(() => import('./features/employee-health/
 const CampaignConfigPage = lazy(() => import('./features/admin-config/CampaignConfigPage'));
 const StoreEmployeeConfigPage = lazy(() => import('./features/store-management/StoreEmployeeConfigPage'));
 const EmployeeCumulativePage = lazy(() => import('./features/employee-cumulative/EmployeeCumulativePage'));
+const EmployeeRankingSummaryPage = lazy(() => import('./features/employee-ranking/EmployeeRankingSummaryPage'));
 const EmployeePerformanceReportPage = lazy(() => import('./features/employee-performance/EmployeePerformanceReportPage'));
 const EmployeeDetailReportPage = lazy(() => import('./features/employee-detail/EmployeeDetailReportPage'));
 const EmployeeSessionManagerPage = lazy(() => import('./features/employee-cumulative/EmployeeSessionManagerPage'));
@@ -29,6 +31,7 @@ const UserStorePermissionPage = lazy(() => import('./features/admin-config/UserS
 const DataStatusPage = lazy(() => import('./features/data-status/DataStatusPage'));
 const VoucherClaimPage = lazy(() => import('./features/voucher/VoucherClaimPage'));
 const VoucherAdminPage = lazy(() => import('./features/voucher/VoucherAdminPage'));
+const XmusicPlaylistPage = lazy(() => import('./features/xmusic-playlist/XmusicPlaylistPage'));
 
 // Các trang Định danh, Đăng ký & Onboarding
 const LoginPage = lazy(() => import('./features/auth/LoginPage'));
@@ -70,6 +73,13 @@ export default function App() {
                                     </ProtectedRoute>
                                 } />
 
+                                {/* Phân hệ Báo Cáo Cụm Siêu Thị (Bảng 11 Cột) */}
+                                <Route path="/bao-cao-cum-sieu-thi" element={
+                                    <ProtectedRoute path="/bao-cao-cum-sieu-thi">
+                                        <ClusterReportPage />
+                                    </ProtectedRoute>
+                                } />
+
                                 {/* Phân hệ BC Tháng */}
                                 <Route path="/bc-thang" element={<Navigate to="/bc-thang/tong-quan" replace />} />
                                 <Route path="/bc-thang/tong-quan" element={
@@ -102,6 +112,13 @@ export default function App() {
                                 <Route path="/chi-tiet-nhan-vien" element={
                                     <ProtectedRoute path="/chi-tiet-nhan-vien">
                                         <EmployeeDetailReportPage />
+                                    </ProtectedRoute>
+                                } />
+
+                                {/* Báo Cáo Tổng Hợp Xếp Hạng Nhân Viên */}
+                                <Route path="/tong-hop-xep-hang-nhan-vien" element={
+                                    <ProtectedRoute path="/tong-hop-xep-hang-nhan-vien">
+                                        <EmployeeRankingSummaryPage />
                                     </ProtectedRoute>
                                 } />
 
@@ -155,6 +172,11 @@ export default function App() {
                                 <Route path="/quan-ly-voucher" element={
                                     <ProtectedRoute path="/quan-ly-voucher">
                                         <VoucherAdminPage />
+                                    </ProtectedRoute>
+                                } />
+                                <Route path="/xmusic-playlist" element={
+                                    <ProtectedRoute path="/xmusic-playlist">
+                                        <XmusicPlaylistPage />
                                     </ProtectedRoute>
                                 } />
 

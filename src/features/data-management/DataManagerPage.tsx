@@ -156,11 +156,11 @@ export default function DataManagementPage() {
 
         worksheet.columns = [
             { header: 'Siêu Thị', key: 'storeName', width: 28 },
-            { header: 'Ngày Báo Cáo', key: 'reportDate', width: 14 },
+            { header: 'Dữ liệu ngày', key: 'reportDate', width: 14 },
             { header: 'Tháng', key: 'month', width: 10 },
             { header: 'Năm', key: 'year', width: 10 },
-            { header: 'Thực Thu (VNĐ)', key: 'revenueActual', width: 20 },
-            { header: 'Chỉ Tiêu (VNĐ)', key: 'revenueTarget', width: 20 },
+            { header: 'DT Lũy kế', key: 'revenueActual', width: 20 },
+            { header: 'Target', key: 'revenueTarget', width: 20 },
             { header: 'Doanh Số Trả Góp', key: 'revenueInstallment', width: 20 },
             { header: 'Tỷ Lệ Trả Góp (%)', key: 'installmentRate', width: 18 },
             { header: 'Dự Kiến Hoàn Thành (%)', key: 'forecastCompletionRate', width: 24 },
@@ -213,7 +213,7 @@ export default function DataManagementPage() {
                         <span>Quản Lý Dữ Liệu Báo Cáo Kinh Doanh</span>
                     </h1>
                     <p className="text-xs text-slate-500 mt-0.5">
-                        Xem, tra cứu chi tiết và xử lý dọn dẹp các bản ghi số liệu ngày/tháng được lưu trên hệ thống Supabase.
+                        Xem, tra cứu chi tiết và xử lý dọn dẹp các bản ghi số liệu ngày/tháng được lưu trên Cloud.
                     </p>
                 </div>
 
@@ -319,10 +319,10 @@ export default function DataManagementPage() {
                             <tr>
                                 <th className="py-3 px-3 text-center w-10">#</th>
                                 <th className="py-3 px-3">Siêu Thị</th>
-                                <th className="py-3 px-3">Ngày Báo Cáo</th>
-                                <th className="py-3 px-3 text-right">Thực Thu (VNĐ)</th>
-                                <th className="py-3 px-3 text-right">Chỉ Tiêu (VNĐ)</th>
-                                <th className="py-3 px-3 text-right">DK Hoàn Thành</th>
+                                <th className="py-3 px-3">Dữ liệu ngày</th>
+                                <th className="py-3 px-3 text-right">DT Lũy kế</th>
+                                <th className="py-3 px-3 text-right">Target</th>
+                                <th className="py-3 px-3 text-right">DKHT</th>
                                 <th className="py-3 px-3 text-right">Trả Góp</th>
                                 <th className="py-3 px-3 text-center">Cập Nhật</th>
                                 <th className="py-3 px-3 text-center w-24">Thao Tác</th>
@@ -366,8 +366,8 @@ export default function DataManagementPage() {
                                         </td>
                                         <td className="py-2.5 px-3 text-right">
                                             <span className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono ${(item.forecastCompletionRate || 0) >= 100
-                                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                                    : 'bg-amber-50 text-amber-700 border border-amber-200'
+                                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                                : 'bg-amber-50 text-amber-700 border border-amber-200'
                                                 }`}>
                                                 {(item.forecastCompletionRate || 0).toFixed(1)}%
                                             </span>
@@ -493,7 +493,7 @@ export default function DataManagementPage() {
                                 Bạn có chắc chắn muốn xóa bản ghi ngày <b>{formatDate(deleteTarget.reportDate)}</b> của siêu thị <b>{getShortStoreName(deleteTarget.storeName)}</b>?
                             </p>
                             <p className="text-[11px] text-red-500 font-semibold mt-1">
-                                * Hành động này sẽ xóa vĩnh viễn trên cơ sở dữ liệu Supabase.
+                                * Hành động này sẽ xóa vĩnh viễn trên Cloud.
                             </p>
                         </div>
 

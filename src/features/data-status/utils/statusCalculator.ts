@@ -315,18 +315,6 @@ export function calculateDataStatus(input: StatusCalculationInput): {
         return false;
     };
 
-    // Kiểm tra siêu thị nào trong applicableStores đã có dữ liệu giờ công
-    const storesWithHours = applicableStores.filter(store => {
-        const storeEmps = employees.filter(e => isStoreMatch(e.store_name, store.name, stores) && e.is_active !== false);
-        const storeEmpIds = new Set(storeEmps.map(e => e.employee_id));
-        return monthHoursSessions.some(s => sessionHasStoreWorkHours(s, store.name, storeEmpIds));
-    });
-
-    const hoursStoresCovered = storesWithHours.length;
-    const isHoursOk = targetStore === 'all'
-        ? (hoursStoresCovered >= totalStoreCount && hoursStoresCovered > 0)
-        : (hoursStoresCovered > 0);
-
     // Phiên liên quan đến phạm vi đang chọn (Toàn Cụm hoặc siêu thị cụ thể)
     const relevantHoursSessions = targetStore === 'all'
         ? monthHoursSessions
@@ -336,19 +324,33 @@ export function calculateDataStatus(input: StatusCalculationInput): {
             return sessionHasStoreWorkHours(s, targetStore, targetEmpIds);
         });
 
+    const hoursSessionDates = Array.from(new Set(relevantHoursSessions.map(s => s.report_date))).filter(Boolean).sort();
+    const latestHoursDate = hoursSessionDates.length > 0 ? hoursSessionDates[hoursSessionDates.length - 1] : null;
+
+    // Kiểm tra siêu thị nào trong applicableStores đã có dữ liệu giờ công ngày n-1 (expectedDate)
+    const n1HoursSessions = monthHoursSessions.filter(s => s.report_date === expectedDate);
+    const storesWithHours = applicableStores.filter(store => {
+        const storeEmps = employees.filter(e => isStoreMatch(e.store_name, store.name, stores) && e.is_active !== false);
+        const storeEmpIds = new Set(storeEmps.map(e => e.employee_id));
+        return n1HoursSessions.some(s => sessionHasStoreWorkHours(s, store.name, storeEmpIds));
+    });
+
+    const hoursStoresCovered = storesWithHours.length;
+    const isHoursOk = targetStore === 'all'
+        ? (hoursStoresCovered >= totalStoreCount && hoursStoresCovered > 0)
+        : (latestHoursDate === expectedDate || hoursSessionDates.includes(expectedDate));
+
     const latestHoursSession = relevantHoursSessions.slice().sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''))[0];
 
     const workHoursStream: DataStreamStatus = {
         id: 'employee_work_hours',
         title: 'Nhân Viên - Giờ Công Làm Việc',
-        shortTitle: 'Giờ công all NV',
+        shortTitle: 'Giờ công NV LK',
         category: 'employee',
         isOk: isHoursOk,
-        statusText: isHoursOk ? 'OK' : (relevantHoursSessions.length > 0 ? 'CHẬM PHIÊN' : 'CẦN CẬP NHẬT'),
-        expectedDate: `Tháng ${selectedMonth}/${selectedYear}`,
-        latestDataDate: isHoursOk
-            ? `Đã nạp (${relevantHoursSessions.length} phiên)`
-            : (relevantHoursSessions.length > 0 ? `Đã có ${relevantHoursSessions.length} phiên` : null),
+        statusText: isHoursOk ? 'OK' : (latestHoursDate ? 'CHẬM PHIÊN' : 'CHƯA CÓ DỮ LIỆU'),
+        expectedDate,
+        latestDataDate: latestHoursDate,
         lastUpdatedAt: latestHoursSession?.created_at || null,
         lastUpdatedBy: latestHoursSession?.created_by || null,
         recordCount: relevantHoursSessions.reduce((acc, s) => acc + (s.employee_count || s.records?.length || 0), 0),
@@ -357,10 +359,12 @@ export function calculateDataStatus(input: StatusCalculationInput): {
         coveragePercent: totalStoreCount > 0
             ? Math.round((hoursStoresCovered / totalStoreCount) * 100)
             : 0,
-        description: 'Lũy kế giờ công all nhân viên',
+        description: 'Dữ liệu lũy kế giờ công của từng nhân viên',
         warningMessage: isHoursOk
             ? undefined
-            : `Chưa có dữ liệu giờ công cho ${targetStore !== 'all' ? targetStore : 'các siêu thị'} trong tháng ${selectedMonth}/${selectedYear}.`,
+            : latestHoursDate
+                ? `Phiên giờ công gần nhất ngày ${latestHoursDate}. Cần nạp phiên ngày ${expectedDate} (n-1).`
+                : `Chưa có phiên giờ công nào cho ${targetStore !== 'all' ? targetStore : 'các siêu thị'} trong tháng ${selectedMonth}/${selectedYear}.`,
         actionUrl: '/cap-nhat-luy-ke-nhan-vien',
         actionLabel: 'Nạp giờ công'
     };
@@ -413,8 +417,11 @@ export function calculateDataStatus(input: StatusCalculationInput): {
         const sTargetsCount = empRevenueTargets.filter(t => storeEmpIds.has(t.employee_id)).length;
         const employeeTargetsOk = storeEmps.length > 0 ? sTargetsCount >= Math.min(storeEmps.length, 1) : sTargetsCount > 0;
 
-        // 6. Giờ công Nhân viên
-        const storeHoursOk = monthHoursSessions.some(s => sessionHasStoreWorkHours(s, storeName, storeEmpIds));
+        // 6. Giờ công Nhân viên (Kỳ vọng theo ngày n-1 giống Doanh thu & Thi đua)
+        const sHoursSessions = monthHoursSessions.filter(s => sessionHasStoreWorkHours(s, storeName, storeEmpIds));
+        const sHoursDates = Array.from(new Set(sHoursSessions.map(s => s.report_date))).filter(Boolean).sort();
+        const sHoursLatestDate = sHoursDates.length > 0 ? sHoursDates[sHoursDates.length - 1] : null;
+        const storeHoursOk = sHoursDates.includes(expectedDate) || sHoursLatestDate === expectedDate;
 
         // Điểm sẵn sàng (6 chỉ số cốt lõi)
         const checkItems = [
@@ -443,6 +450,7 @@ export function calculateDataStatus(input: StatusCalculationInput): {
             employeeTargetsOk,
             employeeTargetsCount: sTargetsCount,
             workHoursOk: storeHoursOk,
+            workHoursDate: sHoursLatestDate,
             readinessScore,
             allOk
         };

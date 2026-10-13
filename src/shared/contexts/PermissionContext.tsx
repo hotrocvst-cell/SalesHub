@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import { useAuth } from './AuthContext';
 import { supabase } from '../../core/lib/supabase';
+import { isStoreMatch } from '../../core/lib/formatters';
 import {
     fetchSystemPagePermissions,
     saveSystemPagePermissions,
@@ -12,10 +13,11 @@ import {
     type RouteAuditReport
 } from '../../core/lib/permissions';
 
-interface PageAccessResult {
+export interface PageAccessResult {
     allowed: boolean;
     isEnabled: boolean;
     roleAllowed: boolean;
+    storeAllowed: boolean;
     page?: SystemPagePermission;
 }
 
@@ -23,13 +25,14 @@ interface PermissionContextType {
     permissions: SystemPagePermission[];
     loading: boolean;
     isSyncedWithSupabase: boolean;
+    hasBadgeColumnsOnCloud: boolean;
     routeAudit: RouteAuditReport;
     canAccessPage: (path: string) => PageAccessResult;
     updatePermissions: (newPerms: SystemPagePermission[]) => Promise<{ success: boolean; fromSupabase: boolean; error?: string }>;
     syncMissingPages: () => Promise<{ success: boolean; fromSupabase: boolean; error?: string }>;
     resetToDefault: () => Promise<{ success: boolean; fromSupabase: boolean }>;
     refreshPermissions: () => Promise<void>;
-    checkCloudConnection: () => Promise<{ exists: boolean; count: number; error?: string }>;
+    checkCloudConnection: () => Promise<{ exists: boolean; hasBadgeColumns: boolean; count: number; error?: string }>;
 }
 
 const PermissionContext = createContext<PermissionContextType | undefined>(undefined);
@@ -39,6 +42,7 @@ export function PermissionProvider({ children }: { children: ReactNode }) {
     const [permissions, setPermissions] = useState<SystemPagePermission[]>(DEFAULT_PAGE_PERMISSIONS);
     const [loading, setLoading] = useState<boolean>(true);
     const [isSyncedWithSupabase, setIsSyncedWithSupabase] = useState<boolean>(false);
+    const [hasBadgeColumnsOnCloud, setHasBadgeColumnsOnCloud] = useState<boolean>(true);
 
     const loadPermissions = async () => {
         setLoading(true);
@@ -47,12 +51,15 @@ export function PermissionProvider({ children }: { children: ReactNode }) {
             setPermissions(res.data);
             setIsSyncedWithSupabase(res.fromSupabase);
         }
+        const cloudCheck = await checkSupabasePermissionsTable();
+        setHasBadgeColumnsOnCloud(cloudCheck.hasBadgeColumns);
         setLoading(false);
     };
 
     const checkCloudConnection = async () => {
         const res = await checkSupabasePermissionsTable();
         setIsSyncedWithSupabase(res.exists);
+        setHasBadgeColumnsOnCloud(res.hasBadgeColumns);
         return res;
     };
 
@@ -83,7 +90,13 @@ export function PermissionProvider({ children }: { children: ReactNode }) {
     const canAccessPage = (path: string): PageAccessResult => {
         // Trang chủ luôn mở khả dụng cho tất cả user
         if (path === '/' || path === '/trang-chu') {
-            return { allowed: true, isEnabled: true, roleAllowed: true, page: permissions.find(p => p.path === '/') };
+            return {
+                allowed: true,
+                isEnabled: true,
+                roleAllowed: true,
+                storeAllowed: true,
+                page: permissions.find(p => p.path === '/')
+            };
         }
 
         // 1. Ưu tiên TUYỆT ĐỐI tìm trang khớp chính xác path trước
@@ -101,41 +114,47 @@ export function PermissionProvider({ children }: { children: ReactNode }) {
             page = permissions.find(p => p.path !== '/' && p.path.startsWith(path + '/'));
         }
 
+        const isAdmin = currentUser?.role === 'ADMIN';
+
         // Trang Quản trị hệ thống: ĐẶC BIỆT CHỈ DÀNH CHO ADMIN
         if (path === '/quan-tri-he-thong' || (page && page.path === '/quan-tri-he-thong')) {
-            const isAdmin = currentUser?.role === 'ADMIN';
             return {
                 allowed: isAdmin,
                 isEnabled: true,
                 roleAllowed: isAdmin,
-                page
-            };
-        }
-
-        // Trang Quản lý tài khoản: Phân quyền theo cấu hình (mặc định chỉ dành cho Admin)
-        if (path === '/quan-ly-tai-khoan' || (page && page.path === '/quan-ly-tai-khoan')) {
-            const isEnabled = page ? Boolean(page.is_enabled) : true;
-            const allowedRoles = page?.allowed_roles || ['ADMIN'];
-            const roleAllowed = Boolean(currentUser?.role === 'ADMIN' || (currentUser?.role && allowedRoles.includes(currentUser.role)));
-            return {
-                allowed: isEnabled && roleAllowed,
-                isEnabled,
-                roleAllowed,
+                storeAllowed: true,
                 page
             };
         }
 
         if (!page) {
             // Route không nằm trong danh mục (ví dụ /bc-thang chuyển hướng sang /bc-thang/tong-quan)
-            return { allowed: true, isEnabled: true, roleAllowed: true };
+            return { allowed: true, isEnabled: true, roleAllowed: true, storeAllowed: true };
         }
 
         const isEnabled = Boolean(page.is_enabled);
-        // ADMIN luôn có quyền mọi trang nếu trang đang Bật
-        const roleAllowed = Boolean(currentUser?.role === 'ADMIN' || (page.allowed_roles && currentUser?.role && page.allowed_roles.includes(currentUser.role)));
-        const allowed = isEnabled && roleAllowed;
+        
+        // 1. Phân quyền theo vai trò (Role-based): Admin luôn được phép, các vai trò khác theo allowed_roles
+        const roleAllowed = Boolean(isAdmin || (page.allowed_roles && currentUser?.role && page.allowed_roles.includes(currentUser.role)));
 
-        return { allowed, isEnabled, roleAllowed, page };
+        // 2. Phân quyền theo siêu thị (Store-based / Branch feature subscription):
+        // Nếu không cấu hình hoặc chứa 'ALL' -> Mở cho tất cả siêu thị.
+        // Ngược lại -> Chỉ mở cho các siêu thị trong danh sách cấu hình.
+        let storeAllowed = true;
+        if (!isAdmin && page.allowed_stores && page.allowed_stores.length > 0 && !page.allowed_stores.includes('ALL')) {
+            const userStores = [
+                currentUser?.store_name,
+                ...(currentUser?.accessible_stores || [])
+            ].filter(Boolean) as string[];
+
+            storeAllowed = userStores.length > 0 && userStores.some(uStore =>
+                page.allowed_stores!.some(allowedStore => isStoreMatch(uStore, allowedStore))
+            );
+        }
+
+        const allowed = isEnabled && roleAllowed && storeAllowed;
+
+        return { allowed, isEnabled, roleAllowed, storeAllowed, page };
     };
 
     const routeAudit = auditRouteCoverage(permissions);
@@ -168,6 +187,7 @@ export function PermissionProvider({ children }: { children: ReactNode }) {
                 permissions,
                 loading,
                 isSyncedWithSupabase,
+                hasBadgeColumnsOnCloud,
                 routeAudit,
                 canAccessPage,
                 updatePermissions,

@@ -16,12 +16,15 @@ import {
     Cloud,
     CloudOff,
     UploadCloud,
-    Trash2
+    Trash2,
+    Search,
+    Sliders,
+    Zap
 } from 'lucide-react';
 import { useAuth } from '../../shared/contexts/AuthContext';
 import { fetchStores, type StoreItem } from '../../core/lib/storage';
 import { getShortStoreName, isStoreMatch, formatDate } from '../../core/lib/formatters';
-import type { VoucherItem } from './types';
+import type { VoucherItem, VoucherDistributionRule } from './types';
 import {
     fetchStoreVouchers,
     analyzeHoardingRisks,
@@ -32,18 +35,21 @@ import {
     checkSupabaseVoucherTable,
     syncLocalVouchersToCloud,
     type SupabaseStorageStatus,
-    STORE_VOUCHERS_SQL
+    STORE_VOUCHERS_SQL,
+    getVoucherDistributionConfig
 } from './services/voucherService';
 import VoucherAdminStats from './components/VoucherAdminStats';
 import VoucherStockSummaryTable from './components/VoucherStockSummaryTable';
 import VoucherHoardingTable from './components/VoucherHoardingTable';
 import VoucherListTable from './components/VoucherListTable';
 import VoucherImportModal from './components/VoucherImportModal';
+import VoucherBulkCheckModal from './components/VoucherBulkCheckModal';
 import VoucherResetModal from './components/VoucherResetModal';
 import VoucherQrDoubleCheckModal from './components/VoucherQrDoubleCheckModal';
 import VoucherCleanModal from './components/VoucherCleanModal';
 import VoucherEditModal from './components/VoucherEditModal';
 import VoucherBatchEditModal from './components/VoucherBatchEditModal';
+import VoucherRuleConfigModal from './components/VoucherRuleConfigModal';
 
 export default function VoucherAdminPage() {
     const { currentUser, isAdmin, canConfigure } = useAuth();
@@ -59,6 +65,8 @@ export default function VoucherAdminPage() {
 
     // Modal state
     const [isImportModalOpen, setIsImportModalOpen] = useState<boolean>(false);
+    const [importPresetCodes, setImportPresetCodes] = useState<string[]>([]);
+    const [isBulkCheckModalOpen, setIsBulkCheckModalOpen] = useState<boolean>(false);
     const [importPreset, setImportPreset] = useState<{
         campaignName: string;
         denomination: number;
@@ -71,6 +79,9 @@ export default function VoucherAdminPage() {
     const [filterEmployeeId, setFilterEmployeeId] = useState<string>('');
     const [filterStatusFromStats, setFilterStatusFromStats] = useState<string>('ALL');
     const [showSqlModal, setShowSqlModal] = useState<boolean>(false);
+    // Cấu hình quy tắc cấp mã voucher (FIFO / FEFO / LIFO)
+    const [distributionRule, setDistributionRule] = useState<VoucherDistributionRule>('FIFO');
+    const [isRuleModalOpen, setIsRuleModalOpen] = useState<boolean>(false);
     // Edit / Batch-edit modal
     const [editingVoucher, setEditingVoucher] = useState<VoucherItem | null>(null);
     const [batchEditVouchers, setBatchEditVouchers] = useState<VoucherItem[]>([]);
@@ -97,14 +108,18 @@ export default function VoucherAdminPage() {
     const loadData = async () => {
         setLoading(true);
         try {
-            const [storesRes, voucherList, statusRes] = await Promise.all([
+            const [storesRes, voucherList, statusRes, configRes] = await Promise.all([
                 fetchStores(),
                 fetchStoreVouchers(selectedStore, accessible, currentUser.full_name || currentUser.employee_id, isAdmin),
-                checkSupabaseVoucherTable()
+                checkSupabaseVoucherTable(),
+                getVoucherDistributionConfig()
             ]);
             if (storesRes.success) setStores(storesRes.data);
             setVouchers(voucherList);
             setCloudStatus(statusRes);
+            if (configRes && configRes.rule_type) {
+                setDistributionRule(configRes.rule_type);
+            }
         } finally {
             setLoading(false);
         }
@@ -280,6 +295,16 @@ export default function VoucherAdminPage() {
                 <div className="flex items-center gap-2 flex-wrap">
                     <button
                         type="button"
+                        onClick={() => setIsRuleModalOpen(true)}
+                        className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-black active:scale-[0.99] text-white text-xs font-black transition cursor-pointer shadow-xs flex items-center gap-1.5 border border-slate-700 hover:border-emerald-500"
+                        title="Cài đặt ưu tiên quy tắc cấp mã voucher (FIFO - Nhập trước cấp trước)"
+                    >
+                        <Sliders className="w-4 h-4 text-emerald-400" />
+                        <span>Ưu Tiên Cấp: <span className="text-emerald-400 font-black">{distributionRule}</span></span>
+                    </button>
+
+                    <button
+                        type="button"
                         onClick={() => handleOpenQrDoubleCheck()}
                         className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 active:scale-[0.99] text-white text-xs font-black transition cursor-pointer shadow-xs flex items-center gap-1.5"
                         title="Tạo mã QR code quét trên máy POS để double check"
@@ -290,7 +315,20 @@ export default function VoucherAdminPage() {
 
                     <button
                         type="button"
-                        onClick={() => setIsImportModalOpen(true)}
+                        onClick={() => setIsBulkCheckModalOpen(true)}
+                        className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 active:scale-[0.99] text-white text-xs font-black transition cursor-pointer shadow-xs flex items-center gap-1.5"
+                        title="Kiểm tra hàng loạt mã voucher xem đã tồn trong kho hay chưa"
+                    >
+                        <Search className="w-4 h-4 text-amber-300" />
+                        <span>Kiểm Tra Mã Hàng Loạt</span>
+                    </button>
+
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setImportPresetCodes([]);
+                            setIsImportModalOpen(true);
+                        }}
                         className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black transition cursor-pointer shadow-xs flex items-center gap-1.5"
                     >
                         <Plus className="w-4 h-4" />
@@ -534,6 +572,7 @@ export default function VoucherAdminPage() {
                 onClose={() => {
                     setIsImportModalOpen(false);
                     setImportPreset(null);
+                    setImportPresetCodes([]);
                 }}
                 currentUserDisplayName={currentUser.full_name || 'Admin'}
                 existingCampaigns={existingCampaigns}
@@ -545,6 +584,7 @@ export default function VoucherAdminPage() {
                 presetCampaignName={importPreset?.campaignName}
                 presetDenomination={importPreset?.denomination}
                 presetDescription={importPreset?.description}
+                presetCodes={importPresetCodes}
                 onSuccess={(added, dup, cloudWarning) => {
                     if (cloudWarning) {
                         showToast(`🎉 Đã nạp ${added} mã! ⚠️ ${cloudWarning}`);
@@ -552,7 +592,20 @@ export default function VoucherAdminPage() {
                         showToast(`🎉 Đã nạp thành công ${added} mã voucher (${dup} mã trùng bị bỏ qua)!`);
                     }
                     setImportPreset(null);
+                    setImportPresetCodes([]);
                     loadData();
+                }}
+            />
+
+            {/* MODAL KIỂM TRA HÀNG LOẠT MÃ VOUCHER */}
+            <VoucherBulkCheckModal
+                isOpen={isBulkCheckModalOpen}
+                onClose={() => setIsBulkCheckModalOpen(false)}
+                allVouchers={vouchers}
+                onOpenImportWithCodes={(codes) => {
+                    setIsBulkCheckModalOpen(false);
+                    setImportPresetCodes(codes);
+                    setIsImportModalOpen(true);
                 }}
             />
 
@@ -720,6 +773,16 @@ export default function VoucherAdminPage() {
                     </div>
                 </div>
             )}
+
+            {/* MODAL CÀI ĐẶT QUY TẮC CẤP PHÁT VOUCHER (FIFO / FEFO / LIFO) */}
+            <VoucherRuleConfigModal
+                isOpen={isRuleModalOpen}
+                onClose={() => setIsRuleModalOpen(false)}
+                currentRule={distributionRule}
+                onSaved={(newRule) => setDistributionRule(newRule)}
+                currentUserDisplayName={currentUser.full_name || currentUser.employee_id}
+                showToast={showToast}
+            />
         </div>
     );
 }

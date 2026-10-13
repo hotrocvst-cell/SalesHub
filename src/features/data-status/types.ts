@@ -43,6 +43,7 @@ export interface StoreMatrixRow {
     employeeTargetsOk: boolean;
     employeeTargetsCount: number;
     workHoursOk: boolean;
+    workHoursDate?: string | null;
     workHoursTotal?: number;
     readinessScore: number; // 0 - 100
     allOk: boolean;

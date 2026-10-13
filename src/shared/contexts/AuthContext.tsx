@@ -661,7 +661,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return false;
     };
 
-    // 8. Đăng xuất
+    // 8. Đăng xuất: Xóa toàn bộ phiên làm việc và tự động load về trang đăng nhập
     const logout = async () => {
         try {
             await supabase.auth.signOut();
@@ -673,6 +673,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         localStorage.removeItem(STORAGE_IMPERSONATION_KEY);
         setImpersonationState({ isActive: false });
         setRawUser(ANONYMOUS_USER);
+        // Tự động load chuyển hướng ngay về trang đăng nhập
+        window.location.replace('/dang-nhap');
     };
 
     return (

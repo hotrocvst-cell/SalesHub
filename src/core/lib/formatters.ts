@@ -142,10 +142,21 @@ export function isStoreMatch(
     // Đối chiếu theo brand/prefix (ví dụ: AAR vs TGDĐ)
     const prefixA = cleanA.split(' - ')[0]?.trim().toLowerCase();
     const prefixB = cleanB.split(' - ')[0]?.trim().toLowerCase();
-    const knownBrands = ['aar', 'tgdd', 'tgd', 'dmx', 'đmx', 'topzone', 'bhx'];
-    const isBrandA = knownBrands.some(k => prefixA.includes(k));
-    const isBrandB = knownBrands.some(k => prefixB.includes(k));
-    if (isBrandA && isBrandB && prefixA !== prefixB) {
+    const getBrandKey = (p: string) => {
+        const raw = p.split('_')[0]?.trim().toLowerCase() || p.toLowerCase();
+        if (raw.includes('tgd')) return 'tgdd';
+        if (raw.includes('dmx') || raw.includes('đmx')) return 'dmx';
+        if (raw.includes('aar')) return 'aar';
+        if (raw.includes('topzone')) return 'topzone';
+        if (raw.includes('bhx')) return 'bhx';
+        return raw;
+    };
+    const brandA = getBrandKey(prefixA);
+    const brandB = getBrandKey(prefixB);
+    const knownBrands = ['aar', 'tgdd', 'dmx', 'topzone', 'bhx'];
+    const isBrandA = knownBrands.includes(brandA);
+    const isBrandB = knownBrands.includes(brandB);
+    if (isBrandA && isBrandB && brandA !== brandB) {
         return false;
     }
 

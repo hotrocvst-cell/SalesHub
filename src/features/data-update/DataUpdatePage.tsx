@@ -1,8 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getLocalDraft, saveLocalDraft, clearLocalDraft, syncBatchDailyRecordsToSupabase, type BusinessDayRecord } from '../../core/lib/storage';
+import {
+    getLocalDraft,
+    saveLocalDraft,
+    clearLocalDraft,
+    syncBatchDailyRecordsToSupabase,
+    fetchBusinessRecordsByDate,
+    type BusinessDayRecord
+} from '../../core/lib/storage';
 import { getYesterdayDateString, getShortStoreName, getCampaignLabel, formatDate, formatDateTime } from '../../core/lib/formatters';
-import { Save, Trash2, Calendar, RefreshCw, CheckCircle2, ArrowRight, CloudUpload, Store, RotateCcw, AlertCircle } from 'lucide-react';
+import { Save, Trash2, Calendar, RefreshCw, CheckCircle2, ArrowRight, CloudUpload, Store, RotateCcw, AlertCircle, AlertTriangle, X } from 'lucide-react';
 
 export default function DataUpdatePage() {
     const navigate = useNavigate();
@@ -31,10 +38,35 @@ export default function DataUpdatePage() {
     const [toastMessage, setToastMessage] = useState<string>('');
     const [isDraftSynced, setIsDraftSynced] = useState<boolean>(false);
 
+    // Quản lý kiểm tra trùng phiên trên Cloud
+    const [existingSessionRecords, setExistingSessionRecords] = useState<BusinessDayRecord[]>([]);
+    const [isCheckingExisting, setIsCheckingExisting] = useState<boolean>(false);
+    const [showOverwriteModal, setShowOverwriteModal] = useState<boolean>(false);
+
     const showToast = (msg: string) => {
         setToastMessage(msg);
         setTimeout(() => setToastMessage(''), 3000);
     };
+
+    // Kiểm tra dữ liệu phiên trên Cloud khi ngày chốt thay đổi
+    const checkExistingSession = useCallback(async (date: string) => {
+        if (!date) {
+            setExistingSessionRecords([]);
+            return;
+        }
+        setIsCheckingExisting(true);
+        const res = await fetchBusinessRecordsByDate(date);
+        if (res.success && res.data) {
+            setExistingSessionRecords(res.data);
+        } else {
+            setExistingSessionRecords([]);
+        }
+        setIsCheckingExisting(false);
+    }, []);
+
+    useEffect(() => {
+        checkExistingSession(reportDate);
+    }, [reportDate, checkExistingSession]);
 
     // Nạp dữ liệu bản nháp (Giữ nguyên số liệu dán nháp nhưng KHÔNG ghi đè passedDays và totalDays để luôn theo ngày hiện tại)
     useEffect(() => {
@@ -135,14 +167,31 @@ export default function DataUpdatePage() {
         setDetectedStores(Object.keys(storeMap));
     }, [revenueRaw, passedDays, totalDays, reportDate]);
 
-    // Thao tác Lưu đồng bộ nhiều siêu thị
-    const handleSave = async () => {
+    // Bắt đầu thao tác lưu: kiểm tra trùng phiên trước khi thực thi
+    const handleSaveClick = () => {
         if (!emulationRaw.trim() && !revenueRaw.trim()) {
             showToast('⚠️ Vui lòng nhập dữ liệu trước khi lưu!');
             return;
         }
 
+        const storeRecordsMap = parseRevenueRawToMap();
+        if (Object.keys(storeRecordsMap).length === 0) {
+            showToast('⚠️ Chưa nhận diện được số liệu siêu thị hợp lệ!');
+            return;
+        }
+
+        // Nếu trên Cloud đã có dữ liệu của ngày chốt này -> Mở Modal xác nhận ghi đè
+        if (existingSessionRecords.length > 0) {
+            setShowOverwriteModal(true);
+        } else {
+            executeSave(false);
+        }
+    };
+
+    // Thực thi lưu và đồng bộ lên Supabase Cloud (hỗ trợ ghi đè sạch phiên)
+    const executeSave = async (isOverwrite: boolean) => {
         setIsSaving(true);
+        setShowOverwriteModal(false);
 
         // 1. Lưu bản nháp cục bộ
         saveLocalDraft({
@@ -213,10 +262,10 @@ export default function DataUpdatePage() {
             rawRevenue: revenueRaw
         })) as BusinessDayRecord[];
 
-        // 5. Lưu batch lên Supabase
+        // 5. Lưu batch lên Supabase (Ghi đè làm sạch phiên nếu trùng ngày chốt)
         let saveResult = { success: false, count: 0 };
         if (finalRecords.length > 0) {
-            saveResult = await syncBatchDailyRecordsToSupabase(finalRecords);
+            saveResult = await syncBatchDailyRecordsToSupabase(finalRecords, { overwrite: isOverwrite });
         }
 
         setIsSaving(false);
@@ -233,7 +282,15 @@ export default function DataUpdatePage() {
                 isSynced: true,
                 updatedAt: now.toISOString()
             });
-            showToast(`💾 Đã bóc tách & lưu ${finalRecords.length} siêu thị thành công lên CLOUD!`);
+
+            // Tải lại danh sách bản ghi hiện có của phiên ngày này
+            await checkExistingSession(reportDate);
+
+            if (isOverwrite) {
+                showToast(`🎉 Đã ghi đè & làm sạch ${finalRecords.length} siêu thị cho phiên ngày ${formatDate(reportDate)} lên CLOUD!`);
+            } else {
+                showToast(`💾 Đã bóc tách & lưu ${finalRecords.length} siêu thị thành công lên CLOUD!`);
+            }
         } else {
             setIsDraftSynced(false);
             saveLocalDraft({
@@ -308,12 +365,22 @@ export default function DataUpdatePage() {
                     <div className="flex items-center gap-2 shrink-0">
                         <button
                             type="button"
-                            onClick={handleSave}
+                            onClick={handleSaveClick}
                             disabled={isSaving}
-                            className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl text-xs font-black flex items-center gap-1.5 shadow-sm transition cursor-pointer disabled:opacity-50"
+                            className={`px-4 py-2 text-white rounded-xl text-xs font-black flex items-center gap-1.5 shadow-sm transition cursor-pointer disabled:opacity-50 ${existingSessionRecords.length > 0
+                                ? 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700'
+                                : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700'
+                            }`}
                         >
                             <CloudUpload className={`w-4 h-4 ${isSaving ? 'animate-spin' : ''}`} />
-                            <span>{isSaving ? 'ĐANG ĐỒNG BỘ...' : '⚡ ĐỒNG BỘ LÊN CLOUD NGAY'}</span>
+                            <span>
+                                {isSaving
+                                    ? 'ĐANG ĐỒNG BỘ...'
+                                    : existingSessionRecords.length > 0
+                                        ? '⚡ ĐỒNG BỘ & GHI ĐÈ CLOUD'
+                                        : '⚡ ĐỒNG BỘ LÊN CLOUD NGAY'
+                                }
+                            </span>
                         </button>
                     </div>
                 </div>
@@ -416,6 +483,47 @@ export default function DataUpdatePage() {
                         />
                     </div>
                 </div>
+
+                {/* BANNER CẢNH BÁO TRÙNG PHIÊN NGÀY CHỐT NẾU ĐÃ CÓ DỮ LIỆU TRÊN CLOUD */}
+                {existingSessionRecords.length > 0 && (
+                    <div className="bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-amber-500/10 border-2 border-amber-400 rounded-2xl p-4 shadow-xs animate-in fade-in duration-200">
+                        <div className="flex items-start gap-3">
+                            <div className="p-2.5 rounded-xl bg-amber-500 text-slate-950 font-black shrink-0 shadow-xs">
+                                <AlertTriangle className="w-5 h-5 text-slate-950 stroke-[2.5]" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <span className="text-xs font-black uppercase tracking-wider text-amber-950 bg-amber-300/90 px-2 py-0.5 rounded-md">
+                                        ⚠️ Trùng phiên ngày chốt: {formatDate(reportDate)}
+                                    </span>
+                                    <span className="text-xs text-slate-600 font-medium">
+                                        Đã có <b className="text-amber-950">{existingSessionRecords.length} siêu thị</b> trên Cloud
+                                    </span>
+                                    {isCheckingExisting && (
+                                        <span className="text-[10px] text-amber-700 italic animate-pulse">Đang rà soát...</span>
+                                    )}
+                                </div>
+                                <p className="text-xs text-slate-700 mt-1 leading-relaxed">
+                                    Phiên ngày <b>{formatDate(reportDate)}</b> đã từng được cập nhật{existingSessionRecords[0]?.updatedAt ? ` (lần gần nhất lúc ${formatDateTime(existingSessionRecords[0].updatedAt)})` : ''}. 
+                                    Khi lưu, hệ thống sẽ <b className="text-amber-900 underline">TỰ ĐỘNG GHI ĐÈ & LÀM SẠCH</b> toàn bộ số liệu cũ của ngày này để khắc phục dữ liệu bị lỗi và đảm bảo không bị nhân bản nhiều dòng.
+                                </p>
+                                <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-[11px]">
+                                    <span className="font-bold text-slate-700">Dữ liệu hiện có:</span>
+                                    {existingSessionRecords.slice(0, 6).map((r, i) => (
+                                        <span key={r.id || `${r.storeName}_${i}`} className="px-1.5 py-0.5 bg-white border border-amber-300 rounded font-bold text-slate-800 shadow-2xs">
+                                            {getShortStoreName(r.storeName)}
+                                        </span>
+                                    ))}
+                                    {existingSessionRecords.length > 6 && (
+                                        <span className="text-slate-500 font-bold bg-amber-100/60 px-1.5 py-0.5 rounded">
+                                            +{existingSessionRecords.length - 6} ST khác
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* Ô dán dữ liệu */}
@@ -467,12 +575,26 @@ export default function DataUpdatePage() {
 
                 <div className="flex items-center gap-3">
                     <button
-                        onClick={handleSave}
+                        onClick={handleSaveClick}
                         disabled={isSaving}
-                        className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition cursor-pointer disabled:opacity-50"
+                        className={`px-5 py-2.5 rounded-xl text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition cursor-pointer disabled:opacity-50 ${existingSessionRecords.length > 0
+                            ? 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700'
+                            : 'bg-emerald-600 hover:bg-emerald-700'
+                        }`}
                     >
-                        {isSaving ? <CloudUpload className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                        <span>{isSaving ? 'ĐANG TÁCH & LƯU...' : '💾 LƯU DỮ LIỆU ĐA SIÊU THỊ'}</span>
+                        {isSaving ? (
+                            <CloudUpload className="w-4 h-4 animate-spin" />
+                        ) : existingSessionRecords.length > 0 ? (
+                            <RotateCcw className="w-4 h-4" />
+                        ) : (
+                            <Save className="w-4 h-4" />
+                        )}
+                        <span>
+                            {isSaving
+                                ? (existingSessionRecords.length > 0 ? 'ĐANG GHI ĐÈ...' : 'ĐANG TÁCH & LƯU...')
+                                : (existingSessionRecords.length > 0 ? '🔄 LƯU & GHI ĐÈ PHIÊN NÀY' : '💾 LƯU DỮ LIỆU ĐA SIÊU THỊ')
+                            }
+                        </span>
                     </button>
 
                     <button
@@ -484,6 +606,74 @@ export default function DataUpdatePage() {
                     </button>
                 </div>
             </div>
+
+            {/* MODAL XÁC NHẬN GHI ĐÈ TRÙNG PHIÊN NGÀY CHỐT */}
+            {showOverwriteModal && (
+                <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 animate-in fade-in duration-150">
+                    <div className="bg-white rounded-3xl max-w-md w-full border border-slate-200 shadow-2xl p-5 sm:p-6 space-y-4 animate-in zoom-in-95 duration-150">
+                        <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-center gap-3">
+                                <div className="w-11 h-11 rounded-2xl bg-amber-100 border border-amber-300 text-amber-700 flex items-center justify-center shrink-0">
+                                    <AlertTriangle className="w-6 h-6 stroke-[2.5]" />
+                                </div>
+                                <div>
+                                    <h3 className="text-base font-black text-slate-900 uppercase tracking-tight">
+                                        Xác Nhận Ghi Đè Phiên
+                                    </h3>
+                                    <p className="text-xs text-amber-800 font-bold font-mono">
+                                        Ngày chốt: {formatDate(reportDate)}
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setShowOverwriteModal(false)}
+                                className="p-1 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        <div className="bg-amber-50/80 border border-amber-200/90 rounded-2xl p-3.5 text-xs text-amber-950 space-y-2">
+                            <p className="font-medium leading-relaxed">
+                                Phiên ngày <b>{formatDate(reportDate)}</b> hiện đã có <b>{existingSessionRecords.length} siêu thị</b> trên Cloud. Bạn đang chuẩn bị lưu mới cho <b>{detectedStores.length} siêu thị</b>.
+                            </p>
+                            <div className="space-y-1.5 pt-1 text-[11.5px] border-t border-amber-200/70 text-slate-700 font-medium">
+                                <div className="flex items-start gap-1.5 text-emerald-800">
+                                    <span className="font-bold shrink-0">✓</span>
+                                    <span><b>Khắc phục dữ liệu lỗi:</b> Xóa sạch số liệu cũ của ngày này để nạp dữ liệu chuẩn mới nhất.</span>
+                                </div>
+                                <div className="flex items-start gap-1.5 text-blue-800">
+                                    <span className="font-bold shrink-0">✓</span>
+                                    <span><b>Tránh trùng lặp:</b> Đảm bảo 1 phiên ngày chỉ có 1 dòng dữ liệu duy nhất cho mỗi siêu thị.</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <p className="text-xs text-slate-500 font-medium">
+                            Bạn có chắc chắn muốn tiến hành ghi đè dữ liệu phiên ngày <b>{formatDate(reportDate)}</b> không?
+                        </p>
+
+                        <div className="flex items-center justify-end gap-2.5 pt-1">
+                            <button
+                                type="button"
+                                onClick={() => setShowOverwriteModal(false)}
+                                className="px-4 py-2.5 rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-100 text-xs font-bold transition cursor-pointer"
+                            >
+                                Hủy Bỏ
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => executeSave(true)}
+                                disabled={isSaving}
+                                className="px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-black flex items-center gap-1.5 shadow-md shadow-amber-600/30 transition cursor-pointer disabled:opacity-50"
+                            >
+                                <RotateCcw className={`w-3.5 h-3.5 ${isSaving ? 'animate-spin' : ''}`} />
+                                <span>{isSaving ? 'ĐANG GHI ĐÈ...' : 'XÁC NHẬN GHI ĐÈ & LƯU CLOUD'}</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

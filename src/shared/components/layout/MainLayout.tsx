@@ -5,6 +5,7 @@ import RolePermissionModal from '../../../features/store-management/components/R
 import NotificationBell from '../../../features/auth/components/NotificationBell';
 import AdminTestingBar from './AdminTestingBar';
 import SidebarNav, { NAVIGATION_GROUPS } from './SidebarNav';
+import { recordPageVisit } from '../../../core/lib/pageVisitService';
 import {
     Store,
     ChevronRight,
@@ -31,29 +32,6 @@ export default function MainLayout() {
         logout
     } = useAuth();
     const location = useLocation();
-
-    // 1. Kiểm tra trạng thái khởi tạo
-    if (isInitializing) {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-slate-100 text-slate-600 font-bold text-xs gap-3">
-                <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                <span>Đang tải hệ thống Sales Hub...</span>
-            </div>
-        );
-    }
-
-    // 2. Chặn toàn bộ truy cập nếu chưa đăng nhập (bắt buộc chuyển hướng đến trang Đăng nhập)
-    if (!isAuthenticated || !currentUser?.email || !currentUser?.id) {
-        return <Navigate to="/dang-nhap" replace />;
-    }
-
-    // 3. Chặn truy cập nếu chưa hoàn thành onboarding hoặc đang chờ xét duyệt
-    if (currentUser.status === 'PENDING_ONBOARDING') {
-        return <Navigate to="/onboarding" replace />;
-    }
-    if (currentUser.status === 'PENDING_APPROVAL' || currentUser.status === 'REJECTED') {
-        return <Navigate to="/cho-xet-duyet" replace />;
-    }
 
     // Mặc định là Open (false = không thu gọn)
     const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
@@ -110,6 +88,36 @@ export default function MainLayout() {
     useEffect(() => {
         setIsMobileOpen(false);
     }, [location.pathname]);
+
+    // Ghi nhận lượt truy cập trang cho người dùng (lưu LocalStorage và sync Supabase)
+    useEffect(() => {
+        if (currentUser?.employee_id && location.pathname && location.pathname !== '/') {
+            recordPageVisit(currentUser.employee_id, location.pathname);
+        }
+    }, [location.pathname, currentUser?.employee_id]);
+
+    // 1. Kiểm tra trạng thái khởi tạo
+    if (isInitializing) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-slate-100 text-slate-600 font-bold text-xs gap-3">
+                <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                <span>Đang tải hệ thống Sales Hub...</span>
+            </div>
+        );
+    }
+
+    // 2. Chặn toàn bộ truy cập nếu chưa đăng nhập (bắt buộc chuyển hướng đến trang Đăng nhập)
+    if (!isAuthenticated || !currentUser?.email || !currentUser?.id) {
+        return <Navigate to="/dang-nhap" replace />;
+    }
+
+    // 3. Chặn truy cập nếu chưa hoàn thành onboarding hoặc đang chờ xét duyệt
+    if (currentUser.status === 'PENDING_ONBOARDING') {
+        return <Navigate to="/onboarding" replace />;
+    }
+    if (currentUser.status === 'PENDING_APPROVAL' || currentUser.status === 'REJECTED') {
+        return <Navigate to="/cho-xet-duyet" replace />;
+    }
 
     // Tiêu đề trang động theo URL
     const getPageTitle = () => {
@@ -318,7 +326,6 @@ export default function MainLayout() {
                                 onClick={() => {
                                     if (window.confirm('Bạn có chắc chắn muốn đăng xuất khỏi hệ thống?')) {
                                         logout();
-                                        navigate('/dang-nhap');
                                     }
                                 }}
                                 className="p-2 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition border border-transparent hover:border-rose-200 cursor-pointer"

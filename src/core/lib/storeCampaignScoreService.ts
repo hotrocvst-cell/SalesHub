@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { isStoreMatch } from './formatters';
+import { isStoreMatch, getShortStoreName } from './formatters';
 
 export type CampaignScoringMode = 'POINTS' | 'COUNT';
 
@@ -32,7 +32,10 @@ export function getAllStoreCampaignScoreConfigs(): Record<string, StoreCampaignS
  * Lấy cấu hình tính điểm của 1 siêu thị cụ thể
  * Tự động đối chiếu thông minh qua isStoreMatch và fallback về DEFAULT
  */
-export function getStoreCampaignScoreConfig(storeName?: string): StoreCampaignScoreConfig {
+export function getStoreCampaignScoreConfig(
+    storeName?: string,
+    storesList?: Array<{ code?: string; name: string; id?: string }>
+): StoreCampaignScoreConfig {
     const allConfigs = getAllStoreCampaignScoreConfigs();
 
     if (!storeName || storeName === 'all' || storeName === 'Tổng') {
@@ -52,8 +55,18 @@ export function getStoreCampaignScoreConfig(storeName?: string): StoreCampaignSc
 
     // 2. Tìm khớp tương đương qua isStoreMatch
     for (const [key, cfg] of Object.entries(allConfigs)) {
-        if (key !== 'DEFAULT' && isStoreMatch(key, storeName)) {
+        if (key !== 'DEFAULT' && isStoreMatch(key, storeName, storesList)) {
             return cfg;
+        }
+    }
+
+    // 3. Tìm khớp theo Short Name (ví dụ: TGD - 290 Trương Công Định)
+    const shortTarget = getShortStoreName(storeName).toLowerCase();
+    if (shortTarget && shortTarget !== 'tổng') {
+        for (const [key, cfg] of Object.entries(allConfigs)) {
+            if (key !== 'DEFAULT' && getShortStoreName(key).toLowerCase() === shortTarget) {
+                return cfg;
+            }
         }
     }
 

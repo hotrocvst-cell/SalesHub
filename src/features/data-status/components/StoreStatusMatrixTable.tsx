@@ -206,7 +206,7 @@ export default function StoreStatusMatrixTable({ matrix, expectedDate }: StoreSt
 
                                     {/* Giờ công Nhân viên */}
                                     <td className="py-2.5 px-1.5 text-center border-r border-slate-100">
-                                        {renderStatusBadge(row.workHoursOk)}
+                                        {renderStatusBadge(row.workHoursOk, row.workHoursDate)}
                                     </td>
 
                                     {/* Mức Đạt (%) Pill Nổi Bật */}

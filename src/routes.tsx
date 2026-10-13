@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import MainLayout from './shared/components/layout/MainLayout';
 import UnauthorizedAccessView from './shared/components/layout/UnauthorizedAccessView';
 
+const ClusterReportPage = lazy(() => import('./features/cluster-report/ClusterReportPage'));
 const MonthlyReportPage = lazy(() => import('./features/monthly-report/MonthlyReportPage'));
 const DailyReportPage = lazy(() => import('./features/daily-report/DailyReportPage'));
 const DailyEmployeeRevenueReportPage = lazy(() => import('./features/daily-report/DailyEmployeeRevenueReportPage'));
@@ -13,6 +14,7 @@ const EmployeeTargetUnifiedPage = lazy(() => import('./features/employee-health/
 const CampaignConfigPage = lazy(() => import('./features/admin-config/CampaignConfigPage'));
 const StoreEmployeeConfigPage = lazy(() => import('./features/store-management/StoreEmployeeConfigPage'));
 const EmployeeCumulativePage = lazy(() => import('./features/employee-cumulative/EmployeeCumulativePage'));
+const EmployeeRankingSummaryPage = lazy(() => import('./features/employee-ranking/EmployeeRankingSummaryPage'));
 const EmployeePerformanceReportPage = lazy(() => import('./features/employee-performance/EmployeePerformanceReportPage'));
 const EmployeeDetailReportPage = lazy(() => import('./features/employee-detail/EmployeeDetailReportPage'));
 const EmployeeSessionManagerPage = lazy(() => import('./features/employee-cumulative/EmployeeSessionManagerPage'));
@@ -44,6 +46,9 @@ export function AppRoutes() {
                 <Route element={<MainLayout />}>
                     <Route path="/" element={<Navigate to="/bc-thang/tong-quan" replace />} />
 
+                    {/* Phân hệ Báo Cáo Cụm Siêu Thị (Bảng 11 Cột) */}
+                    <Route path="/bao-cao-cum-sieu-thi" element={<ClusterReportPage />} />
+
                     {/* Phân hệ BC Tháng */}
                     <Route path="/bc-thang" element={<Navigate to="/bc-thang/tong-quan" replace />} />
                     <Route path="/bc-thang/tong-quan" element={<MonthlyReportPage />} />
@@ -56,6 +61,7 @@ export function AppRoutes() {
                     {/* Báo Cáo Hiệu Quả Doanh Thu Nhân Viên & Chi Tiết */}
                     <Route path="/bao-cao-hieu-qua-nhan-vien" element={<EmployeePerformanceReportPage />} />
                     <Route path="/chi-tiet-nhan-vien" element={<EmployeeDetailReportPage />} />
+                    <Route path="/tong-hop-xep-hang-nhan-vien" element={<EmployeeRankingSummaryPage />} />
 
                     {/* Báo Cáo Tổng Hợp Thi Đua Ngành Hàng & Tiến Độ Thi Đua */}
                     <Route path="/tong-hop-thi-dua" element={<CampaignSummaryPage />} />

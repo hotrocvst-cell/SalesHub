@@ -215,10 +215,64 @@ export async function fetchBusinessRecords(month: number, year: number) {
     }
 }
 
-// 3. Đồng bộ hàng loạt bản ghi từ trang Cập Nhật vào daily_business_records
-export async function syncBatchDailyRecordsToSupabase(records: BusinessDayRecord[]) {
+// 2b. Tải bản ghi theo Ngày chốt cụ thể
+export async function fetchBusinessRecordsByDate(reportDate: string) {
+    if (!reportDate) return { success: true, data: [] as BusinessDayRecord[], count: 0 };
+    try {
+        const { data, error } = await supabase
+            .from('daily_business_records')
+            .select('*')
+            .eq('report_date', reportDate.trim());
+
+        if (error) throw error;
+        return {
+            success: true,
+            data: (data || []).map(mapDbToBusinessDayRecord),
+            count: data?.length || 0
+        };
+    } catch (err: any) {
+        console.error('Lỗi fetchBusinessRecordsByDate:', err);
+        return { success: false, data: [] as BusinessDayRecord[], count: 0, error: err.message || err };
+    }
+}
+
+// 2c. Xóa toàn bộ bản ghi theo Ngày chốt để ghi đè sạch phiên
+export async function deleteBusinessRecordsByDate(reportDate: string) {
+    if (!reportDate) return { success: true, count: 0 };
+    try {
+        const { data, error } = await supabase
+            .from('daily_business_records')
+            .delete()
+            .eq('report_date', reportDate.trim());
+
+        if (error) throw error;
+        return { success: true, data };
+    } catch (err: any) {
+        console.error('Lỗi deleteBusinessRecordsByDate:', err);
+        return { success: false, error: err.message || err };
+    }
+}
+
+// 3. Đồng bộ hàng loạt bản ghi từ trang Cập Nhật vào daily_business_records (Hỗ trợ ghi đè sạch phiên)
+export async function syncBatchDailyRecordsToSupabase(
+    records: BusinessDayRecord[],
+    options?: { overwrite?: boolean }
+) {
     if (!records || records.length === 0) return { success: true, count: 0 };
     try {
+        const targetReportDate = records[0]?.reportDate?.trim();
+
+        // Nếu bật chế độ ghi đè: xóa sạch toàn bộ bản ghi cũ của ngày chốt đó trước
+        if (options?.overwrite && targetReportDate) {
+            const { error: delError } = await supabase
+                .from('daily_business_records')
+                .delete()
+                .eq('report_date', targetReportDate);
+            if (delError) {
+                console.warn('Cảnh báo khi dọn dẹp bản ghi cũ để ghi đè:', delError);
+            }
+        }
+
         const payloads = records.map(record => ({
             store_name: record.storeName?.trim(),
             report_date: record.reportDate,
@@ -238,12 +292,19 @@ export async function syncBatchDailyRecordsToSupabase(records: BusinessDayRecord
             updated_at: new Date().toISOString()
         }));
 
-        const { data, error } = await supabase
-            .from('daily_business_records')
-            .upsert(payloads, { onConflict: 'store_name,report_date' });
+        let saveResult;
+        if (options?.overwrite) {
+            saveResult = await supabase
+                .from('daily_business_records')
+                .insert(payloads);
+        } else {
+            saveResult = await supabase
+                .from('daily_business_records')
+                .upsert(payloads, { onConflict: 'store_name,report_date' });
+        }
 
-        if (error) throw error;
-        return { success: true, data, count: payloads.length };
+        if (saveResult.error) throw saveResult.error;
+        return { success: true, data: saveResult.data, count: payloads.length };
     } catch (err: any) {
         console.error('Lỗi syncBatchDailyRecordsToSupabase:', err);
         return { success: false, count: 0, error: err.message || err };

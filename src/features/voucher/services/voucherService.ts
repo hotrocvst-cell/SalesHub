@@ -5,13 +5,22 @@ import type {
     VoucherClaimRequest,
     VoucherCampaignSummary,
     VoucherHoardingAlert,
-    DenominationStock
+    DenominationStock,
+    VoucherDistributionRule,
+    VoucherDistributionConfig
 } from '../types';
 
 const STORAGE_KEY = 'saleshub_store_vouchers_v1';
+const DISTRIBUTION_CONFIG_STORAGE_KEY = 'saleshub_voucher_distribution_config';
+
+export const DEFAULT_VOUCHER_DISTRIBUTION_CONFIG: VoucherDistributionConfig = {
+    rule_type: 'FIFO',
+    description: 'Ưu tiên cấp mã nhập kho trước, xuất kho trước (First In First Out)',
+    updated_by: 'Hệ thống'
+};
 
 export const STORE_VOUCHERS_SQL = `-- ========================================================
--- TẠO BẢNG LƯU TRỮ KHO MÃ VOUCHER TRÊN SUPABASE CLOUD
+-- 1. TẠO BẢNG LƯU TRỮ KHO MÃ VOUCHER TRÊN SUPABASE CLOUD
 -- Vui lòng chạy lệnh này trong Supabase Dashboard -> SQL Editor
 -- ========================================================
 CREATE TABLE IF NOT EXISTS public.store_vouchers (
@@ -47,7 +56,175 @@ ALTER TABLE public.store_vouchers ADD COLUMN IF NOT EXISTS description TEXT;
 CREATE INDEX IF NOT EXISTS idx_store_vouchers_store_status ON public.store_vouchers(store_name, status);
 CREATE INDEX IF NOT EXISTS idx_store_vouchers_code ON public.store_vouchers(code);
 CREATE INDEX IF NOT EXISTS idx_store_vouchers_expires ON public.store_vouchers(expires_at);
+
+-- ========================================================
+-- 2. TẠO BẢNG LƯU TRỮ CẤU HÌNH QUY TẮC CẤP PHÁT VOUCHER
+-- (FIFO: First In First Out / FEFO / LIFO)
+-- ========================================================
+CREATE TABLE IF NOT EXISTS public.store_voucher_configs (
+    config_key TEXT PRIMARY KEY,
+    rule_type TEXT NOT NULL DEFAULT 'FIFO',
+    description TEXT,
+    updated_by TEXT,
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Kích hoạt RLS & chính sách truy cập toàn quyền cho bảng store_voucher_configs
+ALTER TABLE public.store_voucher_configs ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "store_voucher_configs_all_policy" ON public.store_voucher_configs;
+CREATE POLICY "store_voucher_configs_all_policy" 
+ON public.store_voucher_configs FOR ALL USING (true) WITH CHECK (true);
+
+-- Khởi tạo mặc định quy tắc FIFO
+INSERT INTO public.store_voucher_configs (config_key, rule_type, description, updated_by)
+VALUES ('distribution_rule', 'FIFO', 'Ưu tiên cấp mã nhập kho trước, xuất kho trước (First In First Out)', 'Hệ thống')
+ON CONFLICT (config_key) DO NOTHING;
 `;
+
+/**
+ * Lấy cấu hình quy tắc phân phối voucher (Cloud-first, fallback LocalStorage)
+ * Mặc định: FIFO (First In, First Out)
+ */
+export async function getVoucherDistributionConfig(): Promise<VoucherDistributionConfig> {
+    // 1. Đọc từ LocalStorage trước
+    let localConfig: VoucherDistributionConfig = DEFAULT_VOUCHER_DISTRIBUTION_CONFIG;
+    try {
+        const raw = localStorage.getItem(DISTRIBUTION_CONFIG_STORAGE_KEY);
+        if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed && parsed.rule_type) {
+                localConfig = parsed;
+            }
+        }
+    } catch (e) {
+        console.warn('Lỗi đọc local config voucher:', e);
+    }
+
+    // 2. Thử tải cấu hình mới nhất từ Supabase Cloud
+    try {
+        const { data, error } = await supabase
+            .from('store_voucher_configs')
+            .select('*')
+            .eq('config_key', 'distribution_rule')
+            .maybeSingle();
+
+        if (!error && data && data.rule_type) {
+            const cloudConfig: VoucherDistributionConfig = {
+                rule_type: data.rule_type as VoucherDistributionRule,
+                updated_by: data.updated_by,
+                updated_at: data.updated_at,
+                description: data.description
+            };
+            try {
+                localStorage.setItem(DISTRIBUTION_CONFIG_STORAGE_KEY, JSON.stringify(cloudConfig));
+            } catch {
+                // ignore
+            }
+            return cloudConfig;
+        }
+    } catch {
+        // Fallback local
+    }
+
+    return localConfig;
+}
+
+/**
+ * Lưu cấu hình quy tắc phân phối voucher (Cloud-first upsert, sync LocalStorage)
+ */
+export async function saveVoucherDistributionConfig(
+    rule: VoucherDistributionRule,
+    updatedBy: string
+): Promise<{ success: boolean; config: VoucherDistributionConfig; error?: string }> {
+    const descriptionMap: Record<VoucherDistributionRule, string> = {
+        FIFO: 'Ưu tiên cấp mã nhập kho trước (First In First Out) - Mã cũ nạp trước được xuất trước',
+        FEFO: 'Ưu tiên cấp mã có hạn sử dụng gần nhất (First Expired First Out) - Hạn gần cấp trước',
+        LIFO: 'Ưu tiên cấp mã mới nạp gần đây nhất (Last In First Out)'
+    };
+
+    const newConfig: VoucherDistributionConfig = {
+        rule_type: rule,
+        updated_by: updatedBy,
+        updated_at: new Date().toISOString(),
+        description: descriptionMap[rule] || ''
+    };
+
+    // 1. Lưu LocalStorage trước (tốc độ 0ms)
+    try {
+        localStorage.setItem(DISTRIBUTION_CONFIG_STORAGE_KEY, JSON.stringify(newConfig));
+    } catch (e) {
+        console.warn('Lỗi lưu LocalStorage config voucher:', e);
+    }
+
+    // 2. Đồng bộ Supabase Cloud
+    try {
+        const { error } = await supabase
+            .from('store_voucher_configs')
+            .upsert({
+                config_key: 'distribution_rule',
+                rule_type: rule,
+                updated_by: updatedBy,
+                updated_at: newConfig.updated_at,
+                description: newConfig.description
+            }, { onConflict: 'config_key' });
+
+        if (error) {
+            console.warn('Lỗi upsert Supabase store_voucher_configs:', error);
+            return { success: true, config: newConfig, error: error.message };
+        }
+    } catch (e: any) {
+        console.warn('Lỗi kết nối Supabase khi lưu cấu hình:', e);
+    }
+
+    return { success: true, config: newConfig };
+}
+
+/**
+ * Sắp xếp danh sách mã voucher khả dụng theo quy tắc đã định
+ * - FIFO: Mã nạp vào kho trước (created_at cũ nhất) xếp lên đầu
+ * - FEFO: Mã có hạn sử dụng gần nhất (expires_at nhỏ nhất) xếp lên đầu
+ * - LIFO: Mã mới nạp nhất (created_at mới nhất) xếp lên đầu
+ */
+export function sortVouchersByDistributionRule(
+    vouchers: VoucherItem[],
+    rule: VoucherDistributionRule = 'FIFO'
+): VoucherItem[] {
+    return [...vouchers].sort((a, b) => {
+        if (rule === 'FIFO') {
+            // FIFO: Ưu tiên mã có created_at sớm nhất (cũ nhất)
+            const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
+            const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
+            if (timeA !== timeB) return timeA - timeB;
+
+            // Nếu cùng thời điểm nạp, ưu tiên mã có hạn sử dụng gần hơn
+            if (a.expires_at && b.expires_at) {
+                const expCmp = a.expires_at.localeCompare(b.expires_at);
+                if (expCmp !== 0) return expCmp;
+            } else if (a.expires_at || b.expires_at) {
+                return (a.expires_at ? 0 : 1) - (b.expires_at ? 0 : 1);
+            }
+            return (a.code || '').localeCompare(b.code || '');
+        } else if (rule === 'FEFO') {
+            // FEFO: Ưu tiên mã có ngày hết hạn sớm nhất
+            if (a.expires_at && b.expires_at) {
+                const expCmp = a.expires_at.localeCompare(b.expires_at);
+                if (expCmp !== 0) return expCmp;
+            } else if (a.expires_at || b.expires_at) {
+                return (a.expires_at ? 0 : 1) - (b.expires_at ? 0 : 1);
+            }
+            // Nếu cùng hạn dùng, áp dụng FIFO
+            const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
+            const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
+            return timeA - timeB;
+        } else {
+            // LIFO: Mã mới nạp nhất lên đầu
+            const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
+            const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
+            return timeB - timeA;
+        }
+    });
+}
+
 
 /**
  * Lấy ngày cuối cùng của tháng hiện tại dạng YYYY-MM-DD
@@ -450,7 +627,7 @@ export async function claimVoucher(
             const { data: cloudData, error: cloudErr } = await supabase
                 .from('store_vouchers')
                 .select('*')
-                .order('created_at', { ascending: false });
+                .order('created_at', { ascending: true }); // Thứ tự nạp tăng dần (FIFO)
 
             if (!cloudErr && cloudData && Array.isArray(cloudData)) {
                 setLocalVouchers(cloudData as VoucherItem[]);
@@ -458,6 +635,10 @@ export async function claimVoucher(
         } catch (e) {
             console.warn('Fallback local khi claim voucher:', e);
         }
+
+        // Lấy cấu hình quy tắc cấp phát hiện tại (mặc định FIFO)
+        const config = await getVoucherDistributionConfig();
+        const rule = config.rule_type || 'FIFO';
 
         const all = getLocalVouchers();
         const todayStr = new Date().toISOString().slice(0, 10);
@@ -468,21 +649,21 @@ export async function claimVoucher(
             v.status === 'AVAILABLE' &&
             isNotExpired(v);
 
-        // 1. Ưu tiên tìm mã riêng của siêu thị nhân viên đang làm việc (nếu có)
-        let index = all.findIndex(v =>
+        // 1. Tìm các ứng viên riêng của siêu thị nhân viên đang làm việc (Tier 1)
+        const tier1Candidates = all.filter(v =>
             isStoreMatch(v.store_name, req.store_name) && matchesCampaignAndDenom(v)
         );
 
-        // 2. Tìm trong danh sách siêu thị được phân quyền của Cụm (accessible_stores)
-        if (index === -1 && req.accessible_stores && req.accessible_stores.length > 0) {
-            index = all.findIndex(v =>
+        // 2. Tìm trong danh sách siêu thị được phân quyền của Cụm (Tier 2)
+        const tier2Candidates = (!tier1Candidates.length && req.accessible_stores && req.accessible_stores.length > 0)
+            ? all.filter(v =>
                 req.accessible_stores!.some(s => isStoreMatch(v.store_name, s)) && matchesCampaignAndDenom(v)
-            );
-        }
+            )
+            : [];
 
-        // 3. Tìm theo Cụm (cùng địa chỉ dùng chung hoặc cùng metadata [CỤM: ...] trong note)
-        if (index === -1) {
-            index = all.findIndex(v =>
+        // 3. Tìm theo Cụm chung (Tier 3)
+        const tier3Candidates = (!tier1Candidates.length && !tier2Candidates.length)
+            ? all.filter(v =>
                 isStoreOrClusterMatch(
                     v.store_name,
                     req.store_name,
@@ -492,18 +673,34 @@ export async function claimVoucher(
                     req.employee_name,
                     v.claimed_by_store
                 ) && matchesCampaignAndDenom(v)
-            );
-        }
+            )
+            : [];
 
-        if (index === -1) {
+        // Chọn nhóm ứng viên hợp lệ ưu tiên
+        const candidates = tier1Candidates.length > 0
+            ? tier1Candidates
+            : (tier2Candidates.length > 0 ? tier2Candidates : tier3Candidates);
+
+        if (candidates.length === 0) {
             return {
                 success: false,
                 error: `Đã hết mã voucher mệnh giá ${req.denomination.toLocaleString('vi-VN')}đ của chương trình "${req.campaign_name}" trong kho Cụm của bạn!`
             };
         }
 
+        // Áp dụng quy tắc cấp phát (Mặc định: FIFO - Nhập trước cấp trước)
+        const sortedCandidates = sortVouchersByDistributionRule(candidates, rule);
+        const target = sortedCandidates[0];
+        const index = all.findIndex(v => v.id === target.id);
+
+        if (index === -1) {
+            return {
+                success: false,
+                error: 'Không tìm thấy vị trí mã voucher khả dụng trong kho!'
+            };
+        }
+
         const now = new Date().toISOString();
-        const target = all[index];
         const updatedVoucher: VoucherItem = {
             ...target,
             status: 'CLAIMED',

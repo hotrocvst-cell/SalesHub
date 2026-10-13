@@ -7,9 +7,7 @@ import {
     formatDate
 } from '../../core/lib/formatters';
 import {
-    syncBatchDailyRecordsToSupabase,
     fetchCampaignDictionary,
-    type BusinessDayRecord,
     type CampaignDictItem
 } from '../../core/lib/storage';
 import {
@@ -17,10 +15,7 @@ import {
     Play,
     Camera,
     Copy,
-    FileText,
-    Save,
-    CheckCircle2,
-    AlertCircle
+    FileText
 } from 'lucide-react';
 
 interface CampaignItem {
@@ -66,7 +61,6 @@ export default function DailyReportPage() {
 
     // UI status
     const [toastMessage, setToastMessage] = useState<string | null>(null);
-    const [isSaving, setIsSaving] = useState<boolean>(false);
 
     const showToast = (msg: string) => {
         setToastMessage(msg);
@@ -399,53 +393,6 @@ export default function DailyReportPage() {
         }
     };
 
-    // Lưu bản ghi vào bảng daily_business_records của Supabase
-    const handleSaveToDatabase = async () => {
-        if (!currentRevenue && allData.length === 0) {
-            showToast('Chưa có dữ liệu để lưu vào hệ thống!');
-            return;
-        }
-        setIsSaving(true);
-        const todayStr = new Date().toISOString().slice(0, 10);
-        const curMonth = new Date().getMonth() + 1;
-        const curYear = new Date().getFullYear();
-
-        const emuSummary: Record<string, { target: number; actual: number; pctDK: number }> = {};
-        filteredCampaigns.forEach(c => {
-            emuSummary[c.label] = {
-                target: c.target,
-                actual: c.actual,
-                pctDK: c.pctHT
-            };
-        });
-
-        const record: BusinessDayRecord = {
-            storeName: selectedStore === 'Tổng' ? 'TỔNG CỤM' : selectedStore,
-            reportDate: todayStr,
-            month: curMonth,
-            year: curYear,
-            passedDays: new Date().getDate(),
-            totalDays: 30,
-            revenueActual: currentRevenue ? currentRevenue.rev : 0,
-            revenueTarget: currentRevenue ? currentRevenue.target : 0,
-            revenueInstallment: currentRevenue ? currentRevenue.dtTraGop : 0,
-            installmentRate: currentRevenue ? currentRevenue.pctTraGop : 0,
-            forecastCompletionRate: currentRevenue && currentRevenue.target > 0 ? (currentRevenue.rev / currentRevenue.target * 100) : 0,
-            emulationSummary: emuSummary,
-            rawEmulation: emulationText,
-            rawRevenue: revenueText,
-            dataType: 'realtime'
-        };
-
-        const res = await syncBatchDailyRecordsToSupabase([record]);
-        setIsSaving(false);
-        if (res.success) {
-            showToast('Đã lưu số liệu realtime này lên Supabase!');
-        } else {
-            showToast('Có lỗi xảy ra khi lưu vào database!');
-        }
-    };
-
     return (
         <div className="p-3 sm:p-6 max-w-5xl mx-auto space-y-4">
             {/* Toast popup */}
@@ -470,17 +417,6 @@ export default function DailyReportPage() {
                         </p>
                     </div>
                 </div>
-
-                {allData.length > 0 && (
-                    <button
-                        onClick={handleSaveToDatabase}
-                        disabled={isSaving}
-                        className="px-3.5 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50"
-                    >
-                        <Save className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>{isSaving ? 'ĐANG LƯU...' : 'LƯU DATABASE'}</span>
-                    </button>
-                )}
             </div>
 
             {/* KHU VỰC DÁN DỮ LIỆU INPUT */}

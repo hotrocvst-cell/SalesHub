@@ -91,6 +91,23 @@ export default function ProtectedRoute({ path, children }: Props) {
         );
     }
 
+    // 5b. Nếu tính năng này chưa được kích hoạt cho siêu thị của người dùng (phân quyền theo siêu thị / gói chi nhánh)
+    if (!access.storeAllowed) {
+        const pageName = access.page?.page_name || 'Phân hệ này';
+        const userStore = currentUser?.store_name || 'Chưa gán siêu thị';
+        return (
+            <UnauthorizedAccessView
+                title="Tính Năng Chưa Kích Hoạt Cho Siêu Thị"
+                badgeText="Giới Hạn Theo Siêu Thị / Chi Nhánh"
+                pageName={pageName}
+                path={path}
+                message={`Tính năng [${pageName}] hiện chưa được mở quyền sử dụng cho đơn vị [${userStore}]. Vui lòng liên hệ Quản trị viên (Admin) để kích hoạt gói tính năng này cho siêu thị.`}
+                countdownSeconds={5}
+                homePath="/"
+            />
+        );
+    }
+
     // 6. Đầy đủ quyền truy cập
     return <>{children}</>;
 }

@@ -1,8 +1,7 @@
 import { useEffect } from 'react';
 import ClockWidget from './components/ClockWidget';
-import WeatherWidget from './components/WeatherWidget';
+import WeatherAndQuoteWidget from './components/WeatherAndQuoteWidget';
 import CalendarWidget from './components/CalendarWidget';
-import MonthProgressWidget from './components/MonthProgressWidget';
 import QuickNavigationGrid from './components/QuickNavigationGrid';
 
 export default function HomePage() {
@@ -15,17 +14,10 @@ export default function HomePage() {
             {/* 1. Hero Clock & Lời chào người dùng thời gian thực */}
             <ClockWidget />
 
-            {/* 2. Hàng Thời Tiết & Đếm Ngược Tiến Độ Tháng */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-                <div className="lg:col-span-4 flex flex-col">
-                    <WeatherWidget />
-                </div>
-                <div className="lg:col-span-8 flex flex-col justify-between">
-                    <MonthProgressWidget />
-                </div>
-            </div>
+            {/* 2. Thẻ Thời Tiết Thời Gian Thực (GPS Vị Trí) & Quote Động Lực Mỗi Ngày */}
+            <WeatherAndQuoteWidget />
 
-            {/* 3. Lịch Tháng Toàn Diện (Tất Cả Các Ngày Trong Tháng, Chuyển Tháng, Âm Lịch & Ghi Chú) */}
+            {/* 3. Phân Hệ Tiến Độ & Đếm Ngược + Việc Cần Làm Trong Ngày & Lịch Tháng (2 cột trên PC, ưu tiên To-Do trên mobile) */}
             <CalendarWidget />
 
             {/* 4. Lối Tắt Nhanh Đến Các Phân Hệ Báo Cáo & Quản Trị */}

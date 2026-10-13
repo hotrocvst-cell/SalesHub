@@ -82,3 +82,11 @@ export interface VoucherFilterOptions {
     searchQuery?: string;
 }
 
+export type VoucherDistributionRule = 'FIFO' | 'FEFO' | 'LIFO';
+
+export interface VoucherDistributionConfig {
+    rule_type: VoucherDistributionRule;
+    updated_by?: string;
+    updated_at?: string;
+    description?: string;
+}
