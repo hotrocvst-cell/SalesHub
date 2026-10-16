@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import html2canvas from 'html2canvas';
+import { calculate8KScale } from '../../shared/utils/exportImage';
 import {
     fetchBusinessRecords,
     fetchAllBusinessRecords,
@@ -72,11 +73,15 @@ import {
 import {
     fetchClusterTargetConfigs,
     fetchClusterTargetConfigPackage,
-    fetchClusterAssessment
+    fetchClusterAssessment,
+    saveClusterAssessment
 } from './services/clusterTargetService';
+import { extractStoreRevenueDetails, extractStoreRevenueDetailsWithReal } from './utils/revenueExtractor';
 import ClusterTargetConfigModal from './components/ClusterTargetConfigModal';
 import ClusterAssessmentModal from './components/ClusterAssessmentModal';
 import ReportDataFreshnessBar from '../../shared/components/report/ReportDataFreshnessBar';
+import ReportActionButtons from '../../shared/components/report/ReportActionButtons';
+import type { AssessmentTemplate } from '../../shared/components/report/ReportAssessmentModal';
 import {
     Store,
     Target,
@@ -222,30 +227,60 @@ export default function ClusterReportPage() {
             const totalDays = (rec.totalDays && rec.totalDays > 0) ? rec.totalDays : daysInMonth;
             const remainingDays = Math.max(1, totalDays - passedDays);
 
-            // DT Thực (L. KẾ)
-            const revActual = Number(rec.revenueActual) || 0;
+            // Bóc tách chi tiết Doanh thu Quy đổi (DTQĐ) và Doanh thu Thực (DT Thực) từ rawRevenue
+            const extracted = extractStoreRevenueDetailsWithReal(rec.rawRevenue, storeName);
 
-            // Bóc tách L. KẾ QĐ: cố gắng lấy DT quy đổi từ rawRevenue nếu có, ngược lại dùng công thức tỷ lệ
-            let revQd = revActual;
-            if (rec.rawRevenue) {
-                const parts = rec.rawRevenue.split(/\t|\s{2,}/).map(x => x.trim()).filter(Boolean);
-                if (parts.length >= 4) {
-                    const parsedQd = parseFloat(String(parts[1] || '0').replace(/,/g, ''));
-                    if (!isNaN(parsedQd) && parsedQd > 0) {
-                        revQd = parsedQd;
-                    }
-                }
+            // DT Thực (L. KẾ) & DTQĐ (L. KẾ)
+            let revActual = 0;
+            let revQd = 0;
+
+            if (extracted && extracted.revenueQd > 0 && extracted.revenueActual > 0) {
+                revQd = extracted.revenueQd;
+                revActual = extracted.revenueActual;
+            } else if (extracted && extracted.revenueQd > 0) {
+                revQd = extracted.revenueQd;
+                revActual = extracted.revenueActual || revQd;
+            } else {
+                // Fallback nếu không bóc tách được từ rawRevenue
+                const storedVal = Number(rec.revenueActual) || 0;
+                revQd = storedVal;
+                revActual = storedVal;
             }
 
-            // Nếu revQd vẫn bằng revActual và có cấu hình hoặc tỷ lệ quy đổi thông thường (~37%)
-            if (revQd === revActual && revActual > 0) {
-                revQd = Number((revActual * 1.3724).toFixed(3));
-            }
-
-            // Target Gốc (Base Target)
-            const baseTarget = cfg?.baseTarget && cfg.baseTarget > 0
+            // Target Gốc (Base Target): Ưu tiên cấu hình -> parsed Target -> rec.revenueTarget -> revQd
+            const baseTarget = (cfg?.baseTarget && cfg.baseTarget > 0)
                 ? cfg.baseTarget
-                : (rec.revenueTarget > 0 ? rec.revenueTarget : (revActual * 1.3 || 4.5));
+                : ((extracted?.revenueTarget && extracted.revenueTarget > 0)
+                    ? extracted.revenueTarget
+                    : (rec.revenueTarget > 0 ? rec.revenueTarget : revQd));
+
+            // DT Trả góp & Tỷ lệ trả góp (%TG = DT Trả góp / DT Thực)
+            const revInstallment = (extracted?.installmentRevenue !== undefined && extracted.installmentRevenue > 0)
+                ? extracted.installmentRevenue
+                : (Number(rec.revenueInstallment) || 0);
+
+            // Kiểm tra xem siêu thị này có % Trả góp hay không
+            let installmentRate = 0;
+            let hasInstallmentRate = false;
+
+            if (extracted?.installmentRate !== undefined) {
+                // Ưu tiên 1: Lấy từ extracted (đã tính theo DT thực nếu có 2 bảng, hoặc từ cột 9 mẫu cũ)
+                installmentRate = extracted.installmentRate;
+                hasInstallmentRate = true;
+            } else if ((rec.emulationSummary as any)?.['__real_revenue']) {
+                // Ưu tiên 2: Lấy từ __real_revenue đã lưu trong emulationSummary
+                const realInfo = (rec.emulationSummary as any)['__real_revenue'];
+                const rReal = realInfo.revenueReal || realInfo.revenueActual || 0;
+                const rInst = realInfo.installmentReal !== undefined ? realInfo.installmentReal : realInfo.installmentRevenue;
+                if (rReal > 0 && rInst !== undefined) {
+                    installmentRate = Number(((rInst / rReal) * 100).toFixed(2));
+                    hasInstallmentRate = true;
+                }
+            } else if (!rec.rawRevenue && Number(rec.installmentRate) > 0) {
+                // Ưu tiên 3: Phiên lưu trước đây không lưu rawRevenue nhưng có installmentRate
+                installmentRate = Number(rec.installmentRate);
+                hasInstallmentRate = true;
+            }
 
             // === BẢNG 1: DỮ LIỆU CHUẨN CỦA HỆ THỐNG ===
             const pctHtStandard = baseTarget > 0 ? (revQd / baseTarget) * 100 : 0;
@@ -253,8 +288,6 @@ export default function ClusterReportPage() {
             const forecastRevenueQd = passedDays > 0 ? (revQd / passedDays) * totalDays : revQd;
             const pctDkhtStandard = baseTarget > 0 ? (forecastRevenueQd / baseTarget) * 100 : 0;
             const pctQd = revActual > 0 ? ((revQd - revActual) / revActual) * 100 : 0;
-            const revInstallment = Number(rec.revenueInstallment) || 0;
-            const installmentRate = revActual > 0 ? (revInstallment / revActual) * 100 : (Number(rec.installmentRate) || 0);
 
             // === BẢNG 2: MỤC TIÊU VƯỢT TRỘI ===
             const targetRate = cfg?.targetRate && cfg.targetRate > 0
@@ -277,9 +310,11 @@ export default function ClusterReportPage() {
                 : 0;
 
             // TB 3 Tháng & Tăng trưởng
-            const avg3Months = cfg?.avg3Months && cfg.avg3Months > 0
+            const avg3Months = (cfg?.avg3Months && cfg.avg3Months > 0)
                 ? cfg.avg3Months
-                : (rec.revenueTarget > 0 ? rec.revenueTarget * 0.9 : (revActual * 1.05 || 2.100));
+                : ((extracted?.avg3Months && extracted.avg3Months > 0)
+                    ? extracted.avg3Months
+                    : (rec.revenueTarget > 0 ? rec.revenueTarget * 0.9 : revQd * 0.95));
             const pctGrowth = avg3Months > 0 ? ((forecastRevenueQd - avg3Months) / avg3Months) * 100 : 0;
 
             rows.push({
@@ -299,6 +334,7 @@ export default function ClusterReportPage() {
                 pctQd,
                 revenueInstallment: revInstallment,
                 installmentRate,
+                hasInstallmentRate,
 
                 // Bảng 2
                 targetRate,
@@ -342,6 +378,7 @@ export default function ClusterReportPage() {
                 avgPctQd: 0,
                 totalRevenueInstallment: 0,
                 avgInstallmentRate: 0,
+                hasInstallmentRate: false,
 
                 avgTargetRate: globalPaceRate || 100,
                 totalTargetOver: 0,
@@ -356,6 +393,7 @@ export default function ClusterReportPage() {
             };
         }
 
+        const hasInstallmentRate = clusterRows.some(r => r.hasInstallmentRate);
         const totalRevenueActual = clusterRows.reduce((sum, r) => sum + r.revenueActual, 0);
         const totalRevenueQd = clusterRows.reduce((sum, r) => sum + r.revenueQd, 0);
         const totalBaseTarget = clusterRows.reduce((sum, r) => sum + r.baseTarget, 0);
@@ -365,7 +403,9 @@ export default function ClusterReportPage() {
         const avgPctDkhtStandard = totalBaseTarget > 0 ? (totalForecastRevenueQd / totalBaseTarget) * 100 : 0;
         const avgPctQd = totalRevenueActual > 0 ? ((totalRevenueQd - totalRevenueActual) / totalRevenueActual) * 100 : 0;
         const totalRevenueInstallment = clusterRows.reduce((sum, r) => sum + r.revenueInstallment, 0);
-        const avgInstallmentRate = totalRevenueActual > 0 ? (totalRevenueInstallment / totalRevenueActual) * 100 : 0;
+        const avgInstallmentRate = (hasInstallmentRate && totalRevenueActual > 0)
+            ? (totalRevenueInstallment / totalRevenueActual) * 100
+            : 0;
 
         const totalTargetOver = clusterRows.reduce((sum, r) => sum + r.targetOver, 0);
         const avgTargetRate = totalBaseTarget > 0 ? (totalTargetOver / totalBaseTarget) * 100 : globalPaceRate;
@@ -388,6 +428,7 @@ export default function ClusterReportPage() {
             avgPctQd,
             totalRevenueInstallment,
             avgInstallmentRate,
+            hasInstallmentRate,
 
             avgTargetRate,
             totalTargetOver,
@@ -425,14 +466,15 @@ export default function ClusterReportPage() {
         return Math.round(val).toLocaleString('vi-VN');
     };
 
-    // 5. Chụp ảnh báo cáo (TUYỆT ĐỐI KHÔNG CHÈN FOOTER WATERMARK, CHUẨN FONT UTM-AVO)
+    // 5. Chụp ảnh báo cáo 8K (TUYỆT ĐỐI KHÔNG CHÈN FOOTER WATERMARK, CHUẨN FONT UTM-AVO)
     const handleCaptureReport = async (action: 'DOWNLOAD' | 'COPY') => {
         if (!reportCaptureRef.current) return;
         setIsExportingImg(true);
 
         try {
+            const scale = calculate8KScale(reportCaptureRef.current, 960);
             const canvas = await html2canvas(reportCaptureRef.current, {
-                scale: 2,
+                scale: scale,
                 useCORS: true,
                 backgroundColor: '#ffffff',
                 logging: false,
@@ -481,7 +523,7 @@ export default function ClusterReportPage() {
                             await navigator.clipboard.write([
                                 new ClipboardItem({ 'image/png': blob })
                             ]);
-                            showToast('📋 Đã sao chép ảnh báo cáo cụm vào bộ nhớ tạm!');
+                            showToast('📋 Đã sao chép ảnh báo cáo 8K cụm vào bộ nhớ tạm!');
                         } catch {
                             // Fallback tải file nếu trình duyệt không hỗ trợ clipboard item
                             downloadCanvas(canvas);
@@ -501,11 +543,62 @@ export default function ClusterReportPage() {
 
     const downloadCanvas = (canvas: HTMLCanvasElement) => {
         const link = document.createElement('a');
-        link.download = `Bao_Cao_Cum_Sieu_Thi_${effectiveDate || `Thang_${selectedMonth}`}.png`;
+        link.download = `Bao_Cao_Cum_Sieu_Thi_${effectiveDate || `Thang_${selectedMonth}`}_8K.png`;
         link.href = canvas.toDataURL('image/png');
         link.click();
-        showToast('💾 Đã tải ảnh báo cáo cụm về thiết bị thành công!');
+        showToast('💾 Đã tải ảnh báo cáo 8K về thiết bị thành công!');
     };
+
+    // 6. Cấu hình 3 mẫu nhận xét tạo sẵn cho Cụm Siêu Thị
+    const clusterAssessmentTemplates = useMemo<AssessmentTemplate[]>(() => {
+        if (clusterRows.length === 0) return [];
+        const topPctHt = [...clusterRows].sort((a, b) => b.pctHtOver - a.pctHtOver)[0];
+        const lowPctHt = [...clusterRows].sort((a, b) => a.pctHtOver - b.pctHtOver)[0];
+
+        // Mẫu 1: Tổng quan súc tích
+        const t1Lines: string[] = [
+            `📊 ĐÁNH GIÁ SỨC KHỎE CỤM T${selectedMonth}/${selectedYear}:`,
+            `• DTQĐ: ${clusterSummary.totalRevenueQd.toFixed(3)} tỷ (+${clusterSummary.avgPctQd.toFixed(1)}% QĐ) • %HT: ${clusterSummary.avgPctHtOver.toFixed(1)}%${clusterSummary.hasInstallmentRate ? ` • Trả góp: ${clusterSummary.avgInstallmentRate.toFixed(1)}%` : ''}.`,
+            topPctHt ? `🌟 Dẫn đầu: [${getShortStoreName(topPctHt.storeName)}] đạt ${topPctHt.pctHtOver.toFixed(1)}% target vượt trội.` : '',
+            lowPctHt && lowPctHt.pctHtOver < 100 ? `🚨 Tăng tốc: [${getShortStoreName(lowPctHt.storeName)}] đạt ${lowPctHt.pctHtOver.toFixed(1)}%, tập trung dồn lực ca tối${clusterSummary.hasInstallmentRate ? ' & trả chậm' : ''}.` : '',
+            `🎯 Toàn cụm bám sát nhịp ca để cán đích thắng lợi!`
+        ].filter(Boolean);
+
+        // Mẫu 2: Phân loại & Trọng tâm
+        const reached = clusterRows.filter(r => r.pctHtOver >= 100);
+        const near = clusterRows.filter(r => r.pctHtOver >= 80 && r.pctHtOver < 100);
+        const alertGroup = clusterRows.filter(r => r.pctHtOver < 80);
+
+        const t2Lines: string[] = [
+            `📊 PHÂN LOẠI TIẾN ĐỘ CỤM T${selectedMonth}/${selectedYear}:`,
+            `• Tổng DTQĐ: ${clusterSummary.totalRevenueQd.toFixed(3)} tỷ • %HT Vượt Trội: ${clusterSummary.avgPctHtOver.toFixed(1)}%`,
+            `\n🌟 NHÓM VƯỢT TRỘI / ĐẠT CHUẨN (${reached.length}/${clusterRows.length} shop):`,
+            reached.length > 0 ? reached.map(r => `- ${getShortStoreName(r.storeName)}: ${r.pctHtOver.toFixed(1)}% (${r.revenueQd.toFixed(3)} tỷ)`).join('\n') : '- Chưa có shop nào đạt 100%',
+            `\n⚡ NHÓM CẬN ĐÍCH (>80%): ${near.length} shop`,
+            near.length > 0 ? near.map(r => `- ${getShortStoreName(r.storeName)}: ${r.pctHtOver.toFixed(1)}% (Thiếu ${r.targetRemainingOver.toFixed(0)}tr)`).join('\n') : '- Không có',
+            `\n🚨 NHÓM CẦN BỨT PHÁ (<80%): ${alertGroup.length} shop`,
+            alertGroup.length > 0 ? alertGroup.map(r => `- ${getShortStoreName(r.storeName)}: ${r.pctHtOver.toFixed(1)}% (Cần ${r.targetDailyRemainingOver.toFixed(0)}tr/ngày)`).join('\n') : '- Không có',
+            `\n🔥 Toàn cụm dồn lực giờ vàng ca tối!`
+        ];
+
+        // Mẫu 3: Chi tiết & Hướng dẫn hành động
+        const t3Lines: string[] = [
+            `📋 HƯỚNG DẪN HÀNH ĐỘNG CỤM T${selectedMonth}/${selectedYear}:`,
+            `1. THỰC TRẠNG: Toàn cụm đạt ${clusterSummary.avgPctHtOver.toFixed(1)}% target vượt trội. Target mỗi ngày còn lại cần ${clusterSummary.totalTargetDailyRemainingOver.toFixed(0)} triệu/ngày.`,
+            `2. ĐIỂM SÁNG: ${topPctHt ? `[${getShortStoreName(topPctHt.storeName)}] dẫn đầu với ${topPctHt.pctHtOver.toFixed(1)}%` : 'Duy trì nhịp bán hàng tốt'}.`,
+            `3. GIẢI PHÁP HÀNH ĐỘNG THỰC CHIẾN:`,
+            `• Nhịp ca: Bám sát target từng ca, không để dồn số về cuối ngày.`,
+            `• Cơ cấu doanh thu: Tối ưu triệt để DTQĐ các ngành hàng trọng điểm${clusterSummary.hasInstallmentRate ? ` và nâng tỷ lệ trả chậm >${clusterSummary.avgInstallmentRate > 30 ? clusterSummary.avgInstallmentRate.toFixed(0) : '35'}%` : ''}.`,
+            `• Quản lý siêu thị: Trực tiếp bám sàn trong khung giờ vàng 18h-21h30 để chốt đơn và hỗ trợ nhân viên.`,
+            `💪 Quyết tâm 100% siêu thị trong cụm cán đích!`
+        ];
+
+        return [
+            { id: 1, title: 'Mẫu 1: Tổng quan', badge: 'Súc tích', content: t1Lines.join('\n'), description: 'Đánh giá nhanh 3-4 dòng gửi nhóm Zalo cụm' },
+            { id: 2, title: 'Mẫu 2: Trọng tâm', badge: 'Phân loại', content: t2Lines.join('\n'), description: 'Phân loại nhóm đạt, cận đích và nhóm cần tăng tốc' },
+            { id: 3, title: 'Mẫu 3: Chi tiết', badge: 'Hành động', content: t3Lines.join('\n'), description: 'Hướng dẫn giải pháp thực chiến ca tối & trả chậm' }
+        ];
+    }, [clusterRows, clusterSummary, selectedMonth, selectedYear]);
 
     return (
         <div
@@ -562,52 +655,30 @@ export default function ClusterReportPage() {
                         <span>CẤU HÌNH TARGET</span>
                     </button>
 
-                    {/* Nút Nhận xét & Toggle Hiển thị */}
-                    <div className="flex items-center rounded-2xl border border-blue-200 bg-blue-50/80 shadow-2xs overflow-hidden">
-                        <button
-                            type="button"
-                            onClick={() => setIsAssessmentModalOpen(true)}
-                            className="px-3.5 py-2 hover:bg-blue-100 text-blue-900 text-xs font-black flex items-center gap-1.5 transition cursor-pointer"
-                            title="Mở bảng soạn Nhận xét và Hướng dẫn hành động cụm"
-                        >
-                            <MessageSquare className="w-4 h-4 text-blue-600" />
-                            <span>NHẬN XÉT</span>
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setShowAssessment(prev => !prev)}
-                            className={`px-2.5 py-2 border-l border-blue-200 hover:bg-blue-200/70 transition cursor-pointer flex items-center gap-1 text-[11px] font-black ${
-                                showAssessment ? 'bg-blue-600 text-white hover:bg-blue-700' : 'text-slate-600 hover:text-slate-900'
-                            }`}
-                            title={showAssessment ? 'Đang BẬT hiển thị nhận xét trên báo cáo & ảnh xuất' : 'Đang ẨN nhận xét khỏi báo cáo (mặc định)'}
-                        >
-                            {showAssessment ? <Eye className="w-3.5 h-3.5 text-white" /> : <EyeOff className="w-3.5 h-3.5 text-slate-500" />}
-                            <span>{showAssessment ? 'HIỆN' : 'ẨN'}</span>
-                        </button>
-                    </div>
-
-                    {/* Nút Chụp ảnh báo cáo */}
-                    <div className="flex items-center rounded-2xl shadow-sm overflow-hidden bg-emerald-600 text-white">
-                        <button
-                            type="button"
-                            onClick={() => handleCaptureReport('DOWNLOAD')}
-                            disabled={isExportingImg}
-                            className="px-3.5 py-2 hover:bg-emerald-700 text-xs font-black flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50"
-                            title="Tải ảnh báo cáo cụm về máy (chuẩn màn hình dọc smartphone)"
-                        >
-                            <Camera className="w-4 h-4" />
-                            <span>{isExportingImg ? 'ĐANG XUẤT ẢNH...' : 'XUẤT ẢNH'}</span>
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => handleCaptureReport('COPY')}
-                            disabled={isExportingImg}
-                            className="p-2 border-l border-emerald-500 hover:bg-emerald-700 transition cursor-pointer disabled:opacity-50"
-                            title="Sao chép ảnh vào Clipboard để dán nhanh vào Messaging App"
-                        >
-                            <Copy className="w-3.5 h-3.5" />
-                        </button>
-                    </div>
+                    {/* MẪU BUTTON CHUNG DÙNG CHO TOÀN BỘ PROJECT (XUẤT ẢNH, COPY ẢNH, NHẬN XÉT 1-3 MẪU) */}
+                    <ReportActionButtons
+                        onExportImage={() => handleCaptureReport('DOWNLOAD')}
+                        onCopyImage={() => handleCaptureReport('COPY')}
+                        isExporting={isExportingImg}
+                        hasAssessment={true}
+                        hasAssessmentToggle={true}
+                        showAssessmentOnReport={showAssessment}
+                        onToggleShowAssessment={setShowAssessment}
+                        assessmentTemplates={clusterAssessmentTemplates}
+                        currentComment={assessmentData?.comment}
+                        onSaveComment={async (comment, showOnReport) => {
+                            await saveClusterAssessment({
+                                month: selectedMonth,
+                                year: selectedYear,
+                                comment
+                            });
+                            setShowAssessment(showOnReport);
+                            loadAllData();
+                            showToast('✅ Đã lưu nhận xét thành công!');
+                        }}
+                        reportTitle={`Báo Cáo Sức Khỏe Cụm T${selectedMonth}/${selectedYear}`}
+                        periodLabel={`Tháng ${selectedMonth}/${selectedYear}`}
+                    />
                 </div>
             </div>
 
@@ -728,13 +799,13 @@ export default function ClusterReportPage() {
                 </div>
             </div>
 
-            {/* KHỐI 3 THẺ CHỈ SỐ SỨC KHỎE CỐT LÕI (KEY KPI CARDS - BỎ TB 3 THÁNG, DTQĐ LÀM TRỌNG TÂM, CÂN XỨNG VỚI BẢNG) */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+            {/* KHỐI THẺ CHỈ SỐ SỨC KHỎE CỐT LÕI (TỰ ĐỘNG CO DÃN 2 HOẶC 3 CỘT NẾU CÓ HOẶC KHÔNG CÓ % TRẢ GÓP) */}
+            <div className={`grid grid-cols-1 ${clusterSummary.hasInstallmentRate ? 'sm:grid-cols-3' : 'sm:grid-cols-2'} gap-3.5`}>
                 {/* THẺ 1: TỔNG DTQĐ LŨY KẾ CỤM (LẤY DTQĐ LÀM TRỌNG TÂM) */}
                 <div className="bg-white p-4 rounded-2xl border border-indigo-100 shadow-2xs border-l-4 border-l-indigo-600 flex items-center justify-between">
                     <div className="min-w-0">
                         <div className="text-[10.5px] font-bold text-indigo-700 uppercase tracking-wider truncate">
-                            Tổng DTQĐ Lũy Kế Cụm
+                            Tổng DTQĐ Cụm
                         </div>
                         <div className="text-xl sm:text-2xl font-black text-indigo-950 mt-0.5 tracking-tight font-avo">
                             {formatNumberVal(clusterSummary.totalRevenueQd)}{' '}
@@ -772,23 +843,25 @@ export default function ClusterReportPage() {
                     </div>
                 </div>
 
-                {/* THẺ 3: TỶ TRỌNG TRẢ GÓP */}
-                <div className="bg-white p-4 rounded-2xl border border-purple-100 shadow-2xs border-l-4 border-l-purple-500 flex items-center justify-between">
-                    <div className="min-w-0">
-                        <div className="text-[10.5px] font-bold text-purple-800 uppercase tracking-wider truncate">
-                            Tỷ Trọng Trả Góp
+                {/* THẺ 3: TỶ TRỌNG TRẢ GÓP (CHỈ HIỂN THỊ KHI CÓ DỮ LIỆU % TRẢ GÓP) */}
+                {clusterSummary.hasInstallmentRate && (
+                    <div className="bg-white p-4 rounded-2xl border border-purple-100 shadow-2xs border-l-4 border-l-purple-500 flex items-center justify-between animate-in fade-in">
+                        <div className="min-w-0">
+                            <div className="text-[10.5px] font-bold text-purple-800 uppercase tracking-wider truncate">
+                                Tỷ Trọng Trả Góp
+                            </div>
+                            <div className="text-xl sm:text-2xl font-black text-purple-950 mt-0.5 tracking-tight font-avo">
+                                {clusterSummary.avgInstallmentRate.toFixed(1)}%
+                            </div>
+                            <div className="text-[10.5px] text-slate-500 font-medium mt-0.5 truncate">
+                                DT Góp: <b className="text-slate-700 font-bold">{formatInstallmentVal(clusterSummary.totalRevenueInstallment)} tr</b>
+                            </div>
                         </div>
-                        <div className="text-xl sm:text-2xl font-black text-purple-950 mt-0.5 tracking-tight font-avo">
-                            {clusterSummary.avgInstallmentRate.toFixed(1)}%
-                        </div>
-                        <div className="text-[10.5px] text-slate-500 font-medium mt-0.5 truncate">
-                            DT Góp: <b className="text-slate-700 font-bold">{formatInstallmentVal(clusterSummary.totalRevenueInstallment)} tr</b>
+                        <div className="w-11 h-11 rounded-2xl bg-purple-50 border border-purple-100 flex items-center justify-center text-purple-600 shrink-0 shadow-2xs">
+                            <Award className="w-5 h-5 stroke-[2.2]" />
                         </div>
                     </div>
-                    <div className="w-11 h-11 rounded-2xl bg-purple-50 border border-purple-100 flex items-center justify-center text-purple-600 shrink-0 shadow-2xs">
-                        <Award className="w-5 h-5 stroke-[2.2]" />
-                    </div>
-                </div>
+                )}
             </div>
 
             {/* VÙNG XUẤT ẢNH BÁO CÁO (CHỤP CANVAS GỬI MESSAGING APP) */}
@@ -838,7 +911,7 @@ export default function ClusterReportPage() {
 
                         <div className="flex items-center gap-2 self-start sm:self-auto">
                             <span className="bg-white/10 px-3 py-1.5 rounded-xl text-xs font-black border border-white/15 text-amber-300">
-                                ⚡ Target: {globalPaceRate}%
+                                ⚡ TARGET VÙNG: {globalPaceRate}%
                             </span>
                             <span className="bg-white/10 px-2.5 py-1.5 rounded-xl text-xs font-bold border border-white/10 text-slate-300">
                                 {displayUnit === 'BILLION' ? 'Đơn vị: Tỷ' : 'Đơn vị: Triệu'}
@@ -898,14 +971,14 @@ export default function ClusterReportPage() {
                                                 DỰ KIẾN THÁNG
                                             </th>
                                             <th
-                                                colSpan={2}
+                                                colSpan={clusterSummary.hasInstallmentRate ? 2 : 1}
                                                 className="py-2 px-2 bg-purple-700 text-white text-center"
                                             >
                                                 TRẢ GÓP
                                             </th>
                                         </tr>
 
-                                        {/* Hàng 2: Chi tiết 11 cột */}
+                                        {/* Hàng 2: Chi tiết 11 cột (hoặc 10 cột nếu không có %TG) */}
                                         <tr className="text-[9.5px] sm:text-[10px] font-black uppercase tracking-tight border-b border-slate-200">
                                             {/* Nhóm Lũy kế doanh thu (3 cột) */}
                                             <th className="py-2 px-1.5 text-center bg-blue-50 text-blue-900 border-r border-blue-100 w-18">
@@ -937,20 +1010,22 @@ export default function ClusterReportPage() {
                                                 %DKHT
                                             </th>
 
-                                            {/* Trả góp (2 cột) */}
-                                            <th className="py-2 px-1.5 text-center bg-purple-50 text-purple-900 border-r border-purple-100 w-18">
+                                            {/* Trả góp */}
+                                            <th className={`py-2 px-1.5 text-center bg-purple-50 text-purple-900 ${clusterSummary.hasInstallmentRate ? 'border-r border-purple-100' : ''} w-18`}>
                                                 DT GÓP
                                             </th>
-                                            <th className="py-2 px-1 text-center bg-purple-50 text-purple-900 w-14">
-                                                %TG
-                                            </th>
+                                            {clusterSummary.hasInstallmentRate && (
+                                                <th className="py-2 px-1 text-center bg-purple-50 text-purple-900 w-14">
+                                                    %TG
+                                                </th>
+                                            )}
                                         </tr>
                                     </thead>
 
                                     <tbody className="divide-y divide-slate-100 font-bold text-slate-800 text-[11px] sm:text-xs">
                                         {clusterRows.length === 0 ? (
                                             <tr>
-                                                <td colSpan={11} className="py-8 text-center text-slate-400 italic">
+                                                <td colSpan={clusterSummary.hasInstallmentRate ? 11 : 10} className="py-8 text-center text-slate-400 italic">
                                                     Chưa có dữ liệu kinh doanh của kỳ báo cáo này. Vui lòng nạp số liệu tại phân hệ "Cập nhật số liệu LK".
                                                 </td>
                                             </tr>
@@ -979,22 +1054,22 @@ export default function ClusterReportPage() {
                                                         </td>
 
                                                         {/* 2. DT THỰC */}
-                                                        <td className="py-2.5 px-2 text-right font-black border-r border-slate-100 text-slate-900">
+                                                        <td className="py-2.5 px-2 text-center font-black border-r border-slate-100 text-slate-900">
                                                             {formatNumberVal(row.revenueActual)}
                                                         </td>
 
                                                         {/* 3. %QĐ (Vị trí thứ 2 trong nhóm Lũy kế doanh thu) */}
                                                         <td className="py-2.5 px-1.5 text-center font-black text-emerald-700 border-r border-slate-100">
-                                                            {row.pctQd.toFixed(1)}%
+                                                            {row.pctQd >= 0 ? '+' : ''}{row.pctQd.toFixed(1)}%
                                                         </td>
 
                                                         {/* 4. LŨY KẾ DTQĐ */}
-                                                        <td className="py-2.5 px-2 text-right font-black text-blue-700 border-r border-slate-100">
+                                                        <td className="py-2.5 px-2 text-center font-black text-blue-700 border-r border-slate-100">
                                                             {formatNumberVal(row.revenueQd)}
                                                         </td>
 
                                                         {/* 5. TARGET */}
-                                                        <td className="py-2.5 px-2 text-right font-black border-r border-slate-100 text-slate-900">
+                                                        <td className="py-2.5 px-2 text-center font-black border-r border-slate-100 text-slate-900">
                                                             {formatNumberVal(row.baseTarget)}
                                                         </td>
 
@@ -1009,12 +1084,12 @@ export default function ClusterReportPage() {
                                                         </td>
 
                                                         {/* 7. TARGET CÒN LẠI */}
-                                                        <td className="py-2.5 px-2 text-right font-black border-r border-slate-100 text-slate-700">
+                                                        <td className="py-2.5 px-2 text-center font-black border-r border-slate-100 text-slate-700">
                                                             {formatNumberVal(row.targetRemainingStandard)}
                                                         </td>
 
                                                         {/* 8. DTQĐ DỰ KIẾN */}
-                                                        <td className="py-2.5 px-2 text-right font-black text-indigo-700 border-r border-slate-100">
+                                                        <td className="py-2.5 px-2 text-center font-black text-indigo-700 border-r border-slate-100">
                                                             {formatNumberVal(row.forecastRevenueQd)}
                                                         </td>
 
@@ -1029,14 +1104,16 @@ export default function ClusterReportPage() {
                                                         </td>
 
                                                         {/* 10. DT TRẢ GÓP */}
-                                                        <td className="py-2.5 px-2 text-right font-black border-r border-slate-100 text-slate-900">
+                                                        <td className={`py-2.5 px-2 text-center font-black ${clusterSummary.hasInstallmentRate ? 'border-r border-slate-100' : ''} text-slate-900`}>
                                                             {formatInstallmentVal(row.revenueInstallment)}
                                                         </td>
 
                                                         {/* 11. % TRẢ GÓP */}
-                                                        <td className="py-2.5 px-1.5 text-center font-black text-rose-600">
-                                                            {row.installmentRate.toFixed(1)}%
-                                                        </td>
+                                                        {clusterSummary.hasInstallmentRate && (
+                                                            <td className="py-2.5 px-1.5 text-center font-black text-rose-600">
+                                                                {row.hasInstallmentRate ? `${row.installmentRate.toFixed(1)}%` : '—'}
+                                                            </td>
+                                                        )}
                                                     </tr>
                                                 );
                                             })
@@ -1053,22 +1130,22 @@ export default function ClusterReportPage() {
                                                 </td>
 
                                                 {/* DT Thực */}
-                                                <td className="py-3 px-2 text-right font-black border-r border-slate-800 text-slate-100">
+                                                <td className="py-3 px-2 text-center font-black border-r border-slate-800 text-slate-100">
                                                     {formatNumberVal(clusterSummary.totalRevenueActual)}
                                                 </td>
 
                                                 {/* %QĐ */}
                                                 <td className="py-3 px-1.5 text-center font-black text-emerald-400 border-r border-slate-800">
-                                                    {clusterSummary.avgPctQd.toFixed(1)}%
+                                                    {clusterSummary.avgPctQd >= 0 ? '+' : ''}{clusterSummary.avgPctQd.toFixed(1)}%
                                                 </td>
 
                                                 {/* Lũy kế DTQĐ */}
-                                                <td className="py-3 px-2 text-right font-black text-blue-300 border-r border-slate-800">
+                                                <td className="py-3 px-2 text-center font-black text-blue-300 border-r border-slate-800">
                                                     {formatNumberVal(clusterSummary.totalRevenueQd)}
                                                 </td>
 
                                                 {/* Target */}
-                                                <td className="py-3 px-2 text-right font-black border-r border-slate-800 text-amber-200">
+                                                <td className="py-3 px-2 text-center font-black border-r border-slate-800 text-amber-200">
                                                     {formatNumberVal(clusterSummary.totalBaseTarget)}
                                                 </td>
 
@@ -1078,12 +1155,12 @@ export default function ClusterReportPage() {
                                                 </td>
 
                                                 {/* Target còn lại */}
-                                                <td className="py-3 px-2 text-right font-black border-r border-slate-800 text-slate-300">
+                                                <td className="py-3 px-2 text-center font-black border-r border-slate-800 text-slate-300">
                                                     {formatNumberVal(clusterSummary.totalTargetRemainingStandard)}
                                                 </td>
 
                                                 {/* DTQĐ Dự kiến */}
-                                                <td className="py-3 px-2 text-right font-black text-indigo-300 border-r border-slate-800">
+                                                <td className="py-3 px-2 text-center font-black text-indigo-300 border-r border-slate-800">
                                                     {formatNumberVal(clusterSummary.totalForecastRevenueQd)}
                                                 </td>
 
@@ -1093,14 +1170,16 @@ export default function ClusterReportPage() {
                                                 </td>
 
                                                 {/* DT Trả góp */}
-                                                <td className="py-3 px-2 text-right font-black border-r border-slate-800 text-purple-300">
+                                                <td className={`py-3 px-2 text-center font-black ${clusterSummary.hasInstallmentRate ? 'border-r border-slate-800' : ''} text-purple-300`}>
                                                     {formatInstallmentVal(clusterSummary.totalRevenueInstallment)}
                                                 </td>
 
                                                 {/* % Trả góp */}
-                                                <td className="py-3 px-1.5 text-center font-black text-rose-400">
-                                                    {clusterSummary.avgInstallmentRate.toFixed(1)}%
-                                                </td>
+                                                {clusterSummary.hasInstallmentRate && (
+                                                    <td className="py-3 px-1.5 text-center font-black text-rose-400">
+                                                        {clusterSummary.avgInstallmentRate.toFixed(1)}%
+                                                    </td>
+                                                )}
                                             </tr>
                                         </tfoot>
                                     )}
@@ -1146,7 +1225,7 @@ export default function ClusterReportPage() {
                                                 rowSpan={2}
                                                 className="py-3 px-2 bg-amber-600 text-white text-center border-r border-amber-500 w-20"
                                             >
-                                                % VƯỢT TRỘI
+                                                TARGET
                                             </th>
                                             <th
                                                 rowSpan={2}
@@ -1237,13 +1316,13 @@ export default function ClusterReportPage() {
                                                         </td>
 
                                                         {/* 3. LŨY KẾ DTQĐ */}
-                                                        <td className="py-2.5 px-2 text-right font-black text-blue-700 border-r border-slate-100">
+                                                        <td className="py-2.5 px-2 text-center font-black text-blue-700 border-r border-slate-100">
                                                             {formatNumberVal(row.revenueQd)}
                                                         </td>
 
                                                         {/* 4. TARGET VƯỢT TRỘI */}
                                                         <td
-                                                            className="py-2.5 px-2 text-right font-black border-r border-slate-100 text-slate-900"
+                                                            className="py-2.5 px-2 text-center font-black border-r border-slate-100 text-slate-900"
                                                             title={`Target gốc: ${formatNumberVal(row.baseTarget)} • Nhịp: ${row.targetRate}%`}
                                                         >
                                                             {formatNumberVal(row.targetOver)}
@@ -1260,12 +1339,12 @@ export default function ClusterReportPage() {
                                                         </td>
 
                                                         {/* 6. TARGET CÒN LẠI */}
-                                                        <td className="py-2.5 px-2 text-right font-black border-r border-slate-100 text-slate-700">
+                                                        <td className="py-2.5 px-2 text-center font-black border-r border-slate-100 text-slate-700">
                                                             {formatNumberVal(row.targetRemainingOver)}
                                                         </td>
 
                                                         {/* 7. DTQĐ DỰ KIẾN */}
-                                                        <td className="py-2.5 px-2 text-right font-black text-indigo-700 border-r border-slate-100">
+                                                        <td className="py-2.5 px-2 text-center font-black text-indigo-700 border-r border-slate-100">
                                                             {formatNumberVal(row.forecastRevenueQd)}
                                                         </td>
 
@@ -1281,7 +1360,7 @@ export default function ClusterReportPage() {
 
                                                         {/* 9. TARGET MỖI NGÀY CÒN LẠI (Hiển thị tr/ngày làm tròn) */}
                                                         <td
-                                                            className="py-2.5 px-2 text-right font-black text-purple-900 bg-purple-50/30"
+                                                            className="py-2.5 px-2 text-center font-black text-purple-900 bg-purple-50/30"
                                                             title={`Còn ${row.remainingDays} ngày trong tháng • Target còn lại: ${Math.round(row.targetRemainingOver > 100 ? row.targetRemainingOver : row.targetRemainingOver * 1000).toLocaleString('vi-VN')} tr`}
                                                         >
                                                             {Math.round(row.targetDailyRemainingOver).toLocaleString('vi-VN')}
@@ -1307,12 +1386,12 @@ export default function ClusterReportPage() {
                                                 </td>
 
                                                 {/* Lũy kế DTQĐ */}
-                                                <td className="py-3 px-2 text-right font-black text-blue-300 border-r border-slate-800">
+                                                <td className="py-3 px-2 text-center font-black text-blue-300 border-r border-slate-800">
                                                     {formatNumberVal(clusterSummary.totalRevenueQd)}
                                                 </td>
 
                                                 {/* Target vượt trội */}
-                                                <td className="py-3 px-2 text-right font-black border-r border-slate-800 text-amber-200">
+                                                <td className="py-3 px-2 text-center font-black border-r border-slate-800 text-amber-200">
                                                     {formatNumberVal(clusterSummary.totalTargetOver)}
                                                 </td>
 
@@ -1322,12 +1401,12 @@ export default function ClusterReportPage() {
                                                 </td>
 
                                                 {/* Target còn lại */}
-                                                <td className="py-3 px-2 text-right font-black border-r border-slate-800 text-slate-300">
+                                                <td className="py-3 px-2 text-center font-black border-r border-slate-800 text-slate-300">
                                                     {formatNumberVal(clusterSummary.totalTargetRemainingOver)}
                                                 </td>
 
                                                 {/* DTQĐ dự kiến */}
-                                                <td className="py-3 px-2 text-right font-black text-indigo-300 border-r border-slate-800">
+                                                <td className="py-3 px-2 text-center font-black text-indigo-300 border-r border-slate-800">
                                                     {formatNumberVal(clusterSummary.totalForecastRevenueQd)}
                                                 </td>
 
@@ -1337,7 +1416,7 @@ export default function ClusterReportPage() {
                                                 </td>
 
                                                 {/* Target mỗi ngày còn lại (triệu/ngày) */}
-                                                <td className="py-3 px-2 text-right font-black text-purple-300 bg-purple-950/40">
+                                                <td className="py-3 px-2 text-center font-black text-purple-300 bg-purple-950/40">
                                                     {Math.round(clusterSummary.totalTargetDailyRemainingOver).toLocaleString('vi-VN')}
                                                 </td>
                                             </tr>

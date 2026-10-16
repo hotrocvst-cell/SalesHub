@@ -36,8 +36,11 @@ import {
     syncLocalVouchersToCloud,
     type SupabaseStorageStatus,
     STORE_VOUCHERS_SQL,
-    getVoucherDistributionConfig
+    getVoucherDistributionConfig,
+    fetchVoucherCampaignStatuses,
+    saveVoucherCampaignStatus
 } from './services/voucherService';
+import type { VoucherCampaignStatusConfig } from './types';
 import VoucherAdminStats from './components/VoucherAdminStats';
 import VoucherStockSummaryTable from './components/VoucherStockSummaryTable';
 import VoucherHoardingTable from './components/VoucherHoardingTable';
@@ -62,6 +65,7 @@ export default function VoucherAdminPage() {
     const [toastMessage, setToastMessage] = useState<string>('');
     const [cloudStatus, setCloudStatus] = useState<SupabaseStorageStatus | null>(null);
     const [isSyncingCloud, setIsSyncingCloud] = useState<boolean>(false);
+    const [campaignStatuses, setCampaignStatuses] = useState<Record<string, VoucherCampaignStatusConfig>>({});
 
     // Modal state
     const [isImportModalOpen, setIsImportModalOpen] = useState<boolean>(false);
@@ -108,20 +112,63 @@ export default function VoucherAdminPage() {
     const loadData = async () => {
         setLoading(true);
         try {
-            const [storesRes, voucherList, statusRes, configRes] = await Promise.all([
+            const [storesRes, voucherList, statusRes, configRes, statusesRes] = await Promise.all([
                 fetchStores(),
                 fetchStoreVouchers(selectedStore, accessible, currentUser.full_name || currentUser.employee_id, isAdmin),
                 checkSupabaseVoucherTable(),
-                getVoucherDistributionConfig()
+                getVoucherDistributionConfig(),
+                fetchVoucherCampaignStatuses()
             ]);
             if (storesRes.success) setStores(storesRes.data);
             setVouchers(voucherList);
             setCloudStatus(statusRes);
+            if (statusesRes) setCampaignStatuses(statusesRes);
             if (configRes && configRes.rule_type) {
                 setDistributionRule(configRes.rule_type);
             }
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleToggleCampaignEndStatus = async (campaignName: string, denomination: number, currentIsEnded: boolean) => {
+        const denomLabel = denomination > 0 ? `${denomination.toLocaleString('vi-VN')}đ` : 'tất cả mệnh giá';
+        if (!currentIsEnded) {
+            const confirm = window.confirm(
+                `Xác nhận đánh dấu HẾT MÃ HOÀN TOÀN - KẾT THÚC CHƯƠNG TRÌNH cho:\n\n• Chương trình: "${campaignName}"\n• Mệnh giá: ${denomLabel}\n\nSau khi xác nhận, nhân viên tại trang Cấp mã sẽ thấy thông báo: "Hết mã - Kết thúc chương trình" và không thể lấy mã loại này nữa.`
+            );
+            if (!confirm) return;
+
+            const res = await saveVoucherCampaignStatus(
+                campaignName,
+                denomination,
+                true,
+                currentUser.full_name || currentUser.employee_id || 'Quản lý'
+            );
+            if (res.success) {
+                showToast(`⛔ Đã đánh dấu kết thúc chương trình cho "${campaignName}" (${denomLabel})!`);
+                await loadData();
+            } else {
+                showToast(`❌ Lỗi cập nhật: ${res.error}`);
+            }
+        } else {
+            const confirm = window.confirm(
+                `Mở lại chương trình "${campaignName}" (${denomLabel}) để tiếp tục nạp thêm mã và cho phép nhân viên nhận mã?`
+            );
+            if (!confirm) return;
+
+            const res = await saveVoucherCampaignStatus(
+                campaignName,
+                denomination,
+                false,
+                currentUser.full_name || currentUser.employee_id || 'Quản lý'
+            );
+            if (res.success) {
+                showToast(`🟢 Đã mở lại chương trình "${campaignName}" (${denomLabel})!`);
+                await loadData();
+            } else {
+                showToast(`❌ Lỗi cập nhật: ${res.error}`);
+            }
         }
     };
 
@@ -532,6 +579,8 @@ export default function VoucherAdminPage() {
             {/* 4. BẢNG TỔNG HỢP SỐ LƯỢNG MÃ & DỰ BÁO TIÊU THỤ (BURN RATE & CẢNH BÁO BỔ SUNG) */}
             <VoucherStockSummaryTable
                 vouchers={vouchers}
+                campaignStatuses={campaignStatuses}
+                onToggleCampaignEndStatus={handleToggleCampaignEndStatus}
                 onOpenImportModalWithPreset={(cName, denom, desc) => {
                     setImportPreset({
                         campaignName: cName,

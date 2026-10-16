@@ -15,7 +15,7 @@ import {
     RefreshCw,
     Calculator
 } from 'lucide-react';
-import { formatValue } from '../../../core/lib/formatters';
+import { formatValue, normalizeToMillion, cleanEmployeeName, getShortenedEmployeeName } from '../../../core/lib/formatters';
 import type { PeriodTargetConfig } from '../types';
 import {
     EMPLOYEE_PERIOD_TARGETS_SQL,
@@ -52,6 +52,12 @@ export default function PeriodTargetConfigModal({
     employees,
     onSaved
 }: PeriodTargetConfigModalProps) {
+    // Chiều rộng badge mã nhân viên tự động thích ứng theo mã dài nhất trong bảng để thẳng cột thẳng lề
+    const maxIdLength = React.useMemo(() => {
+        if (!employees || employees.length === 0) return 6;
+        return Math.max(6, ...employees.map(e => String(e.employee_id || '').trim().length));
+    }, [employees]);
+
     if (!isOpen) return null;
 
     const [periodTitle, setPeriodTitle] = useState<string>(
@@ -88,12 +94,12 @@ export default function PeriodTargetConfigModal({
                 setExistingId(existing.id);
                 setPeriodTitle(existing.periodTitle);
                 setStoreTargetInMillion(
-                    existing.storeTarget > 0 ? (existing.storeTarget / 1_000_000).toString() : ''
+                    existing.storeTarget > 0 ? normalizeToMillion(existing.storeTarget).toString() : ''
                 );
-                // Map sang đơn vị triệu để nhập liệu dễ dàng
+                // Đơn vị Triệu đồng chuẩn hóa
                 const millionMap: Record<string, number> = {};
-                Object.entries(existing.targets || {}).forEach(([empId, vndVal]) => {
-                    millionMap[empId] = vndVal >= 100_000 ? Math.round((vndVal / 1_000_000) * 100) / 100 : vndVal;
+                Object.entries(existing.targets || {}).forEach(([empId, val]) => {
+                    millionMap[empId] = normalizeToMillion(val);
                 });
                 setEmpTargets(millionMap);
             } else {
@@ -173,16 +179,16 @@ export default function PeriodTargetConfigModal({
     // Lưu cấu hình
     const handleSave = async () => {
         setSaving(true);
-        // Quy đổi về đơn vị VNĐ chuẩn
-        const targetsVnd: Record<string, number> = {};
-        Object.entries(empTargets).forEach(([empId, millionVal]) => {
-            if (millionVal > 0) {
-                targetsVnd[empId] = Math.round(millionVal * 1_000_000);
+        // Chuẩn hóa và lưu theo đơn vị Triệu đồng (đồng nhất toàn hệ thống)
+        const targetsMillion: Record<string, number> = {};
+        Object.entries(empTargets).forEach(([empId, val]) => {
+            const num = normalizeToMillion(Number(val) || 0);
+            if (num > 0) {
+                targetsMillion[empId] = num;
             }
         });
 
-        const storeTargetMillion = parseFloat(storeTargetInMillion) || totalEmpTargetMillion;
-        const storeTargetVnd = Math.round(storeTargetMillion * 1_000_000);
+        const storeTargetMillion = normalizeToMillion(parseFloat(storeTargetInMillion) || totalEmpTargetMillion);
 
         const config: PeriodTargetConfig = {
             id: existingId || buildPeriodTargetId(selectedStore, fromDate, toDate),
@@ -190,8 +196,8 @@ export default function PeriodTargetConfigModal({
             storeName: selectedStore,
             fromDate,
             toDate,
-            storeTarget: storeTargetVnd,
-            targets: targetsVnd
+            storeTarget: storeTargetMillion,
+            targets: targetsMillion
         };
 
         const res = await savePeriodTarget(config);
@@ -398,15 +404,14 @@ export default function PeriodTargetConfigModal({
                             <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
                                 <tr>
                                     <th className="px-2.5 py-2 w-10 text-center">STT</th>
-                                    <th className="px-2.5 py-2 w-24">Mã NV</th>
-                                    <th className="px-2.5 py-2">Họ và Tên</th>
+                                    <th className="px-2.5 py-2 min-w-[180px]">Nhân viên</th>
                                     <th className="px-2.5 py-2 text-right min-w-[140px]">Target (Triệu VNĐ)</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
                                 {employees.length === 0 ? (
                                     <tr>
-                                        <td colSpan={4} className="px-3 py-6 text-center text-slate-400 italic">
+                                        <td colSpan={3} className="px-3 py-6 text-center text-slate-400 italic">
                                             Không có danh sách nhân sự của siêu thị này.
                                         </td>
                                     </tr>
@@ -418,11 +423,21 @@ export default function PeriodTargetConfigModal({
                                                 <td className="px-2.5 py-1.5 text-center text-slate-400 font-mono text-[11px]">
                                                     {idx + 1}
                                                 </td>
-                                                <td className="px-2.5 py-1.5 font-mono font-bold text-slate-700 text-[11px]">
-                                                    {emp.employee_id}
-                                                </td>
-                                                <td className="px-2.5 py-1.5 font-bold text-slate-900">
-                                                    {emp.full_name}
+                                                <td className="px-2.5 py-1.5 whitespace-nowrap">
+                                                    <div className="flex items-center gap-2 whitespace-nowrap">
+                                                        <span
+                                                            style={{ minWidth: `${maxIdLength + 2.2}ch`, width: `${maxIdLength + 2.2}ch` }}
+                                                            className="font-mono font-bold text-xs px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-800 border border-blue-200 inline-block text-center leading-normal shrink-0"
+                                                        >
+                                                            {emp.employee_id}
+                                                        </span>
+                                                        <span
+                                                            className="font-bold text-xs text-slate-900"
+                                                            title={`Mã NV: ${emp.employee_id} - ${cleanEmployeeName(emp.full_name)}`}
+                                                        >
+                                                            {getShortenedEmployeeName(emp.full_name)}
+                                                        </span>
+                                                    </div>
                                                 </td>
                                                 <td className="px-2.5 py-1.5 text-right">
                                                     <div className="inline-flex items-center gap-1.5">

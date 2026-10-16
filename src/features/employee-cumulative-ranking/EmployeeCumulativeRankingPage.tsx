@@ -1,19 +1,32 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { fetchStores, fetchEmployees, type StoreItem, type EmployeeItem } from '../../core/lib/storage';
-import { getYesterdayDateString, formatDate } from '../../core/lib/formatters';
+import { getYesterdayDateString, formatDate, getStartOfWeek } from '../../core/lib/formatters';
 import { useUserStoreFilter } from '../../shared/hooks/useUserStoreFilter';
-import type { CumulativeRankingViewMode, EmployeeCumulativeRankingRow, StoreCumulativeSummary } from './types';
+import { useExcelExportPermission } from '../../shared/hooks/useExcelExportPermission';
+import type { CumulativeRankingViewMode, EmployeeCumulativeRankingRow, StoreCumulativeSummary, PeriodTargetConfig, TargetSelectionMode } from './types';
 import { fetchCumulativeRankingData } from './services/cumulativeRankingService';
-import CumulativeRankingFilterBar from './components/CumulativeRankingFilterBar';
+import CumulativeRankingFilterBar, { type RankingDatePreset } from './components/CumulativeRankingFilterBar';
 import CumulativeRankingKpiCards from './components/CumulativeRankingKpiCards';
 import CumulativeRankingTable from './components/CumulativeRankingTable';
 import PeriodTargetConfigModal from './components/PeriodTargetConfigModal';
+import PeriodTargetSessionManagerModal from './components/PeriodTargetSessionManagerModal';
+import CloudDataSyncStatusBanner from '../../shared/components/report/CloudDataSyncStatusBanner';
+import {
+    checkSupabasePeriodTargetTable,
+    syncLocalPeriodTargetsToCloud,
+    getLocalCache,
+    EMPLOYEE_PERIOD_TARGETS_SQL
+} from './services/periodTargetStorage';
 import { Trophy, CheckCircle2, AlertCircle } from 'lucide-react';
 import ExcelJS from 'exceljs';
 import html2canvas from 'html2canvas';
+import { calculate8KScale } from '../../shared/utils/exportImage';
 
 export default function EmployeeCumulativeRankingPage() {
     const reportRef = useRef<HTMLDivElement>(null);
+
+    // Quyền xuất file Excel (Mặc định khóa và ẩn hiển thị trừ khi được cấp quyền)
+    const { canExportExcel } = useExcelExportPermission('/xep-hang-doanh-thu-luy-ke');
 
     // 1. STATE THỜI GIAN & BỘ LỌC
     const today = new Date();
@@ -24,6 +37,7 @@ export default function EmployeeCumulativeRankingPage() {
 
     const [fromDate, setFromDate] = useState<string>(firstDayOfMonth);
     const [toDate, setToDate] = useState<string>(defaultYesterday);
+    const [activePreset, setActivePreset] = useState<RankingDatePreset>('THIS_MONTH');
     const [stores, setStores] = useState<StoreItem[]>([]);
     const [selectedStore, setSelectedStore] = useState<string>('all');
 
@@ -34,12 +48,18 @@ export default function EmployeeCumulativeRankingPage() {
         setSelectedStore
     );
 
-    // Chế độ xem & Target & Tìm kiếm
+    // Chế độ xem & Target & Quản lý phiên
     const [viewMode, setViewMode] = useState<CumulativeRankingViewMode>('CUMULATIVE_ONLY');
     const [showTarget, setShowTarget] = useState<boolean>(true);
+    const [targetMode, setTargetMode] = useState<TargetSelectionMode>('AUTO');
     const [searchQuery, setSearchQuery] = useState<string>('');
     const [isPeriodTargetModalOpen, setIsPeriodTargetModalOpen] = useState<boolean>(false);
+    const [isSessionManagerOpen, setIsSessionManagerOpen] = useState<boolean>(false);
     const [employees, setEmployees] = useState<EmployeeItem[]>([]);
+
+    // Trạng thái Cloud Storage & Đồng bộ
+    const [tableReady, setTableReady] = useState<boolean>(true);
+    const [unsyncedCount, setUnsyncedCount] = useState<number>(0);
 
     // State Dữ liệu
     const [rows, setRows] = useState<EmployeeCumulativeRankingRow[]>([]);
@@ -92,7 +112,8 @@ export default function EmployeeCumulativeRankingPage() {
             fromDate,
             toDate,
             store: selectedStore,
-            storesList: stores
+            storesList: stores,
+            targetMode
         });
 
         if (res.success) {
@@ -106,10 +127,24 @@ export default function EmployeeCumulativeRankingPage() {
 
     useEffect(() => {
         loadReportData();
-    }, [fromDate, toDate, selectedStore]);
+    }, [fromDate, toDate, selectedStore, targetMode]);
 
-    // 4. PRESETS THỜI GIAN NHANH
-    const handleSelectPreset = (preset: 'THIS_MONTH' | 'LAST_7_DAYS' | 'YESTERDAY' | 'LAST_MONTH') => {
+    // Kiểm tra trạng thái Cloud & Local cache
+    const checkCloudStatus = async () => {
+        const check = await checkSupabasePeriodTargetTable();
+        setTableReady(check.exists);
+        const local = getLocalCache();
+        const unsynced = local.filter(l => !l.isCloudStored).length;
+        setUnsyncedCount(unsynced);
+    };
+
+    useEffect(() => {
+        checkCloudStatus();
+    }, []);
+
+    // 4. PRESETS THỜI GIAN NHANH (Bắt đầu từ Thứ Hai)
+    const handleSelectPreset = (preset: 'THIS_MONTH' | 'THIS_WEEK' | 'LAST_7_DAYS' | 'YESTERDAY' | 'LAST_MONTH') => {
+        setActivePreset(preset);
         const d = new Date();
         const y = d.getFullYear();
         const m = d.getMonth() + 1;
@@ -118,6 +153,10 @@ export default function EmployeeCumulativeRankingPage() {
         if (preset === 'THIS_MONTH') {
             setFromDate(`${y}-${pad(m)}-01`);
             setToDate(defaultYesterday);
+        } else if (preset === 'THIS_WEEK') {
+            const monday = getStartOfWeek(new Date());
+            setFromDate(monday);
+            setToDate(defaultYesterday >= monday ? defaultYesterday : monday);
         } else if (preset === 'YESTERDAY') {
             setFromDate(defaultYesterday);
             setToDate(defaultYesterday);
@@ -133,6 +172,42 @@ export default function EmployeeCumulativeRankingPage() {
             const prevM = prevMonthDate.getMonth() + 1;
             setFromDate(`${prevY}-${pad(prevM)}-01`);
             setToDate(`${prevY}-${pad(prevM)}-${pad(lastDayOfPrevMonth.getDate())}`);
+        }
+    };
+
+    // Thao tác áp dụng / chỉnh sửa phiên từ Session Manager
+    const handleApplySession = (sess: PeriodTargetConfig) => {
+        setActivePreset('CUSTOM');
+        setFromDate(sess.fromDate);
+        setToDate(sess.toDate);
+        if (sess.storeName && sess.storeName !== 'all') {
+            setSelectedStore(sess.storeName);
+        }
+        setIsSessionManagerOpen(false);
+        showToast(`🎯 Đã áp dụng phiên: ${sess.periodTitle}`);
+    };
+
+    const handleEditSession = (sess: PeriodTargetConfig) => {
+        setActivePreset('CUSTOM');
+        setFromDate(sess.fromDate);
+        setToDate(sess.toDate);
+        if (sess.storeName && sess.storeName !== 'all') {
+            setSelectedStore(sess.storeName);
+        }
+        setIsSessionManagerOpen(false);
+        setIsPeriodTargetModalOpen(true);
+    };
+
+    const handleSyncCloud = async () => {
+        const res = await syncLocalPeriodTargetsToCloud();
+        await checkCloudStatus();
+        await loadReportData();
+        if (res.syncedCount > 0) {
+            showToast(`✅ Đã đồng bộ ${res.syncedCount} phiên lên Supabase Cloud!`);
+        } else if (!res.success) {
+            showToast(`⚠️ Không thể đồng bộ. ${res.error || 'Vui lòng kiểm tra kết nối!'}`);
+        } else {
+            showToast('👍 Dữ liệu đã đồng bộ Cloud.');
         }
     };
 
@@ -238,19 +313,21 @@ export default function EmployeeCumulativeRankingPage() {
         }
     };
 
-    // 7. XUẤT HÌNH ẢNH (PORTRAIT RATIO SMARTPHONE, TUYỆT ĐỐI KHÔNG FOOTER WATERMARK)
+    // 7. XUẤT HÌNH ẢNH 8K (PORTRAIT RATIO SMARTPHONE, TUYỆT ĐỐI KHÔNG FOOTER WATERMARK)
     const handleExportImage = async (mode: 'DOWNLOAD' | 'COPY') => {
         if (!reportRef.current) return;
         setIsExporting(true);
-        showToast('📸 Đang tạo hình ảnh báo cáo dọc smartphone...');
+        showToast('📸 Đang tạo hình ảnh báo cáo 8K dọc smartphone...');
 
         try {
             if (document.fonts && document.fonts.ready) {
                 await document.fonts.ready;
             }
 
+            const scale = calculate8KScale(reportRef.current, 960);
+
             const canvas = await html2canvas(reportRef.current, {
-                scale: 2.5,
+                scale: scale,
                 useCORS: true,
                 allowTaint: true,
                 backgroundColor: '#f8fafc',
@@ -272,17 +349,17 @@ export default function EmployeeCumulativeRankingPage() {
 
             if (mode === 'DOWNLOAD') {
                 const link = document.createElement('a');
-                link.download = `XepHangDoanhThuLuyKe_${fromDate}_den_${toDate}.png`;
+                link.download = `XepHangDoanhThuLuyKe_${fromDate}_den_${toDate}_8K.png`;
                 link.href = canvas.toDataURL('image/png');
                 link.click();
-                showToast('✅ Đã tải xuống ảnh báo cáo thành công!');
+                showToast('✅ Đã tải xuống ảnh báo cáo 8K thành công!');
             } else {
                 canvas.toBlob(async (blob) => {
                     if (blob && navigator.clipboard && navigator.clipboard.write) {
                         await navigator.clipboard.write([
                             new ClipboardItem({ 'image/png': blob })
                         ]);
-                        showToast('📋 Đã sao chép ảnh vào Clipboard! Dán trực tiếp vào Zalo.');
+                        showToast('📋 Đã sao chép ảnh 8K vào Clipboard! Dán trực tiếp vào Messaging App.');
                     } else {
                         showToast('⚠️ Trình duyệt chưa hỗ trợ sao chép ảnh tự động.');
                     }
@@ -328,13 +405,38 @@ export default function EmployeeCumulativeRankingPage() {
                 </div>
             </div>
 
+            {/* BÁO CÁO TRẠNG THÁI LƯU TRỮ CLOUD & LOCALSTORAGE (MANDATORY RULE) */}
+            <div className="max-w-[960px] mx-auto mb-3">
+                <CloudDataSyncStatusBanner
+                    storageType={summary.isPeriodTargetCloudStored === false ? 'local' : 'cloud'}
+                    syncStatus={unsyncedCount > 0 ? 'unsynced' : 'synced'}
+                    tableReady={tableReady}
+                    tableName="employee_period_targets & daily_business_records"
+                    unsyncedCount={unsyncedCount}
+                    onSyncNow={handleSyncCloud}
+                    sqlDdl={EMPLOYEE_PERIOD_TARGETS_SQL}
+                    customMessage={
+                        summary.targetSource === 'PERIOD'
+                            ? `Đang áp dụng Target giai đoạn "${summary.activePeriodTitle}" (${summary.isPeriodTargetCloudStored ? 'Đã lưu Cloud' : 'Chỉ lưu Local Cache'})`
+                            : 'Target nhân sự tính theo cấu hình tháng hoặc phiên làm việc'
+                    }
+                />
+            </div>
+
             {/* THANH ĐIỀU KHIỂN & BỘ LỌC */}
             <div className="max-w-[960px] mx-auto">
                 <CumulativeRankingFilterBar
                     fromDate={fromDate}
                     toDate={toDate}
-                    onFromDateChange={setFromDate}
-                    onToDateChange={setToDate}
+                    onFromDateChange={(val) => {
+                        setFromDate(val);
+                        setActivePreset('CUSTOM');
+                    }}
+                    onToDateChange={(val) => {
+                        setToDate(val);
+                        setActivePreset('CUSTOM');
+                    }}
+                    activePreset={activePreset}
                     onSelectPreset={handleSelectPreset}
                     selectedStore={selectedStore}
                     onStoreChange={setSelectedStore}
@@ -344,12 +446,17 @@ export default function EmployeeCumulativeRankingPage() {
                     onViewModeChange={setViewMode}
                     showTarget={showTarget}
                     onShowTargetChange={setShowTarget}
+                    targetMode={targetMode}
+                    onTargetModeChange={setTargetMode}
                     onOpenPeriodTargetModal={() => setIsPeriodTargetModalOpen(true)}
+                    onOpenSessionManager={() => setIsSessionManagerOpen(true)}
                     activePeriodTitle={summary.activePeriodTitle}
                     targetSource={summary.targetSource}
+                    isPeriodTargetCloudStored={summary.isPeriodTargetCloudStored}
                     searchQuery={searchQuery}
                     onSearchChange={setSearchQuery}
                     loading={loading}
+                    canExportExcel={canExportExcel}
                     onRefresh={loadReportData}
                     onExportExcel={handleExportExcel}
                     onExportImage={handleExportImage}
@@ -382,12 +489,34 @@ export default function EmployeeCumulativeRankingPage() {
             {/* MODAL CẤU HÌNH TARGET GIAI ĐOẠN RIÊNG BIỆT */}
             <PeriodTargetConfigModal
                 isOpen={isPeriodTargetModalOpen}
-                onClose={() => setIsPeriodTargetModalOpen(false)}
+                onClose={() => {
+                    setIsPeriodTargetModalOpen(false);
+                    checkCloudStatus();
+                }}
                 fromDate={fromDate}
                 toDate={toDate}
                 selectedStore={selectedStore}
                 employees={employees}
-                onSaved={loadReportData}
+                onSaved={() => {
+                    checkCloudStatus();
+                    loadReportData();
+                }}
+            />
+
+            {/* MODAL QUẢN LÝ TẤT CẢ CÁC PHIÊN TARGET GIAI ĐOẠN */}
+            <PeriodTargetSessionManagerModal
+                isOpen={isSessionManagerOpen}
+                onClose={() => {
+                    setIsSessionManagerOpen(false);
+                    checkCloudStatus();
+                }}
+                currentStore={selectedStore}
+                onSelectSessionToApply={handleApplySession}
+                onOpenEditSession={handleEditSession}
+                onOpenCreateNew={() => {
+                    setIsSessionManagerOpen(false);
+                    setIsPeriodTargetModalOpen(true);
+                }}
             />
         </div>
     );

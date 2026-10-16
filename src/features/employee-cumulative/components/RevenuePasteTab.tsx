@@ -1,6 +1,12 @@
 import { useState, useMemo, useEffect } from 'react';
-import { parseEmployeeRevenueText, detectStoreFromRawText, type ParsedEmployeeRevenue } from '../utils/employeeParsers';
+import {
+    parseEmployeeRevenueText,
+    parseSingleEmployeeRevenueTable,
+    detectStoreFromRawText,
+    type ParsedEmployeeRevenue
+} from '../utils/employeeParsers';
 import { formatEmployeeRevenueToRawText } from '../utils/sessionStorage';
+import { cleanEmployeeName, getShortenedEmployeeName } from '../../../core/lib/formatters';
 import type { EmployeeItem } from '../../../core/lib/storage';
 import {
     Coins,
@@ -13,7 +19,10 @@ import {
     Filter,
     UserX,
     ChevronDown,
-    ChevronUp
+    ChevronUp,
+    Sparkles,
+    FileSpreadsheet,
+    HelpCircle
 } from 'lucide-react';
 
 interface Props {
@@ -21,15 +30,20 @@ interface Props {
     initialData?: ParsedEmployeeRevenue[];
     configuredEmployees?: EmployeeItem[];
     currentStoreName?: string;
+    initialQdText?: string;
+    initialRealText?: string;
 }
 
 export default function RevenuePasteTab({
     onApply,
     initialData = [],
     configuredEmployees = [],
-    currentStoreName = 'all'
+    currentStoreName = 'all',
+    initialQdText = '',
+    initialRealText = ''
 }: Props) {
-    const [rawText, setRawText] = useState('');
+    const [rawQdText, setRawQdText] = useState<string>(initialQdText);
+    const [rawRealText, setRawRealText] = useState<string>(initialRealText);
     const [parsedList, setParsedList] = useState<ParsedEmployeeRevenue[]>(initialData);
     const [detectedStore, setDetectedStore] = useState<string | null>(null);
     const [errorMsg, setErrorMsg] = useState('');
@@ -40,18 +54,38 @@ export default function RevenuePasteTab({
     useEffect(() => {
         if (initialData && initialData.length > 0) {
             setParsedList(initialData);
-            if (!rawText) {
-                setRawText(formatEmployeeRevenueToRawText(initialData));
+            if (!rawQdText && !rawRealText) {
+                setRawQdText(formatEmployeeRevenueToRawText(initialData));
             }
         }
     }, [initialData]);
+
+    // Đếm số lượng nhân sự nhận diện nhanh từ từng ô
+    const detectedQdCount = useMemo(() => {
+        if (!rawQdText.trim()) return 0;
+        return parseSingleEmployeeRevenueTable(rawQdText, 'QD').length;
+    }, [rawQdText]);
+
+    const detectedRealCount = useMemo(() => {
+        if (!rawRealText.trim()) return 0;
+        return parseSingleEmployeeRevenueTable(rawRealText, 'REAL').length;
+    }, [rawRealText]);
 
     // Cho phép sửa trực tiếp giá trị trong ô input của từng nhân viên
     const handleUpdateMetric = (empId: string, field: keyof ParsedEmployeeRevenue, value: number) => {
         setParsedList(prev => {
             const next = prev.map(item => {
                 if (item.employee_id === empId) {
-                    return { ...item, [field]: value };
+                    const updated = { ...item, [field]: value };
+                    // Tự động tính lại % trả góp nếu sửa DT Thực hoặc DT Trả góp
+                    if (field === 'revenue_actual' || field === 'installment_revenue') {
+                        const revAct = field === 'revenue_actual' ? value : updated.revenue_actual;
+                        const instRev = field === 'installment_revenue' ? value : updated.installment_revenue;
+                        if (revAct > 0) {
+                            updated.installment_rate = Number(((instRev / revAct) * 100).toFixed(1));
+                        }
+                    }
+                    return updated;
                 }
                 return item;
             });
@@ -68,25 +102,37 @@ export default function RevenuePasteTab({
         });
     };
 
-    const handleParse = (text: string) => {
-        setRawText(text);
+    const runParse = (qdText: string, realText: string) => {
         setErrorMsg('');
-        if (!text.trim()) {
+        const hasQd = Boolean(qdText.trim());
+        const hasReal = Boolean(realText.trim());
+
+        if (!hasQd && !hasReal) {
             setParsedList([]);
             setDetectedStore(null);
             return;
         }
 
-        const results = parseEmployeeRevenueText(text);
-        const storeName = detectStoreFromRawText(text);
+        const results = parseEmployeeRevenueText(qdText, realText);
+        const storeName = detectStoreFromRawText(qdText) || detectStoreFromRawText(realText);
         setDetectedStore(storeName);
 
         if (results.length === 0) {
-            setErrorMsg('Không tìm thấy dòng dữ liệu doanh thu nhân viên hợp lệ! Hãy copy bảng hoặc toàn bộ trang Dashboard.');
+            setErrorMsg('Không tìm thấy dòng dữ liệu doanh thu nhân viên hợp lệ! Hãy copy bảng DT quy đổi hoặc bảng DT thực từ BI.');
             setParsedList([]);
         } else {
             setParsedList(results);
         }
+    };
+
+    const handleQdChange = (text: string) => {
+        setRawQdText(text);
+        runParse(text, rawRealText);
+    };
+
+    const handleRealChange = (text: string) => {
+        setRawRealText(text);
+        runParse(rawQdText, text);
     };
 
     // Phân loại nhân viên: Hợp lệ theo cấu hình siêu thị vs Ngoài danh sách cấu hình
@@ -119,6 +165,12 @@ export default function RevenuePasteTab({
         return { validList: valid, excludedList: excluded };
     }, [parsedList, configuredEmployees, filterByConfigured]);
 
+    // Chiều rộng badge mã nhân viên đồng bộ theo Quy chuẩn Rule 11
+    const maxIdLength = useMemo(() => {
+        if (!validList || validList.length === 0) return 6;
+        return Math.max(6, ...validList.map(r => String(r.employee_id || '').trim().length));
+    }, [validList]);
+
     const handleConfirm = (dataToApply?: ParsedEmployeeRevenue[]) => {
         const targetList = dataToApply || validList;
         if (targetList.length === 0) return;
@@ -127,19 +179,26 @@ export default function RevenuePasteTab({
 
     const totalRevQd = validList.reduce((sum, item) => sum + item.revenue_qd, 0);
     const totalRevActual = validList.reduce((sum, item) => sum + item.revenue_actual, 0);
+    const totalInstRev = validList.reduce((sum, item) => sum + item.installment_revenue, 0);
+    const avgInstRate = totalRevActual > 0 ? Number(((totalInstRev / totalRevActual) * 100).toFixed(1)) : 0;
 
     return (
         <div className="space-y-4">
             {/* Header hướng dẫn & áp dụng */}
-            <div className="bg-blue-50/70 border border-blue-200 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="bg-gradient-to-r from-blue-50 via-indigo-50/40 to-blue-50/30 border border-blue-200 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
                 <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs">
                         <Coins className="w-5 h-5" />
                     </div>
                     <div>
-                        <h3 className="font-extrabold text-blue-900 text-sm">Dán Báo Cáo Doanh Thu Nhân Viên (Lũy Kế)</h3>
-                        <p className="text-xs text-blue-700/80">
-                            Thứ tự 8 cột sau tên NV: 1. Số lượng · 2. Doanh thu QĐ · 3. % Tỉ trọng · 4. Doanh thu · 5. TB 3 tháng · 6. % TT · 7. DT Trả góp · 8. % Trả góp.
+                        <div className="flex items-center gap-2">
+                            <h3 className="font-extrabold text-blue-900 text-sm">Dán Dữ Liệu Doanh Thu Nhân Viên (2 Bảng BI)</h3>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 border border-blue-200">
+                                Cập nhật theo BI mới
+                            </span>
+                        </div>
+                        <p className="text-xs text-blue-700/90 mt-0.5">
+                            BI đã tách thành 2 tab: <strong>DT Quy Đổi</strong> (bắt buộc) và <strong>DT Thực</strong> (khuyến nghị để tính chính xác % Trả Góp).
                         </p>
                     </div>
                 </div>
@@ -216,27 +275,91 @@ export default function RevenuePasteTab({
                 </div>
             </div>
 
-            {/* Ô nhập liệu textarea */}
-            <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs space-y-2">
-                <div className="flex justify-between items-center text-xs font-bold text-slate-700">
-                    <span>Dán nội dung từ báo cáo Doanh thu vào đây:</span>
-                    {rawText && (
-                        <button
-                            type="button"
-                            onClick={() => { setRawText(''); setParsedList([]); }}
-                            className="text-rose-600 hover:underline flex items-center gap-1 cursor-pointer font-medium"
-                        >
-                            <Trash2 className="w-3.5 h-3.5" /> Xóa trắng
-                        </button>
-                    )}
+            {/* 2 Ô NHẬP LIỆU: BẢNG DOANH THU QUY ĐỔI & BẢNG DOANH THU THỰC */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {/* TEXTAREA 1: DOANH THU QUY ĐỔI (BẮT BUỘC) */}
+                <div className="bg-white rounded-2xl border-2 border-blue-200/80 p-4 shadow-2xs space-y-2 relative">
+                    <div className="flex justify-between items-center text-xs">
+                        <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-blue-600 inline-block animate-pulse"></span>
+                            <span className="font-extrabold text-blue-950 flex items-center gap-1.5">
+                                <FileSpreadsheet className="w-4 h-4 text-blue-600" />
+                                1. Bảng Doanh Thu Quy Đổi (DTQĐ)
+                            </span>
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-600 text-white">
+                                Bắt buộc
+                            </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            {detectedQdCount > 0 && (
+                                <span className="text-[10.5px] font-mono font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                                    Đã nhận diện: {detectedQdCount} NV
+                                </span>
+                            )}
+                            {rawQdText && (
+                                <button
+                                    type="button"
+                                    onClick={() => handleQdChange('')}
+                                    className="text-rose-600 hover:underline flex items-center gap-1 cursor-pointer font-medium text-[11px]"
+                                >
+                                    <Trash2 className="w-3 h-3" /> Xóa
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                    <textarea
+                        rows={5}
+                        value={rawQdText}
+                        onChange={e => handleQdChange(e.target.value)}
+                        placeholder={`Dán bảng từ Tab "DT quy đổi" trên BI Dashboard:\n27560 - Bùi Minh Lãm\n235\t2,141\t22.0%\t0\t—\t1,180\t961\t0\n260732 - Nguyễn Thị Hồng Loan\n216\t1,986\t20.4%\t0\t—\t1,423\t563\t0`}
+                        className="w-full p-2.5 text-xs font-mono bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500 text-slate-800"
+                    />
+                    <div className="flex items-center justify-between text-[11px] text-slate-500">
+                        <span>Cột: SL · DT QĐ · % Tỉ trọng · TB 3T · % TT · DT Trả thẳng · DT Trả góp · DT Nhập trả</span>
+                    </div>
                 </div>
-                <textarea
-                    rows={6}
-                    value={rawText}
-                    onChange={e => handleParse(e.target.value)}
-                    placeholder="Ví dụ dán trực tiếp từ Dashboard TGDD:&#10;27560 - Bùi Minh Lãm&#10;235&#9;2,141&#9;22.0%&#9;1,606&#9;0&#9;—&#9;482&#9;30.0%&#10;260732 - Nguyễn Thị Hồng Loan&#10;216&#9;1,986&#9;20.4%&#9;1,570&#9;0&#9;—&#9;553&#9;35.2%"
-                    className="w-full p-3 text-xs font-mono bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500 text-slate-800"
-                />
+
+                {/* TEXTAREA 2: DOANH THU THỰC (KHUYẾN NGHỊ) */}
+                <div className="bg-white rounded-2xl border-2 border-emerald-200/80 p-4 shadow-2xs space-y-2 relative">
+                    <div className="flex justify-between items-center text-xs">
+                        <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-emerald-600 inline-block"></span>
+                            <span className="font-extrabold text-emerald-950 flex items-center gap-1.5">
+                                <Sparkles className="w-4 h-4 text-emerald-600" />
+                                2. Bảng Doanh Thu Thực
+                            </span>
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-600 text-white">
+                                ⭐ Khuyến nghị
+                            </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            {detectedRealCount > 0 && (
+                                <span className="text-[10.5px] font-mono font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                                    Đã nhận diện: {detectedRealCount} NV
+                                </span>
+                            )}
+                            {rawRealText && (
+                                <button
+                                    type="button"
+                                    onClick={() => handleRealChange('')}
+                                    className="text-rose-600 hover:underline flex items-center gap-1 cursor-pointer font-medium text-[11px]"
+                                >
+                                    <Trash2 className="w-3 h-3" /> Xóa
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                    <textarea
+                        rows={5}
+                        value={rawRealText}
+                        onChange={e => handleRealChange(e.target.value)}
+                        placeholder={`Dán bảng từ Tab "DT thực" trên BI Dashboard:\n27560 - Bùi Minh Lãm\n235\t1,866\t20.9%\t0\t—\t905\t961\t0\n260732 - Nguyễn Thị Hồng Loan\n216\t1,624\t18.2%\t0\t—\t1,061\t563\t0`}
+                        className="w-full p-2.5 text-xs font-mono bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-emerald-500 text-slate-800"
+                    />
+                    <div className="flex items-center justify-between text-[11px] text-emerald-800/80">
+                        <span>Dùng để tính chính xác DT Thực và <strong>% Trả góp = (DT Trả góp / DT Thực) * 100</strong></span>
+                    </div>
+                </div>
             </div>
 
             {errorMsg && (
@@ -265,7 +388,7 @@ export default function RevenuePasteTab({
                                     <strong className="text-amber-900">{emp.employee_id}</strong> - {emp.full_name}
                                 </div>
                                 <div className="text-amber-700 text-[11px]">
-                                    DT Thực: {emp.revenue_actual.toLocaleString('vi-VN')} tr · DT QĐ: {emp.revenue_qd.toLocaleString('vi-VN')} tr
+                                    DT Thực: {emp.revenue_actual.toLocaleString('vi-VN')} tr · DT QĐ: {emp.revenue_qd.toLocaleString('vi-VN')} tr · %TG: {emp.installment_rate}%
                                 </div>
                             </div>
                         ))}
@@ -281,9 +404,11 @@ export default function RevenuePasteTab({
                             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                             <span>Hợp lệ theo cấu hình: {validList.length} nhân viên (có thể chỉnh sửa trực tiếp từng ô số liệu)</span>
                         </span>
-                        <div className="flex items-center gap-4 text-xs font-extrabold text-slate-700">
+                        <div className="flex items-center gap-4 text-xs font-extrabold text-slate-700 flex-wrap">
                             <span>Tổng DT QĐ: <strong className="text-blue-700 font-mono">{totalRevQd.toLocaleString('vi-VN')} tr</strong></span>
                             <span>Tổng DT Thực: <strong className="text-emerald-700 font-mono">{totalRevActual.toLocaleString('vi-VN')} tr</strong></span>
+                            <span>DT Trả Góp: <strong className="text-purple-700 font-mono">{totalInstRev.toLocaleString('vi-VN')} tr</strong></span>
+                            <span>% Trả Góp ST: <strong className="text-amber-700 font-mono">{avgInstRate}%</strong></span>
                         </div>
                     </div>
 
@@ -292,28 +417,43 @@ export default function RevenuePasteTab({
                             <thead className="bg-slate-100 text-slate-600 font-bold sticky top-0 z-10">
                                 <tr>
                                     <th className="p-2.5 text-center w-12 border-b">STT</th>
-                                    <th className="p-2.5 w-24 border-b">Mã NV</th>
-                                    <th className="p-2.5 border-b min-w-[140px]">Họ và tên</th>
-                                    <th className="p-2.5 text-right border-b w-24">Số Lượng</th>
+                                    {/* Quy chuẩn Rule 11: 1 Cột DUY NHẤT mang tên NHÂN VIÊN */}
+                                    <th className="p-2.5 border-b min-w-[170px]">Nhân viên</th>
+                                    <th className="p-2.5 text-right border-b w-20">Số Lượng</th>
                                     <th className="p-2.5 text-right border-b w-28 text-blue-700">DT QĐ (tr)</th>
                                     <th className="p-2.5 text-right border-b w-28 text-emerald-700">DT Thực (tr)</th>
-                                    <th className="p-2.5 text-right border-b w-28">DT Trả Góp</th>
+                                    <th className="p-2.5 text-right border-b w-28">DT Trả Góp (tr)</th>
                                     <th className="p-2.5 text-right border-b w-20">% Trả Góp</th>
-                                    <th className="p-2.5 text-center border-b w-14">Xóa</th>
+                                    <th className="p-2.5 text-center border-b w-12">Xóa</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100 font-medium">
                                 {validList.map((emp, idx) => (
                                     <tr key={emp.employee_id} className="hover:bg-slate-50 transition">
                                         <td className="p-2 text-center text-slate-400 font-mono">{idx + 1}</td>
-                                        <td className="p-2 font-mono font-bold text-blue-700">{emp.employee_id}</td>
-                                        <td className="p-2 font-bold text-slate-800">{emp.full_name}</td>
+                                        {/* Cột Nhân Viên gộp Mã NV + Tên rút gọn theo Rule 11 */}
+                                        <td className="p-2">
+                                            <div
+                                                className="flex items-center gap-2"
+                                                title={`Mã NV: ${emp.employee_id} - ${cleanEmployeeName(emp.full_name)}`}
+                                            >
+                                                <span
+                                                    style={{ minWidth: `${maxIdLength + 2.2}ch`, width: `${maxIdLength + 2.2}ch` }}
+                                                    className="font-mono font-bold text-xs px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-800 border border-blue-200 inline-block text-center leading-normal shrink-0"
+                                                >
+                                                    {emp.employee_id}
+                                                </span>
+                                                <span className="font-bold text-slate-800 truncate">
+                                                    {getShortenedEmployeeName(emp.full_name)}
+                                                </span>
+                                            </div>
+                                        </td>
                                         <td className="p-1 text-right">
                                             <input
                                                 type="number"
                                                 value={emp.quantity || ''}
                                                 onChange={e => handleUpdateMetric(emp.employee_id, 'quantity', parseInt(e.target.value) || 0)}
-                                                className="w-20 text-right font-mono bg-white border border-slate-200 focus:border-blue-500 rounded-lg px-2 py-1 text-xs outline-hidden focus:ring-1 focus:ring-blue-500 shadow-2xs"
+                                                className="w-18 text-right font-mono bg-white border border-slate-200 focus:border-blue-500 rounded-lg px-2 py-1 text-xs outline-hidden focus:ring-1 focus:ring-blue-500 shadow-2xs"
                                             />
                                         </td>
                                         <td className="p-1 text-right">
@@ -349,7 +489,7 @@ export default function RevenuePasteTab({
                                                 step={0.1}
                                                 value={emp.installment_rate || ''}
                                                 onChange={e => handleUpdateMetric(emp.employee_id, 'installment_rate', parseFloat(e.target.value) || 0)}
-                                                className="w-16 text-right font-mono text-slate-700 bg-white border border-slate-200 focus:border-blue-500 rounded-lg px-2 py-1 text-xs outline-hidden focus:ring-1 focus:ring-blue-500 shadow-2xs"
+                                                className="w-16 text-right font-mono font-bold text-amber-700 bg-white border border-slate-200 focus:border-blue-500 rounded-lg px-2 py-1 text-xs outline-hidden focus:ring-1 focus:ring-blue-500 shadow-2xs"
                                             />
                                         </td>
                                         <td className="p-1 text-center">
@@ -372,4 +512,5 @@ export default function RevenuePasteTab({
         </div>
     );
 }
+
 

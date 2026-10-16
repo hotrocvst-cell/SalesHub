@@ -1,0 +1,121 @@
+
+TGDD
+Dashboards
+
+Danh mục báo cáo
+Doanh thu hợp nhất
+Thi đua
+Giờ Công Làm Việc
+Báo cáo trả chậm
+Lượt bill TGDĐ
+Chi phí chăm sóc khách hàng
+
+Đ
+Đào Bá Linh
+employee
+Doanh thu hợp nhất
+26479 - Đào Bá Linh
+
+Tìm báo cáo
+Ctrl K
+Cập nhật lúc: 10:58:27
+16/10/2026
+
+Toggle theme
+10/2026
+
+Chuỗi
+Chọn
+
+Vùng
+Chọn
+
+Khu vực
+Chọn
+
+Siêu thị
+10335 - AAR_BRV_VTA - 290 Trương Công Định
+×
+
+Ngành hàng
+Chọn
+
+Nhóm hàng
+Chọn
+Lũy kế
+Realtime
+DT thực
+DT quy đổi
+Tải lại
+Xuất Excel
+Xuất theo mẫu
+Toàn công ty
+Siêu thị 10335
+Quỹ thời gian: 15/31 ngày
+48%
+DT quy đổi
+10,827
+triệu đồng · lũy kế tới hết ngày 15/10
+DT quy đổi khoản vay
+?
+—
+Chưa có số khoản vay cho kỳ này
+% HT target
+77.8%
+Target trọn kỳ 13,919 · tiến độ 48.4%
+TT vs TB 3 tháng
++129.0%
+TB3T cùng cửa sổ: 4,727
+DT dự kiến
+?
+22,024
+nhịp 15 ngày → 31 ngày
+TLPVTC lũy kế
+—
+Không có siêu thị nào có máy đếm khách
+Tỷ trọng trả chậm
+42.8%
+DT trả góp QĐ 4,638 / 10,827
+Chi phí
+?
+—
+Chưa có số chi phí tháng 10/2026
+Doanh thu
+Tổng hợp
+Ngành hàng BI
+Nhân viên
+Chi phí
+Thi đua
+
+✓
+Tỉ trọng
+
+✓
+Tăng trưởng
+
+✓
+Chi tiết doanh thu
+NHÂN VIÊN
+SỐ LƯỢNG
+DOANH THU QĐ
+% TỈ TRỌNG
+TB 3 THÁNG	% TT	DT TRẢ THẲNG QĐ	
+DT TRẢ GÓP QĐ
+DT NHẬP TRẢ QĐ
+260732 - Nguyễn Thị Hồng Loan
+342	2,472	22.8%	0	—	1,274	1,253	55
+27560 - Bùi Minh Lãm
+212	2,111	19.5%	0	—	1,328	799	16
+267997 - Nguyễn Thùy Trang
+153	1,832	16.9%	0	—	1,000	832	0
+4614 - Lê Quang Vinh
+111	1,524	14.1%	0	—	758	777	11
+249041 - Nguyễn Phương Nam
+180	1,514	14.0%	0	—	988	526	0
+22838 - Trần Thị Sáu
+180	1,375	12.7%	0	—	938	450	13
+Tổng (6 dòng)	1,178	10,827	100.0%	4,727	+129.0%	6,285	4,638	96
+1-6 / Tổng 6 dòng
+50 / trang
+Đơn vị: triệu đồng
+Tỉ trọng tính trong nhóm cùng cấp cha

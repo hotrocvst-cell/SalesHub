@@ -65,7 +65,7 @@ export default function ClockWidget() {
                 <div className="space-y-1.5">
                     <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md text-blue-200 text-xs font-black uppercase tracking-wider border border-white/10">
                         <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                        <span>Hệ Thống Quản Trị & Bán Hàng SalesHub</span>
+                        <span>Mong Tôn Hoa Sen thấy...</span>
                     </div>
 
                     <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight flex items-center gap-2">

@@ -104,6 +104,8 @@ export default function EmployeeCumulativePage() {
     // State quản lý bản nháp chưa lưu phiên
     const [hasLocalDraft, setHasLocalDraft] = useState<boolean>(false);
     const [draftSavedTime, setDraftSavedTime] = useState<string>('');
+    const [rawQdDraft, setRawQdDraft] = useState<string>('');
+    const [rawRealDraft, setRawRealDraft] = useState<string>('');
 
     // Nạp dữ liệu khi được chuyển hướng từ trang Quản Lý Phiên (hoặc từ SessionHistoryTab)
     useEffect(() => {
@@ -172,6 +174,9 @@ export default function EmployeeCumulativePage() {
                     setWorkHoursMap(parsed.workHoursMap);
                     hasContent = true;
                 }
+                if (parsed.rawQdDraft) setRawQdDraft(parsed.rawQdDraft);
+                if (parsed.rawRealDraft) setRawRealDraft(parsed.rawRealDraft);
+
                 if (hasContent && !parsed.isSavedSession) {
                     setHasLocalDraft(true);
                     setDraftSavedTime(parsed.updatedAt ? formatDateTime(parsed.updatedAt) : '');
@@ -183,6 +188,8 @@ export default function EmployeeCumulativePage() {
                 setCampaignBlocks([]);
                 setCampaignMatrix({});
                 setWorkHoursMap({});
+                setRawQdDraft('');
+                setRawRealDraft('');
                 setHasLocalDraft(false);
             }
         } catch (e) {
@@ -196,6 +203,8 @@ export default function EmployeeCumulativePage() {
         campaignMatrix?: Record<string, Record<string, number>>;
         workHoursMap?: Record<string, number>;
         store?: string;
+        rawQdDraft?: string;
+        rawRealDraft?: string;
     }) => {
         try {
             const now = new Date();
@@ -204,6 +213,8 @@ export default function EmployeeCumulativePage() {
             const matrixToSave = overrides?.campaignMatrix ?? campaignMatrix;
             const hoursToSave = overrides?.workHoursMap ?? workHoursMap;
             const storeToSave = overrides?.store ?? selectedStore;
+            const qdToSave = overrides?.rawQdDraft ?? rawQdDraft;
+            const realToSave = overrides?.rawRealDraft ?? rawRealDraft;
 
             if (revToSave.length === 0 && campToSave.length === 0 && Object.keys(hoursToSave).length === 0) {
                 return;
@@ -215,6 +226,8 @@ export default function EmployeeCumulativePage() {
                 campaignBlocks: campToSave,
                 campaignMatrix: matrixToSave,
                 workHoursMap: hoursToSave,
+                rawQdDraft: qdToSave,
+                rawRealDraft: realToSave,
                 updatedAt: now.toISOString(),
                 isSavedSession: false
             }));
@@ -232,6 +245,8 @@ export default function EmployeeCumulativePage() {
             setCampaignBlocks([]);
             setCampaignMatrix({});
             setWorkHoursMap({});
+            setRawQdDraft('');
+            setRawRealDraft('');
             setHasLocalDraft(false);
             showToast('Đã xóa bản nháp!');
         }
@@ -610,37 +625,49 @@ export default function EmployeeCumulativePage() {
     return (
         <div className="max-w-[1600px] mx-auto space-y-4 pb-12">
             {/* Header Phân Hệ */}
-            <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-2xs flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-                <div>
-                    <div className="flex items-center gap-2">
-                        <span className="p-1.5 rounded-lg bg-blue-100 text-blue-700">
-                            <LayoutDashboard className="w-5 h-5" />
-                        </span>
-                        <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-                            Cập Nhật Lũy Kế Nhân Viên (Paste Text)
-                        </h1>
+            <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-2xs space-y-3.5">
+                <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+                    <div>
+                        <div className="flex items-center gap-2">
+                            <span className="p-1.5 rounded-lg bg-blue-100 text-blue-700">
+                                <LayoutDashboard className="w-5 h-5" />
+                            </span>
+                            <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+                                Cập Nhật Lũy Kế Nhân Viên (Paste Text)
+                            </h1>
+                        </div>
+                        <p className="text-xs text-slate-500 mt-1">
+                            Doanh thu & Thi đua cập nhật theo Siêu thị (có popup xác nhận). Giờ công nạp hỗn hợp Toàn cụm.
+                        </p>
                     </div>
-                    <p className="text-xs text-slate-500 mt-1">
-                        Doanh thu & Thi đua cập nhật theo Siêu thị (có popup xác nhận). Giờ công nạp hỗn hợp Toàn cụm.
-                    </p>
                 </div>
 
-                {/* Chọn Tháng & Siêu thị */}
-                <div className="flex flex-wrap items-center gap-2 self-stretch lg:self-auto">
-                    <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl">
-                        <Store className="w-4 h-4 text-blue-600" />
-                        <select
-                            value={selectedStore}
-                            onChange={e => setSelectedStore(e.target.value)}
-                            className="bg-transparent text-xs font-bold text-slate-800 outline-hidden cursor-pointer"
-                        >
-                            <option value="all">🏢 Toàn Cụm Siêu Thị ({stores.length})</option>
-                            {stores.map(s => (
-                                <option key={s.id || s.code} value={s.name}>{s.name} ({s.code})</option>
-                            ))}
-                        </select>
+                {/* HÀNG 1: BỘ LỌC SIÊU THỊ / CỤM (BẮT BUỘC ĐẦU TIÊN & NẰM RIÊNG LẺ 1 DÒNG) */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-slate-100">
+                    <div className="flex items-center gap-2">
+                        <span className="text-xs font-black text-slate-600 uppercase tracking-wider shrink-0 flex items-center gap-1.5">
+                            <Store className="w-4 h-4 text-blue-600" />
+                            Siêu thị / Cụm:
+                        </span>
+                        <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-300 px-3 py-1.5 rounded-xl min-w-[200px] sm:min-w-[280px]">
+                            <Store className="w-4 h-4 text-blue-600 shrink-0" />
+                            <select
+                                value={selectedStore}
+                                onChange={e => setSelectedStore(e.target.value)}
+                                className="bg-transparent text-xs font-bold text-slate-800 outline-none cursor-pointer w-full"
+                            >
+                                <option value="all">🏢 Toàn Cụm Siêu Thị ({stores.length})</option>
+                                {stores.map(s => (
+                                    <option key={s.id || s.code} value={s.name}>{s.name} ({s.code})</option>
+                                ))}
+                            </select>
+                        </div>
                     </div>
+                </div>
 
+                {/* HÀNG 2: KỲ THÁNG & NĂM, NÚT TẢI LẠI */}
+                <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-bold text-slate-500">Kỳ làm việc:</span>
                     <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl">
                         <Calendar className="w-4 h-4 text-blue-600" />
                         <select
@@ -853,6 +880,8 @@ export default function EmployeeCumulativePage() {
                     initialData={revenueData}
                     configuredEmployees={filteredEmployees}
                     currentStoreName={selectedStore}
+                    initialQdText={rawQdDraft}
+                    initialRealText={rawRealDraft}
                 />
             )}
 

@@ -19,6 +19,9 @@ export interface SystemPagePermission {
     badge_text?: string;    // Nội dung chữ (Ví dụ: HOT, NEW, TOP, Admin, RT, Mới,...)
     badge_icon?: string;    // Icon / Emoji (Ví dụ: 🔥, ⚡, ✨, 🏆, 💎, 👑, 🛡️, 🎁, ⭐)
     badge_color?: BadgeColorTheme | string; // Màu sắc / theme (rose, amber, emerald, blue, purple, indigo, slate)
+    // Phân quyền Xuất Excel (Mặc định: false - Khóa & Ẩn)
+    allow_excel_export?: boolean;
+    allowed_excel_roles?: UserRole[];
 }
 
 export const DEFAULT_PAGE_PERMISSIONS: SystemPagePermission[] = [
@@ -177,6 +180,20 @@ export const DEFAULT_PAGE_PERMISSIONS: SystemPagePermission[] = [
         badge_icon: '⚡',
         badge_text: 'Mới',
         badge_color: 'rose'
+    },
+    {
+        page_key: 'tra_cuu_thi_dua',
+        page_name: 'Tra cứu thi đua',
+        path: '/tra-cuu-thi-dua',
+        group_title: 'SỨC KHỎE NHÂN VIÊN',
+        description: 'Hiển thị và tra cứu thể lệ, định hướng, cách tính và CTKM các chương trình thi đua',
+        is_enabled: true,
+        allowed_roles: ['ADMIN', 'QUAN_LY', 'TRUONG_CA', 'NHAN_VIEN'],
+        order_index: 8,
+        badge_enabled: true,
+        badge_icon: '✨',
+        badge_text: 'Mới',
+        badge_color: 'blue'
     },
     {
         page_key: 'nhip_doanh_thu',

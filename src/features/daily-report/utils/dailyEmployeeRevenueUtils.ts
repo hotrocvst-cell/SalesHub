@@ -278,14 +278,18 @@ export function generateDailyZaloText(
     top30: DailyReportEmployeeRow[],
     belowAvg: DailyReportEmployeeRow[],
     zeroOrNeg: DailyReportEmployeeRow[],
-    zeroInstallment: DailyReportEmployeeRow[]
+    zeroInstallment: DailyReportEmployeeRow[],
+    hasInstallmentData: boolean = true
 ): string {
     const formattedDate = formatDate(reportDate) || reportDate;
 
     // Top 30% text
     const topText = top30.map((e) => {
         const medal = e.rank === 1 ? '🥇' : e.rank === 2 ? '🥈' : e.rank === 3 ? '🥉' : `🎖️ #${e.rank}`;
-        return `   ${medal} ${e.display_name}: ${formatValue(e.revenue_qd)} tr | ${formatValue(e.installment_revenue)} tr (${e.installment_rate}%)`;
+        if (hasInstallmentData) {
+            return `   ${medal} ${e.display_name}: ${formatValue(e.revenue_qd)} tr | ${formatValue(e.installment_revenue)} tr (${e.installment_rate}%)`;
+        }
+        return `   ${medal} ${e.display_name}: ${formatValue(e.revenue_qd)} tr (Thực: ${formatValue(e.revenue_actual)} tr)`;
     }).join('\n');
 
     // Dưới trung bình text
@@ -307,33 +311,39 @@ export function generateDailyZaloText(
 
     // 0% Trả góp text
     let zeroInstallmentNames = '';
-    if (zeroInstallment.length > 0) {
-        zeroInstallmentNames = zeroInstallment.map(e => `${e.short_name} (${formatValue(e.revenue_qd)} tr)`).join('\n   👉 ');
-    } else if (summary.totalEmployees === 0 || summary.activeCount === 0) {
-        zeroInstallmentNames = 'Chưa có nhân sự nào phát sinh doanh thu trong ca';
-    } else {
-        zeroInstallmentNames = 'Không có (100% nhân sự trong ca đều có hợp đồng trả góp)';
+    if (hasInstallmentData) {
+        if (zeroInstallment.length > 0) {
+            zeroInstallmentNames = zeroInstallment.map(e => `${e.short_name} (${formatValue(e.revenue_qd)} tr)`).join('\n   👉 ');
+        } else if (summary.totalEmployees === 0 || summary.activeCount === 0) {
+            zeroInstallmentNames = 'Chưa có nhân sự nào phát sinh doanh thu trong ca';
+        } else {
+            zeroInstallmentNames = 'Không có (100% nhân sự trong ca đều có hợp đồng trả góp)';
+        }
     }
 
-    return `📢 DOANH THU NHÂN VIÊN (${formattedDate})
+    let txt = `📢 DOANH THU NHÂN VIÊN (${formattedDate})
 🏢 ${storeName}
 
 💰 Doanh Thu Thực: ${formatValue(summary.totalActualRevenue)} tr
-💎 DTQĐ: ${formatValue(summary.totalRevenueQd)} tr (TB: ${formatValue(summary.avgRevenueQd)} tr/nv)
-💳 DT Trả Chậm: ${formatValue(summary.totalInstallmentRevenue)} tr (${summary.avgInstallmentRate}%)
+💎 DTQĐ: ${formatValue(summary.totalRevenueQd)} tr (TB: ${formatValue(summary.avgRevenueQd)} tr/nv)`;
 
-🏆 TOP DẪN ĐẦU: (DTQĐ | Trả chậm)
-${topText}
+    if (hasInstallmentData) {
+        txt += `\n💳 DT Trả Chậm: ${formatValue(summary.totalInstallmentRevenue)} tr (${summary.avgInstallmentRate}%)`;
+    }
 
-⚡ TRỌNG TÂM NHẮC NHỞ TĂNG TỐC:
+    txt += `\n\n🏆 TOP DẪN ĐẦU: ${hasInstallmentData ? '(DTQĐ | Trả chậm)' : '(DTQĐ | DT Thực)'}\n${topText}`;
+
+    txt += `\n\n⚡ CẦN QUAN TÂM:
 ⚠️ 1. Nhóm DTQĐ dưới trung bình (${summary.belowAvgCount} bạn < ${formatValue(summary.avgRevenueQd)} tr):
    👉 ${belowAvgNames}
 
 🚨 2. Nhóm DT bất ổn (${summary.zeroOrNegCount} bạn):
-   👉 ${zeroOrNegNames}
+   👉 ${zeroOrNegNames}`;
 
-💳 3. Nhóm chưa có trả góp (${summary.zeroInstallmentCount} bạn):
-   👉 ${zeroInstallmentNames}
+    if (hasInstallmentData) {
+        txt += `\n\n💳 3. Nhóm chưa có trả góp (${summary.zeroInstallmentCount} bạn):\n   👉 ${zeroInstallmentNames}`;
+    }
 
-`;
+    txt += '\n\n';
+    return txt;
 }

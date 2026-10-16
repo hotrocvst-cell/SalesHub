@@ -50,20 +50,21 @@ export default function ClusterAssessmentModal({
         // Tìm siêu thị cần tăng tốc (%HT thấp nhất)
         const lowPctHt = [...rows].sort((a, b) => a.pctHtOver - b.pctHtOver)[0];
 
+        const hasInstallment = summary.hasInstallmentRate ?? (summary.avgInstallmentRate > 0);
         const lines: string[] = [];
 
         lines.push(`📊 ĐÁNH GIÁ SỨC KHỎE CỤM T${month}/${year}:`);
-        lines.push(`• DTQĐ: ${summary.totalRevenueQd.toFixed(3)} tỷ (+${summary.avgPctQd.toFixed(1)}% QĐ) • %HT: ${summary.avgPctHtOver.toFixed(1)}% • Trả góp: ${summary.avgInstallmentRate.toFixed(1)}%.`);
+        lines.push(`• DTQĐ: ${summary.totalRevenueQd.toFixed(3)} tỷ (+${summary.avgPctQd.toFixed(1)}% QĐ) • %HT: ${summary.avgPctHtOver.toFixed(1)}%${hasInstallment ? ` • Trả góp: ${summary.avgInstallmentRate.toFixed(1)}%` : ''}.`);
 
         if (topPctHt) {
             lines.push(`🌟 Dẫn đầu: [${getShortStoreName(topPctHt.storeName)}] đạt ${topPctHt.pctHtOver.toFixed(1)}% target vượt trội.`);
         }
 
         if (lowPctHt && lowPctHt.pctHtOver < 100) {
-            lines.push(`🚨 Tăng tốc: [${getShortStoreName(lowPctHt.storeName)}] đạt ${lowPctHt.pctHtOver.toFixed(1)}%, tập trung dồn lực ca tối & trả chậm.`);
+            lines.push(`🚨 Tăng tốc: [${getShortStoreName(lowPctHt.storeName)}] đạt ${lowPctHt.pctHtOver.toFixed(1)}%, tập trung dồn lực ca tối${hasInstallment ? ' & trả chậm' : ''}.`);
         }
 
-        lines.push(`🎯 Hướng dẫn: Bám sát nhịp ca, tối ưu trả chậm và DTQĐ để toàn cụm cán đích.`);
+        lines.push(`🎯 Hướng dẫn: Bám sát nhịp ca, tối ưu ${hasInstallment ? 'trả chậm và ' : ''}DTQĐ để toàn cụm cán đích.`);
 
         setComment(lines.join('\n'));
     };

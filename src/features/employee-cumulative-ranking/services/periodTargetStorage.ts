@@ -1,10 +1,10 @@
 import { supabase } from '../../../core/lib/supabase';
-import { isStoreMatch } from '../../../core/lib/formatters';
+import { isStoreMatch, normalizeToMillion } from '../../../core/lib/formatters';
 import type { PeriodTargetConfig } from '../types';
 
 const STORAGE_CACHE_KEY = 'saleshub_period_targets_cache_v1';
 
-export const EMPLOYEE_PERIOD_TARGETS_SQL = `-- Bảng lưu trữ cấu hình Target theo từng Giai đoạn riêng biệt (khác với target nguyên tháng)
+export const EMPLOYEE_PERIOD_TARGETS_SQL = `-- Bảng lưu trữ cấu hình Target theo từng Giai đoạn riêng biệt (Đơn vị tính: Triệu đồng)
 CREATE TABLE IF NOT EXISTS public.employee_period_targets (
     id TEXT PRIMARY KEY,
     period_title TEXT NOT NULL,
@@ -55,7 +55,7 @@ export async function checkSupabasePeriodTargetTable(): Promise<{ exists: boolea
 /**
  * Đọc cache từ LocalStorage
  */
-function getLocalCache(): PeriodTargetConfig[] {
+export function getLocalCache(): PeriodTargetConfig[] {
     try {
         const raw = localStorage.getItem(STORAGE_CACHE_KEY);
         return raw ? JSON.parse(raw) : [];
@@ -67,10 +67,22 @@ function getLocalCache(): PeriodTargetConfig[] {
 /**
  * Lưu cache vào LocalStorage
  */
-function setLocalCache(list: PeriodTargetConfig[]): void {
+export function setLocalCache(list: PeriodTargetConfig[]): void {
     try {
         localStorage.setItem(STORAGE_CACHE_KEY, JSON.stringify(list));
     } catch {}
+}
+
+/**
+ * Chuẩn hóa các giá trị target bên trong object về đơn vị Triệu đồng
+ */
+function normalizeTargetsMap(rawTargets: Record<string, any> | undefined): Record<string, number> {
+    if (!rawTargets || typeof rawTargets !== 'object') return {};
+    const result: Record<string, number> = {};
+    Object.entries(rawTargets).forEach(([k, v]) => {
+        result[k.trim()] = normalizeToMillion(v);
+    });
+    return result;
 }
 
 /**
@@ -101,8 +113,9 @@ export async function fetchPeriodTarget(
                     storeName: matched.store_name,
                     fromDate: matched.from_date,
                     toDate: matched.to_date,
-                    storeTarget: Number(matched.store_target) || 0,
-                    targets: matched.targets || {},
+                    storeTarget: normalizeToMillion(matched.store_target),
+                    targets: normalizeTargetsMap(matched.targets),
+                    isCloudStored: true,
                     createdAt: matched.created_at,
                     updatedAt: matched.updated_at,
                     updatedBy: matched.updated_by
@@ -115,15 +128,26 @@ export async function fetchPeriodTarget(
 
     // Fallback LocalStorage cache
     const cached = getLocalCache();
-    return cached.find(c =>
+    const localMatch = cached.find(c =>
         c.fromDate === fromDate &&
         c.toDate === toDate &&
         (storeName === 'all' || isStoreMatch(c.storeName, storeName, storesList))
-    ) || null;
+    );
+
+    if (localMatch) {
+        return {
+            ...localMatch,
+            storeTarget: normalizeToMillion(localMatch.storeTarget),
+            targets: normalizeTargetsMap(localMatch.targets),
+            isCloudStored: false
+        };
+    }
+
+    return null;
 }
 
 /**
- * Tải tất cả các giai đoạn đã cấu hình của một siêu thị
+ * Tải tất cả các giai đoạn đã cấu hình (hỗ trợ phân biệt Cloud vs Local cache)
  */
 export async function fetchAllPeriodTargets(storeName?: string): Promise<PeriodTargetConfig[]> {
     try {
@@ -138,26 +162,45 @@ export async function fetchAllPeriodTargets(storeName?: string): Promise<PeriodT
 
         const { data, error } = await query;
         if (!error && data) {
-            const result: PeriodTargetConfig[] = data.map(row => ({
+            const cloudResults: PeriodTargetConfig[] = data.map(row => ({
                 id: row.id,
                 periodTitle: row.period_title || '',
                 storeName: row.store_name,
                 fromDate: row.from_date,
                 toDate: row.to_date,
-                storeTarget: Number(row.store_target) || 0,
-                targets: row.targets || {},
+                storeTarget: normalizeToMillion(row.store_target),
+                targets: normalizeTargetsMap(row.targets),
+                isCloudStored: true,
                 createdAt: row.created_at,
                 updatedAt: row.updated_at,
                 updatedBy: row.updated_by
             }));
-            setLocalCache(result);
-            return result;
+            
+            // Hợp nhất với local cache nếu có bản ghi chỉ nằm ở máy khách
+            const localCache = getLocalCache();
+            const cloudIdSet = new Set(cloudResults.map(c => c.id));
+            const unsyncedLocal = localCache.filter(l => !cloudIdSet.has(l.id)).map(l => ({
+                ...l,
+                storeTarget: normalizeToMillion(l.storeTarget),
+                targets: normalizeTargetsMap(l.targets),
+                isCloudStored: false
+            }));
+
+            const combined = [...cloudResults, ...unsyncedLocal];
+            setLocalCache(combined);
+            return combined;
         }
     } catch (err) {
-        console.warn('Lỗi fetchAllPeriodTargets:', err);
+        console.warn('Lỗi fetchAllPeriodTargets từ Cloud, dùng cache:', err);
     }
 
-    return getLocalCache();
+    const localList = getLocalCache();
+    return localList.map(l => ({
+        ...l,
+        storeTarget: normalizeToMillion(l.storeTarget),
+        targets: normalizeTargetsMap(l.targets),
+        isCloudStored: false
+    }));
 }
 
 /**
@@ -169,21 +212,32 @@ export async function savePeriodTarget(
     const id = config.id || buildPeriodTargetId(config.storeName, config.fromDate, config.toDate);
     const now = new Date().toISOString();
 
+    const normalizedStoreTarget = normalizeToMillion(config.storeTarget);
+    const normalizedTargets = normalizeTargetsMap(config.targets);
+
     const payload = {
         id,
         period_title: config.periodTitle || `Giai đoạn ${config.fromDate} - ${config.toDate}`,
         store_name: config.storeName,
         from_date: config.fromDate,
         to_date: config.toDate,
-        store_target: Number(config.storeTarget) || 0,
-        targets: config.targets || {},
+        store_target: normalizedStoreTarget,
+        targets: normalizedTargets,
         updated_at: now
     };
 
-    // 1. Cập nhật cache local trước
+    // 1. Cập nhật cache local trước (đánh dấu tạm offline)
     const cached = getLocalCache();
+    const updatedCacheConfig: PeriodTargetConfig = {
+        ...config,
+        id,
+        storeTarget: normalizedStoreTarget,
+        targets: normalizedTargets,
+        updatedAt: now,
+        isCloudStored: false
+    };
     const updatedCache = [
-        config,
+        updatedCacheConfig,
         ...cached.filter(c => c.id !== id)
     ];
     setLocalCache(updatedCache);
@@ -198,17 +252,27 @@ export async function savePeriodTarget(
             console.error('Lỗi Supabase upsert employee_period_targets:', error);
             return {
                 success: false,
-                data: config,
-                error: `Đã lưu tạm offline, lỗi Cloud: ${error.message}`
+                data: updatedCacheConfig,
+                error: `Đã lưu bộ nhớ máy, lỗi Cloud: ${error.message}`
             };
         }
 
-        return { success: true, data: { ...config, id, updatedAt: now } };
+        // Đánh dấu đã lưu thành công lên Cloud
+        const cloudConfig: PeriodTargetConfig = {
+            ...updatedCacheConfig,
+            isCloudStored: true
+        };
+        setLocalCache([
+            cloudConfig,
+            ...cached.filter(c => c.id !== id)
+        ]);
+
+        return { success: true, data: cloudConfig };
     } catch (e: any) {
         console.error('Lỗi ngoại lệ savePeriodTarget:', e);
         return {
             success: false,
-            data: config,
+            data: updatedCacheConfig,
             error: e.message || String(e)
         };
     }
@@ -233,5 +297,41 @@ export async function deletePeriodTarget(id: string): Promise<{ success: boolean
         return { success: true };
     } catch (e: any) {
         return { success: false, error: e.message || String(e) };
+    }
+}
+
+/**
+ * Đồng bộ toàn bộ các phiên Target giai đoạn từ Local lên Cloud
+ */
+export async function syncLocalPeriodTargetsToCloud(): Promise<{ success: boolean; syncedCount: number; error?: string }> {
+    const cached = getLocalCache();
+    const unsynced = cached.filter(c => !c.isCloudStored);
+    if (unsynced.length === 0) return { success: true, syncedCount: 0 };
+
+    try {
+        const payloads = unsynced.map(c => ({
+            id: c.id,
+            period_title: c.periodTitle,
+            store_name: c.storeName,
+            from_date: c.fromDate,
+            to_date: c.toDate,
+            store_target: normalizeToMillion(c.storeTarget),
+            targets: normalizeTargetsMap(c.targets),
+            updated_at: new Date().toISOString()
+        }));
+
+        const { error } = await supabase
+            .from('employee_period_targets')
+            .upsert(payloads, { onConflict: 'id' });
+
+        if (error) throw error;
+
+        // Cập nhật lại cache thành isCloudStored = true
+        const updated = cached.map(c => ({ ...c, isCloudStored: true }));
+        setLocalCache(updated);
+
+        return { success: true, syncedCount: payloads.length };
+    } catch (e: any) {
+        return { success: false, syncedCount: 0, error: e.message || String(e) };
     }
 }

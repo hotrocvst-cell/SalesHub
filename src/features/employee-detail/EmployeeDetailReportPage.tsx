@@ -72,6 +72,8 @@ import {
     Layers
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
+import ReportActionButtons, { type AssessmentTemplate } from '../../shared/components/report/ReportActionButtons';
+import { calculate8KScale } from '../../shared/utils/exportImage';
 
 interface CampaignDetailRow {
     stt: number;
@@ -189,7 +191,6 @@ export default function EmployeeDetailReportPage() {
 
     const [loading, setLoading] = useState<boolean>(true);
     const [isExporting, setIsExporting] = useState<boolean>(false);
-    const [exportResolution, setExportResolution] = useState<'4K' | '8K'>('8K');
     const [toastMessage, setToastMessage] = useState<string>('');
 
     // Cài đặt cấu hình xuất: Xuất All (kèm Ghi Chú Phân Tích) hoặc Loại Trừ Ghi Chú Phân Tích
@@ -855,7 +856,7 @@ export default function EmployeeDetailReportPage() {
         };
     }, [campaignDetailRows, isPointsMode]);
 
-    // 11. XUẤT ẢNH CHẤT LƯỢNG SIÊU NÉT (4K / 8K) THEO ĐÚNG SCREEN CHO BÁO CÁO CHI TIẾT (KHÔNG GIỚI HẠN CHIỀU DÀI)
+    // 11. XUẤT ẢNH CHẤT LƯỢNG SIÊU NÉT 8K THEO ĐÚNG SCREEN CHO BÁO CÁO CHI TIẾT (KHÔNG GIỚI HẠN CHIỀU DÀI)
     const generateCanvas = async (): Promise<HTMLCanvasElement | null> => {
         if (!reportRef.current) return null;
 
@@ -867,8 +868,8 @@ export default function EmployeeDetailReportPage() {
         // Chờ 2 frame render của browser để đảm bảo DOM layout, font và bounding box ổn định 100%
         await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 
-        const scale = exportResolution === '8K' ? 4 : 2.5;
         const contentWidth = Math.max(originalEl.offsetWidth, 640);
+        const scale = calculate8KScale(originalEl, contentWidth);
 
         try {
             return await html2canvas(originalEl, {
@@ -965,10 +966,10 @@ export default function EmployeeDetailReportPage() {
             }
             const link = document.createElement('a');
             const empNameClean = cleanEmployeeName(currentEmployee?.full_name || 'NhanVien');
-            link.download = `ChiTietNV_${empNameClean}_${selectedEmployeeId}_T${selectedMonth}_${selectedYear}_${exportResolution}.png`;
+            link.download = `ChiTietNV_${empNameClean}_${selectedEmployeeId}_T${selectedMonth}_${selectedYear}_8K.png`;
             link.href = canvas.toDataURL('image/png', 1.0);
             link.click();
-            showToast(`✅ Đã tải file ảnh ${exportResolution} thành công!`);
+            showToast('✅ Đã tải file ảnh 8K thành công!');
         } catch (e: any) {
             showToast(`❌ Lỗi xuất ảnh: ${e.message}`);
         } finally {
@@ -995,7 +996,7 @@ export default function EmployeeDetailReportPage() {
                     await navigator.clipboard.write([
                         new ClipboardItem({ 'image/png': blob })
                     ]);
-                    showToast(`✅ Đã copy ảnh ${exportResolution} vào bộ nhớ tạm! Bạn có thể dán (Ctrl + V) ngay vào Messaging App.`);
+                    showToast('✅ Đã copy ảnh 8K vào bộ nhớ tạm! Bạn có thể dán (Ctrl + V) ngay vào Messaging App.');
                 } catch (clipErr) {
                     const link = document.createElement('a');
                     link.download = `ChiTietNV_${selectedEmployeeId}.png`;
@@ -1025,7 +1026,7 @@ export default function EmployeeDetailReportPage() {
 
         const storeNameDisplay = selectedStore === 'all' ? 'Tất cả siêu thị' : getShortStoreName(selectedStore);
         const configDisplay = includeAnalysisSection ? 'Xuất All' : 'Loại trừ Phân Tích';
-        const confirmMsg = `Bạn có muốn xuất ảnh báo cáo chất lượng ${exportResolution} (${configDisplay}) cho toàn bộ ${availableEmployees.length} nhân viên của "${storeNameDisplay}" không?`;
+        const confirmMsg = `Bạn có muốn xuất ảnh báo cáo chuẩn 8K (${configDisplay}) cho toàn bộ ${availableEmployees.length} nhân viên của "${storeNameDisplay}" không?`;
         if (!window.confirm(confirmMsg)) return;
 
         const originalEmployeeId = selectedEmployeeId;
@@ -1067,7 +1068,7 @@ export default function EmployeeDetailReportPage() {
                 if (canvas) {
                     const link = document.createElement('a');
                     const sttPrefix = String(i + 1).padStart(2, '0');
-                    link.download = `${sttPrefix}_ChiTietNV_${empNameClean}_${emp.employee_id}_T${selectedMonth}_${selectedYear}_${exportResolution}.png`;
+                    link.download = `${sttPrefix}_ChiTietNV_${empNameClean}_${emp.employee_id}_T${selectedMonth}_${selectedYear}_8K.png`;
                     link.href = canvas.toDataURL('image/png', 1.0);
                     link.click();
                     successCount++;
@@ -1078,7 +1079,7 @@ export default function EmployeeDetailReportPage() {
             }
 
             if (!cancelBatchRef.current) {
-                showToast(`🎉 Đã xuất thành công ${successCount}/${availableEmployees.length} ảnh báo cáo ${exportResolution}!`);
+                showToast(`🎉 Đã xuất thành công ${successCount}/${availableEmployees.length} ảnh báo cáo 8K!`);
             } else {
                 showToast(`⚠️ Đã dừng xuất ảnh. Đã tải ${successCount} ảnh.`);
             }
@@ -1137,6 +1138,86 @@ export default function EmployeeDetailReportPage() {
         showToast('📋 Đã copy nội dung tóm tắt Messaging App vào bộ nhớ tạm!');
     };
 
+    // 3 MẪU NHẬN XÉT CÁ NHÂN TIÊU CHUẨN DÙNG CHUNG
+    const assessmentTemplates = useMemo<AssessmentTemplate[]>(() => {
+        const empName = currentEmployee?.full_name || selectedEmployeeId;
+        const storeName = currentEmployee?.store_name || selectedStore;
+
+        const summaryText = isPointsMode
+            ? `🎯 ĐIỂM THI ĐUA DK: ${campaignSummaryStats.achievedPoints}/${campaignSummaryStats.totalPoints} ĐIỂM (${campaignSummaryStats.pointsPercentage}%)`
+            : `🎯 THI ĐUA DK: ${campaignSummaryStats.achieved}/${campaignSummaryStats.total} (${campaignSummaryStats.percentage}%)`;
+
+        // Mẫu 1: Tổng quan hiệu quả & Doanh số
+        const m1Lines = [
+            `⚡ [BÁO CÁO HIỆU QUẢ CÁ NHÂN: ${empName.toUpperCase()}]`,
+            `🏢 ${storeName} • 📅 Đến hết: ${reportDateString}`,
+            `----------------------------------------`,
+            `📊 DOANH THU & NĂNG SUẤT:`,
+            `• Target QĐ: ${employeeKpis.targetQd.toLocaleString('vi-VN')} tr`,
+            `• DTQĐ: ${employeeKpis.revenueQd.toLocaleString('vi-VN')} tr (${employeeKpis.forecastCompletionRate}% DKHT)`,
+            `• % Quy đổi: ${employeeKpis.exchangeRate}%`,
+            `• Tỷ lệ trả chậm: ${employeeKpis.installmentRate}%`,
+            ...(employeeKpis.workHours > 0 ? [`• Giờ công: ${employeeKpis.workHours}h (Năng suất: ${employeeKpis.prodQdPerHour} tr/h)`] : []),
+            `----------------------------------------`,
+            summaryText,
+            `💪 Cố gắng duy trì đà tăng trưởng để hoàn thành xuất sắc mục tiêu tháng!`
+        ];
+
+        // Mẫu 2: Chi tiết các thi đua
+        const achievedRows = filteredCampaignRows.filter(r => r.isAchieved);
+        const unachievedRows = filteredCampaignRows.filter(r => !r.isAchieved && r.target > 0);
+        const m2Lines = [
+            `🏆 [TIẾN ĐỘ THI ĐUA CHI TIẾT: ${empName.toUpperCase()}]`,
+            `🏢 ${storeName} • 📅 Đến hết: ${reportDateString}`,
+            `----------------------------------------`,
+            `✅ CÁC NHÓM HÀNG ĐÃ ĐẠT TIẾN ĐỘ (${achievedRows.length}):`,
+            ...(achievedRows.length > 0
+                ? achievedRows.map(r => `• ${r.displayName}: ${r.actual}/${r.target} ${r.unit} (${r.completionRate}% DK)`)
+                : ['• Chưa có nhóm hàng nào đạt 100%']),
+            `----------------------------------------`,
+            `⏳ CÁC NHÓM HÀNG CẦN KÉO SỐ GẤP (${unachievedRows.length}):`,
+            ...(unachievedRows.length > 0
+                ? unachievedRows.map(r => `• ${r.displayName}: ${r.actual}/${r.target} ${r.unit} (Còn thiếu: ${r.remaining} ${r.unit} • ${r.completionRate}% DK)`)
+                : ['• Xuất sắc! Tất cả nhóm hàng có target đều đã đạt!']),
+            `----------------------------------------`,
+            `🔥 Tập trung bứt phá các nhóm hàng còn thiếu để gom trọn điểm thưởng!`
+        ];
+
+        // Mẫu 3: Lời khuyên & Định hướng hành động
+        const m3Lines = [
+            `🎯 [ĐỊNH HƯỚNG & KẾ HOẠCH HÀNH ĐỘNG CÁ NHÂN: ${empName.toUpperCase()}]`,
+            `🏢 ${storeName} • 📅 ${reportDateString}`,
+            `----------------------------------------`,
+            `📌 3 VIỆC CẦN LÀM NGAY:`,
+            `1. Bám sát khách hàng có nhu cầu trả chậm để nâng tỷ lệ TG lên tối thiểu 35%.`,
+            `2. Với mỗi đơn máy, chủ động tư vấn kèm 2 - 3 món phụ kiện/gia dụng.`,
+            `3. Rà soát danh sách nhóm hàng còn thiếu để chủ động giới thiệu khi có lượt khách.`,
+            `----------------------------------------`,
+            `🚀 Chúc bạn bứt phá ngoạn mục và dẫn đầu bảng thi đua siêu thị!`
+        ];
+
+        return [
+            {
+                id: 'template_emp_overview',
+                label: 'Mẫu 1: Tổng quan hiệu quả',
+                description: 'Tóm tắt doanh số, % quy đổi và tỷ lệ trả góp',
+                content: m1Lines.join('\n')
+            },
+            {
+                id: 'template_emp_campaigns',
+                label: 'Mẫu 2: Chi tiết thi đua',
+                description: 'Phân loại nhóm hàng đã đạt và nhóm hàng cần kéo số',
+                content: m2Lines.join('\n')
+            },
+            {
+                id: 'template_emp_actions',
+                label: 'Mẫu 3: Định hướng hành động',
+                description: 'Kế hoạch hành động cụ thể cho nhân viên kéo số',
+                content: m3Lines.join('\n')
+            }
+        ];
+    }, [currentEmployee, selectedEmployeeId, selectedStore, isPointsMode, campaignSummaryStats, reportDateString, employeeKpis, filteredCampaignRows]);
+
     return (
         <div className="space-y-6 pb-12 font-avo">
             {/* Toast Thông Báo */}
@@ -1175,30 +1256,6 @@ export default function EmployeeDetailReportPage() {
 
                 {/* Các nút Xuất Báo Cáo */}
                 <div className="flex items-center gap-2 flex-wrap">
-                    {/* Toggle Độ Phân Giải */}
-                    <div className="flex items-center bg-slate-100 p-0.5 rounded-xl text-[11px] font-bold">
-                        <button
-                            type="button"
-                            onClick={() => setExportResolution('4K')}
-                            className={`px-2 py-1 rounded-lg transition cursor-pointer ${exportResolution === '4K'
-                                ? 'bg-white text-slate-900 shadow-2xs'
-                                : 'text-slate-600 hover:text-slate-900'
-                                }`}
-                        >
-                            4K
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setExportResolution('8K')}
-                            className={`px-2 py-1 rounded-lg transition cursor-pointer ${exportResolution === '8K'
-                                ? 'bg-amber-400 text-amber-950 font-black shadow-2xs'
-                                : 'text-slate-600 hover:text-slate-900'
-                                }`}
-                        >
-                            8K Ultra
-                        </button>
-                    </div>
-
                     {/* Cài đặt cấu hình: Xuất All hoặc Loại trừ Ghi Chú Phân Tích */}
                     <div className="flex items-center bg-slate-100 p-0.5 rounded-xl text-[11px] font-bold border border-slate-200">
                         <button
@@ -1227,27 +1284,21 @@ export default function EmployeeDetailReportPage() {
                         </button>
                     </div>
 
-                    <button
-                        type="button"
-                        onClick={handleCopyImageToClipboard}
-                        disabled={isExporting || batchExport.isRunning}
-                        className="px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-800 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer border border-blue-200 shadow-2xs"
-                        title="Copy ảnh độ nét cao vào Clipboard để dán trực tiếp vào Messaging App"
-                    >
-                        <Copy className="w-4 h-4 text-blue-600" />
-                        <span>{isExporting ? `Đang xuất ${exportResolution}...` : `Copy Ảnh`}</span>
-                    </button>
-
-                    <button
-                        type="button"
-                        onClick={handleDownloadImage}
-                        disabled={isExporting || batchExport.isRunning}
-                        className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer border border-slate-200"
-                        title="Tải ảnh PNG độ nét cao về máy"
-                    >
-                        <Camera className="w-4 h-4 text-slate-600" />
-                        <span>Tải Ảnh</span>
-                    </button>
+                    {/* Cụm button chuẩn: Nhận xét 3 mẫu, Tải ảnh, Copy ảnh, Copy Nhận xét */}
+                    <ReportActionButtons
+                        onExportImage={handleDownloadImage}
+                        onCopyImage={handleCopyImageToClipboard}
+                        onCopyText={handleCopyZaloSummary}
+                        isExporting={isExporting}
+                        isCopyingImage={isExporting}
+                        assessmentTemplates={assessmentTemplates}
+                        reportTitle={`Báo Cáo Chi Tiết: ${currentEmployee?.full_name || selectedEmployeeId}`}
+                        periodLabel={reportDateString}
+                        storeName={currentEmployee?.store_name || selectedStore}
+                        exportLabel="Tải Ảnh"
+                        copyLabel="Copy Ảnh"
+                        copyTextLabel="Copy Nhận xét"
+                    />
 
                     {/* NÚT XUẤT ẢNH HÀNG LOẠT CHO TẤT CẢ NHÂN VIÊN CỦA SHOP (THEO SCREEN) (Chỉ hiển thị với Admin/QL/TC) */}
                     {canExportAllEmployees && (
@@ -1256,86 +1307,87 @@ export default function EmployeeDetailReportPage() {
                             onClick={handleBatchExportAllStore}
                             disabled={isExporting || batchExport.isRunning}
                             className="px-3.5 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs"
-                            title={`Xuất ảnh báo cáo theo screen (${exportResolution}) cho tất cả ${availableEmployees.length} nhân viên trong siêu thị được chọn`}
+                            title={`Xuất ảnh báo cáo theo screen chuẩn 8K cho tất cả ${availableEmployees.length} nhân viên trong siêu thị được chọn`}
                         >
                             {batchExport.isRunning ? (
                                 <Loader2 className="w-4 h-4 animate-spin text-white" />
                             ) : (
                                 <Users className="w-4 h-4 text-amber-300" />
                             )}
-                            <span>Xuất Tất Cả NV ({exportResolution})</span>
+                            <span>Xuất Tất Cả NV</span>
                         </button>
                     )}
-
-                    <button
-                        type="button"
-                        onClick={handleCopyZaloSummary}
-                        className="px-3 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs"
-                        title="Copy tóm tắt kết quả dạng văn bản gửi Messaging App"
-                    >
-                        <Sparkles className="w-4 h-4" />
-                        <span>Copy Nhận xét</span>
-                    </button>
                 </div>
             </div>
 
             {/* 2. THANH BỘ LỌC THỜI GIAN, SIÊU THỊ & CHỌN NHÂN VIÊN */}
-            <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs flex flex-wrap items-center justify-between gap-3 text-xs">
-                <div className="flex flex-wrap items-center gap-2.5">
-                    {/* Chọn Siêu Thị */}
-                    <div className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-bold ${isLockedToSingleStore
-                        ? 'bg-amber-50/90 border-amber-200 text-amber-900 shadow-2xs'
-                        : 'bg-slate-50 border-slate-200 text-slate-800'
-                        }`}>
-                        {isLockedToSingleStore ? (
-                            <Lock className="w-4 h-4 text-amber-600 shrink-0" />
-                        ) : (
-                            <Store className="w-4 h-4 text-amber-600 shrink-0" />
-                        )}
-                        <select
-                            value={selectedStore}
-                            disabled={isLockedToSingleStore}
-                            onChange={e => {
-                                const newStore = e.target.value;
-                                setSelectedStore(newStore);
-                                setSearchParams(prev => {
-                                    const p = new URLSearchParams(prev);
-                                    p.set('store', newStore);
-                                    return p;
-                                });
-                            }}
-                            className="bg-transparent text-xs font-bold outline-hidden cursor-pointer disabled:cursor-not-allowed max-w-[200px] truncate"
-                        >
-                            {canViewAllStores && <option value="all">🏢 Toàn Cụm Siêu Thị</option>}
-                            {allowedStores.map(s => (
-                                <option key={s.id || s.name} value={s.name}>
-                                    {getShortStoreName(s.name)}
-                                </option>
-                            ))}
-                        </select>
+            <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-3 text-xs">
+                {/* HÀNG 1: BỘ LỌC SIÊU THỊ RIÊNG LẺ ĐẦU TIÊN (RULE 10 CONVENTION) */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+                    <div className="flex items-center gap-2">
+                        <div className={`flex items-center gap-2 px-3.5 py-2 rounded-xl border text-xs font-bold ${isLockedToSingleStore
+                            ? 'bg-amber-50/90 border-amber-200 text-amber-900 shadow-2xs'
+                            : 'bg-slate-50 border-slate-200 hover:border-amber-400 text-slate-800 shadow-2xs'
+                            }`}>
+                            {isLockedToSingleStore ? (
+                                <Lock className="w-4 h-4 text-amber-600 shrink-0" />
+                            ) : (
+                                <Store className="w-4 h-4 text-amber-600 shrink-0" />
+                            )}
+                            <span className="text-slate-500 font-bold whitespace-nowrap">Siêu thị:</span>
+                            <select
+                                value={selectedStore}
+                                disabled={isLockedToSingleStore}
+                                onChange={e => {
+                                    const newStore = e.target.value;
+                                    setSelectedStore(newStore);
+                                    setSearchParams(prev => {
+                                        const p = new URLSearchParams(prev);
+                                        p.set('store', newStore);
+                                        return p;
+                                    });
+                                }}
+                                className="bg-transparent text-xs font-black outline-hidden cursor-pointer disabled:cursor-not-allowed min-w-[200px] sm:min-w-[260px] truncate"
+                            >
+                                {canViewAllStores && <option value="all">🏢 Toàn Cụm Siêu Thị</option>}
+                                {allowedStores.map(s => (
+                                    <option key={s.id || s.name} value={s.name}>
+                                        🏪 {getShortStoreName(s.name)}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
                     </div>
 
-                    {/* Chọn Tháng */}
-                    <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl">
-                        <Calendar className="w-4 h-4 text-blue-600" />
-                        <select
-                            value={selectedMonth}
-                            onChange={e => {
-                                const m = parseInt(e.target.value, 10);
-                                setSelectedMonth(m);
-                                setSearchParams(prev => {
-                                    const p = new URLSearchParams(prev);
-                                    p.set('month', String(m));
-                                    return p;
-                                });
-                            }}
-                            className="bg-transparent text-xs font-bold text-slate-800 outline-hidden cursor-pointer"
-                        >
-                            {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
-                                <option key={m} value={m}>Tháng {m}</option>
-                            ))}
-                        </select>
+                    <div className="text-slate-500 font-medium text-[11px]">
+                        Danh sách: <b>{availableEmployees.length} nhân viên</b>
                     </div>
+                </div>
+
+                {/* HÀNG 2: THỜI GIAN & CHỌN NHÂN VIÊN */}
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-0.5">
+                    <div className="flex flex-wrap items-center gap-2.5">
+                        {/* Chọn Tháng */}
+                        <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl">
+                            <Calendar className="w-4 h-4 text-blue-600" />
+                            <select
+                                value={selectedMonth}
+                                onChange={e => {
+                                    const m = parseInt(e.target.value, 10);
+                                    setSelectedMonth(m);
+                                    setSearchParams(prev => {
+                                        const p = new URLSearchParams(prev);
+                                        p.set('month', String(m));
+                                        return p;
+                                    });
+                                }}
+                                className="bg-transparent text-xs font-bold text-slate-800 outline-hidden cursor-pointer"
+                            >
+                                {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                                    <option key={m} value={m}>Tháng {m}</option>
+                                ))}
+                            </select>
+                        </div>
 
                     {/* Chọn Năm */}
                     <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl">
@@ -1479,6 +1531,7 @@ export default function EmployeeDetailReportPage() {
                     </button>
                 </div>
             </div>
+        </div>
 
             {/* Cảnh báo nếu không có phiên dữ liệu nào cho nhân viên đang chọn */}
             {availableSessions.length === 0 && !loading && (
@@ -1995,7 +2048,7 @@ export default function EmployeeDetailReportPage() {
 
                         <div>
                             <h3 className="text-lg font-black text-slate-900">
-                                Đang Xuất Ảnh Báo Cáo ({exportResolution})
+                                Đang Xuất Ảnh Báo Cáo 8K
                             </h3>
                             <p className="text-xs text-slate-500 mt-1 flex items-center justify-center gap-1.5 flex-wrap">
                                 <span>Siêu thị: <strong className="text-slate-800">{selectedStore === 'all' ? 'Tất cả siêu thị' : getShortStoreName(selectedStore)}</strong></span>
@@ -2028,7 +2081,7 @@ export default function EmployeeDetailReportPage() {
                         </div>
 
                         <p className="text-[11px] text-slate-400 italic">
-                            Các file ảnh PNG độ nét cao ({exportResolution}) sẽ tự động tải về máy. Vui lòng giữ tab này hoạt động.
+                            Các file ảnh PNG độ nét cao (8K) sẽ tự động tải về máy. Vui lòng giữ tab này hoạt động.
                         </p>
 
                         <button

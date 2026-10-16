@@ -15,12 +15,13 @@ import {
     X
 } from 'lucide-react';
 import { useAuth } from '../../shared/contexts/AuthContext';
-import type { VoucherItem, VoucherCampaignSummary } from './types';
+import type { VoucherItem, VoucherCampaignSummary, VoucherCampaignStatusConfig } from './types';
 import {
     fetchStoreVouchers,
     claimVoucher,
     resetClaimedVoucher,
-    getCampaignSummaries
+    getCampaignSummaries,
+    fetchVoucherCampaignStatuses
 } from './services/voucherService';
 import VoucherCard from './components/VoucherCard';
 import { getDenominationHotStyle, formatCurrency, parseConditionLines } from './voucherFormatters';
@@ -42,6 +43,7 @@ export default function VoucherClaimPage() {
     const [visibleHistoryCount, setVisibleHistoryCount] = useState<number>(5);
     const [voucherToReturn, setVoucherToReturn] = useState<VoucherItem | null>(null);
     const [isReturning, setIsReturning] = useState<boolean>(false);
+    const [campaignStatuses, setCampaignStatuses] = useState<Record<string, VoucherCampaignStatusConfig>>({});
 
     const userStoreName = currentUser.store_name || 'Toàn Cụm Siêu Thị';
     const accessibleStores = useMemo(() => {
@@ -54,13 +56,17 @@ export default function VoucherClaimPage() {
     const loadData = async () => {
         setLoading(true);
         try {
-            const list = await fetchStoreVouchers(
-                userStoreName,
-                accessibleStores,
-                currentUser.full_name || currentUser.employee_id,
-                false
-            );
+            const [list, statuses] = await Promise.all([
+                fetchStoreVouchers(
+                    userStoreName,
+                    accessibleStores,
+                    currentUser.full_name || currentUser.employee_id,
+                    false
+                ),
+                fetchVoucherCampaignStatuses()
+            ]);
             setVouchers(list);
+            if (statuses) setCampaignStatuses(statuses);
         } finally {
             setLoading(false);
         }
@@ -77,9 +83,10 @@ export default function VoucherClaimPage() {
             userStoreName,
             accessibleStores,
             currentUser.full_name || currentUser.employee_id,
-            false
+            false,
+            campaignStatuses
         );
-    }, [vouchers, userStoreName, accessibleStores, currentUser]);
+    }, [vouchers, userStoreName, accessibleStores, currentUser, campaignStatuses]);
 
     // Các mệnh giá khả dụng của chương trình đang chọn
     const activeCampaignData = useMemo(() => {
@@ -339,6 +346,7 @@ export default function VoucherClaimPage() {
                             ) : (
                                 campaignSummaries.map(c => {
                                     const isSelected = selectedCampaign === c.campaign_name;
+                                    const isEnded = Boolean(c.is_ended);
                                     const hasStock = c.total_available > 0;
 
                                     return (
@@ -346,10 +354,13 @@ export default function VoucherClaimPage() {
                                             key={c.campaign_name}
                                             type="button"
                                             onClick={() => handleSelectCampaign(c.campaign_name)}
-                                            className={`p-3 rounded-2xl border text-left transition cursor-pointer flex items-center justify-between ${isSelected
-                                                ? 'bg-emerald-50 border-emerald-500 ring-2 ring-emerald-500/20 text-emerald-950 font-black'
-                                                : 'bg-slate-50/70 border-slate-200 hover:bg-slate-100 text-slate-700'
-                                                }`}
+                                            className={`p-3 rounded-2xl border text-left transition cursor-pointer flex items-center justify-between ${
+                                                isSelected
+                                                    ? 'bg-emerald-50 border-emerald-500 ring-2 ring-emerald-500/20 text-emerald-950 font-black'
+                                                    : isEnded
+                                                    ? 'bg-slate-100/70 border-slate-200 text-slate-500 hover:bg-slate-100'
+                                                    : 'bg-slate-50/70 border-slate-200 hover:bg-slate-100 text-slate-700'
+                                            }`}
                                         >
                                             <div className="truncate pr-2">
                                                 <div className="text-xs font-black truncate">{c.campaign_name}</div>
@@ -357,9 +368,14 @@ export default function VoucherClaimPage() {
                                                     {c.denominations.length} mức mệnh giá
                                                 </div>
                                             </div>
-                                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold shrink-0 ${hasStock ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-700'
-                                                }`}>
-                                                {hasStock ? '🟢 Còn mã' : '🔴 Hết mã'}
+                                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold shrink-0 ${
+                                                isEnded
+                                                    ? 'bg-slate-200 text-slate-700'
+                                                    : hasStock
+                                                    ? 'bg-emerald-100 text-emerald-800'
+                                                    : 'bg-rose-100 text-rose-700'
+                                            }`}>
+                                                {isEnded ? '⛔ Đã kết thúc' : hasStock ? '🟢 Còn mã' : '🔴 Tạm hết mã'}
                                             </span>
                                         </button>
                                     );
@@ -374,10 +390,32 @@ export default function VoucherClaimPage() {
                             <label className="block text-[11px] font-black uppercase text-slate-600 mb-1.5">
                                 2. Mệnh Giá Voucher & Điều Kiện Áp Dụng:
                             </label>
+
+                            {/* Thông báo nếu toàn bộ chương trình đã kết thúc */}
+                            {activeCampaignData.is_ended && (
+                                <div className="mb-2 p-2.5 rounded-xl bg-slate-100 border border-slate-300 text-slate-700 text-xs flex items-center gap-2">
+                                    <span className="text-sm shrink-0">⛔</span>
+                                    <span>
+                                        Chương trình <strong>"{activeCampaignData.campaign_name}"</strong> đã hết mã hoàn toàn và chính thức kết thúc.
+                                    </span>
+                                </div>
+                            )}
+
+                            {/* Thông báo nếu có mệnh giá tạm hết mã */}
+                            {!activeCampaignData.is_ended && activeCampaignData.denominations.some(d => !d.is_ended && d.available === 0) && (
+                                <div className="mb-2 p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-center gap-2">
+                                    <span className="text-sm shrink-0">💡</span>
+                                    <span>
+                                        <strong>Lưu ý:</strong> Một số mệnh giá đang tạm hết mã. Nhân viên vui lòng liên hệ <strong>Quản lý hoặc Trưởng ca</strong> để nạp thêm tồn kho vào hệ thống.
+                                    </span>
+                                </div>
+                            )}
+
                             <div className="grid grid-cols-2 gap-2">
                                 {activeCampaignData.denominations.map(d => {
                                     const isSelected = selectedDenomination === d.denomination;
-                                    const isAvailable = d.available > 0;
+                                    const isEnded = Boolean(d.is_ended || activeCampaignData.is_ended);
+                                    const isAvailable = d.available > 0 && !isEnded;
                                     const hot = getDenominationHotStyle(d.denomination);
 
                                     return (
@@ -386,12 +424,15 @@ export default function VoucherClaimPage() {
                                             type="button"
                                             disabled={!isAvailable}
                                             onClick={() => setSelectedDenomination(d.denomination)}
-                                            className={`p-3 rounded-2xl border text-center transition cursor-pointer relative overflow-hidden flex flex-col justify-between ${isSelected
-                                                ? hot.activeClass
-                                                : isAvailable
+                                            className={`p-3 rounded-2xl border text-center transition cursor-pointer relative overflow-hidden flex flex-col justify-between ${
+                                                isSelected
+                                                    ? hot.activeClass
+                                                    : isAvailable
                                                     ? `${hot.bgClass} ${hot.borderClass} hover:shadow-xs`
-                                                    : 'bg-slate-100 border-slate-200 text-slate-400 opacity-50 cursor-not-allowed'
-                                                }`}
+                                                    : isEnded
+                                                    ? 'bg-slate-100 border-slate-200 text-slate-400 opacity-60 cursor-not-allowed'
+                                                    : 'bg-rose-50/70 border-rose-200 text-rose-800 cursor-not-allowed'
+                                            }`}
                                         >
                                             {/* Tag độ hot của mệnh giá */}
                                             <div className="flex items-center justify-between gap-1 w-full mb-1">
@@ -436,9 +477,26 @@ export default function VoucherClaimPage() {
                                                 );
                                             })()}
 
-                                            {/* Trạng thái còn / hết mã (Tuyệt đối không để lộ số lượng cụ thể) */}
-                                            <div className={`text-[10px] font-black mt-1 ${isSelected ? 'text-white/95' : isAvailable ? 'text-emerald-700' : 'text-rose-500'}`}>
-                                                {isAvailable ? '🟢 Còn mã' : '🔴 Hết mã'}
+                                            {/* Trạng thái còn / tạm hết / hết mã hoàn toàn */}
+                                            <div className={`text-[10px] font-black mt-1 ${
+                                                isSelected 
+                                                    ? 'text-white/95' 
+                                                    : isEnded 
+                                                    ? 'text-slate-500' 
+                                                    : isAvailable 
+                                                    ? 'text-emerald-700' 
+                                                    : 'text-rose-600'
+                                            }`}>
+                                                {isEnded ? (
+                                                    <span>⛔ Hết mã - Kết thúc chương trình</span>
+                                                ) : isAvailable ? (
+                                                    <span>🟢 Còn mã</span>
+                                                ) : (
+                                                    <div className="flex flex-col items-center">
+                                                        <span>🔴 Tạm hết mã</span>
+                                                        <span className="text-[9px] font-normal text-rose-500 mt-0.5 leading-tight">Liên hệ QL/TC để nạp thêm</span>
+                                                    </div>
+                                                )}
                                             </div>
                                         </button>
                                     );

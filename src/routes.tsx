@@ -25,6 +25,7 @@ const UserManagementPage = lazy(() => import('./features/admin-config/UserManage
 const UserStorePermissionPage = lazy(() => import('./features/admin-config/UserStorePermissionPage'));
 const DataStatusPage = lazy(() => import('./features/data-status/DataStatusPage'));
 const EmployeeCumulativeRankingPage = lazy(() => import('./features/employee-cumulative-ranking/EmployeeCumulativeRankingPage'));
+const CampaignDirectoryPage = lazy(() => import('./features/campaign-directory/CampaignDirectoryPage'));
 
 const LoginPage = lazy(() => import('./features/auth/LoginPage'));
 const RegisterPage = lazy(() => import('./features/auth/RegisterPage'));
@@ -68,6 +69,7 @@ export function AppRoutes() {
                     {/* Báo Cáo Tổng Hợp Thi Đua Ngành Hàng & Tiến Độ Thi Đua */}
                     <Route path="/tong-hop-thi-dua" element={<CampaignSummaryPage />} />
                     <Route path="/tien-do-thi-dua" element={<CampaignProgressPage />} />
+                    <Route path="/tra-cuu-thi-dua" element={<CampaignDirectoryPage />} />
 
                     {/* Phân hệ Cập nhật Dữ liệu */}
                     <Route path="/cap-nhat" element={<DataUpdatePage />} />

@@ -252,7 +252,7 @@ export default function ClusterTargetConfigModal({
                                 </span>
                             </div>
                             <p className="text-[11px] text-slate-500 mt-0.5">
-                                Tùy chỉnh nhịp tăng trưởng chung hoặc cấu hình riêng lẻ từng siêu thị trong cụm, lưu Cloud dùng trên mọi thiết bị
+                                Tùy chỉnh Target Vượt Trội chung hoặc riêng lẻ từng siêu thị trong cụm.
                             </p>
                         </div>
                     </div>
@@ -271,7 +271,7 @@ export default function ClusterTargetConfigModal({
                         <div className="flex items-center gap-2">
                             <Sliders className="w-4 h-4 text-amber-600" />
                             <span className="text-xs font-black text-slate-700 uppercase tracking-wide">
-                                Thiết Lập Nhịp Target Chung:
+                                Thiết Lập Target Vượt trội:
                             </span>
                         </div>
                         {cloudSyncedTime && (
@@ -291,11 +291,10 @@ export default function ClusterTargetConfigModal({
                                         key={rate}
                                         type="button"
                                         onClick={() => handleApplyPaceRateToAll(rate)}
-                                        className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1 ${
-                                            isCurrent
-                                                ? 'bg-amber-500 text-white shadow-xs'
-                                                : 'text-slate-600 hover:bg-amber-50 hover:text-amber-800'
-                                        }`}
+                                        className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1 ${isCurrent
+                                            ? 'bg-amber-500 text-white shadow-xs'
+                                            : 'text-slate-600 hover:bg-amber-50 hover:text-amber-800'
+                                            }`}
                                     >
                                         <span>{rate}%</span>
                                         {rate === 100 && (
@@ -357,12 +356,12 @@ export default function ClusterTargetConfigModal({
                                     <th className="py-2.5 px-2.5 text-right border-r border-slate-200 w-28 bg-slate-100 text-slate-800">
                                         <div className="flex items-center justify-end gap-1">
                                             <Lock className="w-3 h-3 text-slate-500" />
-                                            <span>TARGET GỐC</span>
+                                            <span>TARGET CHUẨN</span>
                                         </div>
                                         <div className="text-[9px] font-normal text-slate-500 lowercase">(cố định tỷ đ)</div>
                                     </th>
                                     <th className="py-2.5 px-2 text-center border-r border-slate-200 w-28 bg-amber-50/70 text-amber-900">
-                                        % NHỊP TARGET
+                                        % TARGET
                                         <div className="text-[9px] font-normal text-amber-700 lowercase">(tùy chỉnh riêng)</div>
                                     </th>
                                     <th className="py-2.5 px-2.5 text-right w-32 bg-orange-50/70 text-orange-900">
@@ -431,11 +430,10 @@ export default function ClusterTargetConfigModal({
                                                             step="1"
                                                             value={item.targetRate || ''}
                                                             onChange={(e) => handleItemChange(row.storeName, 'targetRate', parseFloat(e.target.value) || 0)}
-                                                            className={`w-16 text-center px-1.5 py-1 bg-white border rounded-lg text-xs font-black outline-none ${
-                                                                isCustomRate
-                                                                    ? 'border-amber-400 bg-amber-50 text-amber-900 ring-1 ring-amber-300'
-                                                                    : 'border-slate-200 group-hover:border-amber-300 text-slate-800'
-                                                            }`}
+                                                            className={`w-16 text-center px-1.5 py-1 bg-white border rounded-lg text-xs font-black outline-none ${isCustomRate
+                                                                ? 'border-amber-400 bg-amber-50 text-amber-900 ring-1 ring-amber-300'
+                                                                : 'border-slate-200 group-hover:border-amber-300 text-slate-800'
+                                                                }`}
                                                             placeholder="100"
                                                         />
                                                         <span className="text-[11px] font-bold text-slate-400">%</span>
@@ -463,7 +461,7 @@ export default function ClusterTargetConfigModal({
                             <tfoot>
                                 <tr className="bg-slate-100 text-slate-900 font-black text-xs border-t-2 border-slate-300">
                                     <td colSpan={2} className="py-2.5 px-3 text-left uppercase tracking-wider border-r border-slate-200">
-                                        TỔNG TOÀN CỤM ({totals.count} SIÊU THỊ)
+                                        TỔNG CỤM ({totals.count} SIÊU THỊ)
                                     </td>
                                     <td className="py-2.5 px-2.5 text-right font-black text-blue-950 border-r border-slate-200">
                                         {totals.sumBase.toFixed(3)}
@@ -484,7 +482,7 @@ export default function ClusterTargetConfigModal({
                 <div className="p-3.5 sm:p-4 border-t border-slate-200 bg-slate-50 flex flex-col sm:flex-row items-center justify-between gap-3">
                     <div className="flex items-center gap-2 text-slate-500 text-xs">
                         <Cloud className="w-4 h-4 text-emerald-600 shrink-0" />
-                        <span>Dữ liệu cấu hình tự động lưu đồng bộ đa thiết bị qua Supabase Cloud.</span>
+                        <span>Dữ liệu được lưu tự động qua Cloud.</span>
                     </div>
 
                     <div className="flex items-center gap-2 w-full sm:w-auto justify-end">

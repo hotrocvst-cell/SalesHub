@@ -15,6 +15,7 @@ export interface ClusterStoreRow {
     pctQd: number;                   // %QĐ
     revenueInstallment: number;      // DT trả góp
     installmentRate: number;         // % Trả góp
+    hasInstallmentRate?: boolean;    // Cờ đánh dấu có % trả góp hay không
 
     // === BẢNG 2: MỤC TIÊU VƯỢT TRỘI ===
     targetRate: number;              // % vượt trội (nhịp 100, 105, 110, 115, 120...)
@@ -47,6 +48,7 @@ export interface ClusterSummaryData {
     avgPctQd: number;
     totalRevenueInstallment: number;
     avgInstallmentRate: number;
+    hasInstallmentRate?: boolean;
 
     // Bảng 2
     avgTargetRate: number;

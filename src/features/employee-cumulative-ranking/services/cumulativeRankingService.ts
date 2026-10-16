@@ -1,9 +1,9 @@
 import { supabase } from '../../../core/lib/supabase';
-import { isStoreMatch } from '../../../core/lib/formatters';
+import { isStoreMatch, normalizeToMillion } from '../../../core/lib/formatters';
 import { fetchEmployeeRevenueTargets } from '../../../core/lib/storage';
 import { syncAndFetchEmployeeDataSessions } from '../../employee-cumulative/utils/sessionStorage';
 import { fetchPeriodTarget } from './periodTargetStorage';
-import type { EmployeeCumulativeRankingRow, StoreCumulativeSummary } from '../types';
+import type { EmployeeCumulativeRankingRow, StoreCumulativeSummary, TargetSelectionMode } from '../types';
 
 /**
  * Sinh danh sách các ngày liên tục giữa fromDate và toDate (định dạng YYYY-MM-DD)
@@ -62,13 +62,14 @@ export async function fetchCumulativeRankingData(params: {
     toDate: string;
     store: string;
     storesList?: { name: string; short_name?: string }[];
+    targetMode?: TargetSelectionMode;
 }): Promise<{
     success: boolean;
     rows: EmployeeCumulativeRankingRow[];
     summary: StoreCumulativeSummary;
     error?: string;
 }> {
-    const { fromDate, toDate, store, storesList = [] } = params;
+    const { fromDate, toDate, store, storesList = [], targetMode = 'AUTO' } = params;
     const dateList = generateDateRange(fromDate, toDate);
 
     if (dateList.length === 0) {
@@ -96,12 +97,15 @@ export async function fetchCumulativeRankingData(params: {
 
     try {
         const monthsYears = extractMonthsAndYears(dateList);
+        const firstMonth = monthsYears[0];
+        const startOfFirstMonth = `${firstMonth.year}-${String(firstMonth.month).padStart(2, '0')}-01`;
 
-        // 1. TẢI DỮ LIỆU KINH DOANH CHỐT CỦA SIÊU THỊ (daily_business_records)
+        // 1. TẢI DỮ LIỆU KINH DOANH CHỐT CỦA SIÊU THỊ (daily_business_records - bc tháng)
+        // Lấy từ ngày đầu của tháng đầu tiên để có điểm mốc so sánh nhịp và lũy kế chuẩn
         const { data: businessRecords, error: busError } = await supabase
             .from('daily_business_records')
             .select('*')
-            .gte('report_date', fromDate)
+            .gte('report_date', startOfFirstMonth)
             .lte('report_date', toDate)
             .order('report_date', { ascending: true });
 
@@ -121,76 +125,107 @@ export async function fetchCumulativeRankingData(params: {
             console.warn('Cảnh báo tải employee_data_sessions:', sessError);
         }
 
-        // 3. TẢI CẤU HÌNH TARGET THEO GIAI ĐOẠN RIÊNG BIỆT (ƯU TIÊN SỐ 1 NẾU ĐÃ CẤU HÌNH)
+        // 3. TẢI CẤU HÌNH TARGET THEO GIAI ĐOẠN RIÊNG BIỆT (A - B)
         const periodTargetConfig = await fetchPeriodTarget(store, fromDate, toDate, storesList);
         const hasPeriodTarget = !!periodTargetConfig;
 
-        // 3b. TẢI TARGET THÁNG (DỰ PHÒNG NẾU CHƯA CẤU HÌNH TARGET GIAI ĐOẠN)
+        // 3b. TẢI TARGET THÁNG CẤU HÌNH TỪ TRƯỚC
         const monthTargetMap: Record<string, number> = {};
-        if (!hasPeriodTarget) {
-            for (const my of monthsYears) {
-                const tRes = await fetchEmployeeRevenueTargets(my.month, my.year);
-                if (tRes.success && tRes.data) {
-                    if (Array.isArray(tRes.data)) {
-                        tRes.data.forEach((r: any) => {
-                            if (r && r.employee_id) {
-                                const empId = String(r.employee_id).trim();
-                                const val = Number(r.target_revenue) || 0;
-                                const fullVal = val < 100_000 ? val * 1_000_000 : val;
-                                monthTargetMap[empId] = (monthTargetMap[empId] || 0) + fullVal;
-                            }
-                        });
-                    } else if (typeof tRes.data === 'object') {
-                        Object.entries(tRes.data).forEach(([empId, val]) => {
-                            const num = Number(val) || 0;
-                            const fullVal = num < 100_000 ? num * 1_000_000 : num;
-                            monthTargetMap[empId.trim()] = (monthTargetMap[empId.trim()] || 0) + fullVal;
-                        });
-                    }
+        for (const my of monthsYears) {
+            const tRes = await fetchEmployeeRevenueTargets(my.month, my.year);
+            if (tRes.success && tRes.data) {
+                if (Array.isArray(tRes.data)) {
+                    tRes.data.forEach((r: any) => {
+                        if (r && r.employee_id) {
+                            const empId = String(r.employee_id).trim();
+                            const val = Number(r.target_revenue) || 0;
+                            const normalizedVal = normalizeToMillion(val);
+                            monthTargetMap[empId] = (monthTargetMap[empId] || 0) + normalizedVal;
+                        }
+                    });
+                } else if (typeof tRes.data === 'object') {
+                    Object.entries(tRes.data).forEach(([empId, val]) => {
+                        const num = Number(val) || 0;
+                        const normalizedVal = normalizeToMillion(num);
+                        monthTargetMap[empId.trim()] = (monthTargetMap[empId.trim()] || 0) + normalizedVal;
+                    });
                 }
             }
         }
 
-        // 4. XỬ LÝ SỐ LIỆU CHỐT CỦA SIÊU THỊ (STORE CUMULATIVE TOTAL)
-        // Mỗi ngày d, tính doanh thu thực tế của siêu thị
+        // 4. XỬ LÝ SỐ LIỆU LŨY KẾ THEO SIÊU THỊ TỪ CÁC PHIÊN CẬP NHẬT (BC THÁNG)
+        // Trong daily_business_records (bc tháng), revenue_actual là lũy kế tháng đến ngày report_date
         const storeDailyRevenue: Record<string, number> = {};
-        let storeTargetTotal = 0;
-
         dateList.forEach(d => {
             storeDailyRevenue[d] = 0;
         });
 
-        const storeDateRecordMap = new Map<string, any>();
+        // Nhóm các bản ghi theo từng siêu thị
+        const recordsByStore = new Map<string, any[]>();
         (businessRecords || []).forEach(r => {
             if (!r.report_date) return;
-            const rStore = r.store_name || '';
+            const rStore = (r.store_name || '').trim();
+            if (rStore === 'Tổng' || /^(tổng|tong)/i.test(rStore)) return;
+
             const match = store === 'all' || isStoreMatch(rStore, store, storesList);
             if (!match) return;
 
-            const key = `${r.report_date}_${rStore}`;
-            // Lấy bản ghi có doanh thu lớn nhất nếu trùng ngày
-            const prev = storeDateRecordMap.get(key);
-            if (!prev || (Number(r.revenue_actual) || 0) > (Number(prev.revenue_actual) || 0)) {
-                storeDateRecordMap.set(key, r);
+            if (!recordsByStore.has(rStore)) {
+                recordsByStore.set(rStore, []);
             }
+            recordsByStore.get(rStore)!.push(r);
         });
 
-        // Tính tổng doanh thu siêu thị theo từng ngày
-        storeDateRecordMap.forEach(r => {
-            const date = r.report_date;
-            const rev = Number(r.revenue_actual) || 0;
-            const target = Number(r.revenue_target) || 0;
-            if (storeDailyRevenue[date] !== undefined) {
-                storeDailyRevenue[date] += rev;
+        let storeCumulativeRevenue = 0;
+        let storeMonthlyTargetFromRecords = 0;
+        const isFromFirstDayOfMonth = fromDate.endsWith('-01') || new Date(fromDate).getDate() === 1;
+
+        // Tính lũy kế thực tế chuẩn cho từng siêu thị
+        recordsByStore.forEach((sRecords) => {
+            sRecords.sort((a, b) => new Date(a.report_date).getTime() - new Date(b.report_date).getTime());
+
+            // Lấy bản ghi mới nhất trong dải ngày [fromDate .. toDate]
+            const inPeriodRecords = sRecords.filter(r => r.report_date >= fromDate && r.report_date <= toDate);
+            const latestInPeriod = inPeriodRecords.length > 0 
+                ? inPeriodRecords[inPeriodRecords.length - 1]
+                : sRecords.filter(r => r.report_date <= toDate).slice(-1)[0];
+
+            if (latestInPeriod) {
+                const latestActual = normalizeToMillion(Number(latestInPeriod.revenue_actual) || 0);
+                const latestTarget = normalizeToMillion(Number(latestInPeriod.revenue_target) || 0);
+                storeMonthlyTargetFromRecords += latestTarget;
+
+                if (isFromFirstDayOfMonth) {
+                    // Nếu lấy từ đầu tháng: Lũy kế chính là số lũy kế ghi nhận ở ngày mới nhất
+                    storeCumulativeRevenue += latestActual;
+                } else {
+                    // Nếu lấy từ giữa tháng: Lấy lũy kế ngày cuối trừ lũy kế ngày trước fromDate
+                    const priorRecords = sRecords.filter(r => r.report_date < fromDate);
+                    const priorRecord = priorRecords.length > 0 ? priorRecords[priorRecords.length - 1] : null;
+                    const priorActual = priorRecord ? normalizeToMillion(Number(priorRecord.revenue_actual) || 0) : 0;
+                    const delta = Math.max(0, latestActual - priorActual);
+                    storeCumulativeRevenue += delta;
+                }
             }
-            storeTargetTotal += target;
+
+            // Tính nhịp doanh thu từng ngày cho siêu thị
+            dateList.forEach(d => {
+                const recD = sRecords.find(r => r.report_date === d);
+                if (recD) {
+                    const prevD = new Date(d);
+                    prevD.setDate(prevD.getDate() - 1);
+                    const prevDStr = prevD.toISOString().split('T')[0];
+                    const recPrev = sRecords.find(r => r.report_date === prevDStr);
+
+                    const curVal = normalizeToMillion(Number(recD.revenue_actual) || 0);
+                    const prevVal = recPrev ? normalizeToMillion(Number(recPrev.revenue_actual) || 0) : 0;
+                    const dayPace = recPrev ? Math.max(0, curVal - prevVal) : curVal;
+                    storeDailyRevenue[d] = (storeDailyRevenue[d] || 0) + dayPace;
+                }
+            });
         });
 
-        // Doanh thu Lũy Kế CỦA SIÊU THỊ trong kỳ = Tổng doanh thu các ngày chốt của siêu thị
-        let storeCumulativeRevenue = Object.values(storeDailyRevenue).reduce((acc, v) => acc + v, 0);
-
-        // 5. XỬ LÝ SỐ LIỆU TỪNG NHÂN VIÊN
-        // Nhóm session theo ngày và theo siêu thị để lấy phiên mới nhất cho mỗi ngày
+        // 5. XỬ LÝ SỐ LIỆU TỪNG NHÂN VIÊN TỪ PHIÊN NHÂN VIÊN
         const latestSessionPerDay = new Map<string, any>();
         (sessions || []).forEach(sess => {
             if (!sess.report_date) return;
@@ -242,9 +277,9 @@ export async function fetchCumulativeRankingData(params: {
                 }
 
                 const emp = empMap.get(empId)!;
-                const rev = Number(rec.revenue_actual) || 0;
+                const rev = normalizeToMillion(Number(rec.revenue_actual) || 0);
                 const qty = Number(rec.quantity) || 0;
-                const inst = Number(rec.installment_revenue) || 0;
+                const inst = normalizeToMillion(Number(rec.installment_revenue) || 0);
 
                 emp.dailyRevenues[date] = (emp.dailyRevenues[date] || 0) + rev;
                 emp.dailyQuantities[date] = (emp.dailyQuantities[date] || 0) + qty;
@@ -257,11 +292,10 @@ export async function fetchCumulativeRankingData(params: {
             });
         });
 
-        // Nếu storeCumulativeRevenue = 0 (chưa có bản ghi daily_business_records chốt),
-        // fallback lấy tổng từ phiên nhân viên
         const sumOfEmployees = Array.from(empMap.values()).reduce((sum, e) => sum + e.cumulativeRevenue, 0);
+
+        // Fallback: Nếu chưa có dữ liệu bc tháng trong daily_business_records, lấy tổng từ phiên nhân sự
         if (storeCumulativeRevenue === 0 && sumOfEmployees > 0) {
-            // Tính lại storeDailyRevenue từ các phiên nhân viên
             dateList.forEach(d => {
                 let daySum = 0;
                 empMap.forEach(e => {
@@ -272,19 +306,42 @@ export async function fetchCumulativeRankingData(params: {
             storeCumulativeRevenue = sumOfEmployees;
         }
 
-        // 6. XÁC ĐỊNH BẢNG TARGET VÀ NGUỒN TARGET
-        const finalTargetMap: Record<string, number> = hasPeriodTarget
+        // 6. XÁC ĐỊNH BẢNG TARGET THEO TÙY CHỌN (AUTO / MONTH / PERIOD)
+        const isThisMonth = isFromFirstDayOfMonth && monthsYears.length === 1;
+        let useMonthTarget = false;
+
+        if (targetMode === 'MONTH') {
+            useMonthTarget = true;
+        } else if (targetMode === 'PERIOD') {
+            useMonthTarget = false;
+        } else {
+            // targetMode === 'AUTO' (Khuyến nghị)
+            // Nếu chọn giai đoạn "Tháng này" -> Tự động chọn Target Tháng đã cấu hình từ trước
+            if (isThisMonth) {
+                useMonthTarget = true;
+            } else if (hasPeriodTarget) {
+                useMonthTarget = false;
+            } else {
+                useMonthTarget = true;
+            }
+        }
+
+        const finalTargetMap: Record<string, number> = (!useMonthTarget && hasPeriodTarget)
             ? (periodTargetConfig.targets || {})
             : monthTargetMap;
-        const targetSource: 'PERIOD' | 'MONTH' | 'NONE' = hasPeriodTarget
+
+        const targetSource: 'PERIOD' | 'MONTH' | 'NONE' = (!useMonthTarget && hasPeriodTarget)
             ? 'PERIOD'
             : (Object.keys(monthTargetMap).length > 0 ? 'MONTH' : 'NONE');
 
-        if (hasPeriodTarget && periodTargetConfig.storeTarget > 0) {
+        let storeTargetTotal = 0;
+        if (!useMonthTarget && hasPeriodTarget && periodTargetConfig.storeTarget > 0) {
             storeTargetTotal = periodTargetConfig.storeTarget;
+        } else if (storeMonthlyTargetFromRecords > 0) {
+            storeTargetTotal = storeMonthlyTargetFromRecords;
         }
 
-        // 7. XÂY DỰNG DANH SÁCH DÒNG VÀ TÍNH THỨ HẠNG
+        // 7. XÂY DỰNG DANH SÁCH DÒNG VÀ SẮP XẾP THEO %HT GIẢM DẦN
         const rows: EmployeeCumulativeRankingRow[] = Array.from(empMap.values()).map(e => {
             const target = finalTargetMap[e.employeeId] || 0;
             const completionRate = target > 0 ? (e.cumulativeRevenue / target) * 100 : 0;
@@ -293,7 +350,7 @@ export async function fetchCumulativeRankingData(params: {
                 : 0;
 
             return {
-                rank: 0, // sẽ gán sau khi sort
+                rank: 0, // sẽ gán sau khi sort theo %HT
                 employeeId: e.employeeId,
                 fullName: e.fullName,
                 storeName: e.storeName,
@@ -310,8 +367,13 @@ export async function fetchCumulativeRankingData(params: {
             };
         });
 
-        // Sắp xếp thứ hạng theo doanh thu lũy kế giảm dần
-        rows.sort((a, b) => b.cumulativeRevenue - a.cumulativeRevenue);
+        // QUY CHUẨN SẮP XẾP: Sắp xếp theo %HT GIẢM DẦN (nếu bằng nhau xếp theo Doanh thu lũy kế)
+        rows.sort((a, b) => {
+            if (b.completionRate !== a.completionRate) {
+                return b.completionRate - a.completionRate;
+            }
+            return b.cumulativeRevenue - a.cumulativeRevenue;
+        });
         rows.forEach((r, idx) => {
             r.rank = idx + 1;
         });
@@ -342,6 +404,8 @@ export async function fetchCumulativeRankingData(params: {
             storeCompletionRate,
             targetSource,
             activePeriodTitle: periodTargetConfig?.periodTitle,
+            activePeriodConfig: periodTargetConfig || null,
+            isPeriodTargetCloudStored: periodTargetConfig ? (periodTargetConfig.isCloudStored ?? false) : undefined,
             totalEmployeesWithSales: employeesWithSales,
             sumOfEmployeesCumulative: sumOfEmployees,
             unassignedOrOnlineDiff: storeCumulativeRevenue - sumOfEmployees,

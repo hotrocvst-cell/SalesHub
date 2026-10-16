@@ -91,6 +91,7 @@ export interface BusinessDayRecord {
     emulationSummary: Record<string, { target: number; actual: number; pctDK: number; pctHT?: number }>;
     rawEmulation: string;
     rawRevenue: string;
+    rawRealRevenue?: string;
     updatedAt?: string;
     updatedBy?: string;
     dataType?: string;
@@ -273,41 +274,56 @@ export async function syncBatchDailyRecordsToSupabase(
             }
         }
 
-        const payloads = records.map(record => ({
-            store_name: record.storeName?.trim(),
-            report_date: record.reportDate,
-            month: Number(record.month),
-            year: Number(record.year),
-            passed_days: Number(record.passedDays) || 0,
-            total_days: Number(record.totalDays) || 0,
-            revenue_actual: Number(record.revenueActual) || 0,
-            revenue_target: Number(record.revenueTarget) || 0,
-            revenue_installment: Number(record.revenueInstallment) || 0,
-            installment_rate: Number(record.installmentRate) || 0,
-            forecast_completion_rate: Number(record.forecastCompletionRate) || 0,
-            emulation_summary: record.emulationSummary || {},
-            raw_emulation: record.rawEmulation || '',
-            raw_revenue: record.rawRevenue || '',
-            data_type: record.dataType || 'daily',
-            updated_at: new Date().toISOString()
-        }));
+        // Khử trùng lặp khóa (store_name, report_date) để tránh lỗi 21000 Postgres (ON CONFLICT DO UPDATE cannot affect row a second time)
+        const payloadMap = new Map<string, any>();
+        for (const record of records) {
+            const cleanStoreName = record.storeName?.trim();
+            const cleanReportDate = (record.reportDate || targetReportDate)?.trim();
+            if (!cleanStoreName || !cleanReportDate) continue;
 
-        let saveResult;
-        if (options?.overwrite) {
-            saveResult = await supabase
-                .from('daily_business_records')
-                .insert(payloads);
-        } else {
-            saveResult = await supabase
-                .from('daily_business_records')
-                .upsert(payloads, { onConflict: 'store_name,report_date' });
+            const dedupeKey = `${cleanStoreName}_${cleanReportDate}`;
+
+            // Ép trần tránh lỗi numeric field overflow 22003 (precision 6, scale 2 cho forecast_rate; precision 5, scale 2 cho installment_rate)
+            const safeForecastRate = Math.min(9999.99, Math.max(0, Number(record.forecastCompletionRate) || 0));
+            const safeInstallmentRate = Math.min(999.99, Math.max(0, Number(record.installmentRate) || 0));
+
+            payloadMap.set(dedupeKey, {
+                store_name: cleanStoreName,
+                report_date: cleanReportDate,
+                month: Number(record.month) || 0,
+                year: Number(record.year) || 0,
+                passed_days: Number(record.passedDays) || 0,
+                total_days: Number(record.totalDays) || 0,
+                revenue_actual: Number(record.revenueActual) || 0,
+                revenue_target: Number(record.revenueTarget) || 0,
+                revenue_installment: Number(record.revenueInstallment) || 0,
+                installment_rate: safeInstallmentRate,
+                forecast_completion_rate: safeForecastRate,
+                emulation_summary: record.emulationSummary || {},
+                raw_emulation: record.rawEmulation || '',
+                raw_revenue: record.rawRevenue || '',
+                data_type: record.dataType || 'Lũy kế tháng',
+                updated_at: new Date().toISOString()
+            });
         }
+
+        const payloads = Array.from(payloadMap.values());
+        if (payloads.length === 0) {
+            return { success: false, count: 0, error: 'Không có bản ghi hợp lệ sau khi bóc tách' };
+        }
+
+        // Luôn sử dụng upsert trên (store_name, report_date) để đảm bảo không bị lỗi 23505 trùng khóa
+        const saveResult = await supabase
+            .from('daily_business_records')
+            .upsert(payloads, { onConflict: 'store_name,report_date' })
+            .select();
 
         if (saveResult.error) throw saveResult.error;
         return { success: true, data: saveResult.data, count: payloads.length };
     } catch (err: any) {
         console.error('Lỗi syncBatchDailyRecordsToSupabase:', err);
-        return { success: false, count: 0, error: err.message || err };
+        const errMsg = err?.message || (typeof err === 'string' ? err : JSON.stringify(err));
+        return { success: false, count: 0, error: errMsg };
     }
 }
 

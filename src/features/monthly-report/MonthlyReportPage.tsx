@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import html2canvas from "html2canvas";
+import { calculate8KScale } from "../../shared/utils/exportImage";
 import { useNavigate } from "react-router-dom";
 import {
     formatValue,
@@ -11,6 +12,8 @@ import {
     formatRemainingTarget
 } from "../../core/lib/formatters";
 import ReportDataFreshnessBar from "../../shared/components/report/ReportDataFreshnessBar";
+import ReportActionButtons from "../../shared/components/report/ReportActionButtons";
+import type { AssessmentTemplate } from "../../shared/components/report/ReportAssessmentModal";
 import {
     fetchBusinessRecords,
     fetchCampaignDictionary,
@@ -412,7 +415,7 @@ export default function MonthlyReportPage() {
         if (currentRecord.revenueActual < currentRecord.revenueTarget) {
             txt += `\n- Còn lại: ${formatRemainingTarget(currentRecord.revenueTarget - currentRecord.revenueActual)}`;
         }
-        if (currentRecord.revenueInstallment > 0 || currentRecord.installmentRate > 0) {
+        if ((currentRecord.installmentRate || 0) > 0) {
             txt += `\n- DT trả góp: ${formatValue(currentRecord.revenueInstallment)} (${(currentRecord.installmentRate || 0).toFixed(1)}%)`;
         }
 
@@ -482,14 +485,95 @@ export default function MonthlyReportPage() {
         showToast('Đã copy nội dung nhận xét vào clipboard!');
     };
 
-    // HÀM TẠO ẢNH 4K SIÊU NÉT (SCALE 4) - TỰ ĐỘNG BỎ QUA KHỐI BỘ LỌC
-    const generate4KCanvas = async () => {
+    // 10b. CẤU HÌNH 3 MẪU NHẬN XÉT TẠO SẴN CHO BÁO CÁO THÁNG
+    const monthlyAssessmentTemplates = useMemo<AssessmentTemplate[]>(() => {
+        if (!currentRecord) return [];
+
+        const getSummaryForMode = (mode: number) => {
+            const isAll = selectedStore === "all" || selectedStore === "Tổng";
+            const dispStore = isAll ? (isAdmin ? 'TỔNG TOÀN CỤM' : 'TỔNG CỤM PHỤ TRÁCH') : selectedStore;
+            let txt = `📢 [${dispStore}]\n- NGÀY ${formatDate(currentRecord.reportDate)}`;
+
+            txt += `\n\n💰 Lũy kế DTQĐ: ${formatValue(currentRecord.revenueActual)} (DKHT: ${(currentRecord.forecastCompletionRate || 0).toFixed(1)}%)`;
+            if (currentRecord.revenueActual < currentRecord.revenueTarget) {
+                txt += `\n- Còn lại: ${formatRemainingTarget(currentRecord.revenueTarget - currentRecord.revenueActual)}`;
+            }
+            if ((currentRecord.installmentRate || 0) > 0) {
+                txt += `\n- DT trả góp: ${formatValue(currentRecord.revenueInstallment)} (${(currentRecord.installmentRate || 0).toFixed(1)}%)`;
+            }
+
+            if (emulationRowList.length > 0) {
+                const targeted = emulationRowList;
+                const passed = targeted.filter(d => d.pctDK >= 100);
+                const passRate = targeted.length > 0 ? (passed.length / targeted.length * 100).toFixed(1) : '0';
+                txt += `\n\n🎯 THI ĐUA: DK Đạt ${passed.length}/${targeted.length} NH (${passRate}%)`;
+
+                const fails = targeted.filter(d => d.pctDK < 100);
+
+                if (fails.length === 0) {
+                    txt += `\n\n🎉 Xuất sắc! Đã hoàn thành tất cả các chỉ tiêu!`;
+                } else {
+                    const groupNear = fails.filter(d => d.pctDK >= 80);
+                    const groupSpeed = fails.filter(d => d.pctDK >= 50 && d.pctDK < 80);
+                    const groupAlert = fails.filter(d => d.pctDK < 50);
+
+                    if (mode === 1) {
+                        txt += `\n\n📊 TỔNG HỢP DK CHƯA ĐẠT (${fails.length} NH):`;
+                        if (groupNear.length > 0) txt += `\n- ⚡ CẬN ĐÍCH (>80%): ${groupNear.length} NH`;
+                        if (groupSpeed.length > 0) txt += `\n- 🔥 CẦN TĂNG TỐC (50% - 80%): ${groupSpeed.length} NH`;
+                        if (groupAlert.length > 0) txt += `\n- ⚠️ NGUY HIỂM (<50%): ${groupAlert.length} NH`;
+                    } else if (mode === 2) {
+                        txt += `\n\n📊 CHI TIẾT DK CHƯA ĐẠT (${fails.length} NH):`;
+                        if (groupNear.length > 0) {
+                            txt += `\n\n⚡ CẬN ĐÍCH (>80%): ${groupNear.length} NH`;
+                            groupNear.forEach(d => {
+                                const prefix = isAll ? `[${d.storeName}] ` : '';
+                                txt += `\n- ${prefix}${d.label}: thiếu ${formatValue(Math.max(0, d.target - d.actual))} (${d.pctDK.toFixed(1)}%)`;
+                            });
+                        }
+                        if (groupSpeed.length > 0) {
+                            txt += `\n\n🔥 CẦN TĂNG TỐC (50% - 80%): ${groupSpeed.length} NH`;
+                            groupSpeed.forEach(d => {
+                                const prefix = isAll ? `[${d.storeName}] ` : '';
+                                txt += `\n- ${prefix}${d.label}: thiếu ${formatValue(Math.max(0, d.target - d.actual))} (${d.pctDK.toFixed(1)}%)`;
+                            });
+                        }
+                        if (groupAlert.length > 0) {
+                            txt += `\n\n⚠️ NGUY HIỂM (<50%): ${groupAlert.length} NH`;
+                            groupAlert.forEach(d => {
+                                const prefix = isAll ? `[${d.storeName}] ` : '';
+                                txt += `\n- ${prefix}${d.label}: thiếu ${formatValue(Math.max(0, d.target - d.actual))} (${d.pctDK.toFixed(1)}%)`;
+                            });
+                        }
+                    } else {
+                        txt += `\n\n⚠️ CHI TIẾT DK CHƯA ĐẠT (${fails.length} NH):`;
+                        fails.forEach(d => {
+                            const prefix = isAll ? `[${d.storeName}] ` : '';
+                            txt += `\n- ${prefix}${d.label}: thiếu ${formatValue(Math.max(0, d.target - d.actual))} (${d.pctDK.toFixed(1)}%)`;
+                        });
+                    }
+                }
+            }
+
+            return txt;
+        };
+
+        return [
+            { id: 1, title: 'Mẫu 1: Tổng quát', badge: 'Súc tích', content: getSummaryForMode(1), description: 'Tóm tắt chỉ số và phân loại số lượng ngành hàng chưa đạt' },
+            { id: 2, title: 'Mẫu 2: Chi tiết 3 nhóm', badge: 'Phân loại', content: getSummaryForMode(2), description: 'Phân loại chi tiết ngành hàng cận đích, tăng tốc và nguy hiểm' },
+            { id: 3, title: 'Mẫu 3: Chi tiết toàn bộ', badge: 'Hành động', content: getSummaryForMode(3), description: 'Chi tiết toàn bộ danh sách ngành hàng cần bổ sung' }
+        ];
+    }, [currentRecord, emulationRowList, selectedStore, isAdmin]);
+
+    // HÀM TẠO ẢNH 8K SIÊU NÉT (VỚI AUTO-SAFETY CLAMP) - TỰ ĐỘNG BỎ QUA KHỐI BỘ LỌC
+    const generate8KCanvas = async () => {
         if (!reportRef.current) return null;
         if (document.fonts?.ready) {
             await document.fonts.ready;
         }
+        const scale = calculate8KScale(reportRef.current);
         return await html2canvas(reportRef.current, {
-            scale: 4, // Scale 4 đảm bảo độ phân giải đạt chuẩn Ultra HD 4K
+            scale: scale,
             useCORS: true,
             backgroundColor: '#ffffff',
             logging: false,
@@ -524,21 +608,21 @@ export default function MonthlyReportPage() {
         });
     };
 
-    // LƯU ẢNH CHẤT LƯỢNG 4K
+    // LƯU ẢNH CHẤT LƯỢNG 8K
     const handleSaveImage = async () => {
         if (!reportRef.current) return;
         setIsProcessingImg(true);
 
         try {
-            const canvas = await generate4KCanvas();
+            const canvas = await generate8KCanvas();
             if (!canvas) throw new Error("Không thể khởi tạo canvas");
 
             const imgData = canvas.toDataURL("image/png", 1.0);
             const a = document.createElement("a");
             a.href = imgData;
-            a.download = `Bao_Cao_4K_T${selectedMonth}_${selectedYear}_${selectedStore}.png`;
+            a.download = `Bao_Cao_8K_T${selectedMonth}_${selectedYear}_${selectedStore}.png`;
             a.click();
-            showToast('Đã lưu file ảnh 4K độ nét cao!');
+            showToast('Đã tải file ảnh 8K thành công!');
         } catch (err) {
             console.error("Lỗi khi lưu ảnh:", err);
             showToast('Có lỗi xảy ra khi tạo file ảnh!');
@@ -547,22 +631,22 @@ export default function MonthlyReportPage() {
         }
     };
 
-    // COPY ẢNH VÀO CLIPBOARD ĐỘ NÉT CAO
+    // COPY ẢNH VÀO CLIPBOARD ĐỘ NÉT CAO 8K
     const handleCopyImageClipboard = async () => {
         if (!reportRef.current) return;
         setIsProcessingImg(true);
 
         try {
-            const canvas = await generate4KCanvas();
+            const canvas = await generate8KCanvas();
             if (!canvas) throw new Error("Không thể khởi tạo canvas");
 
             canvas.toBlob(blob => {
                 if (blob && navigator.clipboard && window.ClipboardItem) {
                     navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
-                        .then(() => showToast('Đã copy ảnh 4K vào clipboard! (Ctrl + V để dán)'))
-                        .catch(() => showToast('Trình duyệt chặn copy ảnh, vui lòng dùng "LƯU ẢNH"!'));
+                        .then(() => showToast('Đã copy ảnh 8K vào clipboard! (Ctrl + V để dán)'))
+                        .catch(() => showToast('Trình duyệt chặn copy ảnh, vui lòng dùng "TẢI ẢNH"!'));
                 } else {
-                    showToast('Trình duyệt không hỗ trợ copy ảnh, hãy dùng "LƯU ẢNH"!');
+                    showToast('Trình duyệt không hỗ trợ copy ảnh, hãy dùng "TẢI ẢNH"!');
                 }
             }, 'image/png', 1.0);
         } catch (err) {
@@ -586,8 +670,8 @@ export default function MonthlyReportPage() {
 
             {/* THANH ĐIỀU KHIỂN ĐÃ TÁCH THÀNH 2 HÀNG ĐỘC LẬP */}
             <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3">
-                {/* HÀNG 1: LỰA CHỌN DỮ LIỆU */}
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                {/* TIÊU ĐỀ BÁO CÁO */}
+                <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3">
                     <div className="flex items-center gap-2.5">
                         <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-600 font-bold">
                             <BarChart3 className="w-5 h-5" />
@@ -610,12 +694,18 @@ export default function MonthlyReportPage() {
                             </p>
                         </div>
                     </div>
+                </div>
 
-                    {/* Bộ lọc lựa chọn dữ liệu */}
-                    <div className="flex items-center gap-2 flex-wrap">
-                        <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all ${isLockedToSingleStore
+                {/* HÀNG 1: BỘ LỌC SIÊU THỊ / CỤM (BẮT BUỘC ĐẦU TIÊN & NẰM RIÊNG LẺ 1 DÒNG) */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2.5 border-b border-slate-100">
+                    <div className="flex items-center gap-2">
+                        <span className="text-xs font-black text-slate-600 uppercase tracking-wider shrink-0 flex items-center gap-1.5">
+                            <Store className="w-4 h-4 text-amber-600" />
+                            Siêu thị / Cụm:
+                        </span>
+                        <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all min-w-[200px] sm:min-w-[280px] ${isLockedToSingleStore
                             ? 'bg-amber-50/90 border-amber-200 text-amber-900 shadow-2xs'
-                            : 'bg-slate-50 border-slate-300 text-slate-700'
+                            : 'bg-slate-50 border-slate-300 text-slate-700 hover:border-amber-400'
                             }`}>
                             {isLockedToSingleStore ? (
                                 <Lock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
@@ -630,7 +720,7 @@ export default function MonthlyReportPage() {
                                 }}
                                 disabled={isLockedToSingleStore}
                                 title={isLockedToSingleStore ? 'Tài khoản nhân viên được cố định theo siêu thị đã đăng ký' : undefined}
-                                className={`bg-transparent outline-none font-bold ${isLockedToSingleStore
+                                className={`bg-transparent outline-none font-bold w-full ${isLockedToSingleStore
                                     ? 'cursor-not-allowed text-amber-900 font-black'
                                     : 'cursor-pointer text-slate-700'
                                     }`}
@@ -648,12 +738,18 @@ export default function MonthlyReportPage() {
                                 ))}
                             </select>
                             {isLockedToSingleStore && (
-                                <span className="text-[10px] bg-amber-200/80 text-amber-800 px-1 py-0.5 rounded font-bold uppercase tracking-wider hidden sm:inline">
+                                <span className="text-[10px] bg-amber-200/80 text-amber-800 px-1 py-0.5 rounded font-bold uppercase tracking-wider hidden sm:inline shrink-0">
                                     Đã khóa
                                 </span>
                             )}
                         </div>
+                    </div>
+                </div>
 
+                {/* HÀNG 2: TIÊU CHÍ THỜI GIAN & TẢI SỐ LIỆU */}
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-bold text-slate-500">Kỳ báo cáo:</span>
                         <select
                             value={selectedMonth}
                             onChange={(e) => setSelectedMonth(Number(e.target.value))}
@@ -687,43 +783,26 @@ export default function MonthlyReportPage() {
                     </div>
                 </div>
 
-                {/* HÀNG 2: BUTTON BÁO CÁO */}
+                {/* HÀNG 2: MẪU BUTTON BÁO CÁO CHUNG CHO DỰ ÁN */}
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                     <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                         Công cụ xuất báo cáo
                     </div>
 
-                    <div className="flex items-center gap-2">
-                        {currentRecord && (
-                            <>
-                                <button
-                                    onClick={handleSaveImage}
-                                    disabled={isProcessingImg}
-                                    className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition cursor-pointer disabled:opacity-50"
-                                >
-                                    <Download className="w-4 h-4" />
-                                    <span>{isProcessingImg ? 'ĐANG KẾT XUẤT 4K...' : 'LƯU ẢNH 4K'}</span>
-                                </button>
-
-                                <button
-                                    onClick={handleCopyImageClipboard}
-                                    disabled={isProcessingImg}
-                                    className="px-3.5 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition cursor-pointer disabled:opacity-50"
-                                >
-                                    <Copy className="w-4 h-4" />
-                                    <span>COPY ẢNH 4K</span>
-                                </button>
-
-                                <button
-                                    onClick={handleCopyText}
-                                    className="px-3.5 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition cursor-pointer"
-                                >
-                                    <FileText className="w-4 h-4 text-amber-400" />
-                                    <span>COPY CHỮ</span>
-                                </button>
-                            </>
-                        )}
-                    </div>
+                    {currentRecord && (
+                        <ReportActionButtons
+                            onExportImage={handleSaveImage}
+                            onCopyImage={handleCopyImageClipboard}
+                            isExporting={isProcessingImg}
+                            exportButtonLabel="TẢI ẢNH"
+                            copyImageButtonLabel="COPY ẢNH"
+                            hasAssessment={true}
+                            assessmentTemplates={monthlyAssessmentTemplates}
+                            onCopyText={handleCopyText}
+                            reportTitle={`Báo Cáo Doanh Thu Tháng ${selectedMonth}/${selectedYear} - ${selectedStore}`}
+                            periodLabel={`Tháng ${selectedMonth}/${selectedYear}`}
+                        />
+                    )}
                 </div>
             </div>
 
@@ -805,57 +884,64 @@ export default function MonthlyReportPage() {
                             </div>
                         </div>
 
-                        {/* 2. CHUẨN HÓA 6 CARD SUMMARY KPI */}
-                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
-                            {/* Card 1: DOANH THU QĐ */}
-                            <div className="bg-amber-50/70 border-l-4 border-amber-500 rounded-xl p-3 shadow-xs text-center">
-                                <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider block">DTQĐ</span>
-                                <span className="text-base sm:text-lg font-black text-slate-800 font-mono mt-0.5 block">
-                                    {formatValue(currentRecord.revenueActual || 0)}
-                                </span>
-                            </div>
+                        {/* 2. CHUẨN HÓA CARD SUMMARY KPI */}
+                        {(() => {
+                            const hasInstallmentRate = (currentRecord.installmentRate || 0) > 0;
+                            return (
+                                <div className={`grid grid-cols-2 sm:grid-cols-3 ${hasInstallmentRate ? 'lg:grid-cols-6' : 'lg:grid-cols-5'} gap-2.5`}>
+                                    {/* Card 1: DOANH THU QĐ */}
+                                    <div className="bg-amber-50/70 border-l-4 border-amber-500 rounded-xl p-3 shadow-xs text-center">
+                                        <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider block">DTQĐ</span>
+                                        <span className="text-base sm:text-lg font-black text-slate-800 font-mono mt-0.5 block">
+                                            {formatValue(currentRecord.revenueActual || 0)}
+                                        </span>
+                                    </div>
 
-                            {/* Card 2: MỤC TIÊU */}
-                            <div className="bg-rose-50/70 border-l-4 border-rose-500 rounded-xl p-3 shadow-xs text-center">
-                                <span className="text-[10px] font-bold text-rose-700 uppercase tracking-wider block">TARGET</span>
-                                <span className="text-base sm:text-lg font-black text-slate-800 font-mono mt-0.5 block">
-                                    {formatValue(currentRecord.revenueTarget || 0)}
-                                </span>
-                            </div>
+                                    {/* Card 2: MỤC TIÊU */}
+                                    <div className="bg-rose-50/70 border-l-4 border-rose-500 rounded-xl p-3 shadow-xs text-center">
+                                        <span className="text-[10px] font-bold text-rose-700 uppercase tracking-wider block">TARGET</span>
+                                        <span className="text-base sm:text-lg font-black text-slate-800 font-mono mt-0.5 block">
+                                            {formatValue(currentRecord.revenueTarget || 0)}
+                                        </span>
+                                    </div>
 
-                            {/* Card 3: %DKHT DT */}
-                            <div className="bg-sky-50/70 border-l-4 border-sky-500 rounded-xl p-3 shadow-xs text-center">
-                                <span className="text-[10px] font-bold text-sky-700 uppercase tracking-wider block">%DKHT DT</span>
-                                <span className={`text-base sm:text-lg font-black font-mono mt-0.5 block ${(currentRecord.forecastCompletionRate || 0) >= 100 ? 'text-emerald-600' : 'text-amber-600'
-                                    }`}>
-                                    {(currentRecord.forecastCompletionRate || 0).toFixed(1)}%
-                                </span>
-                            </div>
+                                    {/* Card 3: %DKHT DT */}
+                                    <div className="bg-sky-50/70 border-l-4 border-sky-500 rounded-xl p-3 shadow-xs text-center">
+                                        <span className="text-[10px] font-bold text-sky-700 uppercase tracking-wider block">%DKHT DT</span>
+                                        <span className={`text-base sm:text-lg font-black font-mono mt-0.5 block ${(currentRecord.forecastCompletionRate || 0) >= 100 ? 'text-emerald-600' : 'text-amber-600'
+                                            }`}>
+                                            {(currentRecord.forecastCompletionRate || 0).toFixed(1)}%
+                                        </span>
+                                    </div>
 
-                            {/* Card 4: % TRẢ GÓP */}
-                            <div className="bg-purple-50/70 border-l-4 border-purple-500 rounded-xl p-3 shadow-xs text-center">
-                                <span className="text-[10px] font-bold text-purple-700 uppercase tracking-wider block">% TRẢ CHẬM</span>
-                                <span className="text-base sm:text-lg font-black text-purple-700 font-mono mt-0.5 block">
-                                    {(currentRecord.installmentRate || 0).toFixed(1)}%
-                                </span>
-                            </div>
+                                    {/* Card 4: % TRẢ GÓP (CHỈ HIỂN THỊ KHI CÓ % TRẢ GÓP) */}
+                                    {hasInstallmentRate && (
+                                        <div className="bg-purple-50/70 border-l-4 border-purple-500 rounded-xl p-3 shadow-xs text-center animate-in fade-in">
+                                            <span className="text-[10px] font-bold text-purple-700 uppercase tracking-wider block">% TRẢ CHẬM</span>
+                                            <span className="text-base sm:text-lg font-black text-purple-700 font-mono mt-0.5 block">
+                                                {(currentRecord.installmentRate || 0).toFixed(1)}%
+                                            </span>
+                                        </div>
+                                    )}
 
-                            {/* Card 5: THI ĐUA ĐẠT */}
-                            <div className="bg-slate-100/90 border-l-4 border-slate-600 rounded-xl p-3 shadow-xs text-center">
-                                <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wider block">THI ĐUA</span>
-                                <span className="text-base sm:text-lg font-black text-slate-800 font-mono mt-0.5 block">
-                                    {emulationStats.passed}/{emulationStats.total}
-                                </span>
-                            </div>
+                                    {/* Card 5: THI ĐUA ĐẠT */}
+                                    <div className="bg-slate-100/90 border-l-4 border-slate-600 rounded-xl p-3 shadow-xs text-center">
+                                        <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wider block">THI ĐUA</span>
+                                        <span className="text-base sm:text-lg font-black text-slate-800 font-mono mt-0.5 block">
+                                            {emulationStats.passed}/{emulationStats.total}
+                                        </span>
+                                    </div>
 
-                            {/* Card 6: %HT THI ĐUA */}
-                            <div className="bg-emerald-50/70 border-l-4 border-emerald-500 rounded-xl p-3 shadow-xs text-center">
-                                <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block">%DKHT</span>
-                                <span className="text-base sm:text-lg font-black text-emerald-600 font-mono mt-0.5 block">
-                                    {emulationStats.passRate}%
-                                </span>
-                            </div>
-                        </div>
+                                    {/* Card 6: %HT THI ĐUA */}
+                                    <div className="bg-emerald-50/70 border-l-4 border-emerald-500 rounded-xl p-3 shadow-xs text-center">
+                                        <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block">%THI ĐUA</span>
+                                        <span className="text-base sm:text-lg font-black text-emerald-600 font-mono mt-0.5 block">
+                                            {emulationStats.passRate}%
+                                        </span>
+                                    </div>
+                                </div>
+                            );
+                        })()}
 
                         {/* 3. BẢNG KẾT QUẢ THI ĐUA (NÂNG CẤP TIÊU ĐỀ NỔI BẬT & CÓ CỜ IGNORE BỘ LỌC KHI CHỤP ẢNH) */}
                         <div className="rounded-xl border border-slate-200 overflow-hidden shadow-sm">

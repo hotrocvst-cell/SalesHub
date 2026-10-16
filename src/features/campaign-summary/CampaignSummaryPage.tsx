@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { CampaignSummaryData } from './types';
-import { buildCampaignSummaryFromSession, isEmployeeInStore } from './utils/campaignSummaryStorage';
+import { buildCampaignSummaryFromSession, isEmployeeInStore, generateSmartRemarks } from './utils/campaignSummaryStorage';
 import {
     fetchStores,
     fetchCampaignDictionary,
@@ -22,6 +22,7 @@ import { useUserStoreFilter } from '../../shared/hooks/useUserStoreFilter';
 import CampaignSummaryTable from './components/CampaignSummaryTable';
 import CampaignRemarksModal from './components/CampaignRemarksModal';
 import ReportDataFreshnessBar from '../../shared/components/report/ReportDataFreshnessBar';
+import ReportActionButtons, { type AssessmentTemplate } from '../../shared/components/report/ReportActionButtons';
 import {
     Sparkles,
     Download,
@@ -39,6 +40,7 @@ import {
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import ExcelJS from 'exceljs';
+import { calculate8KScale } from '../../shared/utils/exportImage';
 
 export default function CampaignSummaryPage() {
     const navigate = useNavigate();
@@ -76,7 +78,6 @@ export default function CampaignSummaryPage() {
     const [loading, setLoading] = useState<boolean>(true);
     const [isRemarksModalOpen, setIsRemarksModalOpen] = useState<boolean>(false);
     const [isExporting, setIsExporting] = useState<boolean>(false);
-    const [exportResolution, setExportResolution] = useState<'4K' | '8K'>('8K');
     const [toastMessage, setToastMessage] = useState<string>('');
 
     const showToast = (msg: string) => {
@@ -459,23 +460,13 @@ export default function CampaignSummaryPage() {
                 });
             });
 
-            // Đo chiều cao thực tế của toàn bộ nội dung
-            const targetHeight = clonedReport.scrollHeight || clonedReport.offsetHeight;
-
-            // Tính toán scale theo độ phân giải được chọn (8K: 4.0x, 4K: 3.0x)
-            let exportScale = exportResolution === '8K' ? 4.0 : 3.0;
-
-            // Giới hạn an toàn tuyệt đối tránh tràn bộ nhớ canvas trình duyệt (>16k pixels)
-            if (targetWidth * exportScale > 14000) {
-                exportScale = Math.floor(14000 / targetWidth * 10) / 10;
-            }
+            // Tính toán scale chuẩn 8K với Auto-Safety Clamp bảo vệ bộ nhớ Canvas
+            const exportScale = calculate8KScale(clonedReport, targetWidth);
 
             const canvas = await html2canvas(clonedReport, {
                 scale: exportScale,
                 width: targetWidth,
-                height: targetHeight,
                 windowWidth: targetWidth,
-                windowHeight: targetHeight,
                 scrollX: 0,
                 scrollY: 0,
                 backgroundColor: '#ffffff',
@@ -513,7 +504,7 @@ export default function CampaignSummaryPage() {
                             await navigator.clipboard.write([
                                 new ClipboardItem({ 'image/png': blob })
                             ]);
-                            showToast(`📋 Đã sao chép toàn bộ bảng thi đua chuẩn Siêu Nét ${exportResolution} vào Clipboard! Nhấn Ctrl + V để dán ngay.`);
+                            showToast('📋 Đã sao chép toàn bộ bảng thi đua chuẩn 8K vào Clipboard! Nhấn Ctrl + V để dán ngay.');
                         } catch (err: any) {
                             console.error('Lỗi clipboard, tự động chuyển sang tải file:', err);
                             handleDownloadImage();
@@ -544,9 +535,9 @@ export default function CampaignSummaryPage() {
             const imgData = canvas.toDataURL('image/png', 1.0);
             const a = document.createElement('a');
             a.href = imgData;
-            a.download = `TongHop_ThiDua_${campaignData.date_display || (selectedMonth + '_' + selectedYear)}_${exportResolution}.png`;
+            a.download = `TongHop_ThiDua_${campaignData.date_display || (selectedMonth + '_' + selectedYear)}_8K.png`;
             a.click();
-            showToast(`🎉 Đã tải file ảnh toàn bộ bảng thi đua chuẩn ${exportResolution} thành công!`);
+            showToast('🎉 Đã tải file ảnh toàn bộ bảng thi đua chuẩn 8K thành công!');
         } catch (e: any) {
             console.error('Lỗi tải ảnh:', e);
             showToast('⚠️ Không thể tải ảnh: ' + (e.message || e));
@@ -594,6 +585,86 @@ export default function CampaignSummaryPage() {
         URL.revokeObjectURL(url);
     };
 
+    // 3 MẪU NHẬN XÉT THI ĐUA CHUẨN DÙNG CHUNG
+    const assessmentTemplates = useMemo<AssessmentTemplate[]>(() => {
+        if (!campaignData || !campaignData.rows || campaignData.rows.length === 0) {
+            return [];
+        }
+        const analysis = generateSmartRemarks(campaignData, campaignDict);
+        const storeLabel = selectedStore === 'all' ? 'Toàn Cụm Siêu Thị' : selectedStore;
+
+        // Mẫu 1: Tổng quan tiến độ & Ngành hàng mũi nhọn
+        const m1Lines = [
+            `📢 [TỔNG HỢP THI ĐUA: ${storeLabel.toUpperCase()}]`,
+            `📅 Luỹ kế dự kiến đến: ${formatDate(campaignData.date_display)} (${campaignData.mode_label || 'DỰ KIẾN'})`,
+            `🎯 Quy mô: ${campaignData.total_categories} ngành hàng • ${campaignData.rows.length} nhân sự`,
+            `----------------------------------------`,
+            `🌟 CÁC THI ĐUA MŨI NHỌN DẪN ĐẦU:`,
+            ...(analysis.bestCategories.length > 0
+                ? analysis.bestCategories.map(c => `• ${c.name}: ${c.passedCount}/${campaignData.rows.length} bạn đạt (${c.passRate}%)`)
+                : ['• Đang cập nhật dữ liệu...']),
+            `----------------------------------------`,
+            `⚡ TRỌNG TÂM CẦN KÉO SỐ:`,
+            ...(analysis.weakCategories.length > 0
+                ? analysis.weakCategories.map(c => `• ${c.name}: ${c.under50Count} bạn chưa đạt`)
+                : ['• Các ngành hàng đều đang bám sát tiến độ!']),
+            `----------------------------------------`,
+            `💪 Toàn đội tập trung tư vấn chéo để giữ vững nhịp độ hoàn thành!`
+        ];
+
+        // Mẫu 2: Top dẫn đầu & Cần tăng tốc
+        const m2Lines = [
+            `🏆 [VINH DANH TOP XUẤT SẮC & CẢNH BÁO TIẾN ĐỘ THI ĐUA]`,
+            `🏢 ${storeLabel} • 📅 ${formatDate(campaignData.date_display)}`,
+            `----------------------------------------`,
+            `🥇 TOP NHÂN SỰ XUẤT SẮC DẪN ĐẦU:`,
+            ...(analysis.topEmployees.length > 0
+                ? analysis.topEmployees.map((t, idx) => `  ${idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉'} ${t.name}: dự kiến đạt ${t.achieved} (${t.rate}%)`)
+                : ['• Chưa có dữ liệu']),
+            `👏 Chúc mừng các bạn đã duy trì phong độ vượt trội!`,
+            `----------------------------------------`,
+            `🚨 NHÂN SỰ CẦN TĂNG TỐC VỀ ĐÍCH:`,
+            ...(analysis.bottomEmployees.length > 0
+                ? analysis.bottomEmployees.map(b => `  ⚠️ ${b.name}: dự kiến đạt ${b.achieved} (${b.rate}%)`)
+                : ['• Toàn bộ nhân sự đều đạt chỉ tiêu!']),
+            `👉 Các bạn cần tăng tốc chủ động gặp quản lý để được hỗ trợ kèm cặp!`
+        ];
+
+        // Mẫu 3: Chi tiết & Kế hoạch hành động
+        const m3Lines = [
+            `⚡ [KẾ HOẠCH HÀNH ĐỘNG HỐI SỐ & ĐỘT PHÁ THI ĐUA NGÀNH HÀNG]`,
+            `🏢 ${storeLabel} • 📅 ${formatDate(campaignData.date_display)}`,
+            `----------------------------------------`,
+            `🎯 3 HÀNH ĐỘNG TRỌNG TÂM TOÀN SIÊU THỊ:`,
+            `1. Tập trung vào ngành hàng yếu: ${analysis.weakCategories.map(c => c.name).join(', ') || 'các nhóm hàng còn thiếu'}.`,
+            `2. Nhân viên xuất sắc chia sẻ kinh nghiệm và hỗ trợ các bạn còn thiếu số.`,
+            `3. Đôn đốc tư vấn trả góp và combo phụ kiện kèm theo mỗi đơn hàng.`,
+            `----------------------------------------`,
+            `🚀 Quyết tâm 100% nhân viên về đích tất cả các chương trình thi đua!`
+        ];
+
+        return [
+            {
+                id: 'template_overview',
+                label: 'Mẫu 1: Tổng quan & Ngành hàng',
+                description: 'Tóm tắt tiến độ, ngành hàng mũi nhọn và ngành hàng yếu',
+                content: m1Lines.join('\n')
+            },
+            {
+                id: 'template_ranking',
+                label: 'Mẫu 2: Top & Tăng tốc',
+                description: 'Vinh danh Top dẫn đầu và nhắc nhở nhân sự cần hỗ trợ',
+                content: m2Lines.join('\n')
+            },
+            {
+                id: 'template_action',
+                label: 'Mẫu 3: Kế hoạch hành động',
+                description: 'Kế hoạch hành động đột phá kéo số ngành hàng',
+                content: m3Lines.join('\n')
+            }
+        ];
+    }, [campaignData, campaignDict, selectedStore]);
+
     return (
         <div className="max-w-[1720px] mx-auto space-y-4 pb-12">
             {/* Toast Thông Báo */}
@@ -605,65 +676,72 @@ export default function CampaignSummaryPage() {
             )}
 
             {/* Thanh công cụ lọc: Tháng/Năm, Siêu Thị, Chọn Phiên, Tìm kiếm, Xuất Excel */}
-            <div className="bg-white rounded-2xl p-3.5 border border-slate-200 shadow-2xs flex flex-wrap items-center justify-between gap-3 text-xs">
-                <div className="flex flex-wrap items-center gap-2.5">
-                    {/* Chọn Siêu Thị (Theo phân quyền tài khoản) */}
-                    <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all ${isLockedToSingleStore
-                        ? 'bg-amber-50/90 border-amber-200 text-amber-900 shadow-2xs'
-                        : 'bg-slate-50 border-slate-200 text-slate-800'
-                        }`}>
-                        {isLockedToSingleStore ? (
-                            <Lock className="w-4 h-4 text-amber-600 shrink-0" />
-                        ) : (
-                            <Store className="w-4 h-4 text-emerald-600 shrink-0" />
-                        )}
-                        <select
-                            value={selectedStore}
-                            onChange={e => handleStoreChange(e.target.value)}
-                            disabled={isLockedToSingleStore}
-                            title={isLockedToSingleStore ? 'Tài khoản nhân viên được cố định theo siêu thị đang làm việc' : undefined}
-                            className={`bg-transparent text-xs font-bold outline-hidden ${isLockedToSingleStore
-                                ? 'cursor-not-allowed text-amber-900 font-black'
-                                : 'cursor-pointer text-slate-800'
-                                }`}
-                        >
-                            {canViewAllStores && (
-                                <option value="all">🏢 Toàn Cụm Siêu Thị</option>
+            <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-3 text-xs">
+                {/* HÀNG 1: BỘ LỌC SIÊU THỊ RIÊNG LẺ ĐẦU TIÊN (RULE 10 CONVENTION) */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+                    <div className="flex items-center gap-2">
+                        <div className={`flex items-center gap-2 px-3.5 py-2 rounded-xl border text-xs font-bold transition-all ${isLockedToSingleStore
+                            ? 'bg-amber-50/90 border-amber-200 text-amber-900 shadow-2xs'
+                            : 'bg-slate-50 border-slate-200 hover:border-emerald-400 text-slate-800 shadow-2xs'
+                            }`}>
+                            {isLockedToSingleStore ? (
+                                <Lock className="w-4 h-4 text-amber-600 shrink-0" />
+                            ) : (
+                                <Store className="w-4 h-4 text-emerald-600 shrink-0" />
                             )}
-                            {allowedStores.map(s => (
-                                <option key={s.id || s.code} value={s.name}>{s.name} ({s.code})</option>
-                            ))}
-                        </select>
-                        {isLockedToSingleStore && (
-                            <span className="text-[10px] bg-amber-200/80 text-amber-800 px-1 py-0.5 rounded font-bold uppercase tracking-wider hidden sm:inline">
-                                Đã khóa
-                            </span>
-                        )}
+                            <span className="text-slate-500 font-bold whitespace-nowrap">Siêu thị:</span>
+                            <select
+                                value={selectedStore}
+                                onChange={e => handleStoreChange(e.target.value)}
+                                disabled={isLockedToSingleStore}
+                                title={isLockedToSingleStore ? 'Tài khoản nhân viên được cố định theo siêu thị đang làm việc' : undefined}
+                                className={`bg-transparent text-xs font-black outline-hidden min-w-[200px] sm:min-w-[260px] ${isLockedToSingleStore
+                                    ? 'cursor-not-allowed text-amber-900'
+                                    : 'cursor-pointer text-slate-900'
+                                    }`}
+                            >
+                                {canViewAllStores && (
+                                    <option value="all">🏢 Toàn Cụm Siêu Thị</option>
+                                )}
+                                {allowedStores.map(s => (
+                                    <option key={s.id || s.code} value={s.name}>🏪 {s.name} ({s.code})</option>
+                                ))}
+                            </select>
+                            {isLockedToSingleStore && (
+                                <span className="text-[10px] bg-amber-200/80 text-amber-800 px-1 py-0.5 rounded font-bold uppercase tracking-wider">
+                                    Đã khóa
+                                </span>
+                            )}
+                        </div>
                     </div>
+                </div>
 
-                    {/* Chọn Tháng / Năm */}
-                    <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl">
-                        <Calendar className="w-4 h-4 text-emerald-600" />
-                        <select
-                            value={selectedMonth}
-                            onChange={e => setSelectedMonth(Number(e.target.value))}
-                            className="bg-transparent text-xs font-bold text-slate-800 outline-hidden cursor-pointer"
-                        >
-                            {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
-                                <option key={m} value={m}>Tháng {m}</option>
-                            ))}
-                        </select>
-                        <span className="text-slate-300">/</span>
-                        <select
-                            value={selectedYear}
-                            onChange={e => setSelectedYear(Number(e.target.value))}
-                            className="bg-transparent text-xs font-bold text-slate-800 outline-hidden cursor-pointer"
-                        >
-                            {[2025, 2026, 2027].map(y => (
-                                <option key={y} value={y}>{y}</option>
-                            ))}
-                        </select>
-                    </div>
+                {/* HÀNG 2: THỜI GIAN, PHIÊN & CÁC BỘ LỌC BỔ TRỢ */}
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-0.5">
+                    <div className="flex flex-wrap items-center gap-2.5">
+                        {/* Chọn Tháng / Năm */}
+                        <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl">
+                            <Calendar className="w-4 h-4 text-emerald-600" />
+                            <select
+                                value={selectedMonth}
+                                onChange={e => setSelectedMonth(Number(e.target.value))}
+                                className="bg-transparent text-xs font-bold text-slate-800 outline-hidden cursor-pointer"
+                            >
+                                {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                                    <option key={m} value={m}>Tháng {m}</option>
+                                ))}
+                            </select>
+                            <span className="text-slate-300">/</span>
+                            <select
+                                value={selectedYear}
+                                onChange={e => setSelectedYear(Number(e.target.value))}
+                                className="bg-transparent text-xs font-bold text-slate-800 outline-hidden cursor-pointer"
+                            >
+                                {[2025, 2026, 2027].map(y => (
+                                    <option key={y} value={y}>{y}</option>
+                                ))}
+                            </select>
+                        </div>
 
                     {/* Chọn Phiên Đã Cập Nhật */}
                     {availableSessions.length > 0 && (
@@ -732,6 +810,7 @@ export default function CampaignSummaryPage() {
                     </button>
                 </div>
             </div>
+        </div>
 
             {/* TRƯỜNG HỢP 1: CHƯA CÓ PHIÊN DỮ LIỆU HOẶC KHÔNG CÓ NHÂN VIÊN NÀO CÓ TARGET TẠI SIÊU THỊ NÀY */}
             {!campaignData || availableSessions.length === 0 || campaignData.rows.length === 0 ? (
@@ -825,66 +904,19 @@ export default function CampaignSummaryPage() {
                                 </span>
                             </div>
 
-                            {/* 2. Nút "✨ NHẬN XÉT" (Màu tím neon nổi bật) */}
-                            <button
-                                data-export-ignore="true"
-                                type="button"
-                                onClick={() => setIsRemarksModalOpen(true)}
-                                className="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white text-xs font-black rounded-xl transition cursor-pointer flex items-center gap-1.5 shadow-md hover:scale-[1.02] active:scale-[0.98]"
-                            >
-                                <Sparkles className="w-4 h-4 text-amber-300" />
-                                <span>NHẬN XÉT</span>
-                            </button>
-
-                            {/* 3. Nút "📥 XUẤT ẢNH & ĐỘ NÉT" */}
-                            <div data-export-ignore="true" className="flex items-center gap-1.5 bg-[#0d9488] p-1 rounded-xl shadow-xs">
-                                {/* Bộ chuyển độ phân giải 4K / 8K */}
-                                <div className="flex items-center bg-[#0b6e65] p-0.5 rounded-lg text-[10px] font-black">
-                                    <button
-                                        type="button"
-                                        onClick={() => setExportResolution('4K')}
-                                        className={`px-2 py-1 rounded transition cursor-pointer ${exportResolution === '4K'
-                                                ? 'bg-[#fde047] text-slate-900 shadow-xs'
-                                                : 'text-teal-100 hover:text-white'
-                                            }`}
-                                        title="Độ phân giải 4K siêu nét (~4.500px)"
-                                    >
-                                        4K
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setExportResolution('8K')}
-                                        className={`px-2 py-1 rounded transition cursor-pointer ${exportResolution === '8K'
-                                                ? 'bg-[#fde047] text-slate-900 shadow-xs'
-                                                : 'text-teal-100 hover:text-white'
-                                            }`}
-                                        title="Độ phân giải 8K Ultra HD cực đại (~7.500px - 8.000px, phóng to không vỡ nét)"
-                                    >
-                                        💎 8K
-                                    </button>
-                                </div>
-
-                                <button
-                                    type="button"
-                                    onClick={handleCopyImageToClipboard}
-                                    disabled={isExporting}
-                                    className="px-3 py-1.5 hover:bg-[#0f766e] text-white text-xs font-black rounded-lg transition cursor-pointer flex items-center gap-1.5"
-                                    title={`Copy ảnh toàn bộ bảng độ nét ${exportResolution} vào Clipboard để dán (Ctrl+V) vào Messaging App`}
-                                >
-                                    <Copy className="w-3.5 h-3.5" />
-                                    <span>{isExporting ? 'Đang xuất...' : `Copy ${exportResolution}`}</span>
-                                </button>
-
-                                <button
-                                    type="button"
-                                    onClick={handleDownloadImage}
-                                    disabled={isExporting}
-                                    className="p-1.5 hover:bg-[#0f766e] text-white rounded-lg transition cursor-pointer"
-                                    title={`Tải file ảnh PNG độ nét ${exportResolution}`}
-                                >
-                                    <Download className="w-3.5 h-3.5" />
-                                </button>
-                            </div>
+                            {/* Cụm button hành động chuẩn dùng chung: Nhận xét 3 mẫu, Xuất ảnh, Copy ảnh */}
+                            <ReportActionButtons
+                                onExportImage={handleDownloadImage}
+                                onCopyImage={handleCopyImageToClipboard}
+                                isExporting={isExporting}
+                                isCopyingImage={isExporting}
+                                assessmentTemplates={assessmentTemplates}
+                                reportTitle="Tổng Hợp Thi Đua Ngành Hàng"
+                                periodLabel={campaignData.date_display}
+                                storeName={selectedStore === 'all' ? 'Toàn Cụm' : selectedStore}
+                                exportLabel="Tải Ảnh"
+                                copyLabel="Copy Ảnh"
+                            />
                         </div>
                     </div>
 

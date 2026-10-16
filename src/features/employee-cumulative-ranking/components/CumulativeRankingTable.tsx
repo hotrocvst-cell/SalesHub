@@ -1,5 +1,5 @@
 import React from 'react';
-import { formatValue } from '../../../core/lib/formatters';
+import { formatValue, cleanEmployeeName, getShortenedEmployeeName } from '../../../core/lib/formatters';
 import type { EmployeeCumulativeRankingRow, StoreCumulativeSummary, CumulativeRankingViewMode } from '../types';
 import { Trophy, Medal, Award, User, Info, Building2 } from 'lucide-react';
 
@@ -30,6 +30,12 @@ export default function CumulativeRankingTable({
     isMultiStore
 }: CumulativeRankingTableProps) {
     const { dateList, storeCumulativeRevenue, storeDailyRevenue, storeTarget, storeCompletionRate, sumOfEmployeesCumulative, unassignedOrOnlineDiff } = summary;
+
+    // Chiều rộng badge mã nhân viên tự động thích ứng theo mã dài nhất trong bảng để thẳng cột thẳng lề
+    const maxIdLength = React.useMemo(() => {
+        if (!rows || rows.length === 0) return 6;
+        return Math.max(6, ...rows.map(r => String(r.employeeId || '').trim().length));
+    }, [rows]);
 
     const renderRankBadge = (rank: number) => {
         if (rank === 1) {
@@ -67,14 +73,11 @@ export default function CumulativeRankingTable({
                     {/* TIÊU ĐỀ CỘT */}
                     <thead>
                         <tr className="bg-slate-900 text-white font-bold border-b border-slate-800">
-                            <th className="px-2 py-2.5 text-center w-12 sticky left-0 z-20 bg-slate-900">
+                            <th className="px-2 py-2.5 text-center w-12 sticky left-0 z-20 bg-slate-900 border-r border-slate-800">
                                 Hạng
                             </th>
-                            <th className="px-2 py-2.5 text-left w-20 sticky left-12 z-20 bg-slate-900">
-                                Mã NV
-                            </th>
-                            <th className="px-2.5 py-2.5 text-left min-w-[130px] sticky left-32 z-20 bg-slate-900">
-                                Họ và Tên
+                            <th className="px-3 py-2.5 text-left min-w-[180px] sticky left-12 z-20 bg-slate-900 border-r border-slate-800">
+                                Nhân viên
                             </th>
 
                             {isMultiStore && (
@@ -84,13 +87,13 @@ export default function CumulativeRankingTable({
                             )}
 
                             {showTarget && (
-                                <th className="px-2 py-2.5 text-right min-w-[85px] text-amber-300 font-extrabold">
-                                    {summary.targetSource === 'PERIOD' ? 'Target đợt 🎯' : 'Target'}
+                                <th className="px-2.5 py-2.5 text-right min-w-[95px] text-amber-300 font-black bg-amber-950/70 border-x border-amber-600/30">
+                                    {summary.targetSource === 'PERIOD' ? 'Target đợt (tr) 🎯' : 'Target tháng (tr) 🎯'}
                                 </th>
                             )}
 
                             <th className="px-2.5 py-2.5 text-right min-w-[105px] text-emerald-300 font-black bg-slate-950/60">
-                                Lũy Kế DT
+                                Lũy Kế DT (tr)
                             </th>
 
                             {showTarget && (
@@ -126,7 +129,7 @@ export default function CumulativeRankingTable({
                         {rows.length === 0 ? (
                             <tr>
                                 <td
-                                    colSpan={viewMode === 'WITH_DAILY' ? 8 + dateList.length : 8}
+                                    colSpan={viewMode === 'WITH_DAILY' ? (isMultiStore ? 8 : 7) + dateList.length : (isMultiStore ? 8 : 7)}
                                     className="px-4 py-8 text-center text-slate-400 italic"
                                 >
                                     Không có dữ liệu nhân viên nào trong khoảng thời gian đã chọn.
@@ -143,19 +146,25 @@ export default function CumulativeRankingTable({
                                         }`}
                                     >
                                         {/* HẠNG */}
-                                        <td className="px-2 py-2 text-center sticky left-0 z-10 bg-inherit border-r border-slate-100">
+                                        <td className="px-2 py-2 text-center sticky left-0 z-10 bg-inherit border-r border-slate-100 whitespace-nowrap">
                                             {renderRankBadge(row.rank)}
                                         </td>
 
-                                        {/* MÃ NV */}
-                                        <td className="px-2 py-2 font-mono text-[11px] text-slate-600 sticky left-12 z-10 bg-inherit border-r border-slate-100 font-bold">
-                                            {row.employeeId}
-                                        </td>
-
-                                        {/* HỌ VÀ TÊN */}
-                                        <td className="px-2.5 py-2 font-black text-slate-900 sticky left-32 z-10 bg-inherit border-r border-slate-100 whitespace-nowrap">
-                                            <div className="flex items-center gap-1.5">
-                                                <span>{row.fullName}</span>
+                                        {/* NHÂN VIÊN (MÃ NV BADGE CỐ ĐỊNH CHIỀU RỘNG + TÊN RÚT GỌN) */}
+                                        <td className="px-3 py-2 text-left sticky left-12 z-10 bg-inherit border-r border-slate-100 whitespace-nowrap">
+                                            <div className="flex items-center gap-2 whitespace-nowrap">
+                                                <span
+                                                    style={{ minWidth: `${maxIdLength + 2.2}ch`, width: `${maxIdLength + 2.2}ch` }}
+                                                    className="font-mono font-bold text-xs px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-800 border border-blue-200 inline-block text-center leading-normal shrink-0"
+                                                >
+                                                    {row.employeeId}
+                                                </span>
+                                                <span
+                                                    className="font-bold text-xs text-slate-900 transition"
+                                                    title={`Mã NV: ${row.employeeId} - ${cleanEmployeeName(row.fullName)}`}
+                                                >
+                                                    {getShortenedEmployeeName(row.fullName)}
+                                                </span>
                                             </div>
                                         </td>
 
@@ -166,10 +175,16 @@ export default function CumulativeRankingTable({
                                             </td>
                                         )}
 
-                                        {/* TARGET */}
+                                        {/* TARGET - NỔI BẬT CAO */}
                                         {showTarget && (
-                                            <td className="px-2 py-2 text-right font-mono text-slate-600">
-                                                {row.target > 0 ? formatValue(row.target) : '-'}
+                                            <td className="px-2 py-2 text-right bg-amber-50/60 border-x border-amber-200/50">
+                                                {row.target > 0 ? (
+                                                    <span className="inline-block font-black font-mono text-amber-950 bg-amber-200/80 border border-amber-400 px-2 py-0.5 rounded-lg text-xs shadow-2xs">
+                                                        {formatValue(row.target)}
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-slate-400 text-[10px] italic">Chưa giao</span>
+                                                )}
                                             </td>
                                         )}
 
@@ -235,14 +250,21 @@ export default function CumulativeRankingTable({
                     {/* HÀNG SỐ TỔNG (SUMMARY FOOTER): SỐ TỔNG LÀ DỮ LIỆU LŨY KẾ CỦA SIÊU THỊ */}
                     <tfoot>
                         <tr className="bg-slate-900 text-white font-black border-t-2 border-indigo-400">
-                            <td className="px-2 py-3 text-center sticky left-0 z-20 bg-slate-900">
+                            <td className="px-2 py-3 text-center sticky left-0 z-20 bg-slate-900 border-r border-slate-800">
                                 🏢
                             </td>
-                            <td className="px-2 py-3 text-left sticky left-12 z-20 bg-slate-900 text-[10px] text-amber-300 font-mono">
-                                SIÊU THỊ
-                            </td>
-                            <td className="px-2.5 py-3 text-left sticky left-32 z-20 bg-slate-900 text-amber-300 whitespace-nowrap">
-                                🏢 TỔNG LŨY KẾ SIÊU THỊ
+                            <td className="px-3 py-3 text-left sticky left-12 z-20 bg-slate-900 text-amber-300 font-black whitespace-nowrap border-r border-slate-800">
+                                <div className="flex items-center gap-2 whitespace-nowrap">
+                                    <span
+                                        style={{ minWidth: `${maxIdLength + 2.2}ch`, width: `${maxIdLength + 2.2}ch` }}
+                                        className="font-mono font-bold text-xs px-1.5 py-0.5 rounded-md bg-amber-400/20 text-amber-300 border border-amber-400/40 inline-block text-center leading-normal shrink-0"
+                                    >
+                                        TỔNG
+                                    </span>
+                                    <span className="text-xs uppercase tracking-wide">
+                                        Lũy Kế Siêu Thị
+                                    </span>
+                                </div>
                             </td>
 
                             {isMultiStore && (
@@ -252,8 +274,12 @@ export default function CumulativeRankingTable({
                             )}
 
                             {showTarget && (
-                                <td className="px-2 py-3 text-right font-mono text-amber-300">
-                                    {storeTarget > 0 ? formatValue(storeTarget) : '-'}
+                                <td className="px-2 py-3 text-right font-black font-mono text-amber-300 bg-amber-950/60 border-x border-amber-700/40 text-xs sm:text-sm">
+                                    {storeTarget > 0 ? (
+                                        <span className="px-2 py-0.5 rounded-lg bg-amber-400/20 border border-amber-400/40 text-amber-300">
+                                            {formatValue(storeTarget)}
+                                        </span>
+                                    ) : '-'}
                                 </td>
                             )}
 
@@ -307,23 +333,20 @@ export default function CumulativeRankingTable({
                     <Info className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
                     <span className="font-bold text-slate-800">Quy chuẩn dữ liệu:</span>
                     <span>
-                        Hàng tổng là <strong>Doanh thu lũy kế của Siêu thị</strong> ({formatValue(storeCumulativeRevenue)}), không phải tổng cộng dòng nhân viên.
+                        Hàng tổng là <strong>Doanh thu lũy kế của Siêu thị</strong> ({formatValue(storeCumulativeRevenue)} tr) theo dữ liệu chốt bc tháng.
                     </span>
-                    {summary.targetSource === 'PERIOD' && (
+                    {summary.targetSource === 'PERIOD' ? (
                         <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300 font-black text-[9.5px]">
                             🎯 Target giai đoạn riêng: {summary.activePeriodTitle}
                         </span>
+                    ) : (
+                        <span className="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-800 border border-indigo-200 font-black text-[9.5px]">
+                            📅 Target Tháng đã cấu hình
+                        </span>
                     )}
                 </div>
-                <div className="flex items-center gap-2 flex-wrap text-slate-500 font-mono font-medium">
-                    <span>Tổng dòng NV: <strong className="text-slate-800">{formatValue(sumOfEmployeesCumulative)}</strong></span>
-                    <span>•</span>
-                    <span>
-                        Chênh lệch shop (DT chung/online):{' '}
-                        <strong className={unassignedOrOnlineDiff >= 0 ? 'text-emerald-700' : 'text-rose-600'}>
-                            {unassignedOrOnlineDiff > 0 ? '+' : ''}{formatValue(unassignedOrOnlineDiff)}
-                        </strong>
-                    </span>
+                <div className="text-[10.5px] text-slate-500 font-bold">
+                    Sắp xếp theo: <span className="text-indigo-700 font-black">% Hoàn Thành (%HT) giảm dần</span>
                 </div>
             </div>
         </div>

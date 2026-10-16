@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import type { CampaignSummaryRow } from '../types';
-import { getCampaignLabel } from '../../../core/lib/formatters';
+import { getCampaignLabel, cleanEmployeeName, getShortenedEmployeeName } from '../../../core/lib/formatters';
 import type { CampaignDictItem } from '../../../core/lib/storage';
 import { ArrowUpDown, ArrowDown, ArrowUp } from 'lucide-react';
 
@@ -19,6 +19,12 @@ export default function CampaignSummaryTable({
 }: Props) {
     const [sortField, setSortField] = useState<'stt' | 'achieved' | 'rate' | 'name'>('achieved');
     const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+
+    // Chiều rộng badge mã nhân viên tự động thích ứng theo mã dài nhất trong bảng để thẳng cột thẳng lề
+    const maxIdLength = useMemo(() => {
+        if (!rows || rows.length === 0) return 6;
+        return Math.max(6, ...rows.map(r => String(r.employee_id || '').trim().length));
+    }, [rows]);
 
     // Lọc danh sách cột ngành hàng hiển thị
     const displayedCategories = selectedCategoryFilter === 'ALL'
@@ -78,14 +84,14 @@ export default function CampaignSummaryTable({
                                 </div>
                             </th>
 
-                            {/* 2. MSNV - TÊN NV VIẾT TẮT */}
+                            {/* 2. NHÂN VIÊN */}
                             <th
                                 onClick={() => handleSort('name')}
                                 className="py-2 px-3 min-w-[190px] bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase tracking-wider cursor-pointer border-r border-emerald-500 sticky left-[50px] z-40 transition align-middle"
-                                title="Mã số nhân viên và tên rút gọn (Bấm để sắp xếp)"
+                                title="Nhân viên (Bấm để sắp xếp)"
                             >
                                 <div className="flex items-center justify-center gap-1.5 min-h-[38px] leading-normal">
-                                    <span>MSNV - Tên NV</span>
+                                    <span>NHÂN VIÊN</span>
                                     {sortField === 'name' && (
                                         sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 shrink-0" /> : <ArrowDown className="w-3 h-3 shrink-0" />
                                     )}
@@ -154,14 +160,22 @@ export default function CampaignSummaryTable({
                                     {row.stt}
                                 </td>
 
-                                {/* 2. MSNV - TÊN NV VIẾT TẮT */}
+                                {/* 2. NHÂN VIÊN */}
                                 <td className="py-2.5 px-3 font-black text-slate-900 bg-white group-hover:bg-slate-50 border-r border-slate-200 sticky left-[50px] z-20 whitespace-nowrap">
-                                    <span
-                                        className="cursor-help"
-                                        title={`Họ và tên đầy đủ: ${row.full_name} • Mã NV: ${row.employee_id}`}
-                                    >
-                                        {row.display_name}
-                                    </span>
+                                    <div className="flex items-center gap-2 whitespace-nowrap">
+                                        <span
+                                            style={{ minWidth: `${maxIdLength + 2.2}ch`, width: `${maxIdLength + 2.2}ch` }}
+                                            className="font-mono font-bold text-xs px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-800 border border-blue-200 inline-block text-center leading-normal shrink-0"
+                                        >
+                                            {row.employee_id}
+                                        </span>
+                                        <span
+                                            title={`Mã NV: ${row.employee_id} - ${cleanEmployeeName(row.full_name || row.display_name)}`}
+                                            className="font-bold text-xs text-slate-900 group-hover:text-blue-700 transition"
+                                        >
+                                            {getShortenedEmployeeName(row.full_name || row.display_name)}
+                                        </span>
+                                    </div>
                                 </td>
 
                                 {/* 3. SỐ THI ĐUA DỰ KIẾN ĐẠT/TỔNG (ví dụ: 15/39 hoặc 12/18 đ) */}

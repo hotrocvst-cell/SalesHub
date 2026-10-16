@@ -31,11 +31,13 @@ import { resolveCanonicalCampaign } from '../campaign-summary/utils/campaignSumm
 import { getYesterdayDateString, isStoreMatch, getShortStoreName } from '../../core/lib/formatters';
 import { useAuth } from '../../shared/contexts/AuthContext';
 import { useUserStoreFilter } from '../../shared/hooks/useUserStoreFilter';
+import { useExcelExportPermission } from '../../shared/hooks/useExcelExportPermission';
 import ReportDataFreshnessBar from '../../shared/components/report/ReportDataFreshnessBar';
 import PerformanceConfigModal from '../employee-performance/components/PerformanceConfigModal';
 import EmployeeRankingKpiCards from './components/EmployeeRankingKpiCards';
 import EmployeeRankingTable, { type SortField } from './components/EmployeeRankingTable';
 import EmployeeRankingAssessmentModal from './components/EmployeeRankingAssessmentModal';
+import ReportActionButtons from '../../shared/components/report/ReportActionButtons';
 import {
     fetchEmployeeRankingAssessment,
     type EmployeeRankingAssessmentData
@@ -65,6 +67,7 @@ import {
 } from 'lucide-react';
 import ExcelJS from 'exceljs';
 import html2canvas from 'html2canvas';
+import { calculate8KScale } from '../../shared/utils/exportImage';
 
 export default function EmployeeRankingSummaryPage() {
     const navigate = useNavigate();
@@ -82,6 +85,9 @@ export default function EmployeeRankingSummaryPage() {
         selectedStore,
         setSelectedStore
     );
+
+    // Kiểm tra quyền xuất file Excel (Rule 9)
+    const { canExportExcel } = useExcelExportPermission('/tong-hop-xep-hang-nhan-vien');
 
     const [selectedMonth, setSelectedMonth] = useState<number>(() => new Date().getMonth() + 1);
     const [selectedYear, setSelectedYear] = useState<number>(() => new Date().getFullYear());
@@ -593,19 +599,21 @@ export default function EmployeeRankingSummaryPage() {
         }
     };
 
-    // 8. XUẤT ẢNH BÁO CÁO (PORTRAIT SMARTPHONE OPTIMIZED, NO FOOTER WATERMARK)
+    // 8. XUẤT ẢNH BÁO CÁO 8K (PORTRAIT SMARTPHONE OPTIMIZED, NO FOOTER WATERMARK)
     const exportImage = async (mode: 'DOWNLOAD' | 'COPY') => {
         if (!reportRef.current || isExporting) return;
         setIsExporting(true);
-        showToast('📸 Đang tạo hình ảnh báo cáo dọc smartphone...');
+        showToast('📸 Đang tạo hình ảnh báo cáo 8K dọc smartphone...');
 
         try {
             if (document.fonts && document.fonts.ready) {
                 await document.fonts.ready;
             }
 
+            const scale = calculate8KScale(reportRef.current, 960);
+
             const canvas = await html2canvas(reportRef.current, {
-                scale: 2.5,
+                scale: scale,
                 useCORS: true,
                 allowTaint: true,
                 backgroundColor: '#ffffff',
@@ -627,17 +635,17 @@ export default function EmployeeRankingSummaryPage() {
 
             if (mode === 'DOWNLOAD') {
                 const link = document.createElement('a');
-                link.download = `XepHangNhanVien_${selectedStore}_T${selectedMonth}_${selectedYear}.png`;
+                link.download = `XepHangNhanVien_${selectedStore}_T${selectedMonth}_${selectedYear}_8K.png`;
                 link.href = canvas.toDataURL('image/png');
                 link.click();
-                showToast('✅ Đã tải xuống ảnh báo cáo thành công!');
+                showToast('✅ Đã tải xuống ảnh báo cáo 8K thành công!');
             } else {
                 canvas.toBlob(async (blob) => {
                     if (blob && navigator.clipboard && navigator.clipboard.write) {
                         await navigator.clipboard.write([
                             new ClipboardItem({ 'image/png': blob })
                         ]);
-                        showToast('📋 Đã sao chép ảnh vào Clipboard! Dán trực tiếp vào Zalo.');
+                        showToast('📋 Đã sao chép ảnh 8K vào Clipboard! Dán trực tiếp vào Messaging App.');
                     } else {
                         showToast('⚠️ Trình duyệt chưa hỗ trợ sao chép ảnh tự động.');
                     }
@@ -751,24 +759,11 @@ export default function EmployeeRankingSummaryPage() {
                     </div>
 
                     {/* HÀNG CÔNG CỤ NÚT BẤM */}
-                    <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                        {/* Nút Nhận xét tóm tắt kết quả */}
-                        <button
-                            onClick={() => setIsAssessmentModalOpen(true)}
-                            className="px-2.5 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold text-xs flex items-center gap-1.5 transition border border-purple-200 select-none shadow-2xs relative"
-                            title="Nhận xét tóm tắt kết quả xếp hạng và gợi ý mẫu"
-                        >
-                            <MessageSquare className="w-3.5 h-3.5 text-purple-600" />
-                            <span>Nhận xét</span>
-                            {assessmentData?.comment && (
-                                <span className="w-2 h-2 rounded-full bg-purple-600 animate-pulse" />
-                            )}
-                        </button>
-
+                    <div className="flex items-center gap-2 flex-wrap justify-end">
                         {canManage && (
                             <button
                                 onClick={() => setIsConfigModalOpen(true)}
-                                className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center gap-1.5 transition border border-slate-200 select-none shadow-2xs"
+                                className="px-3 py-2 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center gap-1.5 transition border border-slate-200 select-none shadow-2xs"
                                 title="Cấu hình tỷ lệ TOP / BOT và ngày giờ hoạt động (dùng chung cho cả hệ thống)"
                             >
                                 <Settings className="w-3.5 h-3.5 text-slate-600" />
@@ -776,38 +771,23 @@ export default function EmployeeRankingSummaryPage() {
                             </button>
                         )}
 
-                        <button
-                            onClick={() => exportImage('COPY')}
-                            disabled={isExporting}
-                            className="px-2.5 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs flex items-center gap-1.5 transition border border-indigo-200 select-none shadow-2xs disabled:opacity-50"
-                            title="Sao chép ảnh báo cáo để dán vào Zalo"
-                        >
-                            <Copy className="w-3.5 h-3.5 text-indigo-600" />
-                            <span>Copy Zalo</span>
-                        </button>
-
-                        <button
-                            onClick={() => exportImage('DOWNLOAD')}
-                            disabled={isExporting}
-                            className="px-2.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1.5 transition select-none shadow-sm disabled:opacity-50"
-                            title="Tải ảnh báo cáo dọc smartphone độ nét cao"
-                        >
-                            <Camera className="w-3.5 h-3.5" />
-                            <span>Lưu ảnh</span>
-                        </button>
-
-                        <button
-                            onClick={exportExcel}
-                            className="px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 transition select-none shadow-sm"
-                            title="Xuất file Excel báo cáo chi tiết"
-                        >
-                            <Download className="w-3.5 h-3.5" />
-                            <span>Excel</span>
-                        </button>
+                        <ReportActionButtons
+                            onExportImage={() => exportImage('DOWNLOAD')}
+                            onCopyImage={() => exportImage('COPY')}
+                            isExporting={isExporting}
+                            onOpenAssessment={() => setIsAssessmentModalOpen(true)}
+                            hasAssessment={true}
+                            hasAssessmentToggle={true}
+                            showAssessmentOnReport={showAssessment}
+                            onToggleShowAssessment={setShowAssessment}
+                            onExportExcel={exportExcel}
+                            canExportExcel={canExportExcel}
+                            reportTitle={`Bảng Xếp Hạng Thi Đua Nhân Viên - ${selectedStore}`}
+                        />
 
                         <button
                             onClick={loadAllData}
-                            className="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 transition border border-slate-200"
+                            className="p-2 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-600 transition border border-slate-200"
                             title="Làm mới dữ liệu"
                         >
                             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-indigo-600' : ''}`} />
@@ -815,18 +795,17 @@ export default function EmployeeRankingSummaryPage() {
                     </div>
                 </div>
 
-                {/* BỘ LỌC ĐA CHIỀU */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2 mt-3 pt-3 border-t border-slate-100">
-                    {/* 1. Chọn Siêu thị */}
-                    <div className="col-span-2 sm:col-span-2">
-                        <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">
-                            Siêu Thị
-                        </label>
+                {/* BỘ LỌC SIÊU THỊ / CỤM RIÊNG LẺ ĐẦU TIÊN (RULE 10 CONVENTION) */}
+                <div className="mt-3 pt-3 border-t border-slate-100 pb-2.5 border-b">
+                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">
+                        Siêu Thị / Đơn Vị Phụ Trách
+                    </label>
+                    <div className="flex items-center gap-2">
                         <select
                             value={selectedStore}
                             disabled={isLockedToSingleStore}
                             onChange={(e) => setSelectedStore(e.target.value)}
-                            className="w-full text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-100 disabled:text-slate-500"
+                            className="w-full sm:max-w-md text-xs font-black bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-100 disabled:text-slate-500 cursor-pointer shadow-2xs"
                         >
                             {canViewAllStores && <option value="all">🏢 Toàn Cụm Siêu Thị</option>}
                             {allowedStores.map(st => (
@@ -835,9 +814,17 @@ export default function EmployeeRankingSummaryPage() {
                                 </option>
                             ))}
                         </select>
+                        {isLockedToSingleStore && (
+                            <span className="text-[10px] bg-amber-100 text-amber-800 border border-amber-200 px-2 py-1 rounded-lg font-bold uppercase tracking-wider">
+                                Đã khóa theo shop
+                            </span>
+                        )}
                     </div>
+                </div>
 
-                    {/* 2. Chọn Tháng */}
+                {/* BỘ LỌC THỜI GIAN & TIÊU CHÍ BỔ TRỢ (DÒNG 2) */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2.5">
+                    {/* 1. Chọn Tháng */}
                     <div>
                         <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">
                             Tháng
@@ -845,7 +832,7 @@ export default function EmployeeRankingSummaryPage() {
                         <select
                             value={selectedMonth}
                             onChange={(e) => setSelectedMonth(Number(e.target.value))}
-                            className="w-full text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            className="w-full text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
                         >
                             {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
                                 <option key={m} value={m}>Tháng {m}</option>
@@ -853,7 +840,7 @@ export default function EmployeeRankingSummaryPage() {
                         </select>
                     </div>
 
-                    {/* 3. Chọn Năm */}
+                    {/* 2. Chọn Năm */}
                     <div>
                         <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">
                             Năm
@@ -861,7 +848,7 @@ export default function EmployeeRankingSummaryPage() {
                         <select
                             value={selectedYear}
                             onChange={(e) => setSelectedYear(Number(e.target.value))}
-                            className="w-full text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            className="w-full text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
                         >
                             {[selectedYear - 1, selectedYear, selectedYear + 1].map(y => (
                                 <option key={y} value={y}>{y}</option>
@@ -869,7 +856,7 @@ export default function EmployeeRankingSummaryPage() {
                         </select>
                     </div>
 
-                    {/* 4. Đơn vị hiển thị tiền */}
+                    {/* 3. Đơn vị hiển thị tiền */}
                     <div>
                         <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">
                             Đơn Vị Tiền
@@ -877,14 +864,14 @@ export default function EmployeeRankingSummaryPage() {
                         <select
                             value={displayUnit}
                             onChange={(e) => setDisplayUnit(e.target.value as any)}
-                            className="w-full text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            className="w-full text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
                         >
                             <option value="MILLION">Triệu VNĐ</option>
                             <option value="BILLION">Tỷ VNĐ</option>
                         </select>
                     </div>
 
-                    {/* 5. Lọc TOP / BOT nhanh */}
+                    {/* 4. Lọc TOP / BOT nhanh */}
                     <div>
                         <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">
                             Phân Loại
@@ -892,7 +879,7 @@ export default function EmployeeRankingSummaryPage() {
                         <select
                             value={filterCategory}
                             onChange={(e) => setFilterCategory(e.target.value as any)}
-                            className="w-full text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            className="w-full text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
                         >
                             <option value="ALL">Tất cả ({rankingRows.length})</option>
                             <option value="TOP_REV">🏆 Top DT ({summary.topRevenueCount})</option>

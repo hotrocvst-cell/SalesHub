@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import type { EmployeeRankingRow, EmployeeRankingSummary } from '../types';
 import { ArrowUpDown, ArrowUp, ArrowDown, Trophy, Target, Award } from 'lucide-react';
+import { cleanEmployeeName, getShortenedEmployeeName } from '../../../core/lib/formatters';
 
 export type SortField =
     | 'REVENUE_RANK'
@@ -28,6 +29,12 @@ export default function EmployeeRankingTable({
     onSort,
     displayUnit
 }: Props) {
+    // Chiều rộng badge mã nhân viên tự động thích ứng theo mã dài nhất trong bảng để thẳng cột thẳng lề
+    const maxIdLength = useMemo(() => {
+        if (!rows || rows.length === 0) return 6;
+        return Math.max(6, ...rows.map(r => String(r.employee_id || '').trim().length));
+    }, [rows]);
+
     const formatMoney = (millionVal: number) => {
         if (displayUnit === 'BILLION') {
             return (millionVal / 1000).toFixed(3);
@@ -176,17 +183,20 @@ export default function EmployeeRankingTable({
                                         </td>
 
                                         {/* TÊN NHÂN VIÊN */}
-                                        <td className="py-2 px-2.5 border-r border-slate-100">
-                                            <div
-                                                className="font-black text-slate-900 text-xs truncate max-w-[200px]"
-                                                title={`${row.full_name} (${row.employee_id}) - ${row.job_title}`}
-                                            >
-                                                {row.short_name}
-                                            </div>
-                                            <div className="text-[10px] text-slate-400 font-medium truncate flex items-center gap-1.5 mt-0.2">
-                                                <span className="font-mono">{row.employee_id}</span>
-                                                <span className="text-slate-300">•</span>
-                                                <span className="truncate max-w-[120px]">{row.job_title}</span>
+                                        <td className="py-2.5 px-3 border-r border-slate-100 whitespace-nowrap">
+                                            <div className="flex items-center gap-2 whitespace-nowrap">
+                                                <span
+                                                    style={{ minWidth: `${maxIdLength + 2.2}ch`, width: `${maxIdLength + 2.2}ch` }}
+                                                    className="font-mono font-bold text-xs px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-800 border border-blue-200 inline-block text-center leading-normal shrink-0"
+                                                >
+                                                    {row.employee_id}
+                                                </span>
+                                                <span
+                                                    className="font-bold text-xs text-slate-900 group-hover:text-blue-700 transition"
+                                                    title={`Mã NV: ${row.employee_id} - ${cleanEmployeeName(row.full_name)}${row.job_title ? ` (${row.job_title})` : ''}`}
+                                                >
+                                                    {getShortenedEmployeeName(row.full_name)}
+                                                </span>
                                             </div>
                                         </td>
 

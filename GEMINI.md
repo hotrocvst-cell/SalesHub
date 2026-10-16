@@ -66,3 +66,64 @@
 - **ĐỒNG BỘ ĐA THIẾT BỊ XUYÊN SUỐT (CROSS-DEVICE CONSISTENCY)**:
   - Dữ liệu cấu hình, cấp phát do Quản lý/Admin nạp từ máy tính để bàn (PC) phải phản ánh ngay lập tức và chính xác trên điện thoại di động (smartphone/Messaging App) của nhân viên và ngược lại thông qua Supabase Cloud.
 
+## 6. QUY CHUẨN ĐƠN VỊ TIỀN TỆ & DOANH THU TOÀN HỆ THỐNG (MILLION-UNIT STANDARD)
+- **ĐỒNG NHẤT ĐƠN VỊ TRIỆU ĐỒNG CHO TẤT CẢ DOANH THU VÀ TARGET**:
+  - Mọi dữ liệu doanh thu (Doanh thu quy đổi, Doanh thu thực, Doanh thu trả góp), chỉ tiêu (Target siêu thị, Target nhân sự) trên toàn bộ hệ thống SalesHub đều được lưu trữ, nhập liệu và tính toán theo đơn vị **TRIỆU ĐỒNG (rút gọn phần triệu)**.
+  - Ví dụ chuẩn:
+    + Doanh thu thực tế: `100,000,000 VNĐ` -> Lưu và hiển thị: `100` (hoặc `100 tr`).
+    + Target giao: `100,000,000 VNĐ` -> Lưu và hiển thị: `100` (hoặc `100 tr`).
+    + Tỷ lệ hoàn thành: `%HT` = `(100 / 100) * 100 = 100%`.
+  - **Tuyệt đối không tự ý nhân `1,000,000`** khi lưu trữ hoặc tính toán làm lệch thứ bậc độ lớn (orders of magnitude) dẫn đến %HT bị chia nhỏ li ti (`0.0001%`).
+  - Hàm chuẩn hóa `normalizeToMillion(val)`: Nếu giá trị nhập vào hoặc dán từ nguồn ngoài `>= 100,000`, hệ thống tự động chia `1,000,000` để đưa về đơn vị triệu đồng.
+
+## 7. QUY CHUẨN LỊCH TUẦN & NGÀY ĐẦU TUẦN (MONDAY-FIRST WEEK CONVENTION)
+- **NGÀY ĐẦU TUẦN LUÔN TÍNH TỪ THỨ HAI (MONDAY-FIRST)**:
+  - Toàn bộ hệ thống SalesHub áp dụng quy chuẩn bắt đầu tuần làm việc từ **THỨ HAI (Monday)**.
+  - Tất cả các bộ lọc preset "Tuần này", các hàm tính toán chu kỳ tuần (`getStartOfWeek()`), lịch kinh doanh đều phải lấy Thứ Hai làm ngày mốc đầu tiên của tuần (Monday = Day 1).
+
+## 8. BẮT BUỘC BANNER BÁO CÁO TRẠNG THÁI LƯU TRỮ DỮ LIỆU (MANDATORY CLOUD STORAGE STATUS BANNER)
+- **MINH BẠCH NGUỒN LƯU TRỮ TRÊN TẤT CẢ TRANG CÓ DỮ LIỆU**:
+  - Tất cả các báo cáo, phân hệ quản lý hoặc trang chức năng có liên quan đến lưu trữ dữ liệu (phiên nhân viên, chỉ tiêu thi đua, target giai đoạn, chốt số kinh doanh, voucher,...) **BẮT BUỘC PHẢI CÓ THÀNH PHẦN BÁO CÁO Ở ĐẦU TRANG** (`CloudDataSyncStatusBanner`):
+    1. **Nguồn dữ liệu hiện tại**: Supabase Cloud hay LocalStorage cache.
+    2. **Trạng thái đồng bộ**: Đã đồng bộ thời gian thực hay còn bản ghi máy khách chưa đồng bộ.
+    3. **Trạng thái sẵn sàng kết nối Cloud**: Bảng cơ sở dữ liệu Supabase đã tồn tại hay chưa (nếu chưa, hiển thị cảnh báo kèm nút xem/sao chép mã SQL DDL để Quản trị viên kích hoạt).
+  - Thành phần này luôn gắn thuộc tính `data-html2canvas-ignore="true"` và `data-export-ignore="true"` để không bao giờ bị dính vào hình ảnh báo cáo khi người dùng xuất ảnh gửi Zalo.
+
+## 9. QUY CHUẨN XUẤT FILE EXCEL TOÀN HỆ THỐNG (MANDATORY EXCEL EXPORT PERMISSION RULE)
+- **MẶC ĐỊNH KHÓA VÀ ẨN NÚT XUẤT EXCEL (LOCKED & HIDDEN BY DEFAULT)**:
+  - Trên toàn bộ hệ thống SalesHub, chức năng xuất file Excel (`onExportExcel`) KHÔNG được phép hiển thị tự do cho tất cả người dùng.
+  - Mặc định trên mọi trang và mọi tài khoản: nút/công cụ Xuất Excel là **KHÓA VÀ ẨN HOÀN TOÀN** (`canExportExcel = false`).
+  - Nút xuất file Excel CHỈ ĐƯỢC HIỂN THỊ khi thỏa mãn đồng thời:
+    1. Trang đó được cấu hình kích hoạt tính năng xuất Excel (`allow_excel_export: true` trong cấu hình phân quyền trang).
+    2. Tài khoản người dùng có vai trò (`role`) nằm trong danh sách được cấp phép xuất dữ liệu (`allowed_excel_roles`, hoặc mặc định vai trò Quản trị viên `ADMIN` khi trang được mở khóa).
+  - Sử dụng hook chuẩn `useExcelExportPermission(pagePath)` để kiểm soát hiển thị nút Excel trên từng giao diện báo cáo/danh mục.
+
+## 10. QUY CHUẨN BỐ CỤC BỘ LỌC BÁO CÁO (FILTER BAR CONVENTION - STORE/CLUSTER FIRST ON DEDICATED ROW)
+- **ƯU TIÊN BỘ LỌC SIÊU THỊ / CỤM Ở VỊ TRÍ ĐẦU TIÊN & NẰM RIÊNG LẺ 1 DÒNG (DEDICATED FIRST ROW)**:
+  - Trên tất cả các trang báo cáo, phân hệ hoặc bảng điều khiển có thanh bộ lọc:
+    + Bộ lọc xem theo **Siêu thị / Cụm** (Store / Cluster) **BẮT BUỘC ĐẶT Ở VỊ TRÍ LỰA CHỌN ĐẦU TIÊN VÀ NẰM RIÊNG LẺ TRÊN 1 DÒNG ĐỘC LẬP (DÒNG ĐẦU TIÊN)**.
+    + Có thể kết hợp cùng dòng này với các nút hành động (Làm mới, Xuất ảnh, Xuất Excel nếu được cấp quyền) ở góc phải để tối ưu diện tích.
+    + Sau dòng Siêu thị / Cụm mới đến các tiêu chí bộ lọc khác (Từ ngày - Đến ngày, Lịch tuần, Kỳ tháng, Presets xem nhanh, Chế độ xem, Chỉ tiêu, Tìm kiếm,...).
+  - **Mục đích**: Người dùng (Quản lý khu vực, Quản lý siêu thị, Nhân viên) luôn chủ động xác định đúng phạm vi đơn vị (siêu thị/cụm) mình đang phụ trách trước tiên, trực quan, không bị lẫn với các tiêu chí thời gian hay tùy chọn phức tạp.
+
+## 11. QUY CHUẨN HIỂN THỊ CỘT NHÂN VIÊN TRONG BẢNG DỮ LIỆU (EMPLOYEE COLUMN STANDARD)
+- **GỘP CHUNG MÃ NV VÀ TÊN NHÂN VIÊN TRÊN CÙNG MỘT CỘT (SINGLE COMBINED COLUMN)**:
+  - Tất cả các bảng báo cáo và danh mục có thông tin nhân viên (Báo cáo hiệu quả nhân viên, Xếp hạng doanh thu lũy kế, Bảng chỉ tiêu thi đua, Phân bổ target,...) **BẮT BUỘC ÁP DỤNG ĐỒNG BỘ CẤU TRÚC 1 CỘT DUY NHẤT MANG TÊN "NHÂN VIÊN"**.
+  - Tuyệt đối không tách rời thành 2 cột riêng biệt "Mã NV" và "Họ và Tên" gây lãng phí không gian chiều ngang trên thiết bị di động (smartphone).
+- **QUY TẮC HIỂN THỊ TÊN RÚT GỌN (SHORTENED EMPLOYEE NAME)**:
+  - Trên bảng dữ liệu, tên nhân viên hiển thị bằng **Tên rút gọn** chuẩn (`getShortenedEmployeeName(fullName)`):
+    + Lấy 2 từ cuối cùng của tên nhân viên (ví dụ: *"Nguyễn Phương Nam"* -> **"Phương Nam"**, *"Lê Quang Vinh"* -> **"Quang Vinh"**).
+    + Ngoại lệ chữ đệm: Nếu từ kế cuối là *"Thị"* (không phân biệt hoa thường), chỉ hiển thị từ cuối cùng (ví dụ: *"Nguyễn Thị Loan"* -> **"Loan"**; *"Trần Thị Kim Cúc"* -> **"Kim Cúc"**).
+  - Thuộc tính `title` của phần tử tên luôn hiển thị đầy đủ mã và họ tên chuẩn hóa: `title={`Mã NV: ${employeeId} - ${cleanEmployeeName(fullName)}`}` để người dùng rê chuột xem trọn vẹn khi cần.
+- **TỰ ĐỘNG ĐỒNG BỘ CHIỀU RỘNG BADGE MÃ NHÂN VIÊN (UNIFORM BADGE WIDTH)**:
+  - Badge mã nhân viên sử dụng `font-mono font-bold text-xs px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-800 border border-blue-200 inline-block text-center leading-normal shrink-0`.
+  - Chiều rộng của badge mã NV phải được tính toán tự động dựa trên độ dài mã lớn nhất trong bảng dữ liệu:
+    ```ts
+    const maxIdLength = useMemo(() => {
+        if (!rows || rows.length === 0) return 6;
+        return Math.max(6, ...rows.map(r => String(r.employee_id || r.employeeId || '').trim().length));
+    }, [rows]);
+    ```
+    và gắn thuộc tính `style={{ minWidth: `${maxIdLength + 2.2}ch`, width: `${maxIdLength + 2.2}ch` }}`.
+  - **Mục đích**: Đảm bảo tất cả các badge mã nhân viên có kích thước hoàn toàn bằng nhau, giúp toàn bộ phần tên nhân viên phía sau được căn thẳng tắp một hàng dọc từ trên xuống dưới, tạo giao diện chuyên nghiệp, sắc nét và ngay ngắn.
+

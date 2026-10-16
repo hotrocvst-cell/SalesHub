@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import html2canvas from 'html2canvas';
+import { calculate8KScale } from '../../shared/utils/exportImage';
 import {
     fetchMonthlyRecordsForChart,
     type BusinessDayRecord
@@ -15,6 +16,7 @@ import {
     Layers,
     ArrowUpRight
 } from 'lucide-react';
+import ReportActionButtons from '../../shared/components/report/ReportActionButtons';
 
 interface DailyAggregatedData {
     reportDate: string;
@@ -210,7 +212,7 @@ export default function RevenueTrendPage() {
         return Math.max(...timelineData.map(d => d.dailyPace), 1);
     }, [timelineData]);
 
-    // CHỤP BÁO CÁO CHUẨN 4K
+    // CHỤP BÁO CÁO CHUẨN 8K VỚI AUTO-SAFETY CLAMP
     const handleCapture = async () => {
         if (!chartRef.current) return;
         setIsCapturing(true);
@@ -218,15 +220,16 @@ export default function RevenueTrendPage() {
             if (document.fonts?.ready) {
                 await document.fonts.ready;
             }
+            const scale = calculate8KScale(chartRef.current);
             const canvas = await html2canvas(chartRef.current, {
-                scale: 4, // Chuẩn độ phân giải 4K Ultra HD
+                scale: scale,
                 backgroundColor: '#ffffff',
                 useCORS: true,
                 logging: false
             });
             const a = document.createElement('a');
             a.href = canvas.toDataURL('image/png', 1.0);
-            a.download = `Nhip_Doanh_Thu_4K_T${selectedMonth}_${selectedYear}_${selectedStore}.png`;
+            a.download = `Nhip_Doanh_Thu_8K_T${selectedMonth}_${selectedYear}_${selectedStore}.png`;
             a.click();
         } catch (err) {
             console.error('Lỗi chụp ảnh:', err);
@@ -235,11 +238,37 @@ export default function RevenueTrendPage() {
         }
     };
 
+    const handleCopyImage = async () => {
+        if (!chartRef.current) return;
+        setIsCapturing(true);
+        try {
+            if (document.fonts?.ready) {
+                await document.fonts.ready;
+            }
+            const scale = calculate8KScale(chartRef.current);
+            const canvas = await html2canvas(chartRef.current, {
+                scale: scale,
+                backgroundColor: '#ffffff',
+                useCORS: true,
+                logging: false
+            });
+            canvas.toBlob(async blob => {
+                if (blob && navigator.clipboard && window.ClipboardItem) {
+                    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+                }
+            }, 'image/png', 1.0);
+        } catch (err) {
+            console.error('Lỗi copy ảnh:', err);
+        } finally {
+            setIsCapturing(false);
+        }
+    };
+
     return (
         <div className="p-4 sm:p-6 space-y-4 max-w-full mx-auto w-full">
             {/* THANH ĐIỀU KHIỂN & BỘ LỌC */}
-            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-                <div className="flex items-center gap-2.5">
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3.5">
+                <div className="flex items-center gap-2.5 border-b border-slate-100 pb-3">
                     <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-600 flex items-center justify-center font-bold">
                         <TrendingUp className="w-5 h-5" />
                     </div>
@@ -253,47 +282,64 @@ export default function RevenueTrendPage() {
                     </div>
                 </div>
 
-                {/* BỘ LỌC */}
-                <div className="flex items-center gap-2 flex-wrap">
-                    <select
-                        value={selectedStore}
-                        onChange={(e) => setSelectedStore(e.target.value)}
-                        className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
-                    >
-                        <option value="Tổng">🏢 TỔNG TOÀN CỤM ({storeList.length} siêu thị)</option>
-                        {storeList.map(s => (
-                            <option key={s} value={s}>{s}</option>
-                        ))}
-                    </select>
+                {/* HÀNG 1: BỘ LỌC SIÊU THỊ / CỤM (BẮT BUỘC ĐẦU TIÊN & NẰM RIÊNG LẺ 1 DÒNG) */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2.5 border-b border-slate-100">
+                    <div className="flex items-center gap-2">
+                        <span className="text-xs font-black text-slate-600 uppercase tracking-wider shrink-0 flex items-center gap-1.5">
+                            <Store className="w-4 h-4 text-indigo-600" />
+                            Siêu thị / Cụm:
+                        </span>
+                        <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-300 px-3 py-1.5 rounded-xl min-w-[200px] sm:min-w-[280px]">
+                            <Store className="w-4 h-4 text-slate-500 shrink-0" />
+                            <select
+                                value={selectedStore}
+                                onChange={(e) => setSelectedStore(e.target.value)}
+                                className="bg-transparent outline-none font-bold text-xs text-slate-700 cursor-pointer w-full"
+                            >
+                                <option value="Tổng">🏢 TỔNG TOÀN CỤM ({storeList.length} siêu thị)</option>
+                                {storeList.map(s => (
+                                    <option key={s} value={s}>{s}</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+                </div>
 
-                    <select
-                        value={selectedMonth}
-                        onChange={(e) => setSelectedMonth(Number(e.target.value))}
-                        className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
-                    >
-                        {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
-                            <option key={m} value={m}>Tháng {m}/{selectedYear}</option>
-                        ))}
-                    </select>
+                {/* HÀNG 2: TIÊU CHÍ THỜI GIAN & HÀNH ĐỘNG */}
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-bold text-slate-500">Kỳ báo cáo:</span>
+                        <select
+                            value={selectedMonth}
+                            onChange={(e) => setSelectedMonth(Number(e.target.value))}
+                            className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                        >
+                            {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                                <option key={m} value={m}>Tháng {m}/{selectedYear}</option>
+                            ))}
+                        </select>
 
-                    <button
-                        onClick={loadData}
-                        disabled={loading}
-                        className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition cursor-pointer"
-                        title="Làm mới số liệu"
-                    >
-                        <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                    </button>
+                        <button
+                            onClick={loadData}
+                            disabled={loading}
+                            className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition cursor-pointer"
+                            title="Làm mới số liệu"
+                        >
+                            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                        </button>
+                    </div>
 
                     {timelineData.length > 0 && (
-                        <button
-                            onClick={handleCapture}
-                            disabled={isCapturing}
-                            className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition cursor-pointer disabled:opacity-50"
-                        >
-                            <Camera className="w-4 h-4" />
-                            <span>{isCapturing ? 'ĐANG KẾT XUẤT 4K...' : 'LƯU ẢNH 4K'}</span>
-                        </button>
+                        <ReportActionButtons
+                            onExportImage={handleCapture}
+                            onCopyImage={handleCopyImage}
+                            isExporting={isCapturing}
+                            exportButtonLabel="TẢI ẢNH"
+                            copyImageButtonLabel="COPY ẢNH"
+                            hasAssessment={true}
+                            reportTitle={`Nhịp Doanh Thu & Diễn Biến Tăng Trưởng T${selectedMonth}/${selectedYear} - ${selectedStore}`}
+                            periodLabel={`Tháng ${selectedMonth}/${selectedYear}`}
+                        />
                     )}
                 </div>
             </div>

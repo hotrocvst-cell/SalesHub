@@ -24,6 +24,7 @@ import {
     syncPerformanceConfigsFromCloud,
     type TopBotConfig
 } from './utils/performanceConfig';
+import ReportActionButtons from '../../shared/components/report/ReportActionButtons';
 import {
     Trophy,
     Calendar,
@@ -47,10 +48,13 @@ import { useAuth } from '../../shared/contexts/AuthContext';
 import { useUserStoreFilter } from '../../shared/hooks/useUserStoreFilter';
 import ExcelJS from 'exceljs';
 import html2canvas from 'html2canvas';
+import { useExcelExportPermission } from '../../shared/hooks/useExcelExportPermission';
+import { calculate8KScale } from '../../shared/utils/exportImage';
 
 export default function EmployeePerformanceReportPage() {
     const navigate = useNavigate();
     const { currentUser, canConfigure } = useAuth();
+    const { canExportExcel } = useExcelExportPermission('/bao-cao-hieu-qua-nhan-vien');
     const canManage = canConfigure || ['ADMIN', 'QUAN_LY', 'TRUONG_CA'].includes(currentUser?.role);
     const reportRef = useRef<HTMLDivElement>(null);
 
@@ -81,7 +85,6 @@ export default function EmployeePerformanceReportPage() {
 
     const [loading, setLoading] = useState<boolean>(true);
     const [isExporting, setIsExporting] = useState<boolean>(false);
-    const [exportResolution, setExportResolution] = useState<'4K' | '8K'>('8K');
     const [isConfigModalOpen, setIsConfigModalOpen] = useState<boolean>(false);
     const [toastMessage, setToastMessage] = useState<string>('');
 
@@ -481,8 +484,8 @@ export default function EmployeePerformanceReportPage() {
         URL.revokeObjectURL(url);
     };
 
-    // 6. XUẤT ẢNH 4K / 8K (LƯU FILE HOẶC COPY VÀO CLIPBOARD)
-    const generateCanvas = async (resolution: '4K' | '8K' = exportResolution): Promise<HTMLCanvasElement | null> => {
+    // 6. XUẤT ẢNH 8K (LƯU FILE HOẶC COPY VÀO CLIPBOARD) VỚI CƠ CHẾ AUTO-SAFETY CLAMP
+    const generateCanvas = async (): Promise<HTMLCanvasElement | null> => {
         if (!reportRef.current) return null;
         if (document.fonts?.ready) {
             await document.fonts.ready;
@@ -495,19 +498,9 @@ export default function EmployeePerformanceReportPage() {
         // Bảng 12 cột cần ít nhất 1460px; cộng thêm padding 48px -> tối thiểu 1520px
         const tableScrollWidth = tableElement ? tableElement.scrollWidth : 0;
         const contentWidth = Math.max(tableScrollWidth + 64, targetElement.scrollWidth + 64, 1520);
-        const elementHeight = targetElement.scrollHeight || 1000;
 
-        // Tính toán tỷ lệ scale chuẩn xác: 8K (~7680px) hoặc 4K (~3840px)
-        const targetPixelWidth = resolution === '8K' ? 7680 : 3840;
-        let scale = targetPixelWidth / contentWidth;
-        const minScale = resolution === '8K' ? 4.5 : 2.4;
-        const maxScale = resolution === '8K' ? 5.5 : 2.8;
-        scale = Math.min(Math.max(scale, minScale), maxScale);
-
-        // Giới hạn an toàn chiều cao để không vượt quá canvas buffer trình duyệt (14,000px)
-        if (elementHeight * scale > 14000) {
-            scale = 14000 / elementHeight;
-        }
+        // Tính toán tỷ lệ scale chuẩn 8K với Auto-Safety Clamp bảo vệ bộ nhớ Canvas
+        const scale = calculate8KScale(targetElement, contentWidth);
 
         return await html2canvas(targetElement, {
             scale: scale,
@@ -650,7 +643,7 @@ export default function EmployeePerformanceReportPage() {
     const handleDownloadImage = async () => {
         setIsExporting(true);
         try {
-            const canvas = await generateCanvas(exportResolution);
+            const canvas = await generateCanvas();
             if (!canvas) {
                 showToast('⚠️ Không thể khởi tạo canvas để xuất ảnh!');
                 return;
@@ -658,11 +651,11 @@ export default function EmployeePerformanceReportPage() {
             const imgData = canvas.toDataURL('image/png', 1.0);
             const a = document.createElement('a');
             a.href = imgData;
-            a.download = `BaoCao_HieuQua_NV_${selectedMonth}_${selectedYear}_${exportResolution}.png`;
+            a.download = `BaoCao_HieuQua_NV_${selectedMonth}_${selectedYear}.png`;
             a.click();
-            showToast(`🎉 Đã tải file ảnh báo cáo độ phân giải ${exportResolution} siêu nét thành công!`);
+            showToast('🎉 Đã tải file ảnh báo cáo thành công!');
         } catch (e: any) {
-            console.error(`Lỗi tải ảnh ${exportResolution}:`, e);
+            console.error('Lỗi tải ảnh:', e);
             showToast('⚠️ Không thể tải ảnh: ' + (e.message || e));
         } finally {
             setIsExporting(false);
@@ -672,7 +665,7 @@ export default function EmployeePerformanceReportPage() {
     const handleCopyImageToClipboard = async () => {
         setIsExporting(true);
         try {
-            const canvas = await generateCanvas(exportResolution);
+            const canvas = await generateCanvas();
             if (!canvas) {
                 showToast('⚠️ Không thể khởi tạo canvas!');
                 return;
@@ -684,15 +677,15 @@ export default function EmployeePerformanceReportPage() {
                         await navigator.clipboard.write([
                             new ClipboardItem({ 'image/png': blob })
                         ]);
-                        showToast(`📋 Đã sao chép ảnh ${exportResolution} vào Clipboard! Boss hãy nhấn Ctrl + V để dán ngay vào Messaging App.`);
+                        showToast('📋 Đã sao chép ảnh vào Clipboard! Bạn hãy nhấn Ctrl + V để dán ngay.');
                     } catch (err: any) {
                         console.warn('Lỗi ghi clipboard trực tiếp, tự động chuyển sang tải file:', err);
                         const imgData = canvas.toDataURL('image/png', 1.0);
                         const a = document.createElement('a');
                         a.href = imgData;
-                        a.download = `BaoCao_HieuQua_NV_${selectedMonth}_${selectedYear}_${exportResolution}.png`;
+                        a.download = `BaoCao_HieuQua_NV_${selectedMonth}_${selectedYear}.png`;
                         a.click();
-                        showToast(`💾 Ảnh ${exportResolution} dung lượng cao đã tự động được tải về máy của bạn!`);
+                        showToast('💾 Ảnh báo cáo đã tự động được tải về máy của bạn!');
                     }
                 } else {
                     handleDownloadImage();
@@ -759,65 +752,19 @@ export default function EmployeePerformanceReportPage() {
                         </button>
                     )}
 
-                    {/* Toggle Chọn Độ Phân Giải 4K / 8K */}
-                    <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200 shadow-2xs">
-                        <button
-                            type="button"
-                            onClick={() => setExportResolution('4K')}
-                            className={`px-2.5 py-1.5 text-xs font-black rounded-lg transition cursor-pointer ${exportResolution === '4K'
-                                ? 'bg-white text-blue-700 shadow-2xs'
-                                : 'text-slate-500 hover:text-slate-800'
-                                }`}
-                            title="Chọn độ phân giải 4K (khoảng 3840px)"
-                        >
-                            4K UHD
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setExportResolution('8K')}
-                            className={`px-2.5 py-1.5 text-xs font-black rounded-lg transition cursor-pointer flex items-center gap-1 ${exportResolution === '8K'
-                                ? 'bg-slate-900 text-amber-300 shadow-2xs'
-                                : 'text-slate-500 hover:text-slate-800'
-                                }`}
-                            title="Chọn độ phân giải 8K Ultra-HD (khoảng 7680px siêu nét)"
-                        >
-                            <span>8K</span>
-                            <span className="text-[9px] px-1 py-0.2 rounded bg-amber-400 text-slate-950 font-black">MAX</span>
-                        </button>
-                    </div>
-
-                    {/* Nút Copy Ảnh vào Clipboard */}
-                    <button
-                        type="button"
-                        onClick={handleCopyImageToClipboard}
-                        disabled={isExporting}
-                        className="px-3.5 py-2 bg-blue-50 hover:bg-blue-100 text-blue-800 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer border border-blue-200 shadow-2xs"
-                        title={`Copy ảnh độ phân giải ${exportResolution} vào bộ nhớ tạm để dán (Ctrl+V) vào Messaging App`}
-                    >
-                        <Copy className="w-4 h-4 text-blue-600" />
-                        <span>{isExporting ? `Đang xuất ${exportResolution}...` : `Copy Ảnh ${exportResolution}`}</span>
-                    </button>
-
-                    {/* Nút Lưu File Ảnh */}
-                    <button
-                        type="button"
-                        onClick={handleDownloadImage}
-                        disabled={isExporting}
-                        className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer border border-slate-200"
-                        title={`Tải file ảnh chất lượng cao ${exportResolution} về máy`}
-                    >
-                        <Camera className="w-4 h-4 text-slate-600" />
-                        <span>Tải Ảnh {exportResolution}</span>
-                    </button>
-
-                    <button
-                        type="button"
-                        onClick={handleExportExcel}
-                        className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs"
-                    >
-                        <Download className="w-4 h-4" />
-                        <span>Xuất Excel</span>
-                    </button>
+                    {/* CỤM NÚT BÁO CÁO CHUNG CHO DỰ ÁN */}
+                    <ReportActionButtons
+                        onExportImage={handleDownloadImage}
+                        onCopyImage={handleCopyImageToClipboard}
+                        isExporting={isExporting}
+                        exportButtonLabel="TẢI ẢNH"
+                        copyImageButtonLabel="COPY ẢNH"
+                        hasAssessment={true}
+                        reportTitle={`Báo Cáo Hiệu Quả Nhân Viên T${selectedMonth}/${selectedYear} - ${selectedStore}`}
+                        periodLabel={`Tháng ${selectedMonth}/${selectedYear}`}
+                        onExportExcel={handleExportExcel}
+                        canExportExcel={canExportExcel}
+                    />
 
                     {/* Nút Cập Nhật Số Liệu (Chỉ hiển thị với Admin/QL/TC) */}
                     {canManage && (
@@ -882,139 +829,162 @@ export default function EmployeePerformanceReportPage() {
             </div>
 
             {/* Thanh Bộ Lọc & Tìm Kiếm & Sắp Xếp */}
-            <div className="bg-white rounded-2xl p-3.5 border border-slate-200 shadow-2xs flex flex-wrap items-center justify-between gap-3 text-xs">
-                <div className="flex flex-wrap items-center gap-2">
-                    {/* 1. Chọn Siêu Thị (Theo phân quyền tài khoản) */}
-                    <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all ${isLockedToSingleStore
-                        ? 'bg-amber-50/90 border-amber-200 text-amber-900 shadow-2xs'
-                        : 'bg-slate-50 border-slate-200 text-slate-800'
-                        }`}>
-                        {isLockedToSingleStore ? (
-                            <Lock className="w-4 h-4 text-amber-600 shrink-0" />
-                        ) : (
-                            <Store className="w-4 h-4 text-amber-600 shrink-0" />
-                        )}
-                        <select
-                            value={selectedStore}
-                            onChange={e => setSelectedStore(e.target.value)}
-                            disabled={isLockedToSingleStore}
-                            title={isLockedToSingleStore ? 'Tài khoản nhân viên được cố định theo siêu thị đã đăng ký' : undefined}
-                            className={`bg-transparent text-xs font-bold outline-hidden ${isLockedToSingleStore
-                                ? 'cursor-not-allowed text-amber-900 font-black'
-                                : 'cursor-pointer text-slate-800'
-                                }`}
-                        >
-                            {canViewAllStores && (
-                                <option value="all">🏢 Toàn Cụm Siêu Thị</option>
+            <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-3 text-xs">
+                {/* HÀNG 1: BỘ LỌC SIÊU THỊ RIÊNG LẺ ĐẦU TIÊN (RULE 10 CONVENTION) */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+                    <div className="flex items-center gap-2">
+                        <div className={`flex items-center gap-2 px-3.5 py-2 rounded-xl border text-xs font-bold transition-all ${isLockedToSingleStore
+                            ? 'bg-amber-50/90 border-amber-200 text-amber-900 shadow-2xs'
+                            : 'bg-slate-50 border-slate-200 hover:border-amber-400 text-slate-800 shadow-2xs'
+                            }`}>
+                            {isLockedToSingleStore ? (
+                                <Lock className="w-4 h-4 text-amber-600 shrink-0" />
+                            ) : (
+                                <Store className="w-4 h-4 text-amber-600 shrink-0" />
                             )}
-                            {allowedStores.map(s => (
-                                <option key={s.id || s.code} value={s.name}>{s.name} ({s.code})</option>
-                            ))}
-                        </select>
-                        {isLockedToSingleStore && (
-                            <span className="text-[10px] bg-amber-200/80 text-amber-800 px-1 py-0.5 rounded font-bold uppercase tracking-wider hidden sm:inline">
-                                Đã khóa
-                            </span>
-                        )}
+                            <span className="text-slate-500 font-bold whitespace-nowrap">Siêu thị:</span>
+                            <select
+                                value={selectedStore}
+                                onChange={e => setSelectedStore(e.target.value)}
+                                disabled={isLockedToSingleStore}
+                                title={isLockedToSingleStore ? 'Tài khoản nhân viên được cố định theo siêu thị đã đăng ký' : undefined}
+                                className={`bg-transparent text-xs font-black outline-hidden min-w-[200px] sm:min-w-[260px] ${isLockedToSingleStore
+                                    ? 'cursor-not-allowed text-amber-900'
+                                    : 'cursor-pointer text-slate-900'
+                                    }`}
+                            >
+                                {canViewAllStores && (
+                                    <option value="all">🏢 Toàn Cụm Siêu Thị</option>
+                                )}
+                                {allowedStores.map(s => (
+                                    <option key={s.id || s.code} value={s.name}>🏪 {s.name} ({s.code})</option>
+                                ))}
+                            </select>
+                            {isLockedToSingleStore && (
+                                <span className="text-[10px] bg-amber-200/80 text-amber-800 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">
+                                    Đã khóa
+                                </span>
+                            )}
+                        </div>
                     </div>
 
-                    {/* 2. Chọn Tháng / Năm */}
-                    <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl">
-                        <Calendar className="w-4 h-4 text-amber-600" />
-                        <select
-                            value={selectedMonth}
-                            onChange={e => setSelectedMonth(Number(e.target.value))}
-                            className="bg-transparent text-xs font-bold text-slate-800 outline-hidden cursor-pointer"
+                    <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setPaceFilter('all');
+                                setTopBotFilter('all');
+                                setSearchQuery('');
+                                setSortBy('FORECAST_RATE_DESC');
+                            }}
+                            className="text-slate-500 hover:text-slate-800 text-xs font-bold underline cursor-pointer"
                         >
-                            {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
-                                <option key={m} value={m}>Tháng {m}</option>
-                            ))}
-                        </select>
-                        <span className="text-slate-300">/</span>
-                        <select
-                            value={selectedYear}
-                            onChange={e => setSelectedYear(Number(e.target.value))}
-                            className="bg-transparent text-xs font-bold text-slate-800 outline-hidden cursor-pointer"
-                        >
-                            {[2025, 2026, 2027].map(y => (
-                                <option key={y} value={y}>{y}</option>
-                            ))}
-                        </select>
-                    </div>
-
-                    {/* 3. Bộ lọc SẮP XẾP KẾT QUẢ (Mặc định: %DKHT Cao -> Thấp) */}
-                    <div className="flex items-center gap-1.5 bg-amber-50/80 border border-amber-300 px-3 py-1.5 rounded-xl">
-                        <ArrowUpDown className="w-4 h-4 text-amber-700" />
-                        <span className="text-amber-900 font-bold">Xếp theo:</span>
-                        <select
-                            value={sortBy}
-                            onChange={e => setSortBy(e.target.value)}
-                            className="bg-transparent text-xs font-extrabold text-amber-950 outline-hidden cursor-pointer"
-                        >
-                            <option value="FORECAST_RATE_DESC">🎯 %DKHT Dự Báo (Cao ➔ Thấp) [Mặc định]</option>
-                            <option value="FORECAST_RATE_ASC">🎯 %DKHT Dự Báo (Thấp ➔ Cao)</option>
-                            <option value="REVENUE_QD_DESC">💎 Lũy kế DTQĐ (Cao ➔ Thấp)</option>
-                            <option value="REVENUE_ACTUAL_DESC">💵 Lũy kế DT Thực (Cao ➔ Thấp)</option>
-                            <option value="COMPLETION_RATE_DESC">📊 %HT Real (Cao ➔ Thấp)</option>
-                            <option value="PROD_QD_DESC">⚡ DTQĐ/GC Năng Suất (Cao ➔ Thấp)</option>
-                            <option value="WORK_HOURS_DESC">⏰ Giờ công (Cao ➔ Thấp)</option>
-                            <option value="INSTALLMENT_RATE_DESC">💳 % Trả chậm (Cao ➔ Thấp)</option>
-                            <option value="RANK_ASC">🥇 Thứ hạng (#1 ➔ #N)</option>
-                        </select>
-                    </div>
-
-                    {/* 4. Lọc nhanh TOP / BOT */}
-                    <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl">
-                        <Trophy className="w-4 h-4 text-amber-500" />
-                        <select
-                            value={topBotFilter}
-                            onChange={e => setTopBotFilter(e.target.value)}
-                            className="bg-transparent text-xs font-bold text-slate-800 outline-hidden cursor-pointer"
-                        >
-                            <option value="all">Tất cả thứ hạng</option>
-                            <option value="TOP">🏆 Chỉ xem nhóm TOP</option>
-                            <option value="MID">⭐️ Chỉ xem nhóm MID</option>
-                            <option value="BOT">⚠️ Chỉ xem nhóm BOT</option>
-                        </select>
-                    </div>
-
-                    {/* 5. Lọc nhịp độ */}
-                    <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl">
-                        <Filter className="w-4 h-4 text-amber-600" />
-                        <select
-                            value={paceFilter}
-                            onChange={e => setPaceFilter(e.target.value)}
-                            className="bg-transparent text-xs font-bold text-slate-800 outline-hidden cursor-pointer"
-                        >
-                            <option value="all">Tất cả nhịp độ</option>
-                            <option value="EXCEED">Vượt nhịp (≥100%)</option>
-                            <option value="ON_TRACK">Đạt nhịp (80-99%)</option>
-                            <option value="SLOW">Cần tăng tốc (50-79%)</option>
-                            <option value="CRITICAL">Báo động (&lt;50%)</option>
-                        </select>
+                            Đặt lại bộ lọc
+                        </button>
                     </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl w-60">
-                        <Search className="w-4 h-4 text-slate-400" />
-                        <input
-                            type="text"
-                            placeholder="Tìm nhân viên / mã NV..."
-                            value={searchQuery}
-                            onChange={e => setSearchQuery(e.target.value)}
-                            className="bg-transparent text-xs outline-hidden w-full text-slate-800 placeholder-slate-400"
-                        />
+                {/* HÀNG 2: CÁC TIÊU CHÍ BỘ LỌC KHÁC & TÌM KIẾM */}
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-0.5">
+                    <div className="flex flex-wrap items-center gap-2">
+                        {/* 1. Chọn Tháng / Năm */}
+                        <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl">
+                            <Calendar className="w-4 h-4 text-amber-600" />
+                            <select
+                                value={selectedMonth}
+                                onChange={e => setSelectedMonth(Number(e.target.value))}
+                                className="bg-transparent text-xs font-bold text-slate-800 outline-hidden cursor-pointer"
+                            >
+                                {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                                    <option key={m} value={m}>Tháng {m}</option>
+                                ))}
+                            </select>
+                            <span className="text-slate-300">/</span>
+                            <select
+                                value={selectedYear}
+                                onChange={e => setSelectedYear(Number(e.target.value))}
+                                className="bg-transparent text-xs font-bold text-slate-800 outline-hidden cursor-pointer"
+                            >
+                                {[2025, 2026, 2027].map(y => (
+                                    <option key={y} value={y}>{y}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        {/* 2. Bộ lọc SẮP XẾP KẾT QUẢ (Mặc định: %DKHT Cao -> Thấp) */}
+                        <div className="flex items-center gap-1.5 bg-amber-50/80 border border-amber-300 px-3 py-1.5 rounded-xl">
+                            <ArrowUpDown className="w-4 h-4 text-amber-700" />
+                            <span className="text-amber-900 font-bold">Xếp theo:</span>
+                            <select
+                                value={sortBy}
+                                onChange={e => setSortBy(e.target.value)}
+                                className="bg-transparent text-xs font-extrabold text-amber-950 outline-hidden cursor-pointer"
+                            >
+                                <option value="FORECAST_RATE_DESC">🎯 %DKHT Dự Báo (Cao ➔ Thấp) [Mặc định]</option>
+                                <option value="FORECAST_RATE_ASC">🎯 %DKHT Dự Báo (Thấp ➔ Cao)</option>
+                                <option value="REVENUE_QD_DESC">💎 Lũy kế DTQĐ (Cao ➔ Thấp)</option>
+                                <option value="REVENUE_ACTUAL_DESC">💵 Lũy kế DT Thực (Cao ➔ Thấp)</option>
+                                <option value="COMPLETION_RATE_DESC">📊 %HT Real (Cao ➔ Thấp)</option>
+                                <option value="PROD_QD_DESC">⚡ DTQĐ/GC Năng Suất (Cao ➔ Thấp)</option>
+                                <option value="WORK_HOURS_DESC">⏰ Giờ công (Cao ➔ Thấp)</option>
+                                <option value="INSTALLMENT_RATE_DESC">💳 % Trả chậm (Cao ➔ Thấp)</option>
+                                <option value="RANK_ASC">🥇 Thứ hạng (#1 ➔ #N)</option>
+                            </select>
+                        </div>
+
+                        {/* 3. Lọc nhanh TOP / BOT */}
+                        <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl">
+                            <Trophy className="w-4 h-4 text-amber-500" />
+                            <select
+                                value={topBotFilter}
+                                onChange={e => setTopBotFilter(e.target.value)}
+                                className="bg-transparent text-xs font-bold text-slate-800 outline-hidden cursor-pointer"
+                            >
+                                <option value="all">Tất cả thứ hạng</option>
+                                <option value="TOP">🏆 Chỉ xem nhóm TOP</option>
+                                <option value="MID">⭐️ Chỉ xem nhóm MID</option>
+                                <option value="BOT">⚠️ Chỉ xem nhóm BOT</option>
+                            </select>
+                        </div>
+
+                        {/* 4. Lọc nhịp độ */}
+                        <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl">
+                            <Filter className="w-4 h-4 text-amber-600" />
+                            <select
+                                value={paceFilter}
+                                onChange={e => setPaceFilter(e.target.value)}
+                                className="bg-transparent text-xs font-bold text-slate-800 outline-hidden cursor-pointer"
+                            >
+                                <option value="all">Tất cả nhịp độ</option>
+                                <option value="EXCEED">Vượt nhịp (≥100%)</option>
+                                <option value="ON_TRACK">Đạt nhịp (80-99%)</option>
+                                <option value="SLOW">Cần tăng tốc (50-79%)</option>
+                                <option value="CRITICAL">Báo động (&lt;50%)</option>
+                            </select>
+                        </div>
                     </div>
 
-                    <button
-                        type="button"
-                        onClick={loadAllData}
-                        className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-600 transition cursor-pointer"
-                        title="Tải lại số liệu"
-                    >
-                        <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-amber-600' : ''}`} />
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl w-60">
+                            <Search className="w-4 h-4 text-slate-400" />
+                            <input
+                                type="text"
+                                placeholder="Tìm nhân viên / mã NV..."
+                                value={searchQuery}
+                                onChange={e => setSearchQuery(e.target.value)}
+                                className="bg-transparent text-xs outline-hidden w-full text-slate-800 placeholder-slate-400"
+                            />
+                        </div>
+
+                        <button
+                            type="button"
+                            onClick={loadAllData}
+                            className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-600 transition cursor-pointer"
+                            title="Tải lại số liệu"
+                        >
+                            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-amber-600' : ''}`} />
+                        </button>
+                    </div>
                 </div>
             </div>
 

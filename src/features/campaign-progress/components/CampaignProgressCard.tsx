@@ -1,9 +1,10 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useMemo } from 'react';
 import html2canvas from 'html2canvas';
+import { calculate8KScale } from '../../../shared/utils/exportImage';
 import { Zap, Camera, Copy, CheckCircle2, Sparkles } from 'lucide-react';
 import type { CampaignProgressItem } from '../types';
-import { formatRemainingTarget } from '../../../core/lib/formatters';
-import CampaignProgressRemarkModal from './CampaignProgressRemarkModal';
+import { formatRemainingTarget, cleanEmployeeName, getShortenedEmployeeName } from '../../../core/lib/formatters';
+import ReportActionButtons, { type AssessmentTemplate } from '../../../shared/components/report/ReportActionButtons';
 
 interface Props {
     item: CampaignProgressItem;
@@ -32,7 +33,12 @@ export default function CampaignProgressCard({ item, reportDateDisplay, storeNam
     const [isExportingSingle, setIsExportingSingle] = useState<boolean>(false);
     const [isCopyingImage, setIsCopyingImage] = useState<boolean>(false);
     const [copySuccess, setCopySuccess] = useState<boolean>(false);
-    const [isRemarkModalOpen, setIsRemarkModalOpen] = useState<boolean>(false);
+
+    // Chiều rộng badge mã nhân viên tự động thích ứng theo mã dài nhất trong bảng để thẳng cột thẳng lề
+    const maxIdLength = useMemo(() => {
+        if (!item.employees || item.employees.length === 0) return 6;
+        return Math.max(6, ...item.employees.map(e => String(e.employeeId || '').trim().length));
+    }, [item.employees]);
 
     // Tự động nhận diện nếu dữ liệu có số thập phân (như trong ảnh mẫu: 100,5; 56,9; 0,0)
     const hasDecimals =
@@ -40,14 +46,15 @@ export default function CampaignProgressCard({ item, reportDateDisplay, storeNam
         item.totalActual % 1 !== 0 ||
         item.employees.some(e => e.target % 1 !== 0 || e.actual % 1 !== 0);
 
-    // 1. Sao chép hình ảnh báo cáo của riêng bảng này vào Clipboard
+    // 1. Sao chép hình ảnh báo cáo của riêng bảng này vào Clipboard chuẩn 8K
     const handleCopyCardImage = async () => {
         if (!cardRef.current) return;
         setIsCopyingImage(true);
 
         try {
+            const scale = calculate8KScale(cardRef.current);
             const canvas = await html2canvas(cardRef.current, {
-                scale: 2,
+                scale: scale,
                 useCORS: true,
                 backgroundColor: '#ffffff',
                 logging: false,
@@ -76,7 +83,7 @@ export default function CampaignProgressCard({ item, reportDateDisplay, storeNam
                     console.warn('Clipboard write image failed, falling back to download:', clipErr);
                     const link = document.createElement('a');
                     const cleanName = item.displayName.replace(/[^a-zA-Z0-9\u00C0-\u1EF9]/g, '_').slice(0, 35);
-                    link.download = `Tien_Do_${cleanName}_${reportDateDisplay}.png`;
+                    link.download = `Tien_Do_${cleanName}_${reportDateDisplay}_8K.png`;
                     link.href = canvas.toDataURL('image/png');
                     link.click();
                     setCopySuccess(true);
@@ -91,14 +98,15 @@ export default function CampaignProgressCard({ item, reportDateDisplay, storeNam
         }
     };
 
-    // 2. Xuất hình ảnh báo cáo riêng lẻ cho bảng thi đua này tải về máy (Tuân thủ triệt để GEMINI.md)
+    // 2. Xuất hình ảnh báo cáo riêng lẻ cho bảng thi đua này tải về máy chuẩn 8K
     const handleExportSingle = async () => {
         if (!cardRef.current) return;
         setIsExportingSingle(true);
 
         try {
+            const scale = calculate8KScale(cardRef.current);
             const canvas = await html2canvas(cardRef.current, {
-                scale: 2,
+                scale: scale,
                 useCORS: true,
                 backgroundColor: '#ffffff',
                 logging: false,
@@ -117,7 +125,7 @@ export default function CampaignProgressCard({ item, reportDateDisplay, storeNam
 
             const link = document.createElement('a');
             const cleanName = item.displayName.replace(/[^a-zA-Z0-9\u00C0-\u1EF9]/g, '_').slice(0, 35);
-            link.download = `Tien_Do_${cleanName}_${reportDateDisplay}.png`;
+            link.download = `Tien_Do_${cleanName}_${reportDateDisplay}_8K.png`;
             link.href = canvas.toDataURL('image/png');
             link.click();
         } catch (err) {
@@ -128,69 +136,113 @@ export default function CampaignProgressCard({ item, reportDateDisplay, storeNam
         }
     };
 
+    // 3 Mẫu nhận xét chuẩn tự động cho bảng thi đua này
+    const assessmentTemplates = useMemo<AssessmentTemplate[]>(() => {
+        const storeDisplay = storeName === 'all' ? 'Toàn Cụm Siêu Thị' : storeName;
+        const sorted = [...(item.employees || [])].sort((a, b) => b.forecastRate - a.forecastRate || b.actual - a.actual);
+        const topEmployees = sorted.filter(e => e.isAchieved || e.forecastRate >= 100).slice(0, 3);
+        const underperformingEmployees = [...(item.employees || [])]
+            .filter(e => e.forecastRate < 80)
+            .sort((a, b) => a.forecastRate - b.forecastRate || a.actual - b.actual);
+
+        // Mẫu 1: Tổng quan tiến độ
+        const m1 = [
+            `📢 [TIẾN ĐỘ THI ĐUA: ${item.displayName.toUpperCase()}]`,
+            `📅 Luỹ kế: ${reportDateDisplay} • 🏢 ${storeDisplay}`,
+            `----------------------------------------`,
+            `🎯 SIÊU THỊ:`,
+            `• Target: ${item.totalTarget.toLocaleString('vi-VN')} ${item.unit}`,
+            `• Lũy kế: ${item.totalActual.toLocaleString('vi-VN')} ${item.unit}`,
+            `• %DKHT: ${item.forecastRate}% [${item.isAchieved ? '🟢 ĐÃ ĐẠT TIẾN ĐỘ' : '🔴 CHƯA ĐẠT - CẦN TĂNG TỐC'}]`,
+            `• Tỷ lệ NV đạt: ${item.achievedEmployees}/${item.totalEmployees} bạn (${item.employeeAchieveRate}%)`,
+            `----------------------------------------`,
+            item.isAchieved ? `💪 Duy trì phong độ để về đích trọn vẹn!` : `🔥 Toàn team tập trung đẩy số nhóm này!`
+        ].join('\n');
+
+        // Mẫu 2: Top & Cần tăng tốc
+        const m2Lines = [
+            `🌟 [VINH DANH & CẢNH BÁO TIẾN ĐỘ: ${item.displayName.toUpperCase()}]`,
+            `🏢 ${storeDisplay} • 📅 ${reportDateDisplay}`,
+            `----------------------------------------`
+        ];
+        if (topEmployees.length > 0) {
+            m2Lines.push(`🥇 TOP NHÂN VIÊN XUẤT SẮC:`);
+            topEmployees.forEach((emp, i) => {
+                const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉';
+                m2Lines.push(`${medal} ${emp.displayName}: ${emp.actual}/${emp.target} (${emp.forecastRate}%)`);
+            });
+            m2Lines.push(``);
+        }
+        if (underperformingEmployees.length > 0) {
+            m2Lines.push(`🚨 CÁC BẠN CẦN TĂNG TỐC GẤP:`);
+            underperformingEmployees.forEach(emp => {
+                m2Lines.push(`⚠️ ${emp.displayName}: ${emp.actual}/${emp.target} (${emp.forecastRate}% • Thiếu ${emp.remaining} ${item.unit})`);
+            });
+            m2Lines.push(``);
+        }
+        m2Lines.push(`👉 Các bạn chưa đạt chủ động tư vấn khách để hoàn thành chỉ tiêu!`);
+
+        // Mẫu 3: Kế hoạch hành động
+        const remainingGap = Math.max(0, item.totalTarget - item.totalActual);
+        const m3 = [
+            `⚡ [KẾ HOẠCH HÀNH ĐỘNG HỐI SỐ: ${item.displayName.toUpperCase()}]`,
+            `🎯 Mục tiêu còn thiếu: ${remainingGap.toLocaleString('vi-VN')} ${item.unit}`,
+            `----------------------------------------`,
+            `1. Rà soát từng khách hàng tiềm năng trong ngày.`,
+            `2. Giới thiệu kèm CTKM khi tư vấn sản phẩm chính.`,
+            `3. Quản lý kèm cặp trực tiếp các bạn còn thiếu số.`,
+            `----------------------------------------`,
+            `🚀 Quyết tâm 100% nhân viên về đích nhóm hàng ${item.displayName}!`
+        ].join('\n');
+
+        return [
+            {
+                id: 'template_progress',
+                label: 'Mẫu 1: Tổng quan tiến độ',
+                description: 'Tóm tắt chỉ tiêu, tỷ lệ dự kiến và tỷ lệ nhân viên đạt',
+                content: m1
+            },
+            {
+                id: 'template_top_acceleration',
+                label: 'Mẫu 2: Top & Tăng tốc',
+                description: 'Vinh danh Top dẫn đầu và nhắc nhở nhân sự cần hỗ trợ',
+                content: m2Lines.join('\n')
+            },
+            {
+                id: 'template_action_plan',
+                label: 'Mẫu 3: Kế hoạch hành động',
+                description: 'Checklist hành động hối số và đôn đốc tư vấn',
+                content: m3
+            }
+        ];
+    }, [item, reportDateDisplay, storeName]);
+
     return (
         <div
             ref={cardRef}
             data-campaign-card-key={item.campaignKey}
             className="bg-white rounded-2xl border border-slate-200/90 p-3 sm:p-5 shadow-xs max-w-4xl mx-auto transition-all font-avo"
         >
-            {/* Thanh công cụ phụ: Nút Nhận xét, Copy ảnh, Tải ảnh (Ẩn khi chụp ảnh html2canvas) */}
+            {/* Thanh công cụ phụ: Cụm button chuẩn ReportActionButtons (Ẩn khi chụp ảnh html2canvas) */}
             <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5" data-html2canvas-ignore="true">
                 <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider hidden sm:inline">
                     Bảng theo dõi nhóm hàng
                 </span>
 
                 <div className="flex items-center gap-1.5 flex-wrap ml-auto">
-                    {/* Nút 1: Nhận xét kết quả riêng bảng này */}
-                    <button
-                        type="button"
-                        data-html2canvas-ignore="true"
-                        onClick={() => setIsRemarkModalOpen(true)}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-gradient-to-r from-purple-50 to-indigo-50 hover:from-purple-100 hover:to-indigo-100 text-purple-800 border border-purple-200 text-xs font-bold transition-all shadow-2xs cursor-pointer active:scale-95"
-                        title="Phân tích, đánh giá và soạn tin nhắn nhận xét riêng cho nhóm hàng này gửi Messaging App"
-                    >
-                        <Sparkles className="w-3.5 h-3.5 text-purple-600" />
-                        <span>Nhận xét</span>
-                    </button>
-
-                    {/* Nút 2: Copy ảnh vào clipboard */}
-                    <button
-                        type="button"
-                        data-html2canvas-ignore="true"
-                        onClick={handleCopyCardImage}
-                        disabled={isCopyingImage}
-                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all shadow-2xs cursor-pointer active:scale-95 disabled:opacity-50 ${
-                            copySuccess
-                                ? 'bg-emerald-600 text-white border border-emerald-600'
-                                : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200'
-                        }`}
-                        title="Sao chép ảnh bảng này vào bộ nhớ tạm để dán nhanh (Ctrl+V) vào nhóm chat Messaging App"
-                    >
-                        {copySuccess ? (
-                            <>
-                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-200" />
-                                <span>Đã copy ảnh!</span>
-                            </>
-                        ) : (
-                            <>
-                                <Copy className="w-3.5 h-3.5 text-slate-600" />
-                                <span>{isCopyingImage ? 'Đang copy...' : 'Copy ảnh'}</span>
-                            </>
-                        )}
-                    </button>
-
-                    {/* Nút 3: Tải ảnh riêng lẻ */}
-                    <button
-                        type="button"
-                        data-html2canvas-ignore="true"
-                        onClick={handleExportSingle}
-                        disabled={isExportingSingle}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-[#005e43] border border-emerald-300 text-xs font-bold transition-all shadow-2xs cursor-pointer active:scale-95 disabled:opacity-50"
-                        title="Tải ảnh riêng lẻ của bảng thi đua này về máy"
-                    >
-                        <Camera className="w-3.5 h-3.5 text-emerald-700" />
-                        <span>{isExportingSingle ? 'Đang tải...' : 'Tải ảnh'}</span>
-                    </button>
+                    <ReportActionButtons
+                        onExportImage={handleExportSingle}
+                        onCopyImage={handleCopyCardImage}
+                        isExporting={isExportingSingle}
+                        isCopyingImage={isCopyingImage}
+                        copySuccess={copySuccess}
+                        assessmentTemplates={assessmentTemplates}
+                        reportTitle={`Tiến độ thi đua: ${item.displayName}`}
+                        periodLabel={reportDateDisplay}
+                        storeName={storeName}
+                        exportLabel="Tải ảnh"
+                        copyLabel="Copy ảnh"
+                    />
                 </div>
             </div>
 
@@ -271,16 +323,24 @@ export default function CampaignProgressCard({ item, reportDateDisplay, storeNam
                                             #{idx + 1}
                                         </td>
 
-                                        {/* TÊN NHÂN VIÊN THEO CẤU HÌNH VIẾT TẮT */}
-                                        <td className="text-left py-2.5 px-3">
-                                            <span
-                                                title={`Họ và tên: ${emp.fullName}`}
-                                                className={`font-black text-xs sm:text-sm uppercase tracking-tight cursor-default ${
-                                                    isAchieved ? 'text-slate-900' : 'text-rose-600'
-                                                }`}
-                                            >
-                                                {emp.displayName}
-                                            </span>
+                                        {/* TÊN NHÂN VIÊN */}
+                                        <td className="text-left py-2.5 px-3 whitespace-nowrap">
+                                            <div className="flex items-center gap-2 whitespace-nowrap">
+                                                <span
+                                                    style={{ minWidth: `${maxIdLength + 2.2}ch`, width: `${maxIdLength + 2.2}ch` }}
+                                                    className="font-mono font-bold text-xs px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-800 border border-blue-200 inline-block text-center leading-normal shrink-0"
+                                                >
+                                                    {emp.employeeId}
+                                                </span>
+                                                <span
+                                                    title={`Mã NV: ${emp.employeeId} - ${cleanEmployeeName(emp.fullName || emp.displayName)}`}
+                                                    className={`font-bold text-xs sm:text-sm tracking-tight cursor-default ${
+                                                        isAchieved ? 'text-slate-900' : 'text-rose-600'
+                                                    }`}
+                                                >
+                                                    {getShortenedEmployeeName(emp.fullName || emp.displayName)}
+                                                </span>
+                                            </div>
                                         </td>
 
                                         {/* TARGET */}
@@ -319,17 +379,6 @@ export default function CampaignProgressCard({ item, reportDateDisplay, storeNam
                     </table>
                 </div>
             </div>
-
-            {/* Modal Nhận Xét Chi Tiết Bảng Thi Đua */}
-            {isRemarkModalOpen && (
-                <CampaignProgressRemarkModal
-                    isOpen={isRemarkModalOpen}
-                    onClose={() => setIsRemarkModalOpen(false)}
-                    item={item}
-                    reportDateDisplay={reportDateDisplay}
-                    storeName={storeName}
-                />
-            )}
         </div>
     );
 }

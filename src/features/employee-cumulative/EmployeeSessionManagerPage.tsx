@@ -309,84 +309,99 @@ export default function EmployeeSessionManagerPage() {
             )}
 
             {/* Thanh Bộ Lọc */}
-            <div className="bg-white rounded-2xl p-3.5 border border-slate-200 shadow-2xs flex flex-wrap items-center justify-between gap-3 text-xs">
-                <div className="flex flex-wrap items-center gap-2">
-                    <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl">
-                        <Store className="w-4 h-4 text-purple-600" />
-                        <select
-                            value={selectedStore}
-                            onChange={e => setSelectedStore(e.target.value)}
-                            className="bg-transparent text-xs font-bold text-slate-800 outline-hidden cursor-pointer"
-                        >
-                            <option value="all">🏢 Tất Cả Siêu Thị</option>
-                            {stores.map(s => (
-                                <option key={s.id || s.code} value={s.name}>{s.name} ({s.code})</option>
-                            ))}
-                        </select>
+            <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-3 text-xs">
+                {/* HÀNG 1: BỘ LỌC SIÊU THỊ / CỤM (BẮT BUỘC ĐẦU TIÊN & NẰM RIÊNG LẺ 1 DÒNG) */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2.5 border-b border-slate-100">
+                    <div className="flex items-center gap-2">
+                        <span className="text-xs font-black text-slate-600 uppercase tracking-wider shrink-0 flex items-center gap-1.5">
+                            <Store className="w-4 h-4 text-purple-600" />
+                            Siêu thị / Cụm:
+                        </span>
+                        <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-300 px-3 py-1.5 rounded-xl min-w-[200px] sm:min-w-[280px]">
+                            <Store className="w-4 h-4 text-purple-600 shrink-0" />
+                            <select
+                                value={selectedStore}
+                                onChange={e => setSelectedStore(e.target.value)}
+                                className="bg-transparent text-xs font-bold text-slate-800 outline-none cursor-pointer w-full"
+                            >
+                                <option value="all">🏢 Tất Cả Siêu Thị</option>
+                                {stores.map(s => (
+                                    <option key={s.id || s.code} value={s.name}>{s.name} ({s.code})</option>
+                                ))}
+                            </select>
+                        </div>
                     </div>
 
-                    <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl">
-                        <Calendar className="w-4 h-4 text-purple-600" />
-                        <select
-                            value={selectedMonth}
-                            onChange={e => setSelectedMonth(Number(e.target.value))}
-                            className="bg-transparent text-xs font-bold text-slate-800 outline-hidden cursor-pointer"
-                        >
-                            <option value={0}>📅 Tất Cả Các Tháng</option>
-                            {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
-                                <option key={m} value={m}>Tháng {m}</option>
-                            ))}
-                        </select>
-                        <span className="text-slate-300">/</span>
-                        <select
-                            value={selectedYear}
-                            onChange={e => setSelectedYear(Number(e.target.value))}
-                            className="bg-transparent text-xs font-bold text-slate-700 outline-hidden cursor-pointer"
-                        >
-                            <option value={0}>Tất Cả Năm</option>
-                            <option value={2026}>2026</option>
-                            <option value={2025}>2025</option>
-                            <option value={2024}>2024</option>
-                        </select>
-                    </div>
-
-                    <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl">
-                        <Filter className="w-4 h-4 text-purple-600" />
-                        <select
-                            value={sessionType}
-                            onChange={e => setSessionType(e.target.value)}
-                            className="bg-transparent text-xs font-bold text-slate-800 outline-hidden cursor-pointer"
-                        >
-                            <option value="all">Tất cả loại phiên</option>
-                            <option value="REVENUE_CAMPAIGN">Doanh Thu & Thi Đua</option>
-                            <option value="WORK_HOURS">Giờ Công Toàn Cụm</option>
-                        </select>
+                    <div className="flex items-center gap-2">
+                        <span className="text-slate-500 font-mono text-xs">
+                            Tổng số phiên: <strong className="text-slate-900">{totalSessions}</strong>
+                        </span>
                     </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                    <span className="text-slate-500 font-mono hidden sm:inline">
-                        Tổng số phiên: <strong className="text-slate-900">{totalSessions}</strong>
-                    </span>
+                {/* HÀNG 2: TIÊU CHÍ KỲ THÁNG & LOẠI PHIÊN */}
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-xs font-bold text-slate-500">Kỳ làm việc:</span>
+                        <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl">
+                            <Calendar className="w-4 h-4 text-purple-600" />
+                            <select
+                                value={selectedMonth}
+                                onChange={e => setSelectedMonth(Number(e.target.value))}
+                                className="bg-transparent text-xs font-bold text-slate-800 outline-hidden cursor-pointer"
+                            >
+                                <option value={0}>📅 Tất Cả Các Tháng</option>
+                                {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                                    <option key={m} value={m}>Tháng {m}</option>
+                                ))}
+                            </select>
+                            <span className="text-slate-300">/</span>
+                            <select
+                                value={selectedYear}
+                                onChange={e => setSelectedYear(Number(e.target.value))}
+                                className="bg-transparent text-xs font-bold text-slate-700 outline-hidden cursor-pointer"
+                            >
+                                <option value={0}>Tất Cả Năm</option>
+                                <option value={2026}>2026</option>
+                                <option value={2025}>2025</option>
+                                <option value={2024}>2024</option>
+                            </select>
+                        </div>
 
-                    <button
-                        type="button"
-                        onClick={handlePullFromCloud}
-                        className="px-3 py-1.5 border border-purple-200 bg-purple-50 hover:bg-purple-100 text-purple-800 rounded-xl font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                        title="Tải lại toàn bộ các phiên từ CLOUD về máy"
-                    >
-                        <CloudDownload className="w-3.5 h-3.5 text-purple-600" />
-                        <span>Kéo từ Cloud</span>
-                    </button>
+                        <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl">
+                            <Filter className="w-4 h-4 text-purple-600" />
+                            <select
+                                value={sessionType}
+                                onChange={e => setSessionType(e.target.value)}
+                                className="bg-transparent text-xs font-bold text-slate-800 outline-hidden cursor-pointer"
+                            >
+                                <option value="all">Tất cả loại phiên</option>
+                                <option value="REVENUE_CAMPAIGN">Doanh Thu & Thi Đua</option>
+                                <option value="WORK_HOURS">Giờ Công Toàn Cụm</option>
+                            </select>
+                        </div>
+                    </div>
 
-                    <button
-                        type="button"
-                        onClick={loadData}
-                        className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-600 transition cursor-pointer"
-                        title="Làm mới danh sách"
-                    >
-                        <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-purple-600' : ''}`} />
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={handlePullFromCloud}
+                            className="px-3 py-1.5 border border-purple-200 bg-purple-50 hover:bg-purple-100 text-purple-800 rounded-xl font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                            title="Tải lại toàn bộ các phiên từ CLOUD về máy"
+                        >
+                            <CloudDownload className="w-3.5 h-3.5 text-purple-600" />
+                            <span>Kéo từ Cloud</span>
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={loadData}
+                            className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-600 transition cursor-pointer"
+                            title="Làm mới danh sách"
+                        >
+                            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-purple-600' : ''}`} />
+                        </button>
+                    </div>
                 </div>
             </div>
 

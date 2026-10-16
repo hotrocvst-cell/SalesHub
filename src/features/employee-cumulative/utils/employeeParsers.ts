@@ -76,45 +76,68 @@ export function detectStoreFromRawText(rawText: string): string | null {
 
 /**
  * 1. BÓC TÁCH DOANH THU NHÂN VIÊN (Raw Data Parsing & Extraction)
- * Logic xử lý dữ liệu thô:
- * 1. Chuẩn hóa chuỗi văn bản đầu vào: rawText.split(/\r?\n/), .trim(), lọc bỏ dòng trống (line !== ''), loại trừ header/footer cố định TGDD.
- * 2. Thuật toán nhận diện "Dòng Cặp" (Pair Lines):
- *    - Dòng 1 (Dòng Định Danh): Chứa mã nhân viên và tên (ngăn cách bằng dấu -)
- *    - Dòng 2 (Dòng Chỉ Số Số Liệu): Nằm ngay bên dưới Dòng 1, chứa dãy số liệu ngăn cách bằng Tab (\t) hoặc nhiều khoảng trắng.
+ * Hỗ trợ:
+ * 1. Định dạng mới tách rời 2 bảng độc lập: "Bảng Doanh thu quy đổi (DTQĐ)" và "Bảng Doanh thu thực".
+ * 2. Định dạng cũ gộp chung 8 cột hoặc 10 cột trong cùng 1 bảng.
+ * 3. Tự động tính toán % Trả góp = (DT Trả góp thực / DT Thực) * 100 khi có bảng Doanh thu thực.
  */
-export function parseEmployeeRevenueText(rawText: string): ParsedEmployeeRevenue[] {
-    if (!rawText || !rawText.trim()) return [];
 
-    // Kiểm tra dòng tiêu đề siêu thị để không bị bóc nhầm thành nhân viên
-    const isStoreHeader = (str: string): boolean => {
-        if (/^\d{3,6}\s*-\s*[A-Z0-9_]{3,}/i.test(str)) {
-            const parts = str.split(' - ');
-            if (parts.length >= 2) {
-                const brandPart = parts[1].trim().toUpperCase();
-                if (
-                    brandPart.startsWith('AAR_') ||
-                    brandPart.startsWith('TGD_') ||
-                    brandPart.startsWith('DMX_') ||
-                    brandPart.startsWith('BHX_') ||
-                    brandPart.startsWith('AVA_') ||
-                    brandPart.startsWith('TOP_') ||
-                    brandPart.startsWith('ĐMX') ||
-                    brandPart.startsWith('TGDĐ') ||
-                    parts.length >= 3
-                ) {
-                    return true;
-                }
+// Hàm kiểm tra dòng tiêu đề siêu thị để không bị bóc nhầm thành nhân viên
+function isStoreHeader(str: string): boolean {
+    if (/^\d{3,6}\s*-\s*[A-Z0-9_]{3,}/i.test(str)) {
+        const parts = str.split(' - ');
+        if (parts.length >= 2) {
+            const brandPart = parts[1].trim().toUpperCase();
+            if (
+                brandPart.startsWith('AAR_') ||
+                brandPart.startsWith('TGD_') ||
+                brandPart.startsWith('DMX_') ||
+                brandPart.startsWith('BHX_') ||
+                brandPart.startsWith('AVA_') ||
+                brandPart.startsWith('TOP_') ||
+                brandPart.startsWith('ĐMX') ||
+                brandPart.startsWith('TGDĐ') ||
+                parts.length >= 3
+            ) {
+                return true;
             }
         }
-        return false;
-    };
+    }
+    return false;
+}
 
-    // 1. Chuẩn hóa chuỗi văn bản đầu vào
-    const rawLines = rawText.split(/\r?\n/)
-        .map(l => l.trim())
-        .filter(line => line !== '');
+// Hàm nhận diện dòng nhân viên: "Mã NV - Họ và Tên"
+function extractEmployeeInfo(str: string): { empId: string; fullName: string } | null {
+    if (isStoreHeader(str)) return null;
+    // Mã nhân viên không được bắt đầu bằng dấu trừ '-'
+    const m = str.match(/^([a-zA-Z0-9_.]+)\s*-\s*([^\t\r\n]+)$/);
+    if (m && m[1].toLowerCase() !== 'online' && !m[1].startsWith('-')) {
+        const name = m[2].trim();
+        // Tên nhân viên phải chứa ký tự chữ cái (tránh nhận nhầm biểu thức toán/số âm)
+        if (/[a-zA-Z\u00C0-\u024F\u1EA0-\u1EF9]/.test(name)) {
+            return { empId: m[1].trim(), fullName: name };
+        }
+    }
+    return null;
+}
 
-    // Danh sách các từ khóa cố định cần loại trừ từ hệ thống TGDD
+/**
+ * Bóc tách dữ liệu từ 1 bảng đơn lẻ (QD hoặc REAL hoặc Legacy)
+ */
+export function parseSingleEmployeeRevenueTable(
+    text: string,
+    forceType?: 'QD' | 'REAL'
+): ParsedEmployeeRevenue[] {
+    if (!text || !text.trim()) return [];
+
+    let isQdTable = forceType === 'QD';
+    let isRealTable = forceType === 'REAL';
+
+    if (!forceType) {
+        isQdTable = /(doanh thu qđ|dt trả góp qđ|dt trả thẳng qđ)/i.test(text);
+        isRealTable = /(dt trả góp|dt trả thẳng)/i.test(text) && !isQdTable;
+    }
+
     const IGNORE_KEYWORDS = [
         'nhân viên',
         'số lượng',
@@ -141,96 +164,45 @@ export function parseEmployeeRevenueText(rawText: string): ParsedEmployeeRevenue
         'doanh thu theo cấp'
     ];
 
-    // Lọc bỏ dòng tiêu đề và footer cố định
-    const cleanLines = rawLines.filter(line => {
-        const lower = line.toLowerCase();
-        if (
-            lower.startsWith('tổng') ||
-            lower.startsWith('đơn vị:') ||
-            lower.startsWith('tỉ trọng tính') ||
-            lower.includes('/ trang') ||
-            /^\d+-\d+\s*\/\s*tổng/.test(lower) ||
-            isStoreHeader(line)
-        ) {
-            return false;
-        }
-        // Lọc bỏ dòng tiêu đề bảng nếu chứa các từ khóa cột
-        if (lower.includes('nhân viên') && (lower.includes('số lượng') || lower.includes('doanh thu'))) {
-            return false;
-        }
-        return !IGNORE_KEYWORDS.some(kw => lower === kw);
-    });
+    const cleanLines = text.split(/\r?\n/)
+        .map(l => l.trim())
+        .filter(line => {
+            const lower = line.toLowerCase();
+            if (
+                lower.startsWith('tổng') ||
+                lower.startsWith('đơn vị:') ||
+                lower.startsWith('tỉ trọng tính') ||
+                lower.includes('/ trang') ||
+                /^\d+-\d+\s*\/\s*tổng/.test(lower) ||
+                isStoreHeader(line)
+            ) {
+                return false;
+            }
+            if (lower.includes('nhân viên') && (lower.includes('số lượng') || lower.includes('doanh thu'))) {
+                return false;
+            }
+            return !IGNORE_KEYWORDS.some(kw => lower === kw);
+        });
 
     const results: ParsedEmployeeRevenue[] = [];
 
-    // Hàm nhận diện dòng nhân viên: "Mã NV - Họ và Tên"
-    const extractEmployeeInfo = (str: string): { empId: string; fullName: string } | null => {
-        if (isStoreHeader(str)) return null;
-        // Mã nhân viên không được bắt đầu bằng dấu trừ '-'
-        const m = str.match(/^([a-zA-Z0-9_.]+)\s*-\s*([^\t\r\n]+)$/);
-        if (m && m[1].toLowerCase() !== 'online' && !m[1].startsWith('-')) {
-            const name = m[2].trim();
-            // Tên nhân viên phải chứa ký tự chữ cái (tránh nhận nhầm biểu thức toán/số âm)
-            if (/[a-zA-Z\u00C0-\u024F\u1EA0-\u1EF9]/.test(name)) {
-                return { empId: m[1].trim(), fullName: name };
-            }
+    const addOrUpdateResult = (
+        empInfo: { empId: string; fullName: string },
+        metrics: {
+            quantity: number;
+            revenue_qd: number;
+            revenue_actual: number;
+            installment_revenue: number;
+            installment_rate: number;
         }
-        return null;
-    };
-
-    /**
-     * Bóc tách số liệu theo thứ tự cột chuẩn xác:
-     * - Cột 0: SỐ LƯỢNG (cần)
-     * - Cột 1: DOANH THU QĐ (cần)
-     * - Cột 2: % TỈ TRỌNG (không cần)
-     * - Cột 3: DOANH THU (cần)
-     * - Cột 4: TB 3 THÁNG (không cần)
-     * - Cột 5: % TT (không cần)
-     * - Cột 6: DT TRẢ GÓP (cần)
-     * - Cột 7: % TRẢ GÓP (cần)
-     */
-    const extractMetrics = (cols: string[]): {
-        quantity: number;
-        revenue_qd: number;
-        revenue_actual: number;
-        installment_revenue: number;
-        installment_rate: number;
-    } => {
-        const quantity = cols.length > 0 ? parseNumber(cols[0]) : 0;
-        const revenue_qd = cols.length > 1 ? parseNumber(cols[1]) : 0;
-        const revenue_actual = cols.length > 3 ? parseNumber(cols[3]) : 0;
-
-        let installment_revenue = 0;
-        let installment_rate = 0;
-
-        if (cols.length >= 10) {
-            // Tương thích ngược: Định dạng 10 cột cũ (có Target & % HT Target ở giữa)
-            installment_revenue = parseNumber(cols[8]);
-            installment_rate = parseNumber(cols[9]);
-        } else if (cols.length >= 7) {
-            // Định dạng chuẩn 8 cột theo quy định mới
-            installment_revenue = parseNumber(cols[6]);
-            installment_rate = cols.length > 7 ? parseNumber(cols[7]) : 0;
-        }
-
-        return {
-            quantity,
-            revenue_qd,
-            revenue_actual,
-            installment_revenue,
-            installment_rate
-        };
-    };
-
-    // Hàm ghi nhận kết quả và gộp trùng lặp nếu cùng 1 nhân viên xuất hiện nhiều dòng
-    const addOrUpdateResult = (empInfo: { empId: string; fullName: string }, metrics: ReturnType<typeof extractMetrics>) => {
+    ) => {
         const existingIdx = results.findIndex(r => r.employee_id === empInfo.empId);
         if (existingIdx >= 0) {
             results[existingIdx].quantity += metrics.quantity;
             results[existingIdx].revenue_qd = Number((results[existingIdx].revenue_qd + metrics.revenue_qd).toFixed(2));
             results[existingIdx].revenue_actual = Number((results[existingIdx].revenue_actual + metrics.revenue_actual).toFixed(2));
             results[existingIdx].installment_revenue = Number((results[existingIdx].installment_revenue + metrics.installment_revenue).toFixed(2));
-            if (results[existingIdx].revenue_actual > 0) {
+            if (results[existingIdx].revenue_actual > 0 && isRealTable) {
                 results[existingIdx].installment_rate = Number(((results[existingIdx].installment_revenue / results[existingIdx].revenue_actual) * 100).toFixed(1));
             }
         } else {
@@ -244,59 +216,187 @@ export function parseEmployeeRevenueText(rawText: string): ParsedEmployeeRevenue
 
     for (let i = 0; i < cleanLines.length; i++) {
         const line = cleanLines[i];
+        let empInfo: { empId: string; fullName: string } | null = null;
+        let cols: string[] = [];
 
-        // TRƯỜNG HỢP 1: Tất cả nằm trên 1 dòng duy nhất phân cách bằng Tab
-        // Ví dụ: 27560 - Bùi Minh Lãm\t235\t2,141\t22.0%\t1,606\t0\t—\t482\t30.0%
+        // TRƯỜNG HỢP 1: Tất cả nằm trên 1 dòng phân cách bằng Tab
         if (line.includes('\t')) {
             const parts = line.split('\t').map(p => p.trim());
-            const empInfo = extractEmployeeInfo(parts[0]);
+            empInfo = extractEmployeeInfo(parts[0]);
             if (empInfo && parts.length >= 5) {
-                const cols = parts.slice(1);
-                const metrics = extractMetrics(cols);
-                addOrUpdateResult(empInfo, metrics);
-                continue;
+                cols = parts.slice(1);
             }
         }
 
-        // TRƯỜNG HỢP 2 & 3: Bắt đầu bằng dòng "Mã NV - Họ và tên"
-        const empInfo = extractEmployeeInfo(line);
-        if (empInfo) {
-            // Kiểm tra dòng tiếp theo (Dòng 2) chứa các cột số liệu cách nhau bằng Tab hoặc 2+ khoảng trắng
-            if (i + 1 < cleanLines.length) {
-                const nextLine = cleanLines[i + 1];
-                const nextCols = nextLine.split(/\t+|\s{2,}/).map(c => c.trim()).filter(Boolean);
-
+        // TRƯỜNG HỢP 2: Dòng 1 là Tên NV, Dòng 2 là các cột số liệu
+        if (!empInfo) {
+            empInfo = extractEmployeeInfo(line);
+            if (empInfo && i + 1 < cleanLines.length) {
+                const nextCols = cleanLines[i + 1].split(/\t+|\s{2,}/).map(c => c.trim()).filter(Boolean);
                 if (nextCols.length >= 4) {
-                    const metrics = extractMetrics(nextCols);
-                    addOrUpdateResult(empInfo, metrics);
-                    i++; // Bỏ qua dòng 2 vì đã xử lý
-                    continue;
+                    cols = nextCols;
+                    i++;
                 }
             }
+        }
 
-            // TRƯỜNG HỢP 3: Khi người dùng copy bảng web mà mỗi ô dữ liệu thành 1 dòng riêng lẻ
+        // TRƯỜNG HỢP 3: Khi người dùng copy bảng web mà mỗi ô dữ liệu thành 1 dòng riêng lẻ
+        if (empInfo && cols.length === 0) {
             const collectedCols: string[] = [];
             let j = i + 1;
             while (j < cleanLines.length && collectedCols.length < 8) {
                 const checkLine = cleanLines[j];
-                // Dừng lại nếu gặp nhân viên tiếp theo
-                if (extractEmployeeInfo(checkLine)) {
-                    break;
-                }
+                if (extractEmployeeInfo(checkLine)) break;
                 collectedCols.push(checkLine);
                 j++;
             }
-
             if (collectedCols.length >= 4) {
-                const metrics = extractMetrics(collectedCols);
-                addOrUpdateResult(empInfo, metrics);
-                i = j - 1; // Nhảy con trỏ tới dòng số liệu cuối cùng đã gom
-                continue;
+                cols = collectedCols;
+                i = j - 1;
             }
+        }
+
+        if (empInfo && cols.length >= 4) {
+            // Nhận diện cấu trúc mới 8 cột (Cột 7 là DT Nhập trả dạng số, KHÔNG phải % trả góp)
+            const isNew8ColFormat = cols.length === 8 && !cols[7].includes('%');
+
+            const quantity = parseNumber(cols[0]);
+            let revenue_qd = 0;
+            let revenue_actual = 0;
+            let installment_revenue = 0;
+            let installment_rate = 0;
+
+            if (isNew8ColFormat) {
+                if (isRealTable) {
+                    // Bảng Doanh thu thực mới: Cột 1 = DT Thực, Cột 6 = DT Trả góp thực
+                    revenue_actual = parseNumber(cols[1]);
+                    revenue_qd = revenue_actual;
+                    installment_revenue = parseNumber(cols[6]);
+                    installment_rate = revenue_actual > 0
+                        ? Number(((installment_revenue / revenue_actual) * 100).toFixed(1))
+                        : 0;
+                } else {
+                    // Bảng Doanh thu quy đổi mới (hoặc mặc định): Cột 1 = DT QĐ, Cột 6 = DT Trả góp QĐ
+                    // Quy chuẩn: CHỈ lấy DT Trả góp từ bảng Doanh thu thực, KHÔNG lấy "DT Trả góp QĐ"
+                    revenue_qd = parseNumber(cols[1]);
+                    revenue_actual = revenue_qd;
+                    installment_revenue = 0;
+                    installment_rate = 0; // Chưa có DT thực thì % trả góp để 0
+                }
+            } else {
+                // Tương thích ngược: Bảng cũ 8 cột hoặc 10 cột
+                revenue_qd = parseNumber(cols[1]);
+                revenue_actual = cols.length > 3 ? parseNumber(cols[3]) : revenue_qd;
+                if (cols.length >= 10) {
+                    installment_revenue = parseNumber(cols[8]);
+                    installment_rate = parseNumber(cols[9]);
+                } else if (cols.length >= 7) {
+                    installment_revenue = parseNumber(cols[6]);
+                    installment_rate = cols.length > 7 ? parseNumber(cols[7]) : (revenue_actual > 0 ? Number(((installment_revenue / revenue_actual) * 100).toFixed(1)) : 0);
+                }
+            }
+
+            addOrUpdateResult(empInfo, {
+                quantity,
+                revenue_qd,
+                revenue_actual,
+                installment_revenue,
+                installment_rate
+            });
         }
     }
 
     return results;
+}
+
+/**
+ * Gộp dữ liệu từ Bảng Doanh Thu Quy Đổi (QD) và Bảng Doanh Thu Thực (REAL)
+ */
+export function mergeEmployeeRevenues(
+    table1: ParsedEmployeeRevenue[],
+    table2: ParsedEmployeeRevenue[]
+): ParsedEmployeeRevenue[] {
+    if (!table2 || table2.length === 0) return table1;
+    if (!table1 || table1.length === 0) return table2;
+
+    let qdList = table1;
+    let realList = table2;
+
+    // Tự động phân định xem bảng nào là REAL
+    const t1HasReal = table1.some(r => r.installment_rate > 0 || r.revenue_actual !== r.revenue_qd);
+    const t2HasReal = table2.some(r => r.installment_rate > 0 || r.revenue_actual !== r.revenue_qd);
+
+    if (t1HasReal && !t2HasReal) {
+        realList = table1;
+        qdList = table2;
+    }
+
+    const realMap = new Map<string, ParsedEmployeeRevenue>();
+    realList.forEach(r => realMap.set(r.employee_id, r));
+
+    const merged: ParsedEmployeeRevenue[] = qdList.map(item => {
+        const real = realMap.get(item.employee_id);
+        if (real) {
+            const revActual = real.revenue_actual > 0 ? real.revenue_actual : item.revenue_qd;
+            // CHỈ lấy DT Trả góp từ bảng Doanh thu thực (real)
+            const instRev = real.installment_revenue > 0 ? real.installment_revenue : 0;
+            const instRate = revActual > 0 && instRev > 0
+                ? Number(((instRev / revActual) * 100).toFixed(1))
+                : 0;
+
+            return {
+                ...item,
+                revenue_actual: revActual,
+                installment_revenue: instRev,
+                installment_rate: instRate
+            };
+        }
+        return item;
+    });
+
+    // Bổ sung nhân sự có trong Real nhưng chưa có trong QD (nếu có)
+    realList.forEach(real => {
+        if (!qdList.some(q => q.employee_id === real.employee_id)) {
+            merged.push({
+                ...real,
+                revenue_qd: real.revenue_actual
+            });
+        }
+    });
+
+    return merged;
+}
+
+/**
+ * Hàm phân tích cú pháp chính hỗ trợ cả 2 bảng độc lập hoặc 1 bảng gộp
+ */
+export function parseEmployeeRevenueText(rawText: string, realRawText?: string): ParsedEmployeeRevenue[] {
+    if (!rawText || !rawText.trim()) return [];
+
+    const SPLIT_TOKENS = [
+        '=== BẢNG DOANH THU THỰC ===',
+        '=== DOANH THU THỰC ===',
+        '--- DOANH THU THỰC ---'
+    ];
+
+    for (const token of SPLIT_TOKENS) {
+        if (!realRawText && rawText.includes(token)) {
+            const [p1, p2] = rawText.split(token);
+            return mergeEmployeeRevenues(
+                parseSingleEmployeeRevenueTable(p1, 'QD'),
+                parseSingleEmployeeRevenueTable(p2, 'REAL')
+            );
+        }
+    }
+
+    if (realRawText && realRawText.trim()) {
+        return mergeEmployeeRevenues(
+            parseSingleEmployeeRevenueTable(rawText, 'QD'),
+            parseSingleEmployeeRevenueTable(realRawText, 'REAL')
+        );
+    }
+
+    return parseSingleEmployeeRevenueTable(rawText);
 }
 
 /**

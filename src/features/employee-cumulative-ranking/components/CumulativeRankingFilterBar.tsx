@@ -13,12 +13,16 @@ import {
     Target as TargetIcon,
     Settings
 } from 'lucide-react';
-import type { CumulativeRankingViewMode } from '../types';
+import type { CumulativeRankingViewMode, TargetSelectionMode } from '../types';
+import MondayFirstDatePicker from '../../../shared/components/common/MondayFirstDatePicker';
+import ReportActionButtons from '../../../shared/components/report/ReportActionButtons';
 
 interface StoreOption {
     name: string;
     short_name?: string;
 }
+
+export type RankingDatePreset = 'THIS_MONTH' | 'THIS_WEEK' | 'LAST_7_DAYS' | 'YESTERDAY' | 'LAST_MONTH' | 'CUSTOM';
 
 interface CumulativeRankingFilterBarProps {
     fromDate: string;
@@ -27,7 +31,8 @@ interface CumulativeRankingFilterBarProps {
     onToDateChange: (val: string) => void;
     
     // Quick presets
-    onSelectPreset: (preset: 'THIS_MONTH' | 'LAST_7_DAYS' | 'YESTERDAY' | 'LAST_MONTH') => void;
+    activePreset?: RankingDatePreset;
+    onSelectPreset: (preset: 'THIS_MONTH' | 'THIS_WEEK' | 'LAST_7_DAYS' | 'YESTERDAY' | 'LAST_MONTH') => void;
     
     // Store
     selectedStore: string;
@@ -39,19 +44,24 @@ interface CumulativeRankingFilterBarProps {
     viewMode: CumulativeRankingViewMode;
     onViewModeChange: (mode: CumulativeRankingViewMode) => void;
     
-    // Target
+    // Target mode & options
     showTarget: boolean;
     onShowTargetChange: (val: boolean) => void;
+    targetMode: TargetSelectionMode;
+    onTargetModeChange: (mode: TargetSelectionMode) => void;
     onOpenPeriodTargetModal: () => void;
+    onOpenSessionManager?: () => void;
     activePeriodTitle?: string;
     targetSource?: 'PERIOD' | 'MONTH' | 'NONE';
+    isPeriodTargetCloudStored?: boolean;
     
     // Search
     searchQuery: string;
     onSearchChange: (q: string) => void;
     
-    // Actions
+    // Actions & Permissions
     loading: boolean;
+    canExportExcel: boolean;
     onRefresh: () => void;
     onExportExcel: () => void;
     onExportImage: (mode: 'DOWNLOAD' | 'COPY') => void;
@@ -63,6 +73,7 @@ export default function CumulativeRankingFilterBar({
     toDate,
     onFromDateChange,
     onToDateChange,
+    activePreset = 'THIS_MONTH',
     onSelectPreset,
     selectedStore,
     onStoreChange,
@@ -72,12 +83,17 @@ export default function CumulativeRankingFilterBar({
     onViewModeChange,
     showTarget,
     onShowTargetChange,
+    targetMode,
+    onTargetModeChange,
     onOpenPeriodTargetModal,
+    onOpenSessionManager,
     activePeriodTitle,
     targetSource,
+    isPeriodTargetCloudStored,
     searchQuery,
     onSearchChange,
     loading,
+    canExportExcel = false,
     onRefresh,
     onExportExcel,
     onExportImage,
@@ -85,79 +101,30 @@ export default function CumulativeRankingFilterBar({
 }: CumulativeRankingFilterBarProps) {
     return (
         <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-3 sm:p-4 mb-4">
-            {/* HÀNG 1: BỘ LỌC THỜI GIAN & SIÊU THỊ & NÚT THAO TÁC */}
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-slate-100">
-                {/* KHỐI CHỌN NGÀY TỪ A -> B & SIÊU THỊ */}
-                <div className="flex flex-wrap items-center gap-2">
-                    {/* TỪ NGÀY */}
-                    <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-xl text-xs">
-                        <Calendar className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                        <span className="text-[11px] font-bold text-slate-500">Từ:</span>
-                        <input
-                            type="date"
-                            value={fromDate}
-                            onChange={(e) => onFromDateChange(e.target.value)}
-                            className="bg-transparent font-semibold text-slate-800 text-xs focus:outline-hidden cursor-pointer"
-                        />
-                    </div>
-
-                    {/* ĐẾN NGÀY */}
-                    <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-xl text-xs">
-                        <Calendar className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                        <span className="text-[11px] font-bold text-slate-500">Đến:</span>
-                        <input
-                            type="date"
-                            value={toDate}
-                            onChange={(e) => onToDateChange(e.target.value)}
-                            className="bg-transparent font-semibold text-slate-800 text-xs focus:outline-hidden cursor-pointer"
-                        />
-                    </div>
-
-                    {/* PRESETS NHANH */}
-                    <div className="hidden sm:flex items-center gap-1 bg-slate-100/80 p-0.5 rounded-xl">
-                        <button
-                            type="button"
-                            onClick={() => onSelectPreset('THIS_MONTH')}
-                            className="px-2 py-1 text-[11px] font-bold text-slate-700 hover:bg-white rounded-lg transition-all"
-                        >
-                            Tháng này
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => onSelectPreset('LAST_7_DAYS')}
-                            className="px-2 py-1 text-[11px] font-bold text-slate-700 hover:bg-white rounded-lg transition-all"
-                        >
-                            7 ngày
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => onSelectPreset('YESTERDAY')}
-                            className="px-2 py-1 text-[11px] font-bold text-slate-700 hover:bg-white rounded-lg transition-all"
-                        >
-                            Hôm qua
-                        </button>
-                    </div>
-
-                    {/* CHỌN SIÊU THỊ */}
-                    <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-xl text-xs">
-                        <StoreIcon className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+            {/* HÀNG 1: BỘ LỌC SIÊU THỊ / CỤM ĐẶT ĐẦU TIÊN RIÊNG LẺ 1 DÒNG (RULE 10 CONVENTION) */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+                {/* BỘ LỌC SIÊU THỊ / CỤM Ở VỊ TRÍ ĐẦU TIÊN */}
+                <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 hover:border-blue-400 px-3 py-2 rounded-xl text-xs transition-all shadow-2xs">
+                        <StoreIcon className="w-4 h-4 text-blue-600 shrink-0" />
+                        <span className="text-[11px] font-bold text-slate-500 whitespace-nowrap">Siêu thị:</span>
                         <select
                             value={selectedStore}
                             disabled={isLockedToSingleStore}
                             onChange={(e) => onStoreChange(e.target.value)}
-                            className="bg-transparent font-semibold text-slate-800 text-xs focus:outline-hidden cursor-pointer disabled:cursor-not-allowed max-w-[150px] sm:max-w-[200px]"
+                            className="bg-transparent font-black text-slate-900 text-xs focus:outline-hidden cursor-pointer disabled:cursor-not-allowed min-w-[180px] sm:min-w-[240px]"
                         >
-                            <option value="all">Tất cả siêu thị</option>
+                            <option value="all">🏢 Tất cả siêu thị</option>
                             {storesList.map((s, idx) => (
                                 <option key={idx} value={s.name}>
-                                    {s.short_name || s.name}
+                                    🏪 {s.short_name || s.name}
                                 </option>
                             ))}
                         </select>
                     </div>
                 </div>
 
-                {/* KHỐI NÚT THAO TÁC (XUẤT EXCEL / ẢNH) */}
+                {/* KHỐI NÚT THAO TÁC (XUẤT EXCEL / ẢNH / LÀM MỚI) */}
                 <div className="flex items-center gap-1.5 flex-wrap justify-end">
                     <button
                         type="button"
@@ -170,38 +137,63 @@ export default function CumulativeRankingFilterBar({
                         <span className="hidden sm:inline">Làm mới</span>
                     </button>
 
-                    <button
-                        type="button"
-                        onClick={onExportExcel}
-                        disabled={loading}
-                        className="px-2.5 py-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                        title="Xuất file Excel"
-                    >
-                        <Download className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>Excel</span>
-                    </button>
+                    {/* CỤM NÚT BÁO CÁO CHUNG: XUẤT ẢNH, COPY ẢNH, NHẬN XÉT, EXCEL */}
+                    <ReportActionButtons
+                        onExportImage={() => onExportImage('DOWNLOAD')}
+                        onCopyImage={() => onExportImage('COPY')}
+                        isExporting={isExporting}
+                        hasAssessment={true}
+                        reportTitle="Bảng Xếp Hạng Lũy Kế Nhân Viên"
+                        onExportExcel={onExportExcel}
+                        canExportExcel={canExportExcel}
+                    />
+                </div>
+            </div>
 
-                    <button
-                        type="button"
-                        onClick={() => onExportImage('DOWNLOAD')}
-                        disabled={isExporting}
-                        className="px-2.5 py-1.5 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                        title="Tải ảnh báo cáo chuẩn dọc smartphone"
-                    >
-                        <Camera className="w-3.5 h-3.5 text-blue-600" />
-                        <span>Tải ảnh</span>
-                    </button>
+            {/* HÀNG 2: BỘ LỌC THỜI GIAN (TỪ NGÀY -> ĐẾN NGÀY & PRESETS XEM NHANH) */}
+            <div className="flex flex-wrap items-center gap-2 py-3 border-b border-slate-100">
+                {/* TỪ NGÀY (LỊCH BẮT ĐẦU TỪ THỨ HAI) */}
+                <MondayFirstDatePicker
+                    label="Từ:"
+                    value={fromDate}
+                    onChange={onFromDateChange}
+                />
 
-                    <button
-                        type="button"
-                        onClick={() => onExportImage('COPY')}
-                        disabled={isExporting}
-                        className="px-2.5 py-1.5 text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                        title="Sao chép ảnh vào Clipboard gửi Zalo"
-                    >
-                        <Copy className="w-3.5 h-3.5 text-indigo-600" />
-                        <span className="hidden sm:inline">Copy ảnh</span>
-                    </button>
+                {/* ĐẾN NGÀY (LỊCH BẮT ĐẦU TỪ THỨ HAI) */}
+                <MondayFirstDatePicker
+                    label="Đến:"
+                    value={toDate}
+                    onChange={onToDateChange}
+                />
+
+                {/* PRESETS NHANH (Bắt đầu từ Thứ Hai) */}
+                <div className="flex items-center gap-1 bg-slate-100/90 p-1 rounded-xl">
+                    <span className="text-[10.5px] font-bold text-slate-500 pl-1.5 pr-0.5 whitespace-nowrap">
+                        Xem nhanh theo:
+                    </span>
+                    {[
+                        { id: 'THIS_MONTH', label: 'Tháng này' },
+                        { id: 'THIS_WEEK', label: 'Tuần này', title: 'Tuần này (Tính từ Thứ Hai)' },
+                        { id: 'LAST_7_DAYS', label: '7 ngày' },
+                        { id: 'YESTERDAY', label: 'Hôm qua' },
+                    ].map((p) => {
+                        const isActive = activePreset === p.id;
+                        return (
+                            <button
+                                key={p.id}
+                                type="button"
+                                onClick={() => onSelectPreset(p.id as any)}
+                                title={p.title}
+                                className={`px-2 sm:px-2.5 py-1 text-[11px] font-black rounded-lg transition-all cursor-pointer ${
+                                    isActive
+                                        ? 'bg-indigo-600 text-white shadow-xs'
+                                        : 'text-slate-700 hover:bg-white rounded-lg'
+                                }`}
+                            >
+                                {p.label}
+                            </button>
+                        );
+                    })}
                 </div>
             </div>
 
@@ -250,6 +242,55 @@ export default function CumulativeRankingFilterBar({
                         </div>
                     </label>
 
+                    {/* LỰA CHỌN NGUỒN TARGET: TỰ ĐỘNG (KHUYẾN NGHỊ) / TARGET THÁNG / TARGET GIAI ĐOẠN */}
+                    {showTarget && (
+                        <div className="flex items-center gap-1 bg-slate-100/90 p-0.5 rounded-xl border border-slate-200/80">
+                            <button
+                                type="button"
+                                onClick={() => onTargetModeChange('AUTO')}
+                                className={`px-2 py-1 text-[11px] font-black rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
+                                    targetMode === 'AUTO'
+                                        ? 'bg-emerald-600 text-white shadow-2xs'
+                                        : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+                                }`}
+                                title="Tự động chọn Target Tháng nếu chọn 'Tháng này', hoặc Target Giai đoạn nếu có phiên trùng khớp"
+                            >
+                                <span>⚡ Tự động</span>
+                                <span className={`text-[9px] px-1 py-0.2 rounded-full font-bold ${
+                                    targetMode === 'AUTO' ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-800'
+                                }`}>
+                                    Khuyến nghị
+                                </span>
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => onTargetModeChange('MONTH')}
+                                className={`px-2 py-1 text-[11px] font-black rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
+                                    targetMode === 'MONTH'
+                                        ? 'bg-indigo-600 text-white shadow-2xs'
+                                        : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+                                }`}
+                                title="Sử dụng Target tháng đã cài đặt cấu hình từ trước"
+                            >
+                                <span>📅 Target Tháng</span>
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => onTargetModeChange('PERIOD')}
+                                className={`px-2 py-1 text-[11px] font-black rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
+                                    targetMode === 'PERIOD'
+                                        ? 'bg-amber-600 text-white shadow-2xs'
+                                        : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+                                }`}
+                                title="Sử dụng Target giai đoạn thi đua riêng"
+                            >
+                                <span>🎯 Target Giai Đoạn</span>
+                            </button>
+                        </div>
+                    )}
+
                     {/* NÚT CẤU HÌNH TARGET GIAI ĐOẠN */}
                     <button
                         type="button"
@@ -267,12 +308,33 @@ export default function CumulativeRankingFilterBar({
                                 <span className="flex items-center gap-1">
                                     <span>🎯 Target giai đoạn:</span>
                                     <strong className="text-amber-800">{activePeriodTitle || 'Đang áp dụng'}</strong>
+                                    {isPeriodTargetCloudStored ? (
+                                        <span className="text-[9.5px] px-1 py-0.2 rounded-full bg-emerald-100 text-emerald-800 font-bold">
+                                            ☁️ Cloud
+                                        </span>
+                                    ) : (
+                                        <span className="text-[9.5px] px-1 py-0.2 rounded-full bg-amber-100 text-amber-800 font-bold">
+                                            💾 Local
+                                        </span>
+                                    )}
                                 </span>
                             ) : (
                                 '⚙️ Cài Target Giai Đoạn'
                             )}
                         </span>
                     </button>
+
+                    {/* NÚT QUẢN LÝ TẤT CẢ CÁC PHIÊN TARGET */}
+                    {onOpenSessionManager && (
+                        <button
+                            type="button"
+                            onClick={onOpenSessionManager}
+                            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                            title="Xem tất cả các đợt thi đua đã lưu, kiểm tra lưu trữ Cloud và áp dụng nhanh"
+                        >
+                            <span>📑 Quản lý phiên</span>
+                        </button>
+                    )}
                 </div>
 
                 {/* TÌM KIẾM NHÂN VIÊN */}

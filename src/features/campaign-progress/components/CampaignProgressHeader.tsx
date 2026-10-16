@@ -105,8 +105,47 @@ export default function CampaignProgressHeader({
                 </div>
             </div>
 
-            {/* Hàng 2: Bộ lọc Tháng/Năm, Siêu thị, Phiên dữ liệu */}
-            <div className="flex flex-wrap items-center gap-2.5 pt-0.5 text-xs">
+            {/* Hàng 2: Bộ lọc Siêu thị riêng lẻ đầu tiên (Rule 10 Convention) */}
+            <div className="pt-1 pb-2.5 border-b border-slate-100 flex items-center justify-between gap-3">
+                <div className={`flex items-center gap-2 border rounded-xl px-3 py-1.5 transition-all w-full sm:w-auto ${isLockedToSingleStore
+                    ? 'bg-amber-50/90 border-amber-200 text-amber-900 shadow-2xs'
+                    : 'bg-slate-50 border-slate-200 hover:border-blue-400 text-slate-800 shadow-2xs'
+                    }`}>
+                    {isLockedToSingleStore ? (
+                        <Lock className="w-4 h-4 text-amber-600 shrink-0" />
+                    ) : (
+                        <Store className="w-4 h-4 text-blue-600 shrink-0" />
+                    )}
+                    <span className="text-[11px] font-bold text-slate-500 whitespace-nowrap">Siêu thị:</span>
+                    <select
+                        value={selectedStore}
+                        onChange={(e) => setSelectedStore(e.target.value)}
+                        disabled={isLockedToSingleStore}
+                        title={isLockedToSingleStore ? 'Tài khoản nhân viên được cố định theo siêu thị đang làm việc' : undefined}
+                        className={`bg-transparent font-black text-xs focus:outline-none min-w-[200px] sm:min-w-[260px] truncate ${isLockedToSingleStore
+                            ? 'cursor-not-allowed text-amber-900'
+                            : 'cursor-pointer text-slate-900'
+                            }`}
+                    >
+                        {canViewAllStores && (
+                            <option value="all">🏢 Toàn Cụm Siêu Thị</option>
+                        )}
+                        {allowedStores.map(s => (
+                            <option key={s.id || s.name} value={s.name}>
+                                🏪 {s.name}
+                            </option>
+                        ))}
+                    </select>
+                    {isLockedToSingleStore && (
+                        <span className="text-[9px] bg-amber-200/80 text-amber-800 px-1 py-0.2 rounded font-bold uppercase tracking-wider">
+                            Khóa
+                        </span>
+                    )}
+                </div>
+            </div>
+
+            {/* Hàng 3: Bộ lọc Tháng/Năm, Phiên dữ liệu */}
+            <div className="flex flex-wrap items-center gap-2.5 pt-1 text-xs">
                 {/* 1. Chọn Tháng & Năm */}
                 <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 shrink-0">
                     <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
@@ -133,43 +172,6 @@ export default function CampaignProgressHeader({
                     <span className="ml-auto text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200">
                         {operatingConfig.passedDays}/{operatingConfig.operatingDays}N
                     </span>
-                </div>
-
-                {/* 2. Chọn Siêu thị */}
-                <div className={`flex items-center gap-1.5 border rounded-lg px-2.5 py-1.5 transition-all shrink-0 max-w-full sm:max-w-xs ${isLockedToSingleStore
-                    ? 'bg-amber-50/90 border-amber-200 text-amber-900 shadow-2xs'
-                    : 'bg-slate-50 border-slate-200 text-slate-800'
-                    }`}>
-                    {isLockedToSingleStore ? (
-                        <Lock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                    ) : (
-                        <Store className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                    )}
-                    <span className="text-[11px] font-bold text-slate-500 shrink-0">Shop:</span>
-                    <select
-                        value={selectedStore}
-                        onChange={(e) => setSelectedStore(e.target.value)}
-                        disabled={isLockedToSingleStore}
-                        title={isLockedToSingleStore ? 'Tài khoản nhân viên được cố định theo siêu thị đang làm việc' : undefined}
-                        className={`bg-transparent font-bold focus:outline-none flex-1 truncate ${isLockedToSingleStore
-                            ? 'cursor-not-allowed text-amber-900 font-black'
-                            : 'cursor-pointer text-slate-800'
-                            }`}
-                    >
-                        {canViewAllStores && (
-                            <option value="all">🏢 Toàn Cụm Siêu Thị</option>
-                        )}
-                        {allowedStores.map(s => (
-                            <option key={s.id || s.name} value={s.name}>
-                                {s.name}
-                            </option>
-                        ))}
-                    </select>
-                    {isLockedToSingleStore && (
-                        <span className="text-[9px] bg-amber-200/80 text-amber-800 px-1 py-0.2 rounded font-bold uppercase tracking-wider hidden sm:inline shrink-0">
-                            Khóa
-                        </span>
-                    )}
                 </div>
 
                 {/* 3. Chọn Phiên dữ liệu (Tự động xuống dòng riêng khi màn hình không đủ bề ngang, chống tràn text) */}

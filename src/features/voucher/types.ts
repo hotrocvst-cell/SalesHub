@@ -20,6 +20,15 @@ export interface VoucherItem {
     description?: string;              // Diễn giải / Điều kiện sử dụng voucher
 }
 
+export interface VoucherCampaignStatusConfig {
+    id: string;                        // `${campaign_name}:::${denomination}` hoặc `${campaign_name}`
+    campaign_name: string;
+    denomination?: number;
+    is_ended: boolean;                 // true = Hết mã hoàn toàn / Kết thúc chương trình; false = Đang hoạt động / Còn nạp thêm
+    updated_by?: string;
+    updated_at?: string;
+}
+
 export interface DenominationStock {
     denomination: number;
     total: number;
@@ -27,6 +36,7 @@ export interface DenominationStock {
     claimed: number;
     used: number;
     description?: string;              // Điều kiện sử dụng của mệnh giá
+    is_ended?: boolean;                // Trạng thái: Hết mã hoàn toàn - Kết thúc chương trình
 }
 
 export interface VoucherCampaignSummary {
@@ -34,6 +44,7 @@ export interface VoucherCampaignSummary {
     total_available: number;
     total_vouchers: number;
     denominations: DenominationStock[];
+    is_ended?: boolean;                // Toàn bộ chương trình đã kết thúc
 }
 
 export interface VoucherStockForecast {
@@ -46,8 +57,9 @@ export interface VoucherStockForecast {
     used: number;
     avgDailyUsage: number;             // Trung bình sử dụng / ngày
     daysRemaining: number;             // Số ngày còn lại dự kiến
-    alertLevel: 'OUT_OF_STOCK' | 'CRITICAL' | 'WARNING' | 'SAFE' | 'INACTIVE';
+    alertLevel: 'OUT_OF_STOCK' | 'CRITICAL' | 'WARNING' | 'SAFE' | 'INACTIVE' | 'ENDED';
     alertMessage: string;
+    is_ended?: boolean;                // Đã chốt kết thúc chương trình
 }
 
 export interface VoucherClaimRequest {

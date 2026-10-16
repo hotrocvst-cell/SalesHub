@@ -1,5 +1,6 @@
 import { useState, useRef, useMemo } from 'react';
 import html2canvas from 'html2canvas';
+import { calculate8KScale } from '../../shared/utils/exportImage';
 import { useCampaignProgressData } from './hooks/useCampaignProgressData';
 import { useAuth } from '../../shared/contexts/AuthContext';
 import CampaignProgressHeader from './components/CampaignProgressHeader';
@@ -71,8 +72,9 @@ export default function CampaignProgressPage() {
                 const cardEl = document.querySelector(`[data-campaign-card-key="${item.campaignKey}"]`) as HTMLElement;
                 if (!cardEl) continue;
 
+                const scale = calculate8KScale(cardEl);
                 const canvas = await html2canvas(cardEl, {
-                    scale: 2,
+                    scale: scale,
                     useCORS: true,
                     backgroundColor: '#ffffff',
                     logging: false,
@@ -92,7 +94,7 @@ export default function CampaignProgressPage() {
                 const cleanName = item.displayName.replace(/[^a-zA-Z0-9\u00C0-\u1EF9]/g, '_').slice(0, 30);
                 const storeLabel = selectedStore === 'all' ? 'Toan_Cum' : selectedStore.replace(/\s+/g, '_');
                 const link = document.createElement('a');
-                link.download = `Tien_Do_${i + 1}_${cleanName}_${storeLabel}_${reportDateDisplay}.png`;
+                link.download = `Tien_Do_${i + 1}_${cleanName}_${storeLabel}_${reportDateDisplay}_8K.png`;
                 link.href = canvas.toDataURL('image/png');
                 link.click();
 

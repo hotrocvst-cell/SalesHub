@@ -7,11 +7,13 @@ import type {
     VoucherHoardingAlert,
     DenominationStock,
     VoucherDistributionRule,
-    VoucherDistributionConfig
+    VoucherDistributionConfig,
+    VoucherCampaignStatusConfig
 } from '../types';
 
 const STORAGE_KEY = 'saleshub_store_vouchers_v1';
 const DISTRIBUTION_CONFIG_STORAGE_KEY = 'saleshub_voucher_distribution_config';
+const CAMPAIGN_STATUS_STORAGE_KEY = 'saleshub_voucher_campaign_statuses';
 
 export const DEFAULT_VOUCHER_DISTRIBUTION_CONFIG: VoucherDistributionConfig = {
     rule_type: 'FIFO',
@@ -79,6 +81,25 @@ ON public.store_voucher_configs FOR ALL USING (true) WITH CHECK (true);
 INSERT INTO public.store_voucher_configs (config_key, rule_type, description, updated_by)
 VALUES ('distribution_rule', 'FIFO', 'Ưu tiên cấp mã nhập kho trước, xuất kho trước (First In First Out)', 'Hệ thống')
 ON CONFLICT (config_key) DO NOTHING;
+
+-- ========================================================
+-- 3. TẠO BẢNG LƯU TRỮ TRẠNG THÁI CHƯƠNG TRÌNH VOUCHER
+-- (Đang hoạt động - còn nạp thêm / Hết mã hoàn toàn - Kết thúc chương trình)
+-- ========================================================
+CREATE TABLE IF NOT EXISTS public.store_voucher_campaign_statuses (
+    id TEXT PRIMARY KEY,
+    campaign_name TEXT NOT NULL,
+    denomination NUMERIC DEFAULT 0,
+    is_ended BOOLEAN DEFAULT false,
+    updated_by TEXT,
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Kích hoạt RLS & chính sách truy cập toàn quyền cho bảng store_voucher_campaign_statuses
+ALTER TABLE public.store_voucher_campaign_statuses ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "store_voucher_campaign_statuses_all_policy" ON public.store_voucher_campaign_statuses;
+CREATE POLICY "store_voucher_campaign_statuses_all_policy" 
+ON public.store_voucher_campaign_statuses FOR ALL USING (true) WITH CHECK (true);
 `;
 
 /**
@@ -177,6 +198,146 @@ export async function saveVoucherDistributionConfig(
     }
 
     return { success: true, config: newConfig };
+}
+
+/**
+ * Tạo key định danh cho chương trình / mệnh giá
+ */
+export function getCampaignStatusKey(campaignName: string, denomination?: number): string {
+    const cleanCamp = campaignName.trim();
+    if (denomination && denomination > 0) {
+        return `${cleanCamp}:::${denomination}`;
+    }
+    return cleanCamp;
+}
+
+/**
+ * Kiểm tra xem chương trình hoặc mức mệnh giá cụ thể đã kết thúc (hết mã hoàn toàn) hay chưa
+ */
+export function isCampaignOrDenomEnded(
+    statuses: Record<string, VoucherCampaignStatusConfig> | undefined,
+    campaignName: string,
+    denomination?: number
+): boolean {
+    if (!statuses) return false;
+    const cleanCamp = campaignName.trim();
+    if (denomination && denomination > 0) {
+        const specificKey = `${cleanCamp}:::${denomination}`;
+        if (statuses[specificKey] && statuses[specificKey].is_ended) {
+            return true;
+        }
+    }
+    if (statuses[cleanCamp] && statuses[cleanCamp].is_ended) {
+        return true;
+    }
+    return false;
+}
+
+/**
+ * Lấy danh sách trạng thái chương trình / mệnh giá (Cloud-first, fallback LocalStorage)
+ */
+export async function fetchVoucherCampaignStatuses(): Promise<Record<string, VoucherCampaignStatusConfig>> {
+    const statusMap: Record<string, VoucherCampaignStatusConfig> = {};
+
+    // 1. Đọc từ LocalStorage trước để phản hồi tức thì
+    try {
+        const raw = localStorage.getItem(CAMPAIGN_STATUS_STORAGE_KEY);
+        if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object') {
+                Object.assign(statusMap, parsed);
+            }
+        }
+    } catch (e) {
+        console.warn('Lỗi đọc local campaign statuses:', e);
+    }
+
+    // 2. Thử tải dữ liệu mới nhất từ Supabase Cloud
+    try {
+        const { data, error } = await supabase
+            .from('store_voucher_campaign_statuses')
+            .select('*');
+
+        if (!error && Array.isArray(data)) {
+            data.forEach((row: any) => {
+                const key = row.id || getCampaignStatusKey(row.campaign_name, row.denomination);
+                statusMap[key] = {
+                    id: key,
+                    campaign_name: row.campaign_name,
+                    denomination: Number(row.denomination) || 0,
+                    is_ended: Boolean(row.is_ended),
+                    updated_by: row.updated_by,
+                    updated_at: row.updated_at
+                };
+            });
+
+            // Ghi đè lại LocalStorage cache
+            try {
+                localStorage.setItem(CAMPAIGN_STATUS_STORAGE_KEY, JSON.stringify(statusMap));
+            } catch {
+                // ignore
+            }
+        }
+    } catch (e) {
+        // Fallback local
+    }
+
+    return statusMap;
+}
+
+/**
+ * Lưu trạng thái chương trình / mệnh giá (Cloud-first upsert, sync LocalStorage cache)
+ * isEnded = true: Hết mã hoàn toàn - Kết thúc chương trình
+ * isEnded = false: Đang hoạt động - Còn nạp thêm
+ */
+export async function saveVoucherCampaignStatus(
+    campaignName: string,
+    denomination: number,
+    isEnded: boolean,
+    updatedBy: string
+): Promise<{ success: boolean; config?: VoucherCampaignStatusConfig; error?: string }> {
+    const key = getCampaignStatusKey(campaignName, denomination);
+    const item: VoucherCampaignStatusConfig = {
+        id: key,
+        campaign_name: campaignName.trim(),
+        denomination: denomination || 0,
+        is_ended: isEnded,
+        updated_by: updatedBy,
+        updated_at: new Date().toISOString()
+    };
+
+    // 1. Cập nhật LocalStorage cache ngay lập tức
+    try {
+        let map: Record<string, VoucherCampaignStatusConfig> = {};
+        const raw = localStorage.getItem(CAMPAIGN_STATUS_STORAGE_KEY);
+        if (raw) map = JSON.parse(raw);
+        map[key] = item;
+        localStorage.setItem(CAMPAIGN_STATUS_STORAGE_KEY, JSON.stringify(map));
+    } catch (e) {
+        console.warn('Lỗi ghi local campaign status:', e);
+    }
+
+    // 2. Upsert lên Supabase Cloud
+    try {
+        const { error } = await supabase
+            .from('store_voucher_campaign_statuses')
+            .upsert([{
+                id: item.id,
+                campaign_name: item.campaign_name,
+                denomination: item.denomination,
+                is_ended: item.is_ended,
+                updated_by: item.updated_by,
+                updated_at: item.updated_at
+            }], { onConflict: 'id' });
+
+        if (error) {
+            console.warn('Supabase store_voucher_campaign_statuses warning:', error.message);
+        }
+    } catch (e) {
+        console.warn('Không thể kết nối Cloud để lưu campaign status:', e);
+    }
+
+    return { success: true, config: item };
 }
 
 /**
@@ -681,10 +842,19 @@ export async function claimVoucher(
             ? tier1Candidates
             : (tier2Candidates.length > 0 ? tier2Candidates : tier3Candidates);
 
+        // 0. Kiểm tra xem chương trình hoặc mức mệnh giá đã chốt hết mã hoàn toàn hay chưa
+        const statuses = await fetchVoucherCampaignStatuses();
+        if (isCampaignOrDenomEnded(statuses, req.campaign_name, req.denomination)) {
+            return {
+                success: false,
+                error: `Chương trình "${req.campaign_name}" (mệnh giá ${req.denomination.toLocaleString('vi-VN')}đ) đã hết mã hoàn toàn và chính thức kết thúc chương trình!`
+            };
+        }
+
         if (candidates.length === 0) {
             return {
                 success: false,
-                error: `Đã hết mã voucher mệnh giá ${req.denomination.toLocaleString('vi-VN')}đ của chương trình "${req.campaign_name}" trong kho Cụm của bạn!`
+                error: `Đã tạm hết mã voucher mệnh giá ${req.denomination.toLocaleString('vi-VN')}đ của chương trình "${req.campaign_name}". Vui lòng liên hệ Quản lý hoặc Trưởng ca để nạp thêm tồn kho!`
             };
         }
 
@@ -1455,7 +1625,8 @@ export function getCampaignSummaries(
     storeName?: string,
     accessibleStores?: string[],
     currentUserDisplayName?: string,
-    isAdmin?: boolean
+    isAdmin?: boolean,
+    campaignStatuses?: Record<string, VoucherCampaignStatusConfig>
 ): VoucherCampaignSummary[] {
     let list = vouchers;
     if (!isAdmin || (storeName && storeName !== 'all')) {
@@ -1477,13 +1648,15 @@ export function getCampaignSummaries(
 
         const denomMap = map.get(cName)!;
         if (!denomMap.has(denom)) {
+            const isEnded = isCampaignOrDenomEnded(campaignStatuses, cName, denom);
             denomMap.set(denom, {
                 denomination: denom,
                 total: 0,
                 available: 0,
                 claimed: 0,
                 used: 0,
-                description: v.description
+                description: v.description,
+                is_ended: isEnded
             });
         }
 
@@ -1505,15 +1678,25 @@ export function getCampaignSummaries(
         const total_available = denominations.reduce((sum, d) => sum + d.available, 0);
         const total_vouchers = denominations.reduce((sum, d) => sum + d.total, 0);
 
+        const isEntireCampaignEnded = isCampaignOrDenomEnded(campaignStatuses, cName) ||
+            (denominations.length > 0 && denominations.every(d => d.is_ended));
+
         result.push({
             campaign_name: cName,
             total_available,
             total_vouchers,
-            denominations
+            denominations,
+            is_ended: isEntireCampaignEnded
         });
     });
 
-    return result.sort((a, b) => b.total_available - a.total_available);
+    return result.sort((a, b) => {
+        // Ưu tiên chương trình còn hoạt động lên trước
+        if (a.is_ended !== b.is_ended) {
+            return a.is_ended ? 1 : -1;
+        }
+        return b.total_available - a.total_available;
+    });
 }
 
 /**

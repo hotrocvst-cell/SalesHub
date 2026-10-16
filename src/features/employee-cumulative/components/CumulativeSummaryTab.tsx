@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import type { ParsedEmployeeRevenue, ParsedCampaignBlock } from '../utils/employeeParsers';
 import type { EmployeeItem } from '../../../core/lib/storage';
+import { cleanEmployeeName, getShortenedEmployeeName } from '../../../core/lib/formatters';
 import { Download, Search, Clock, Store } from 'lucide-react';
 import ExcelJS from 'exceljs';
 
@@ -108,11 +109,23 @@ export default function CumulativeSummaryTab({
         );
     }, [unifiedRows, searchQuery]);
 
+    // Chiều rộng badge mã nhân viên đồng bộ theo Quy chuẩn Rule 11
+    const maxIdLength = useMemo(() => {
+        if (!filteredRows || filteredRows.length === 0) return 6;
+        return Math.max(6, ...filteredRows.map(r => String(r.employee_id || '').trim().length));
+    }, [filteredRows]);
+
+    // Kiểm tra xem phiên có số liệu trả góp hay không để hiển thị cột % TG
+    const hasInstallmentData = useMemo(() => {
+        return filteredRows.some(r => r.installment_rate > 0 || r.installment_revenue > 0);
+    }, [filteredRows]);
+
     // Tính tổng cộng
     const totals = useMemo(() => {
         let revActual = 0;
         let revQd = 0;
         let hours = 0;
+        let instRev = 0;
         const campTotals: Record<string, number> = {};
         campaignBlocks.forEach(c => { campTotals[c.campaign_name] = 0; });
 
@@ -120,15 +133,20 @@ export default function CumulativeSummaryTab({
             revActual += r.revenue_actual;
             revQd += r.revenue_qd;
             hours += r.work_hours;
+            instRev += r.installment_revenue;
             campaignBlocks.forEach(c => {
                 campTotals[c.campaign_name] += (r.campaigns[c.campaign_name] || 0);
             });
         });
 
+        const avgInstRate = revActual > 0 ? Number(((instRev / revActual) * 100).toFixed(1)) : 0;
+
         return {
             revActual: Number(revActual.toFixed(2)),
             revQd: Number(revQd.toFixed(2)),
             hours: Number(hours.toFixed(2)),
+            instRev: Number(instRev.toFixed(2)),
+            avgInstRate,
             campTotals
         };
     }, [filteredRows, campaignBlocks]);
@@ -261,10 +279,13 @@ export default function CumulativeSummaryTab({
                         <thead className="bg-slate-900 text-white sticky top-0 z-10 text-[11px] uppercase tracking-wider font-extrabold">
                             <tr>
                                 <th className="p-2.5 w-12 text-center border-r border-slate-800">STT</th>
-                                <th className="p-2.5 w-24 border-r border-slate-800">Mã NV</th>
-                                <th className="p-2.5 min-w-[160px] border-r border-slate-800">Họ và Tên</th>
+                                {/* Quy chuẩn Rule 11: 1 Cột DUY NHẤT mang tên NHÂN VIÊN */}
+                                <th className="p-2.5 min-w-[170px] border-r border-slate-800">Nhân viên</th>
                                 <th className="p-2.5 text-right bg-blue-950 border-r border-blue-900">DT Thực (Tr)</th>
                                 <th className="p-2.5 text-right bg-blue-900 border-r border-blue-800">DT QĐ (Tr)</th>
+                                {hasInstallmentData && (
+                                    <th className="p-2.5 text-right bg-purple-950 border-r border-purple-900">% TG</th>
+                                )}
                                 <th className="p-2.5 text-right bg-emerald-950 border-r border-emerald-900">Giờ Công (h)</th>
                                 <th className="p-2.5 text-right bg-emerald-900 border-r border-emerald-800">Năng Suất</th>
                                 {campaignBlocks.map(c => (
@@ -278,7 +299,7 @@ export default function CumulativeSummaryTab({
                         <tbody className="divide-y divide-slate-100 font-medium">
                             {filteredRows.length === 0 ? (
                                 <tr>
-                                    <td colSpan={7 + campaignBlocks.length} className="p-10 text-center text-slate-400">
+                                    <td colSpan={(hasInstallmentData ? 7 : 6) + campaignBlocks.length} className="p-10 text-center text-slate-400">
                                         <div className="flex flex-col items-center justify-center gap-2">
                                             <p className="font-bold text-slate-600 text-sm">Chưa có số liệu nhân sự nào được tải lên!</p>
                                             <p className="text-xs text-slate-400">
@@ -291,11 +312,26 @@ export default function CumulativeSummaryTab({
                                 filteredRows.map((r, idx) => (
                                 <tr key={r.employee_id} className="hover:bg-slate-50 transition">
                                     <td className="p-2 text-center text-slate-400 font-mono border-r border-slate-100">{idx + 1}</td>
-                                    <td className="p-2 font-mono font-bold text-blue-700 border-r border-slate-100">{r.employee_id}</td>
-                                    <td className="p-2 font-bold text-slate-800 border-r border-slate-100">
-                                        <div>
-                                            <span>{r.full_name}</span>
-                                            <span className="block text-[10px] text-slate-400 font-normal truncate max-w-[150px]">{r.store_name}</span>
+                                    {/* Cột Nhân Viên gộp Mã NV + Tên rút gọn theo Rule 11 */}
+                                    <td className="p-2 border-r border-slate-100">
+                                        <div
+                                            className="flex items-center gap-2"
+                                            title={`Mã NV: ${r.employee_id} - ${cleanEmployeeName(r.full_name)}`}
+                                        >
+                                            <span
+                                                style={{ minWidth: `${maxIdLength + 2.2}ch`, width: `${maxIdLength + 2.2}ch` }}
+                                                className="font-mono font-bold text-xs px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-800 border border-blue-200 inline-block text-center leading-normal shrink-0"
+                                            >
+                                                {r.employee_id}
+                                            </span>
+                                            <div className="truncate">
+                                                <span className="font-bold text-slate-800 block truncate">
+                                                    {getShortenedEmployeeName(r.full_name)}
+                                                </span>
+                                                <span className="block text-[10px] text-slate-400 font-normal truncate max-w-[150px]">
+                                                    {r.store_name}
+                                                </span>
+                                            </div>
                                         </div>
                                     </td>
                                     <td className="p-2 text-right font-mono font-extrabold text-blue-700 bg-blue-50/20 border-r border-slate-100">
@@ -304,6 +340,11 @@ export default function CumulativeSummaryTab({
                                     <td className="p-2 text-right font-mono font-bold text-slate-800 bg-blue-50/30 border-r border-slate-100">
                                         {r.revenue_qd ? r.revenue_qd.toLocaleString('vi-VN') : '—'}
                                     </td>
+                                    {hasInstallmentData && (
+                                        <td className="p-2 text-right font-mono font-bold text-purple-700 bg-purple-50/20 border-r border-slate-100">
+                                            {r.installment_rate > 0 ? `${r.installment_rate}%` : '—'}
+                                        </td>
+                                    )}
                                     <td className="p-2 text-right font-mono font-bold text-emerald-700 bg-emerald-50/20 border-r border-slate-100">
                                         {r.work_hours ? `${r.work_hours}h` : '—'}
                                     </td>
@@ -324,7 +365,7 @@ export default function CumulativeSummaryTab({
                         {/* Footer tổng cộng */}
                         <tfoot className="sticky bottom-0 z-10 bg-slate-900 text-white font-extrabold text-xs shadow-lg">
                             <tr>
-                                <td colSpan={3} className="p-2.5 text-right uppercase tracking-wider border-r border-slate-800">
+                                <td colSpan={2} className="p-2.5 text-right uppercase tracking-wider border-r border-slate-800">
                                     Tổng cộng ({filteredRows.length} NV):
                                 </td>
                                 <td className="p-2.5 text-right font-mono text-amber-300 bg-blue-950 border-r border-blue-900">
@@ -333,6 +374,11 @@ export default function CumulativeSummaryTab({
                                 <td className="p-2.5 text-right font-mono text-amber-300 bg-blue-900 border-r border-blue-800">
                                     {totals.revQd.toLocaleString('vi-VN')} tr
                                 </td>
+                                {hasInstallmentData && (
+                                    <td className="p-2.5 text-right font-mono text-amber-300 bg-purple-950 border-r border-purple-900">
+                                        {totals.avgInstRate}%
+                                    </td>
+                                )}
                                 <td className="p-2.5 text-right font-mono text-emerald-300 bg-emerald-950 border-r border-emerald-900">
                                     {totals.hours.toLocaleString('vi-VN')}h
                                 </td>

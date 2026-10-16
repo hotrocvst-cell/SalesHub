@@ -133,6 +133,12 @@ export const NAVIGATION_GROUPS: NavGroup[] = [
                 badge: '🔥 Hot'
             },
             {
+                name: 'Tra cứu thi đua',
+                path: '/tra-cuu-thi-dua',
+                icon: BookOpenCheck,
+                badge: '✨ Mới'
+            },
+            {
                 name: 'Chi tiết nhân viên',
                 path: '/chi-tiet-nhan-vien',
                 icon: UserCheck,

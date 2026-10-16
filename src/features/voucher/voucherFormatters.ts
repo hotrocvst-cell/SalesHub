@@ -151,7 +151,10 @@ export function getDenominationHotStyle(denomination: number): DenominationHotSt
  * Tính toán danh sách tổng hợp số lượng mã voucher theo từng chiến dịch & mệnh giá,
  * đồng thời phân tích tốc độ sử dụng trung bình mỗi ngày và dự báo số ngày còn lại.
  */
-export function calculateStockForecasts(vouchers: VoucherItem[]): VoucherStockForecast[] {
+export function calculateStockForecasts(
+    vouchers: VoucherItem[],
+    campaignStatuses?: Record<string, { is_ended: boolean }> | Record<string, boolean>
+): VoucherStockForecast[] {
     const today = new Date();
     const todayStr = today.toISOString().slice(0, 10);
 
@@ -211,6 +214,22 @@ export function calculateStockForecasts(vouchers: VoucherItem[]): VoucherStockFo
 
     const forecasts: VoucherStockForecast[] = [];
 
+    // Helper kiểm tra trạng thái kết thúc
+    const checkIsEnded = (cName: string, denom: number) => {
+        if (!campaignStatuses) return false;
+        const specificKey = `${cName}:::${denom}`;
+        const campKey = cName;
+        const specVal = (campaignStatuses as any)[specificKey];
+        if (specVal !== undefined) {
+            return typeof specVal === 'boolean' ? specVal : Boolean(specVal?.is_ended);
+        }
+        const campVal = (campaignStatuses as any)[campKey];
+        if (campVal !== undefined) {
+            return typeof campVal === 'boolean' ? campVal : Boolean(campVal?.is_ended);
+        }
+        return false;
+    };
+
     groups.forEach((g) => {
         // Tính tốc độ trung bình sử dụng mỗi ngày:
         // Lấy các lượt cấp trong 14 ngày gần nhất (hoặc toàn bộ nếu ít hơn 14 ngày)
@@ -220,7 +239,6 @@ export function calculateStockForecasts(vouchers: VoucherItem[]): VoucherStockFo
         if (g.claimTimestamps.length > 0) {
             g.claimTimestamps.sort((a, b) => a - b);
             const firstClaim = g.claimTimestamps[0];
-            const lastClaim = g.claimTimestamps[g.claimTimestamps.length - 1];
             
             // Số ngày trải qua từ lần cấp đầu tiên đến nay (tối thiểu 1 ngày)
             const daysSpan = Math.max(1, Math.ceil((today.getTime() - firstClaim) / (1000 * 60 * 60 * 24)));
@@ -247,14 +265,19 @@ export function calculateStockForecasts(vouchers: VoucherItem[]): VoucherStockFo
             daysRemaining = Math.round((g.available / avgDailyUsage) * 10) / 10;
         }
 
+        const isEnded = checkIsEnded(g.campaign_name, g.denomination);
+
         // Đánh giá mức độ cảnh báo:
-        // CHỈ cảnh báo sắp hết mã nếu tồn kho dự báo không còn đủ dùng trong 2 ngày (daysRemaining <= 2)
         let alertLevel: VoucherStockForecast['alertLevel'] = 'SAFE';
         let alertMessage = 'Đủ dùng an toàn';
 
-        if (g.available === 0) {
+        if (isEnded) {
+            alertLevel = 'ENDED';
+            alertMessage = '⛔ HẾT MÃ - KẾT THÚC CHƯƠNG TRÌNH';
+            daysRemaining = 0;
+        } else if (g.available === 0) {
             alertLevel = 'OUT_OF_STOCK';
-            alertMessage = '🚨 ĐÃ HẾT MÃ - CẦN NẠP BỔ SUNG NGAY';
+            alertMessage = '🚨 TẠM HẾT MÃ - CẦN NẠP BỔ SUNG NGAY';
         } else if (avgDailyUsage > 0 && daysRemaining <= 1) {
             alertLevel = 'CRITICAL';
             alertMessage = `⚡ SẮP HẾT CẤP BÁCH (Chỉ còn đủ dùng ~${daysRemaining} ngày)`;
@@ -279,17 +302,19 @@ export function calculateStockForecasts(vouchers: VoucherItem[]): VoucherStockFo
             avgDailyUsage,
             daysRemaining,
             alertLevel,
-            alertMessage
+            alertMessage,
+            is_ended: isEnded
         });
     });
 
-    // Sắp xếp: Ưu tiên loại Hết mã lên đầu, sau đó đến Sắp hết, sau đó đến Mệnh giá
+    // Sắp xếp: Ưu tiên loại Hết mã lên đầu, sau đó đến Sắp hết, sau đó đến Mệnh giá, Đã kết thúc xuống cuối
     const alertPriority: Record<VoucherStockForecast['alertLevel'], number> = {
         OUT_OF_STOCK: 1,
         CRITICAL: 2,
         WARNING: 3,
         SAFE: 4,
-        INACTIVE: 5
+        INACTIVE: 5,
+        ENDED: 6
     };
 
     return forecasts.sort((a, b) => {

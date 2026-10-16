@@ -394,3 +394,75 @@ export function formatCapitalizeWords(str: string): string {
         .map(w => w ? w.charAt(0).toUpperCase() + w.slice(1) : '')
         .join(' ');
 }
+
+/**
+ * Chuẩn hóa số liệu doanh thu / target về đơn vị Triệu đồng (rút gọn phần triệu)
+ * - Nếu số >= 100,000 (ví dụ: 100,000,000 VNĐ) -> chia 1,000,000 = 100
+ * - Nếu số < 100,000 (ví dụ: 100, 15.5) -> giữ nguyên 100, 15.5
+ */
+export function normalizeToMillion(val: number | string | undefined | null): number {
+    if (val === null || val === undefined) return 0;
+    const num = Number(val);
+    if (isNaN(num)) return 0;
+    if (Math.abs(num) >= 100_000) {
+        return Math.round((num / 1_000_000) * 100) / 100;
+    }
+    return Math.round(num * 100) / 100;
+}
+
+/**
+ * Lấy ngày đầu tuần (Mặc định tính từ Thứ Hai - Monday-first) theo chuẩn dự án SalesHub
+ * Trả về chuỗi định dạng YYYY-MM-DD
+ */
+export function getStartOfWeek(d: Date = new Date()): string {
+    const date = new Date(d);
+    const day = date.getDay(); // 0: CN, 1: T2, ..., 6: T7
+    const diff = date.getDate() - (day === 0 ? 6 : day - 1);
+    date.setDate(diff);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const dayStr = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${dayStr}`;
+}
+
+/**
+ * Chuẩn hóa họ tên nhân viên, loại bỏ hoàn toàn các hậu tố/tiền tố bộ phận:
+ * - "Nguyễn Văn A - AIO - TZ" -> "Nguyễn Văn A"
+ * - "Trần Thị B - ĐMX" -> "Trần Thị B"
+ * - "Lê Văn C (AIO)" -> "Lê Văn C"
+ */
+export function cleanEmployeeName(fullName: string): string {
+    if (!fullName || !fullName.trim()) return '';
+    let clean = fullName.trim();
+    // 1. Loại bỏ các phần chú thích trong ngoặc đơn: (AIO), (ĐMX), (TGD), (Kho), (QL), v.v.
+    clean = clean.replace(/\s*\([^)]*(aio|đmx|dmx|tgd|tgdd|kho|thu ngân|tư vấn|new|tz|ql|sm|am|asm|pg|sub|ctv|dịch vụ|dv|kỹ thuật|kt)[^)]*\)/gi, '');
+    // 2. Loại bỏ các phần bộ phận nối bằng dấu gạch ngang ở đuôi: - AIO, - ĐMX, - TGD, - AIO - TZ, - Kho, v.v.
+    clean = clean.replace(/\s*[-–—]\s*(aio|đmx|dmx|tgd|tgdd|bh|kho|thu ngân|tư vấn|new|tz|ql|sm|am|asm|pg|sub|ctv|dịch vụ|dv|kỹ thuật|kt)(\s*[-–—]\s*[\w\s]+)*\s*$/gi, '');
+    return clean.trim();
+}
+
+/**
+ * Rút gọn tên nhân viên chuẩn toàn hệ thống SalesHub:
+ * Cấu trúc: 2 chữ cuối của tên nhân viên.
+ * Ngoại lệ: Nếu chữ kế cuối là "Thị" (không phân biệt hoa/thường), chỉ hiển thị chữ cuối cùng (tên).
+ * Ví dụ:
+ * - "Nguyễn Phương Nam" -> "Phương Nam"
+ * - "Nguyễn Thị Loan" -> "Loan" (vì chữ kế cuối là "Thị")
+ * - "Trần Thị Kim Cúc" -> "Kim Cúc" (chữ kế cuối là "Kim")
+ * - "Lê Quang Vinh" -> "Quang Vinh"
+ */
+export function getShortenedEmployeeName(fullName: string): string {
+    const cleaned = cleanEmployeeName(fullName);
+    if (!cleaned) return '';
+    const words = cleaned.split(/\s+/);
+    if (words.length <= 1) return words[0];
+
+    const lastWord = words[words.length - 1];
+    const secondToLast = words[words.length - 2];
+
+    if (secondToLast.toLowerCase() === 'thị') {
+        return lastWord;
+    }
+    return `${secondToLast} ${lastWord}`;
+}
+

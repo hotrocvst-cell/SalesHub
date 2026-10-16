@@ -1,5 +1,6 @@
+import { useMemo } from 'react';
 import type { EmployeePerformanceRow } from '../types';
-import { cleanEmployeeName } from '../utils/performanceConfig';
+import { cleanEmployeeName, getShortenedEmployeeName } from '../utils/performanceConfig';
 
 interface Props {
     rows: EmployeePerformanceRow[];
@@ -11,6 +12,12 @@ export default function PerformanceTable({
     rows,
     onSelectEmployee
 }: Props) {
+    // Chiều rộng badge mã nhân viên tự động thích ứng theo mã dài nhất trong bảng để thẳng cột thẳng lề
+    const maxIdLength = useMemo(() => {
+        if (!rows || rows.length === 0) return 6;
+        return Math.max(6, ...rows.map(r => String(r.employee_id || '').trim().length));
+    }, [rows]);
+
     if (rows.length === 0) {
         return (
             <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-400 space-y-2">
@@ -125,17 +132,20 @@ export default function PerformanceTable({
                                         {getRankBadge(row.rank)}
                                     </td>
 
-                                    {/* 2. Mã NV + Tên NV (1 dòng duy nhất đồng nhất, không kèm bộ phận) */}
+                                    {/* 2. Mã NV + Tên NV (Mã NV badge cố định chiều rộng + Tên rút gọn) */}
                                     <td className="py-2.5 px-3 text-left align-middle border-r border-slate-100 whitespace-nowrap">
                                         <div className="flex items-center gap-2 whitespace-nowrap">
-                                            <span className="font-mono font-bold text-xs px-2 py-0.5 rounded-md bg-blue-50 text-blue-800 border border-blue-200 inline-block text-center leading-normal">
+                                            <span
+                                                style={{ minWidth: `${maxIdLength + 2.2}ch`, width: `${maxIdLength + 2.2}ch` }}
+                                                className="font-mono font-bold text-xs px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-800 border border-blue-200 inline-block text-center leading-normal shrink-0"
+                                            >
                                                 {row.employee_id}
                                             </span>
                                             <span
                                                 className="font-bold text-xs text-slate-900 group-hover:text-blue-700 transition"
                                                 title={`Mã NV: ${row.employee_id} - ${cleanEmployeeName(row.full_name)}`}
                                             >
-                                                {cleanEmployeeName(row.full_name)}
+                                                {getShortenedEmployeeName(row.full_name)}
                                             </span>
                                         </div>
                                     </td>

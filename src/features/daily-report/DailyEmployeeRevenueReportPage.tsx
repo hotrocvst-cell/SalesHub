@@ -5,7 +5,9 @@ import {
     formatDate,
     getYesterdayDateString,
     isStoreMatch,
-    getShortStoreName
+    getShortStoreName,
+    cleanEmployeeName,
+    getShortenedEmployeeName
 } from '../../core/lib/formatters';
 import {
     fetchStores,
@@ -49,6 +51,8 @@ import {
     Lock
 } from 'lucide-react';
 import { useUserStoreFilter } from '../../shared/hooks/useUserStoreFilter';
+import ReportActionButtons, { type AssessmentTemplate } from '../../shared/components/report/ReportActionButtons';
+import { calculate8KScale } from '../../shared/utils/exportImage';
 
 const DRAFT_STORE_KEY = 'saleshub_daily_emp_revenue_store_v1';
 const DRAFT_DATE_KEY = 'saleshub_daily_emp_revenue_date_v1';
@@ -76,6 +80,7 @@ export default function DailyEmployeeRevenueReportPage() {
 
     // 2. DỮ LIỆU BÁO CÁO DÁN (Mặc định để trống)
     const [rawText, setRawText] = useState<string>('');
+    const [rawRealText, setRawRealText] = useState<string>('');
 
     const [reportDate, setReportDate] = useState<string>(() => {
         try {
@@ -103,7 +108,6 @@ export default function DailyEmployeeRevenueReportPage() {
 
     // Tùy chọn xuất ảnh: 'ALL' (Bảng kèm tóm tắt) | 'TABLE_ONLY' (Chỉ bảng) | 'SUMMARY_ONLY' (Chỉ tóm tắt)
     const [exportScope, setExportScope] = useState<'ALL' | 'TABLE_ONLY' | 'SUMMARY_ONLY'>('ALL');
-    const [exportResolution, setExportResolution] = useState<'4K' | '8K'>('8K');
     const [isExporting, setIsExporting] = useState<boolean>(false);
     const [toastMessage, setToastMessage] = useState<string>('');
 
@@ -131,11 +135,11 @@ export default function DailyEmployeeRevenueReportPage() {
         return map;
     }, [employees]);
 
-    // Phân tích cú pháp văn bản dán
+    // Phân tích cú pháp văn bản dán (hỗ trợ cả 2 bảng tách rời DTQĐ và DT Thực)
     const parsedRawList = useMemo<ParsedEmployeeRevenue[]>(() => {
-        if (!rawText.trim()) return [];
-        return parseEmployeeRevenueText(rawText);
-    }, [rawText]);
+        if (!rawText.trim() && !rawRealText.trim()) return [];
+        return parseEmployeeRevenueText(rawText, rawRealText);
+    }, [rawText, rawRealText]);
 
     // Tự động nhận diện siêu thị từ văn bản dán và khớp với dropdown
     useEffect(() => {
@@ -238,6 +242,18 @@ export default function DailyEmployeeRevenueReportPage() {
         zeroInstallmentEmployees,
         summary
     } = processedData;
+
+    // Kiểm tra xem phiên dữ liệu có thông tin trả góp hợp lệ (từ bảng Doanh thu thực) hay không
+    const hasInstallmentData = useMemo(() => {
+        if (rawRealText.trim()) return true;
+        return allShiftEmployees.some(e => (e.installment_revenue || 0) > 0 || (e.installment_rate || 0) > 0);
+    }, [rawRealText, allShiftEmployees]);
+
+    // Chiều rộng badge mã nhân viên tự động thích ứng theo mã dài nhất trong bảng để thẳng cột thẳng lề
+    const maxIdLength = useMemo(() => {
+        if (!allShiftEmployees || allShiftEmployees.length === 0) return 6;
+        return Math.max(6, ...allShiftEmployees.map(r => String(r.employee_id || '').trim().length));
+    }, [allShiftEmployees]);
 
     // Top vượt trội xuất sắc dẫn đầu (tối đa 3 nhân sự tương ứng 3 huy chương 🥇🥈🥉)
     const topLeadingEmployees = useMemo(() => {
@@ -349,13 +365,14 @@ export default function DailyEmployeeRevenueReportPage() {
     // Xóa trắng dữ liệu dán
     const handleClearData = () => {
         setRawText('');
+        setRawRealText('');
         setDetectedStoreName('');
         setManualShiftEmpIds(new Set());
         showToast('🗑️ Đã xóa trắng dữ liệu báo cáo!');
     };
 
     // =========================================================================
-    // 4. BỘ XUẤT ẢNH ULTRA HD 4K / 8K & SAO CHÉP CLIPBOARD
+    // 4. BỘ XUẤT ẢNH ULTRA HD 8K & SAO CHÉP CLIPBOARD
     // =========================================================================
     const generateReportCanvas = async (): Promise<HTMLCanvasElement | null> => {
         if (!reportRef.current) return null;
@@ -370,7 +387,7 @@ export default function DailyEmployeeRevenueReportPage() {
 
         // Tối ưu độ rộng xuất ảnh cho smartphone (720px là tỷ lệ chuẩn sắc nét cho xem ảnh dọc trên điện thoại)
         const targetWidth = 720;
-        const exportScale = exportResolution === '8K' ? 4 : 2.8;
+        const exportScale = calculate8KScale(originalEl, targetWidth);
 
         try {
             return await html2canvas(originalEl, {
@@ -481,7 +498,7 @@ export default function DailyEmployeeRevenueReportPage() {
             return;
         }
         setIsExporting(true);
-        showToast(`⏳ Đang tạo ảnh báo cáo ${exportResolution} Ultra HD...`);
+        showToast('⏳ Đang tạo ảnh báo cáo 8K Ultra HD...');
 
         try {
             const canvas = await generateReportCanvas();
@@ -494,12 +511,12 @@ export default function DailyEmployeeRevenueReportPage() {
             const link = document.createElement('a');
             const cleanStore = displayStoreTitle.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 30);
             const scopeTag = exportScope === 'TABLE_ONLY' ? 'Bang' : exportScope === 'SUMMARY_ONLY' ? 'TomTat' : 'DayDu';
-            link.download = `BaoCao_DoanhThu_Ngay_${cleanStore}_${reportDate}_${scopeTag}_${exportResolution}.png`;
+            link.download = `BaoCao_DoanhThu_Ngay_${cleanStore}_${reportDate}_${scopeTag}_8K.png`;
             link.href = url;
             link.click();
             URL.revokeObjectURL(url);
 
-            showToast(`🎉 Đã tải file ảnh ${exportResolution} thành công!`);
+            showToast('🎉 Đã tải file ảnh 8K thành công!');
         } catch (err: any) {
             console.error('Lỗi tải ảnh:', err);
             showToast(`⚠️ Không thể xuất ảnh: ${err.message || 'Lỗi không xác định'}`);
@@ -515,7 +532,7 @@ export default function DailyEmployeeRevenueReportPage() {
             return;
         }
         setIsExporting(true);
-        showToast(`⏳ Đang tạo ảnh ${exportResolution} để copy vào Clipboard...`);
+        showToast('⏳ Đang tạo ảnh 8K để copy vào Clipboard...');
 
         try {
             const canvas = await generateReportCanvas();
@@ -532,7 +549,7 @@ export default function DailyEmployeeRevenueReportPage() {
                 new ClipboardItem({ 'image/png': blob })
             ]);
 
-            showToast(`📋 Đã sao chép ảnh ${exportResolution} vào Clipboard! Bạn có thể dán (Ctrl+V) ngay vào Messaging App.`);
+            showToast('📋 Đã sao chép ảnh 8K vào Clipboard! Bạn có thể dán (Ctrl+V) ngay vào Messaging App.');
         } catch (err: any) {
             console.error('Lỗi copy ảnh:', err);
             showToast(`⚠️ Lỗi copy ảnh: ${err.message || 'Hãy dùng nút Tải File Ảnh'}`);
@@ -556,16 +573,91 @@ export default function DailyEmployeeRevenueReportPage() {
                 topLeadingEmployees,
                 belowAvgEmployees,
                 zeroOrNegativeEmployees,
-                zeroInstallmentEmployees
+                zeroInstallmentEmployees,
+                hasInstallmentData
             );
 
             await navigator.clipboard.writeText(text);
-            showToast(`📝 Đã sao chép tin nhắn Messaging App! Bạn có thể dán ngay vào nhóm chat.`);
+            showToast('📝 Đã sao chép tin nhắn Messaging App! Bạn có thể dán ngay vào nhóm chat.');
         } catch (err: any) {
             console.error('Lỗi copy text:', err);
-            showToast('⚠️ Không thể copy text vào bộ nhớ tạm.');
+            showToast(`⚠️ Không thể sao chép văn bản: ${err.message || 'Lỗi không xác định'}`);
         }
     };
+
+    // 3 MẪU NHẬN XÉT DOANH THU CA NGÀY
+    const assessmentTemplates = useMemo<AssessmentTemplate[]>(() => {
+        if (allShiftEmployees.length === 0) return [];
+
+        // Mẫu 1: Tổng quan ca
+        const m1Lines = [
+            `📢 [BÁO CÁO DOANH THU CA NGÀY - ${displayStoreTitle.toUpperCase()}]`,
+            `📅 Ngày: ${formatDate(reportDate)}`,
+            `👥 Nhân sự đi ca: ${summary.totalEmployees} bạn`,
+            `----------------------------------------`,
+            `💰 DOANH SỐ CA:`,
+            `• DT Thực tế: ${formatValue(summary.totalActualRevenue)} tr`,
+            `• DT Quy đổi: ${formatValue(summary.totalRevenueQd)} tr`,
+            ...(hasInstallmentData
+                ? [`• DT Trả góp: ${formatValue(summary.totalInstallmentRevenue)} tr (Tỷ lệ TG: ${summary.avgInstallmentRate}%)`]
+                : []),
+            `• Sản lượng: ${summary.totalQuantity} máy/món`,
+            `• TB nhân sự: ${formatValue(summary.avgRevenueQd)} tr/bạn`,
+            `----------------------------------------`,
+            `💪 Toàn ca tiếp tục bám sát khách hàng để chốt deal bùng nổ!`
+        ];
+
+        // Mẫu 2: Top dẫn đầu & Nhắc nhở
+        const m2Lines = [
+            `🌟 [VINH DANH TOP DẪN ĐẦU & NHẮC NHỞ CA: ${displayStoreTitle.toUpperCase()}]`,
+            `📅 Ngày: ${formatDate(reportDate)}`,
+            `----------------------------------------`,
+            `🥇 TOP NHÂN SỰ DẪN ĐẦU CA:`,
+            ...(topLeadingEmployees.length > 0
+                ? topLeadingEmployees.slice(0, 3).map((e, idx) => `  ${idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉'} ${getShortenedEmployeeName(e.full_name)}: ${formatValue(e.revenue_qd)} tr (Thực: ${formatValue(e.revenue_actual)} tr${hasInstallmentData ? ` • TG: ${e.installment_rate}%` : ''})`)
+                : ['  • Đang cập nhật']),
+            `----------------------------------------`,
+            `⚠️ CÁC BẠN CHƯA CÓ SỐ / CẦN TĂNG TỐC:`,
+            ...(zeroOrNegativeEmployees.length > 0
+                ? zeroOrNegativeEmployees.map(e => `  👉 ${getShortenedEmployeeName(e.full_name)}: 0 đ (Cố lên bạn ơi!)`)
+                : ['  • 100% nhân sự đi ca đều đã phát sinh doanh thu!']),
+            `----------------------------------------`,
+            `🔥 Mọi người chủ động tiếp cận, chào mời khách hàng tận tâm!`
+        ];
+
+        // Mẫu 3: Báo cáo đầy đủ format Zalo
+        const fullZaloText = generateDailyZaloText(
+            displayStoreTitle,
+            reportDate,
+            summary,
+            topLeadingEmployees,
+            belowAvgEmployees,
+            zeroOrNegativeEmployees,
+            zeroInstallmentEmployees,
+            hasInstallmentData
+        );
+
+        return [
+            {
+                id: 'template_shift_overview',
+                label: 'Mẫu 1: Tổng quan ca',
+                description: 'Tóm tắt doanh thu thực tế, quy đổi và tỷ lệ trả góp',
+                content: m1Lines.join('\n')
+            },
+            {
+                id: 'template_top_reminder',
+                label: 'Mẫu 2: Top & Nhắc nhở',
+                description: 'Vinh danh top doanh số và nhắc nhở các bạn chưa có số',
+                content: m2Lines.join('\n')
+            },
+            {
+                id: 'template_full_zalo',
+                label: 'Mẫu 3: Chi tiết gửi Zalo',
+                description: 'Bản báo cáo chi tiết đầy đủ định dạng nhóm chat Zalo',
+                content: fullZaloText
+            }
+        ];
+    }, [allShiftEmployees, displayStoreTitle, reportDate, summary, topLeadingEmployees, belowAvgEmployees, zeroOrNegativeEmployees, zeroInstallmentEmployees, hasInstallmentData]);
 
     return (
         <div className="max-w-[1720px] mx-auto space-y-4 pb-16 font-avo antialiased">
@@ -598,27 +690,26 @@ export default function DailyEmployeeRevenueReportPage() {
                             Báo Cáo Doanh Thu Nhân Viên Trong Ngày
                         </h1>
 
-                        {/* Dropdown chọn siêu thị và ngày */}
-                        <div className="flex items-center gap-3 pt-1 flex-wrap">
-                            {/* 1. Chọn Siêu thị (Tổng cụm hoặc từng siêu thị theo phân quyền) */}
-                            <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all ${isLockedToSingleStore
-                                ? 'bg-amber-50/90 border-amber-200 text-amber-900 shadow-xs'
-                                : 'bg-slate-100 border-slate-200 text-slate-800'
+                        {/* 1. Chọn Siêu thị (Dòng độc lập đầu tiên - Rule 10 Convention) */}
+                        <div className="pt-1.5 pb-1">
+                            <div className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border text-xs font-bold transition-all ${isLockedToSingleStore
+                                ? 'bg-amber-50/90 border-amber-200 text-amber-900 shadow-2xs'
+                                : 'bg-slate-50 border-slate-200 hover:border-emerald-400 text-slate-800 shadow-2xs'
                                 }`}>
                                 {isLockedToSingleStore ? (
-                                    <Lock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                    <Lock className="w-4 h-4 text-amber-600 shrink-0" />
                                 ) : (
-                                    <Store className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                                    <Store className="w-4 h-4 text-emerald-600 shrink-0" />
                                 )}
-                                <span className="text-slate-500 hidden sm:inline">Siêu thị:</span>
+                                <span className="text-slate-500 font-bold whitespace-nowrap">Siêu thị:</span>
                                 <select
                                     value={selectedStore}
                                     onChange={e => setSelectedStore(e.target.value)}
                                     disabled={isLockedToSingleStore}
                                     title={isLockedToSingleStore ? 'Tài khoản nhân viên được cố định theo siêu thị đã đăng ký' : undefined}
-                                    className={`bg-transparent font-extrabold outline-hidden ${isLockedToSingleStore
-                                        ? 'cursor-not-allowed text-amber-900 font-black'
-                                        : 'cursor-pointer text-slate-800'
+                                    className={`bg-transparent font-black outline-hidden min-w-[200px] sm:min-w-[260px] ${isLockedToSingleStore
+                                        ? 'cursor-not-allowed text-amber-900'
+                                        : 'cursor-pointer text-slate-900'
                                         }`}
                                 >
                                     {canViewAllStores && (
@@ -626,18 +717,21 @@ export default function DailyEmployeeRevenueReportPage() {
                                     )}
                                     {allowedStores.map(s => (
                                         <option key={s.id || s.name} value={s.name}>
-                                            {s.code ? `[${s.code}] ` : ''}{s.name}
+                                            🏪 {s.code ? `[${s.code}] ` : ''}{s.name}
                                         </option>
                                     ))}
                                 </select>
                                 {isLockedToSingleStore && (
-                                    <span className="text-[10px] bg-amber-200/80 text-amber-800 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider hidden md:inline">
+                                    <span className="text-[10px] bg-amber-200/80 text-amber-800 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">
                                         Đã khóa
                                     </span>
                                 )}
                             </div>
+                        </div>
 
-                            {/* 2. Chọn ngày báo cáo */}
+                        {/* 2. Các tiêu chí khác: Chọn ngày báo cáo & Điểm danh ca (Dòng 2) */}
+                        <div className="flex items-center gap-3 pt-1 flex-wrap">
+                            {/* Chọn ngày báo cáo */}
                             <div className="flex items-center gap-1.5 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-bold">
                                 <Calendar className="w-3.5 h-3.5 text-slate-500" />
                                 <span className="text-slate-500 hidden sm:inline">Ngày:</span>
@@ -649,7 +743,7 @@ export default function DailyEmployeeRevenueReportPage() {
                                 />
                             </div>
 
-                            {/* 3. Nút mở Danh sách nhân sự đi làm trong ca */}
+                            {/* Nút mở Danh sách nhân sự đi làm trong ca */}
                             <button
                                 type="button"
                                 onClick={() => setIsRosterModalOpen(!isRosterModalOpen)}
@@ -717,64 +811,21 @@ export default function DailyEmployeeRevenueReportPage() {
                             </button>
                         </div>
 
-                        {/* 3. Chọn độ phân giải 4K / 8K */}
-                        <div className="flex items-center bg-slate-900 text-white p-1 rounded-xl text-xs font-black shadow-xs">
-                            <button
-                                type="button"
-                                onClick={() => setExportResolution('4K')}
-                                className={`px-2.5 py-1 rounded-lg transition cursor-pointer ${exportResolution === '4K'
-                                    ? 'bg-emerald-500 text-slate-950 shadow-xs'
-                                    : 'text-slate-300 hover:text-white'
-                                    }`}
-                            >
-                                4K
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setExportResolution('8K')}
-                                className={`px-2.5 py-1 rounded-lg transition cursor-pointer ${exportResolution === '8K'
-                                    ? 'bg-emerald-500 text-slate-950 shadow-xs'
-                                    : 'text-slate-300 hover:text-white'
-                                    }`}
-                            >
-                                8K
-                            </button>
-                        </div>
-
-                        {/* 4. Nút Tải File Ảnh */}
-                        <button
-                            type="button"
-                            onClick={handleDownloadImage}
-                            disabled={isExporting || allShiftEmployees.length === 0}
-                            className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95 disabled:opacity-50"
-                        >
-                            <Download className="w-4 h-4" />
-                            <span>Tải Ảnh ({exportResolution})</span>
-                        </button>
-
-                        {/* 5. Nút Copy Ảnh vào Clipboard */}
-                        <button
-                            type="button"
-                            onClick={handleCopyImageClipboard}
-                            disabled={isExporting || allShiftEmployees.length === 0}
-                            className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95 disabled:opacity-50"
-                            title="Sao chép ảnh vào Clipboard để dán ngay vào Messaging App"
-                        >
-                            <Copy className="w-4 h-4" />
-                            <span className="hidden sm:inline">Copy Ảnh</span>
-                        </button>
-
-                        {/* 6. Nút Copy Text Messaging App */}
-                        <button
-                            type="button"
-                            onClick={handleCopyZaloText}
-                            disabled={allShiftEmployees.length === 0}
-                            className="px-3.5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95 disabled:opacity-50"
-                            title="Sao chép tin nhắn báo cáo Messaging App chuẩn format"
-                        >
-                            <FileText className="w-4 h-4" />
-                            <span>Copy Text</span>
-                        </button>
+                        {/* Cụm button chuẩn dùng chung: Nhận xét 3 mẫu, Tải ảnh, Copy ảnh, Copy Text */}
+                        <ReportActionButtons
+                            onExportImage={handleDownloadImage}
+                            onCopyImage={handleCopyImageClipboard}
+                            onCopyText={handleCopyZaloText}
+                            isExporting={isExporting}
+                            isCopyingImage={isExporting}
+                            assessmentTemplates={assessmentTemplates}
+                            reportTitle={`Báo Cáo Doanh Thu Ngày: ${displayStoreTitle}`}
+                            periodLabel={reportDate}
+                            storeName={displayStoreTitle}
+                            exportLabel="Tải Ảnh"
+                            copyLabel="Copy Ảnh"
+                            copyTextLabel="Copy Text"
+                        />
                     </div>
                 </div>
 
@@ -782,8 +833,8 @@ export default function DailyEmployeeRevenueReportPage() {
                 {isInputExpanded && (
                     <div className="pt-4 border-t border-slate-200 space-y-3 animate-in fade-in duration-200">
                         <div className="flex items-center justify-between text-xs text-slate-600 font-medium">
-                            <span>Dán toàn bộ bảng báo cáo doanh thu vào ô dưới đây:</span>
-                            {rawText && (
+                            <span className="font-bold text-slate-700">Dán bảng báo cáo doanh thu vào 2 ô dưới đây:</span>
+                            {(rawText || rawRealText) && (
                                 <button
                                     type="button"
                                     onClick={handleClearData}
@@ -794,13 +845,34 @@ export default function DailyEmployeeRevenueReportPage() {
                                 </button>
                             )}
                         </div>
-                        <textarea
-                            rows={7}
-                            value={rawText}
-                            onChange={e => setRawText(e.target.value)}
-                            placeholder="Ví dụ dán:&#10;10335 - AAR_BRV_VTA - 290 Trương Công Định&#10;NHÂN VIÊN	SỐ LƯỢNG	DOANH THU QĐ	% TỈ TRỌNG	DOANH THU...&#10;4614 - Lê Quang Vinh	8	39	48.8%	34...&#10;249041 - Nguyễn Phương Nam	1	41	51.2%	32..."
-                            className="w-full p-3 bg-slate-50 border border-slate-200 rounded-2xl font-mono text-xs text-slate-800 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-emerald-500 shadow-inner"
-                        />
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                                <label className="text-[11px] font-bold text-emerald-800 uppercase flex items-center justify-between">
+                                    <span>🔗 1. Bảng Doanh Thu Quy Đổi (DTQĐ)</span>
+                                    <span className="text-[10px] text-emerald-700 font-semibold lowercase bg-emerald-50 px-1.5 py-0.5 rounded">bắt buộc</span>
+                                </label>
+                                <textarea
+                                    rows={6}
+                                    value={rawText}
+                                    onChange={e => setRawText(e.target.value)}
+                                    placeholder="Dán bảng Doanh thu quy đổi nhân viên..."
+                                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-2xl font-mono text-xs text-slate-800 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-emerald-500 shadow-inner"
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-[11px] font-bold text-purple-800 uppercase flex items-center justify-between">
+                                    <span>🔗 2. Bảng Doanh Thu Thực (Real)</span>
+                                    <span className="text-[10px] text-purple-700 font-semibold lowercase bg-purple-50 px-1.5 py-0.5 rounded">khuyến nghị</span>
+                                </label>
+                                <textarea
+                                    rows={6}
+                                    value={rawRealText}
+                                    onChange={e => setRawRealText(e.target.value)}
+                                    placeholder="Dán bảng Doanh thu thực nhân viên để bóc tách DT Trả góp chuẩn..."
+                                    className="w-full p-3 bg-purple-50/20 border border-purple-200 rounded-2xl font-mono text-xs text-slate-800 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-purple-500 shadow-inner"
+                                />
+                            </div>
+                        </div>
                         <div className="flex items-center justify-between pt-1">
                             <span className="text-[11px] text-slate-400">
                                 Hệ thống sẽ tự động lọc nhân viên theo siêu thị, chuẩn hóa DTQĐ khác 0 và loại bỏ dòng Online.
@@ -923,7 +995,7 @@ export default function DailyEmployeeRevenueReportPage() {
             {/* ========================================================= */}
             {/* 3. TRƯỜNG HỢP CHƯA CÓ DỮ LIỆU BÁO CÁO                     */}
             {/* ========================================================= */}
-            {(!rawText.trim() || allShiftEmployees.length === 0) ? (
+            {(!rawText.trim() && !rawRealText.trim()) || allShiftEmployees.length === 0 ? (
                 <div className="bg-white rounded-3xl border border-dashed border-slate-300 p-8 sm:p-12 text-center shadow-xs space-y-5 max-w-2xl mx-auto my-6 animate-in fade-in duration-300">
                     <div className="w-16 h-16 rounded-3xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center mx-auto shadow-inner">
                         <AlertCircle className="w-8 h-8" />
@@ -941,23 +1013,41 @@ export default function DailyEmployeeRevenueReportPage() {
                         </p>
                     </div>
 
-                    {/* Vùng dán trực tiếp nhanh */}
+                    {/* Vùng dán trực tiếp nhanh (2 ô DTQĐ và DT Thực) */}
                     <div className="max-w-xl mx-auto space-y-3 pt-2 text-left">
-                        <div className="flex items-center justify-between text-xs text-slate-500 font-semibold px-1">
-                            <span>Dán dữ liệu vào đây:</span>
-                            <span className="text-[11px] text-slate-400">Ctrl + V</span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                                <label className="text-[11px] font-bold text-emerald-800 uppercase flex items-center justify-between">
+                                    <span>🔗 1. Bảng DTQĐ</span>
+                                    <span className="text-[10px] text-emerald-700 font-semibold lowercase bg-emerald-50 px-1.5 py-0.5 rounded">bắt buộc</span>
+                                </label>
+                                <textarea
+                                    rows={5}
+                                    value={rawText}
+                                    onChange={e => setRawText(e.target.value)}
+                                    placeholder="Dán bảng Doanh thu quy đổi..."
+                                    className="w-full p-3 bg-slate-50 border border-slate-300 rounded-2xl font-mono text-xs text-slate-800 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-emerald-500 shadow-inner"
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-[11px] font-bold text-purple-800 uppercase flex items-center justify-between">
+                                    <span>🔗 2. Bảng DT Thực</span>
+                                    <span className="text-[10px] text-purple-700 font-semibold lowercase bg-purple-50 px-1.5 py-0.5 rounded">khuyến nghị</span>
+                                </label>
+                                <textarea
+                                    rows={5}
+                                    value={rawRealText}
+                                    onChange={e => setRawRealText(e.target.value)}
+                                    placeholder="Dán bảng Doanh thu thực..."
+                                    className="w-full p-3 bg-purple-50/20 border border-purple-200 rounded-2xl font-mono text-xs text-slate-800 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-purple-500 shadow-inner"
+                                />
+                            </div>
                         </div>
-                        <textarea
-                            rows={6}
-                            value={rawText}
-                            onChange={e => setRawText(e.target.value)}
-                            placeholder="Dán bảng dữ liệu vào đây (gồm cột: Nhân viên, Số lượng, Doanh thu QĐ, Doanh thu...)"
-                            className="w-full p-3.5 bg-slate-50 border border-slate-300 rounded-2xl font-mono text-xs text-slate-800 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-emerald-500 shadow-inner"
-                        />
+
                         <button
                             type="button"
                             onClick={() => {
-                                if (!rawText.trim()) {
+                                if (!rawText.trim() && !rawRealText.trim()) {
                                     showToast('⚠️ Vui lòng dán văn bản báo cáo vào ô trước!');
                                     return;
                                 }
@@ -1002,7 +1092,7 @@ export default function DailyEmployeeRevenueReportPage() {
                             </div>
 
                             {/* Thống kê nhanh trên banner */}
-                            <div className="relative z-10 grid grid-cols-3 gap-2 text-center w-full sm:w-auto shrink-0">
+                            <div className={`relative z-10 grid ${hasInstallmentData ? 'grid-cols-3' : 'grid-cols-2'} gap-2 text-center w-full sm:w-auto shrink-0`}>
                                 <div className="bg-white/10 backdrop-blur-xs border border-white/20 rounded-xl p-2 min-w-[70px]">
                                     <div className="text-[9.5px] text-amber-200 font-bold uppercase">Nhân sự</div>
                                     <div className="text-base sm:text-lg font-black text-white">{summary.totalEmployees} <span className="text-[9px] font-medium text-amber-200">NV</span></div>
@@ -1011,15 +1101,17 @@ export default function DailyEmployeeRevenueReportPage() {
                                     <div className="text-[9.5px] text-amber-200 font-bold uppercase">Tổng DTQĐ</div>
                                     <div className="text-base sm:text-lg font-black text-[#fde047]">{formatValue(summary.totalRevenueQd)} <span className="text-[9px] font-medium text-amber-200">tr</span></div>
                                 </div>
-                                <div className="bg-white/10 backdrop-blur-xs border border-white/20 rounded-xl p-2 min-w-[65px]">
-                                    <div className="text-[9.5px] text-amber-200 font-bold uppercase">% Trả góp</div>
-                                    <div className="text-base sm:text-lg font-black text-white">{summary.avgInstallmentRate}%</div>
-                                </div>
+                                {hasInstallmentData && (
+                                    <div className="bg-white/10 backdrop-blur-xs border border-white/20 rounded-xl p-2 min-w-[65px]">
+                                        <div className="text-[9.5px] text-amber-200 font-bold uppercase">% Trả góp</div>
+                                        <div className="text-base sm:text-lg font-black text-white">{summary.avgInstallmentRate}%</div>
+                                    </div>
+                                )}
                             </div>
                         </div>
 
                         {/* B. CHỈ SỐ KPI TỔNG THỂ */}
-                        <div data-section="kpis" className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                        <div data-section="kpis" className={`grid grid-cols-1 ${hasInstallmentData ? 'sm:grid-cols-3' : 'sm:grid-cols-2'} gap-2.5`}>
                             <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 flex items-center gap-2.5">
                                 <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
                                     <Coins className="w-4 h-4" />
@@ -1050,20 +1142,22 @@ export default function DailyEmployeeRevenueReportPage() {
                                 </div>
                             </div>
 
-                            <div className="bg-purple-50/70 border border-purple-200 rounded-2xl p-3 flex items-center gap-2.5">
-                                <div className="w-9 h-9 rounded-xl bg-purple-600 text-white flex items-center justify-center shrink-0 shadow-xs">
-                                    <CreditCard className="w-4 h-4" />
-                                </div>
-                                <div className="min-w-0">
-                                    <div className="text-[10px] font-extrabold text-purple-900 uppercase truncate">Trả Góp / Trả Chậm</div>
-                                    <div className="text-sm sm:text-base font-black text-purple-700 leading-tight">
-                                        {formatValue(summary.totalInstallmentRevenue)} <span className="text-[10px] font-semibold text-purple-600">tr</span>
+                            {hasInstallmentData && (
+                                <div className="bg-purple-50/70 border border-purple-200 rounded-2xl p-3 flex items-center gap-2.5">
+                                    <div className="w-9 h-9 rounded-xl bg-purple-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                                        <CreditCard className="w-4 h-4" />
                                     </div>
-                                    <div className="text-[10px] text-purple-700 font-semibold truncate">
-                                        {summary.avgInstallmentRate}% DT thực
+                                    <div className="min-w-0">
+                                        <div className="text-[10px] font-extrabold text-purple-900 uppercase truncate">Trả Góp / Trả Chậm</div>
+                                        <div className="text-sm sm:text-base font-black text-purple-700 leading-tight">
+                                            {formatValue(summary.totalInstallmentRevenue)} <span className="text-[10px] font-semibold text-purple-600">tr</span>
+                                        </div>
+                                        <div className="text-[10px] text-purple-700 font-semibold truncate">
+                                            {summary.avgInstallmentRate}% DT thực
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
+                            )}
                         </div>
 
                         {/* ========================================================= */}
@@ -1150,12 +1244,14 @@ export default function DailyEmployeeRevenueReportPage() {
                                                     </div>
 
                                                     {/* DT Trả góp & Tỷ lệ */}
-                                                    <div className="flex items-baseline justify-between text-[11px]">
-                                                        <span className="text-slate-500 font-semibold">Trả góp:</span>
-                                                        <span className="font-extrabold text-emerald-600">
-                                                            {formatValue(emp.installment_revenue)} tr ({emp.installment_rate}%)
-                                                        </span>
-                                                    </div>
+                                                    {hasInstallmentData && (
+                                                        <div className="flex items-baseline justify-between text-[11px]">
+                                                            <span className="text-slate-500 font-semibold">Trả góp:</span>
+                                                            <span className="font-extrabold text-emerald-600">
+                                                                {formatValue(emp.installment_revenue)} tr ({emp.installment_rate}%)
+                                                            </span>
+                                                        </div>
+                                                    )}
 
                                                     {/* Số lượng sản phẩm */}
                                                     <div className="flex items-baseline justify-between text-[11px]">
@@ -1181,7 +1277,7 @@ export default function DailyEmployeeRevenueReportPage() {
                                     <span className="w-2.5 h-5 bg-orange-500 rounded-full inline-block" />
                                     <h3 className="text-xs sm:text-sm font-black text-slate-900 uppercase tracking-wide flex items-center gap-1.5">
                                         <Zap className="w-4 h-4 text-orange-500 shrink-0 fill-orange-500" />
-                                        <span>TRỌNG TÂM NHẮC NHỞ:</span>
+                                        <span>CẦN QUAN TÂM:</span>
                                     </h3>
                                 </div>
 
@@ -1210,7 +1306,7 @@ export default function DailyEmployeeRevenueReportPage() {
 
                             {/* HIỂN THỊ DẠNG THẺ CHIP CÂN ĐỐI (FLEX-WRAP CHIPS) */}
                             {reminderViewMode === 'CARDS' ? (
-                                <div className={`grid grid-cols-1 ${zeroOrNegativeEmployees.length > 0 ? 'sm:grid-cols-3' : 'sm:grid-cols-2'} gap-2.5 items-stretch`}>
+                                <div className={`grid grid-cols-1 ${hasInstallmentData ? (zeroOrNegativeEmployees.length > 0 ? 'sm:grid-cols-3' : 'sm:grid-cols-2') : (zeroOrNegativeEmployees.length > 0 ? 'sm:grid-cols-2' : 'sm:grid-cols-1')} gap-2.5 items-stretch`}>
                                     {/* CỘT 1: DTQĐ DƯỚI TRUNG BÌNH */}
                                     <div className="bg-gradient-to-b from-amber-50/70 to-white border border-amber-200 rounded-2xl p-3 flex flex-col justify-between shadow-2xs space-y-2.5 min-h-[150px]">
                                         <div className="space-y-0.5">
@@ -1304,52 +1400,54 @@ export default function DailyEmployeeRevenueReportPage() {
                                         </div>
                                     )}
 
-                                    {/* CỘT 3: CÓ DT NHƯNG 0% TRẢ GÓP */}
-                                    <div className="bg-gradient-to-b from-indigo-50/70 to-white border border-indigo-200 rounded-2xl p-3 flex flex-col justify-between shadow-2xs space-y-2.5 min-h-[150px]">
-                                        <div className="space-y-0.5">
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-1.5 text-xs font-black text-indigo-950 uppercase">
-                                                    <CreditCard className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                                                    <span>0% Trả Góp</span>
+                                    {/* CỘT 3: CÓ DT NHƯNG 0% TRẢ GÓP - CHỈ HIỂN THỊ KHI CÓ DỮ LIỆU TRẢ GÓP */}
+                                    {hasInstallmentData && (
+                                        <div className="bg-gradient-to-b from-indigo-50/70 to-white border border-indigo-200 rounded-2xl p-3 flex flex-col justify-between shadow-2xs space-y-2.5 min-h-[150px]">
+                                            <div className="space-y-0.5">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-1.5 text-xs font-black text-indigo-950 uppercase">
+                                                        <CreditCard className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                                                        <span>0% Trả Góp</span>
+                                                    </div>
+                                                    <span className="px-1.5 py-0.5 bg-indigo-200 text-indigo-900 text-[9.5px] font-black rounded shrink-0">
+                                                        {zeroInstallmentEmployees.length} bạn
+                                                    </span>
                                                 </div>
-                                                <span className="px-1.5 py-0.5 bg-indigo-200 text-indigo-900 text-[9.5px] font-black rounded shrink-0">
-                                                    {zeroInstallmentEmployees.length} bạn
-                                                </span>
+                                                <div className="text-[10.5px] text-indigo-800 leading-snug">
+                                                    Duyệt nhanh - Lãi suất thấp từ 0%
+                                                </div>
                                             </div>
-                                            <div className="text-[10.5px] text-indigo-800 leading-snug">
-                                                Duyệt nhanh - Lãi suất thấp từ 0%
-                                            </div>
-                                        </div>
 
-                                        {/* Danh sách dạng chip gọn gàng */}
-                                        <div className="flex-1 py-1">
-                                            {zeroInstallmentEmployees.length === 0 ? (
-                                                <div className="h-full flex items-center justify-center py-3 px-2 text-center text-[11px] font-bold text-emerald-700 bg-white/80 rounded-xl border border-emerald-200">
-                                                    {summary.totalEmployees === 0 || summary.activeCount === 0
-                                                        ? 'Chưa có nhân sự nào phát sinh doanh thu'
-                                                        : '🎯 100% nhân sự đều có đơn trả góp!'}
-                                                </div>
-                                            ) : (
-                                                <div className="flex flex-wrap gap-1 content-start">
-                                                    {zeroInstallmentEmployees.map(emp => (
-                                                        <div
-                                                            key={emp.employee_id}
-                                                            className="inline-flex items-center gap-1 px-2 py-1 bg-white border border-indigo-200 rounded-lg shadow-2xs text-[11px] hover:border-indigo-300 transition"
-                                                            title={`${emp.full_name}: DTQĐ ${formatValue(emp.revenue_qd)} tr, chưa có hợp đồng trả góp`}
-                                                        >
-                                                            <span className="font-bold text-slate-800">{emp.short_name}</span>
-                                                            <span className="px-1 py-0.2 bg-indigo-100 text-indigo-800 rounded font-black text-[10px]">
-                                                                0% TG
-                                                            </span>
-                                                            <span className="text-[9.5px] text-slate-500 font-semibold">
-                                                                ({formatValue(emp.revenue_qd)}tr)
-                                                            </span>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            )}
+                                            {/* Danh sách dạng chip gọn gàng */}
+                                            <div className="flex-1 py-1">
+                                                {zeroInstallmentEmployees.length === 0 ? (
+                                                    <div className="h-full flex items-center justify-center py-3 px-2 text-center text-[11px] font-bold text-emerald-700 bg-white/80 rounded-xl border border-emerald-200">
+                                                        {summary.totalEmployees === 0 || summary.activeCount === 0
+                                                            ? 'Chưa có nhân sự nào phát sinh doanh thu'
+                                                            : '🎯 100% nhân sự đều có đơn trả góp!'}
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex flex-wrap gap-1 content-start">
+                                                        {zeroInstallmentEmployees.map(emp => (
+                                                            <div
+                                                                key={emp.employee_id}
+                                                                className="inline-flex items-center gap-1 px-2 py-1 bg-white border border-indigo-200 rounded-lg shadow-2xs text-[11px] hover:border-indigo-300 transition"
+                                                                title={`${emp.full_name}: DTQĐ ${formatValue(emp.revenue_qd)} tr, chưa có hợp đồng trả góp`}
+                                                            >
+                                                                <span className="font-bold text-slate-800">{emp.short_name}</span>
+                                                                <span className="px-1 py-0.2 bg-indigo-100 text-indigo-800 rounded font-black text-[10px]">
+                                                                    0% TG
+                                                                </span>
+                                                                <span className="text-[9.5px] text-slate-500 font-semibold">
+                                                                    ({formatValue(emp.revenue_qd)}tr)
+                                                                </span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
-                                    </div>
+                                    )}
                                 </div>
                             ) : (
                                 /* HIỂN THỊ DẠNG BẢNG CHI TIẾT NHẮC NHỞ */
@@ -1365,11 +1463,24 @@ export default function DailyEmployeeRevenueReportPage() {
                                             </thead>
                                             <tbody className="divide-y divide-slate-100 font-medium">
                                                 {allShiftEmployees
-                                                    .filter(e => e.is_below_avg || e.is_zero_or_negative || e.is_zero_installment)
+                                                    .filter(e => e.is_below_avg || e.is_zero_or_negative || (hasInstallmentData && e.is_zero_installment))
                                                     .map(emp => (
                                                         <tr key={emp.employee_id} className="hover:bg-slate-50 transition">
-                                                            <td className="py-2 px-2.5 font-extrabold text-slate-900 text-[11.5px]">
-                                                                {emp.short_name} <span className="text-[9.5px] text-slate-400 font-normal">#{emp.employee_id}</span>
+                                                            <td className="py-2 px-2.5 font-extrabold text-slate-900 text-[11.5px] whitespace-nowrap">
+                                                                <div className="flex items-center gap-2 whitespace-nowrap">
+                                                                    <span
+                                                                        style={{ minWidth: `${maxIdLength + 2.2}ch`, width: `${maxIdLength + 2.2}ch` }}
+                                                                        className="font-mono font-bold text-xs px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-800 border border-blue-200 inline-block text-center leading-normal shrink-0"
+                                                                    >
+                                                                        {emp.employee_id}
+                                                                    </span>
+                                                                    <span
+                                                                        className="font-bold text-xs text-slate-900"
+                                                                        title={`Mã NV: ${emp.employee_id} - ${cleanEmployeeName(emp.full_name)}`}
+                                                                    >
+                                                                        {getShortenedEmployeeName(emp.full_name)}
+                                                                    </span>
+                                                                </div>
                                                             </td>
                                                             <td className="py-2 px-2.5 text-right font-black text-slate-800 text-[11.5px]">
                                                                 {formatValue(emp.revenue_qd)} tr
@@ -1386,7 +1497,7 @@ export default function DailyEmployeeRevenueReportPage() {
                                                                             Dưới TB (-{formatValue(summary.avgRevenueQd - emp.revenue_qd)})
                                                                         </span>
                                                                     )}
-                                                                    {emp.is_zero_installment && (
+                                                                    {hasInstallmentData && emp.is_zero_installment && (
                                                                         <span className="px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded text-[9.5px] font-bold">
                                                                             0% Trả góp
                                                                         </span>
@@ -1469,16 +1580,18 @@ export default function DailyEmployeeRevenueReportPage() {
                                         >
                                             &le; 0đ
                                         </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setFilterCategory('ZERO_INSTALLMENT')}
-                                            className={`px-2 py-0.5 rounded-lg transition cursor-pointer ${filterCategory === 'ZERO_INSTALLMENT'
-                                                ? 'bg-white text-indigo-700 shadow-2xs font-extrabold'
-                                                : 'text-slate-500 hover:text-slate-800'
-                                                }`}
-                                        >
-                                            0% TG
-                                        </button>
+                                        {hasInstallmentData && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setFilterCategory('ZERO_INSTALLMENT')}
+                                                className={`px-2 py-0.5 rounded-lg transition cursor-pointer ${filterCategory === 'ZERO_INSTALLMENT'
+                                                    ? 'bg-white text-indigo-700 shadow-2xs font-extrabold'
+                                                    : 'text-slate-500 hover:text-slate-800'
+                                                    }`}
+                                            >
+                                                0% TG
+                                            </button>
+                                        )}
                                     </div>
 
                                     {/* Ô tìm kiếm */}
@@ -1498,17 +1611,21 @@ export default function DailyEmployeeRevenueReportPage() {
                             {/* Bảng dữ liệu chính - Tinh gọn cho Smartphone */}
                             <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
                                 <div className="overflow-x-auto max-h-[600px] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300">
-                                    <table className="w-full text-left text-xs border-collapse" style={{ tableLayout: 'fixed', minWidth: '560px' }}>
+                                    <table className="w-full text-left text-xs border-collapse" style={{ tableLayout: 'fixed', minWidth: hasInstallmentData ? '580px' : '460px' }}>
                                         <colgroup>
                                             <col style={{ width: '34px' }} />
                                             <col style={{ width: '56px' }} />
-                                            <col style={{ minWidth: '120px' }} />
+                                            <col style={{ minWidth: '135px' }} />
                                             <col style={{ width: '38px' }} />
                                             <col style={{ width: '68px' }} />
                                             <col style={{ width: '76px' }} />
                                             <col style={{ width: '48px' }} />
-                                            <col style={{ width: '68px' }} />
-                                            <col style={{ width: '48px' }} />
+                                            {hasInstallmentData && (
+                                                <>
+                                                    <col style={{ width: '68px' }} />
+                                                    <col style={{ width: '48px' }} />
+                                                </>
+                                            )}
                                         </colgroup>
                                         <thead className="sticky top-0 z-20 shadow-2xs select-none">
                                             <tr className="bg-slate-900 text-white text-[10.5px] font-black uppercase h-9 tracking-wider">
@@ -1578,26 +1695,29 @@ export default function DailyEmployeeRevenueReportPage() {
                                                 </th>
 
                                                 {/* Tỷ trọng ST */}
-                                                <th className="py-1.5 px-1 text-right border-r border-slate-800" title="Tỷ trọng đóng góp vào doanh thu siêu thị">
+                                                <th className={`py-1.5 px-1 text-right ${hasInstallmentData ? 'border-r border-slate-800' : ''}`} title="Tỷ trọng đóng góp vào doanh thu siêu thị">
                                                     % ST
                                                 </th>
 
-                                                {/* DT Trả Góp */}
-                                                <th
-                                                    onClick={() => handleSort('installment')}
-                                                    className="py-1.5 px-1.5 text-right cursor-pointer hover:bg-slate-800 border-r border-slate-800 transition"
-                                                    title="Doanh thu trả góp (triệu đồng)"
-                                                >
-                                                    <div className="flex items-center justify-end gap-0.5">
-                                                        <span>T.Góp</span>
-                                                        <ArrowUpDown className="w-2.5 h-2.5 opacity-60" />
-                                                    </div>
-                                                </th>
+                                                {/* DT Trả Góp & % Trả Góp */}
+                                                {hasInstallmentData && (
+                                                    <>
+                                                        <th
+                                                            onClick={() => handleSort('installment')}
+                                                            className="py-1.5 px-1.5 text-right cursor-pointer hover:bg-slate-800 border-r border-slate-800 transition"
+                                                            title="Doanh thu trả góp (triệu đồng)"
+                                                        >
+                                                            <div className="flex items-center justify-end gap-0.5">
+                                                                <span>T.Góp</span>
+                                                                <ArrowUpDown className="w-2.5 h-2.5 opacity-60" />
+                                                            </div>
+                                                        </th>
 
-                                                {/* % Trả Góp */}
-                                                <th className="py-1.5 px-1 text-right" title="Tỷ lệ trả góp trên doanh thu thực">
-                                                    % TG
-                                                </th>
+                                                        <th className="py-1.5 px-1 text-right" title="Tỷ lệ trả góp trên doanh thu thực">
+                                                            % TG
+                                                        </th>
+                                                    </>
+                                                )}
                                             </tr>
                                         </thead>
 
@@ -1653,14 +1773,20 @@ export default function DailyEmployeeRevenueReportPage() {
                                                         </td>
 
                                                         {/* 3. MSNV - Tên rút gọn */}
-                                                        <td className="py-1.5 px-2 border-r border-slate-100">
-                                                            <div className="min-w-0" title={row.full_name}>
-                                                                <div className="font-extrabold text-slate-900 truncate text-[11.5px] leading-tight">
-                                                                    {row.short_name}
-                                                                </div>
-                                                                <div className="text-[9.5px] font-semibold text-slate-400 font-mono tracking-tight leading-tight">
-                                                                    #{row.employee_id}
-                                                                </div>
+                                                        <td className="py-1.5 px-2 border-r border-slate-100 whitespace-nowrap">
+                                                            <div className="flex items-center gap-2 whitespace-nowrap">
+                                                                <span
+                                                                    style={{ minWidth: `${maxIdLength + 2.2}ch`, width: `${maxIdLength + 2.2}ch` }}
+                                                                    className="font-mono font-bold text-xs px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-800 border border-blue-200 inline-block text-center leading-normal shrink-0"
+                                                                >
+                                                                    {row.employee_id}
+                                                                </span>
+                                                                <span
+                                                                    className="font-bold text-xs text-slate-900 group-hover:text-blue-700 transition"
+                                                                    title={`Mã NV: ${row.employee_id} - ${cleanEmployeeName(row.full_name)}`}
+                                                                >
+                                                                    {getShortenedEmployeeName(row.full_name)}
+                                                                </span>
                                                             </div>
                                                         </td>
 
@@ -1680,29 +1806,32 @@ export default function DailyEmployeeRevenueReportPage() {
                                                         </td>
 
                                                         {/* 7. Tỷ trọng (%) */}
-                                                        <td className="py-1.5 px-1 text-right font-bold text-slate-600 text-[11px] border-r border-slate-100">
+                                                        <td className={`py-1.5 px-1 text-right font-bold text-slate-600 text-[11px] ${hasInstallmentData ? 'border-r border-slate-100' : ''}`}>
                                                             {row.contribution_rate}%
                                                         </td>
 
-                                                        {/* 8. DT Trả Góp */}
-                                                        <td className="py-1.5 px-1.5 text-right font-extrabold text-slate-800 text-[11.5px] border-r border-slate-100">
-                                                            {row.installment_revenue > 0 ? (
-                                                                <span className="text-purple-700">{formatValue(row.installment_revenue)}</span>
-                                                            ) : (
-                                                                <span className="text-slate-300 font-medium">0</span>
-                                                            )}
-                                                        </td>
+                                                        {/* 8. DT Trả Góp & 9. % TG */}
+                                                        {hasInstallmentData && (
+                                                            <>
+                                                                <td className="py-1.5 px-1.5 text-right font-extrabold text-slate-800 text-[11.5px] border-r border-slate-100">
+                                                                    {row.installment_revenue > 0 ? (
+                                                                        <span className="text-purple-700">{formatValue(row.installment_revenue)}</span>
+                                                                    ) : (
+                                                                        <span className="text-slate-300 font-medium">0</span>
+                                                                    )}
+                                                                </td>
 
-                                                        {/* 9. % Trả Góp */}
-                                                        <td className="py-1.5 px-1 text-right font-bold text-[11px]">
-                                                            {row.installment_rate > 0 ? (
-                                                                <span className={row.installment_rate >= 30 ? 'text-emerald-700 font-black' : 'text-slate-700'}>
-                                                                    {row.installment_rate}%
-                                                                </span>
-                                                            ) : (
-                                                                <span className="text-rose-500 font-bold">0%</span>
-                                                            )}
-                                                        </td>
+                                                                <td className="py-1.5 px-1 text-right font-bold text-[11px]">
+                                                                    {row.installment_rate > 0 ? (
+                                                                        <span className={row.installment_rate >= 30 ? 'text-emerald-700 font-black' : 'text-slate-700'}>
+                                                                            {row.installment_rate}%
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span className="text-rose-500 font-bold">0%</span>
+                                                                    )}
+                                                                </td>
+                                                            </>
+                                                        )}
                                                     </tr>
                                                 );
                                             })}
@@ -1723,15 +1852,19 @@ export default function DailyEmployeeRevenueReportPage() {
                                                 <td className="py-1.5 px-1.5 text-right bg-[#005a43] text-[#fde047] text-xs border-r border-[#004735]">
                                                     {formatValue(summary.totalRevenueQd)}
                                                 </td>
-                                                <td className="py-1.5 px-1 text-right border-r border-slate-800 text-[11px]">
+                                                <td className={`py-1.5 px-1 text-right ${hasInstallmentData ? 'border-r border-slate-800' : ''} text-[11px]`}>
                                                     100%
                                                 </td>
-                                                <td className="py-1.5 px-1.5 text-right text-purple-300 border-r border-slate-800 text-[11.5px]">
-                                                    {formatValue(summary.totalInstallmentRevenue)}
-                                                </td>
-                                                <td className="py-1.5 px-1 text-right text-amber-300 text-[11px]">
-                                                    {summary.avgInstallmentRate}%
-                                                </td>
+                                                {hasInstallmentData && (
+                                                    <>
+                                                        <td className="py-1.5 px-1.5 text-right text-purple-300 border-r border-slate-800 text-[11.5px]">
+                                                            {formatValue(summary.totalInstallmentRevenue)}
+                                                        </td>
+                                                        <td className="py-1.5 px-1 text-right text-amber-300 text-[11px]">
+                                                            {summary.avgInstallmentRate}%
+                                                        </td>
+                                                    </>
+                                                )}
                                             </tr>
                                         </tfoot>
                                     </table>
