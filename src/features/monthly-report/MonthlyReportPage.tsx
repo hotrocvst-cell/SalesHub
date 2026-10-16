@@ -1,6 +1,10 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import html2canvas from "html2canvas";
-import { calculate8KScale } from "../../shared/utils/exportImage";
+import {
+    calculate8KScale,
+    generateStandardReportCanvas,
+    downloadReportCanvas,
+    copyReportCanvasToClipboard
+} from "../../shared/utils/exportImage";
 import { useNavigate } from "react-router-dom";
 import {
     formatValue,
@@ -74,6 +78,7 @@ export default function MonthlyReportPage() {
     const [campaigns, setCampaigns] = useState<CampaignDictItem[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
     const [isProcessingImg, setIsProcessingImg] = useState<boolean>(false);
+    const [isCopyingImg, setIsCopyingImg] = useState<boolean>(false);
     const [toastMessage, setToastMessage] = useState<string | null>(null);
 
     const showToast = (msg: string) => {
@@ -565,44 +570,21 @@ export default function MonthlyReportPage() {
         ];
     }, [currentRecord, emulationRowList, selectedStore, isAdmin]);
 
-    // HÀM TẠO ẢNH 8K SIÊU NÉT (VỚI AUTO-SAFETY CLAMP) - TỰ ĐỘNG BỎ QUA KHỐI BỘ LỌC
+    // HÀM TẠO ẢNH 8K SIÊU NÉT (VỚI AUTO-SAFETY CLAMP) - ĐỘC LẬP HOÀN TOÀN VỚI THIẾT BỊ NGƯỜI DÙNG
     const generate8KCanvas = async () => {
         if (!reportRef.current) return null;
-        if (document.fonts?.ready) {
-            await document.fonts.ready;
-        }
-        const scale = calculate8KScale(reportRef.current);
-        return await html2canvas(reportRef.current, {
-            scale: scale,
-            useCORS: true,
-            backgroundColor: '#ffffff',
-            logging: false,
-            imageTimeout: 0,
-            ignoreElements: (element) => {
-                // Tự động bỏ qua bất kỳ phần tử nào có cờ data-html2canvas-ignore="true" hoặc khối trạng thái dữ liệu
-                return (
-                    element.getAttribute('data-html2canvas-ignore') === 'true' ||
-                    element.getAttribute('data-export-ignore') === 'true' ||
-                    element.getAttribute('data-freshness-bar') === 'true'
-                );
-            },
-            onclone: (clonedDoc) => {
-                // Ẩn/xóa khối trạng thái dữ liệu và các nút thao tác khỏi ảnh xuất
-                clonedDoc.querySelectorAll('[data-html2canvas-ignore="true"], [data-export-ignore="true"], [data-freshness-bar="true"]').forEach(el => {
-                    (el as HTMLElement).remove();
-                });
-
-                const target = clonedDoc.querySelector('[data-capture-target="true"]') as HTMLElement;
-                if (target) {
-                    target.style.width = '100%';
-                    target.style.maxWidth = 'none';
-                    target.style.height = 'auto';
-                    target.style.maxHeight = 'none';
-                    target.style.overflow = 'visible';
-                }
-                const scrollBoxes = clonedDoc.querySelectorAll('.overflow-x-auto');
-                scrollBoxes.forEach(sb => {
-                    (sb as HTMLElement).style.overflow = 'visible';
+        const targetWidth = isAllMode ? 880 : 820;
+        const hasInstallmentRate = (currentRecord?.installmentRate || 0) > 0;
+        return await generateStandardReportCanvas(reportRef.current, {
+            targetWidth,
+            kpiColumns: hasInstallmentRate ? 6 : 5,
+            containerSelector: '[data-report-table="true"]',
+            onCustomClone: (_doc, clonedReport) => {
+                // Đảm bảo banner tiêu đề và bảng hiển thị dạng hàng ngang đối xứng trong ảnh xuất
+                clonedReport.querySelectorAll<HTMLElement>('.flex-col').forEach(el => {
+                    el.style.flexDirection = 'row';
+                    el.style.alignItems = 'center';
+                    el.style.justifyContent = 'space-between';
                 });
             }
         });
@@ -610,19 +592,21 @@ export default function MonthlyReportPage() {
 
     // LƯU ẢNH CHẤT LƯỢNG 8K
     const handleSaveImage = async () => {
-        if (!reportRef.current) return;
+        if (!reportRef.current || isProcessingImg || isCopyingImg) return;
         setIsProcessingImg(true);
 
         try {
             const canvas = await generate8KCanvas();
             if (!canvas) throw new Error("Không thể khởi tạo canvas");
 
-            const imgData = canvas.toDataURL("image/png", 1.0);
-            const a = document.createElement("a");
-            a.href = imgData;
-            a.download = `Bao_Cao_8K_T${selectedMonth}_${selectedYear}_${selectedStore}.png`;
-            a.click();
-            showToast('Đã tải file ảnh 8K thành công!');
+            const cleanStore = (selectedStore === 'all' ? 'Toan_Cum' : selectedStore).replace(/[^a-zA-Z0-9_-]/g, '_');
+            const fileName = `Bao_Cao_8K_T${selectedMonth}_${selectedYear}_${cleanStore}.png`;
+            const success = await downloadReportCanvas(canvas, fileName);
+            if (success) {
+                showToast('Đã tải file ảnh 8K thành công!');
+            } else {
+                throw new Error("Không thể tạo file ảnh");
+            }
         } catch (err) {
             console.error("Lỗi khi lưu ảnh:", err);
             showToast('Có lỗi xảy ra khi tạo file ảnh!');
@@ -633,27 +617,24 @@ export default function MonthlyReportPage() {
 
     // COPY ẢNH VÀO CLIPBOARD ĐỘ NÉT CAO 8K
     const handleCopyImageClipboard = async () => {
-        if (!reportRef.current) return;
-        setIsProcessingImg(true);
+        if (!reportRef.current || isProcessingImg || isCopyingImg) return;
+        setIsCopyingImg(true);
 
         try {
             const canvas = await generate8KCanvas();
             if (!canvas) throw new Error("Không thể khởi tạo canvas");
 
-            canvas.toBlob(blob => {
-                if (blob && navigator.clipboard && window.ClipboardItem) {
-                    navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
-                        .then(() => showToast('Đã copy ảnh 8K vào clipboard! (Ctrl + V để dán)'))
-                        .catch(() => showToast('Trình duyệt chặn copy ảnh, vui lòng dùng "TẢI ẢNH"!'));
-                } else {
-                    showToast('Trình duyệt không hỗ trợ copy ảnh, hãy dùng "TẢI ẢNH"!');
-                }
-            }, 'image/png', 1.0);
+            const success = await copyReportCanvasToClipboard(canvas);
+            if (success) {
+                showToast('Đã copy ảnh 8K vào clipboard! (Ctrl + V để dán)');
+            } else {
+                showToast('Trình duyệt chặn copy ảnh, vui lòng dùng "TẢI ẢNH"!');
+            }
         } catch (err) {
             console.error("Lỗi khi copy ảnh:", err);
             showToast('Có lỗi khi copy ảnh vào clipboard!');
         } finally {
-            setIsProcessingImg(false);
+            setIsCopyingImg(false);
         }
     };
 
@@ -794,6 +775,7 @@ export default function MonthlyReportPage() {
                             onExportImage={handleSaveImage}
                             onCopyImage={handleCopyImageClipboard}
                             isExporting={isProcessingImg}
+                            isCopying={isCopyingImg}
                             exportButtonLabel="TẢI ẢNH"
                             copyImageButtonLabel="COPY ẢNH"
                             hasAssessment={true}
@@ -888,7 +870,7 @@ export default function MonthlyReportPage() {
                         {(() => {
                             const hasInstallmentRate = (currentRecord.installmentRate || 0) > 0;
                             return (
-                                <div className={`grid grid-cols-2 sm:grid-cols-3 ${hasInstallmentRate ? 'lg:grid-cols-6' : 'lg:grid-cols-5'} gap-2.5`}>
+                                <div data-kpi-grid="true" className={`grid grid-cols-2 sm:grid-cols-3 ${hasInstallmentRate ? 'lg:grid-cols-6' : 'lg:grid-cols-5'} gap-2.5`}>
                                     {/* Card 1: DOANH THU QĐ */}
                                     <div className="bg-amber-50/70 border-l-4 border-amber-500 rounded-xl p-3 shadow-xs text-center">
                                         <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider block">DTQĐ</span>
@@ -1015,20 +997,20 @@ export default function MonthlyReportPage() {
 
                             {/* BẢNG SỐ LIỆU CHI TIẾT */}
                             <div className="overflow-x-auto no-scrollbar">
-                                <table className="w-full text-xs text-left min-w-[840px] font-avo report-table">
+                                <table className="w-full text-xs text-left font-avo report-table border-collapse">
                                     <thead className="bg-slate-800 text-white uppercase text-[10px] font-black border-b border-slate-700">
                                         <tr>
-                                            <th className="py-3 px-3 text-center w-10">#</th>
+                                            <th className="py-2 px-1.5 text-center w-9 whitespace-nowrap">#</th>
                                             {isAllMode && (
-                                                <th className="py-3 px-3 min-w-[200px]">Siêu Thị</th>
+                                                <th className="py-2 px-2 text-left whitespace-nowrap">Siêu Thị</th>
                                             )}
-                                            <th className="py-3 px-3">Thi đua</th>
-                                            <th className="py-3 px-3 text-center">Target</th>
-                                            <th className="py-3 px-3 text-center">Lũy Kế</th>
-                                            <th className="py-3 px-3 text-center" title="% Hoàn thành hiện tại: (Lũy kế / Target) * 100">%HT</th>
-                                            <th className="py-3 px-3 text-center" title="% Dự kiến hoàn thành cuối tháng theo nhịp bán">%DKHT</th>
-                                            <th className="py-3 px-3 text-center" title="Mục tiêu thi đua còn lại: Target - Lũy kế">Còn lại</th>
-                                            <th className="py-3 px-3 text-center">Đánh giá</th>
+                                            <th className="py-2 px-2.5 text-left">Thi đua</th>
+                                            <th className="py-2 px-2 text-right whitespace-nowrap">Target</th>
+                                            <th className="py-2 px-2 text-right whitespace-nowrap">Lũy Kế</th>
+                                            <th className="py-2 px-1.5 text-center whitespace-nowrap" title="% Hoàn thành hiện tại: (Lũy kế / Target) * 100">%HT</th>
+                                            <th className="py-2 px-1.5 text-center whitespace-nowrap" title="% Dự kiến hoàn thành cuối tháng theo nhịp bán">%DKHT</th>
+                                            <th className="py-2 px-2 text-right whitespace-nowrap" title="Mục tiêu thi đua còn lại: Target - Lũy kế">Còn lại</th>
+                                            <th className="py-2 px-1.5 text-center w-12 whitespace-nowrap">Đánh giá</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
@@ -1043,44 +1025,44 @@ export default function MonthlyReportPage() {
                                                 const isPass = row.pctDK >= 100;
                                                 return (
                                                     <tr key={row.id} className={isPass ? 'bg-[#f0fdf4] text-emerald-950' : 'bg-[#fff1f2] text-rose-950'}>
-                                                        <td className="py-2.5 px-3 text-center text-slate-400 font-bold">
+                                                        <td className="py-1.5 px-1.5 text-center text-slate-400 font-bold whitespace-nowrap">
                                                             {idx + 1}
                                                         </td>
                                                         {isAllMode && (
-                                                            <td className="py-2.5 px-3 font-bold text-slate-800 whitespace-nowrap">
+                                                            <td className="py-1.5 px-2 font-bold text-slate-800 whitespace-nowrap text-left">
                                                                 <div className="flex items-center gap-1.5">
-                                                                    <Store className="w-3.5 h-3.5 text-indigo-600 flex-shrink-0" />
+                                                                    <Store className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
                                                                     <span>{row.storeName}</span>
                                                                 </div>
                                                             </td>
                                                         )}
-                                                        <td className="py-2.5 px-3 font-bold text-slate-800">
+                                                        <td className="py-1.5 px-2.5 font-bold text-slate-800 text-left">
                                                             {row.label}
                                                         </td>
-                                                        <td className="py-2.5 px-3 text-center font-mono font-bold">
+                                                        <td className="py-1.5 px-2 text-right font-mono font-bold whitespace-nowrap">
                                                             {formatValue(row.target)}
                                                         </td>
-                                                        <td className="py-2.5 px-3 text-center font-mono font-bold text-indigo-600">
+                                                        <td className="py-1.5 px-2 text-right font-mono font-bold text-indigo-600 whitespace-nowrap">
                                                             {formatValue(row.actual)}
                                                         </td>
-                                                        <td className="py-2.5 px-3 text-center font-mono font-bold">
-                                                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${row.pctHT >= 100
+                                                        <td className="py-1.5 px-1.5 text-center font-mono font-bold whitespace-nowrap">
+                                                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${row.pctHT >= 100
                                                                 ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
                                                                 : 'bg-slate-100 text-slate-700 border border-slate-200'
                                                                 }`}>
                                                                 {row.pctHT.toFixed(0)}%
                                                             </span>
                                                         </td>
-                                                        <td className="py-2.5 px-3 text-center font-mono font-bold">
-                                                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${isPass ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-rose-100 text-rose-800 border border-rose-300'
+                                                        <td className="py-1.5 px-1.5 text-center font-mono font-bold whitespace-nowrap">
+                                                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${isPass ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-rose-100 text-rose-800 border border-rose-300'
                                                                 }`}>
                                                                 {row.pctDK.toFixed(0)}%
                                                             </span>
                                                         </td>
-                                                        <td className={`py-2.5 px-3 text-center font-mono font-bold ${row.remaining === 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                                        <td className={`py-1.5 px-2 text-right font-mono font-bold whitespace-nowrap ${row.remaining === 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                                                             {formatRemainingTarget(row.remaining, false)}
                                                         </td>
-                                                        <td className="py-2.5 px-3 text-center">
+                                                        <td className="py-1.5 px-1.5 text-center whitespace-nowrap align-middle">
                                                             {isPass ? (
                                                                 <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-emerald-500 text-white text-[11px] font-bold">✓</span>
                                                             ) : (

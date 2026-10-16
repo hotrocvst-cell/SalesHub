@@ -1,6 +1,10 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import html2canvas from 'html2canvas';
-import { calculate8KScale } from '../../shared/utils/exportImage';
+import {
+    calculate8KScale,
+    generateStandardReportCanvas,
+    downloadReportCanvas,
+    copyReportCanvasToClipboard
+} from '../../shared/utils/exportImage';
 import {
     formatValue,
     getShortStoreName,
@@ -59,6 +63,8 @@ export default function DailyReportPage() {
     const [selectedStore, setSelectedStore] = useState<string>('Tổng');
     const [summaryMode, setSummaryMode] = useState<number>(1);
     const [isPointsEnabled, setIsPointsEnabled] = useState<boolean>(false);
+    const [isExporting, setIsExporting] = useState<boolean>(false);
+    const [isCopying, setIsCopying] = useState<boolean>(false);
 
     // Danh mục từ điển thi đua động từ Supabase
     const [campaignsDict, setCampaignsDict] = useState<CampaignDictItem[]>([]);
@@ -544,37 +550,41 @@ export default function DailyReportPage() {
     };
 
     const handleCaptureImage = async (mode: 'save' | 'copy') => {
-        if (!exportRef.current) return;
+        if (!exportRef.current || isExporting || isCopying) return;
+        if (mode === 'save') setIsExporting(true);
+        else setIsCopying(true);
+
         try {
-            if (document.fonts?.ready) {
-                await document.fonts.ready;
-            }
-            const scale = calculate8KScale(exportRef.current);
-            const canvas = await html2canvas(exportRef.current, {
-                scale: scale,
-                backgroundColor: '#ffffff',
-                useCORS: true
+            const targetWidth = 800;
+            const canvas = await generateStandardReportCanvas(exportRef.current, {
+                targetWidth,
+                kpiColumns: hasInstallmentData ? 5 : 3,
+                containerSelector: '[data-report-table="true"]'
             });
 
+            if (!canvas) throw new Error('Không thể khởi tạo canvas');
+
+            const cleanStore = (selectedStore === 'Tổng' ? 'Tong_Cum' : selectedStore).replace(/[^a-zA-Z0-9_-]/g, '_');
+            const fileName = `BaoCao_Realtime_${cleanStore}_8K.png`;
+
             if (mode === 'save') {
-                const link = document.createElement('a');
-                link.href = canvas.toDataURL('image/png');
-                link.download = `BaoCao_Realtime_${selectedStore.replace(/\s+/g, '_')}_8K.png`;
-                link.click();
-                showToast('Đã lưu file ảnh 8K báo cáo!');
+                const success = await downloadReportCanvas(canvas, fileName);
+                if (success) showToast('Đã lưu file ảnh 8K báo cáo!');
+                else throw new Error('Lỗi khi tải file ảnh');
             } else {
-                canvas.toBlob(blob => {
-                    if (blob && navigator.clipboard && window.ClipboardItem) {
-                        navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
-                            .then(() => showToast('Đã copy ảnh 8K vào clipboard!'))
-                            .catch(() => showToast('Trình duyệt chặn copy ảnh, hãy dùng TẢI ẢNH!'));
-                    } else {
-                        showToast('Hãy dùng nút TẢI ẢNH trên trình duyệt này!');
-                    }
-                });
+                const success = await copyReportCanvasToClipboard(canvas);
+                if (success) {
+                    showToast('Đã copy ảnh 8K vào clipboard!');
+                } else {
+                    showToast('Trình duyệt chặn copy ảnh, hãy dùng TẢI ẢNH!');
+                }
             }
         } catch (err) {
+            console.error('Lỗi khi chụp bảng báo cáo:', err);
             showToast('Lỗi khi chụp bảng báo cáo!');
+        } finally {
+            setIsExporting(false);
+            setIsCopying(false);
         }
     };
 
@@ -663,6 +673,8 @@ export default function DailyReportPage() {
                     <ReportActionButtons
                         onExportImage={() => handleCaptureImage('save')}
                         onCopyImage={() => handleCaptureImage('copy')}
+                        isExporting={isExporting}
+                        isCopying={isCopying}
                         exportButtonLabel="LƯU ẢNH"
                         copyImageButtonLabel="COPY ẢNH"
                         hasAssessment={true}
@@ -717,7 +729,7 @@ export default function DailyReportPage() {
                 </div>
 
                 {/* CÁC THẺ KPI TỔNG HỢP */}
-                <div className={`grid ${hasInstallmentData ? 'grid-cols-2 sm:grid-cols-5' : 'grid-cols-1 sm:grid-cols-3'} gap-2.5 text-center`}>
+                <div data-kpi-grid="true" className={`grid ${hasInstallmentData ? 'grid-cols-2 sm:grid-cols-5' : 'grid-cols-1 sm:grid-cols-3'} gap-2.5 text-center`}>
                     <div className="bg-amber-50/70 border-l-4 border-amber-500 rounded-xl p-2.5 shadow-xs">
                         <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider block">DOANH THU QĐ</span>
                         <span className="text-base sm:text-lg font-black text-slate-800 font-mono">
@@ -760,17 +772,17 @@ export default function DailyReportPage() {
 
                 {/* BẢNG SỐ LIỆU CHI TIẾT (CHỈ CÁC MỤC TARGET > 0) */}
                 <div className="overflow-x-auto rounded-xl border border-slate-200">
-                    <table className="w-full text-center border-collapse text-xs sm:text-sm font-avo report-table">
+                    <table className="w-full border-collapse text-xs sm:text-sm font-avo report-table">
                         <thead>
                             <tr className="bg-blue-600 text-white font-bold tracking-wider">
-                                <th className="py-2.5 px-2 w-10">#</th>
-                                <th className="py-2.5 px-3 text-left">THI ĐUA</th>
-                                {isPointsEnabled && <th className="py-2.5 px-2 w-12">ĐIỂM</th>}
-                                <th className="py-2.5 px-2">TARGET</th>
-                                <th className="py-2.5 px-2">RT</th>
-                                <th className="py-2.5 px-2">%HT</th>
-                                <th className="py-2.5 px-2">CÒN</th>
-                                <th className="py-2.5 px-2 w-12">KQ</th>
+                                <th className="py-2 px-1.5 text-center w-9 whitespace-nowrap">#</th>
+                                <th className="py-2 px-2.5 text-left">THI ĐUA</th>
+                                {isPointsEnabled && <th className="py-2 px-1.5 text-center w-12 whitespace-nowrap">ĐIỂM</th>}
+                                <th className="py-2 px-2 text-right whitespace-nowrap">TARGET</th>
+                                <th className="py-2 px-2 text-right whitespace-nowrap">RT</th>
+                                <th className="py-2 px-1.5 text-right whitespace-nowrap">%HT</th>
+                                <th className="py-2 px-2 text-right whitespace-nowrap">CÒN</th>
+                                <th className="py-2 px-1.5 text-center w-12 whitespace-nowrap">KQ</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-200">
@@ -789,18 +801,18 @@ export default function DailyReportPage() {
                                             key={d.label + idx}
                                             className={isPass ? 'bg-[#f0fdf4] text-emerald-950' : 'bg-[#fff1f2] text-rose-950'}
                                         >
-                                            <td className="py-2 px-2 text-slate-500 font-medium">{idx + 1}</td>
-                                            <td className="py-2 px-3 text-left font-bold text-slate-800">{d.label}</td>
-                                            {isPointsEnabled && <td className="py-2 px-2 text-slate-400">-</td>}
-                                            <td className="py-2 px-2 font-mono">{formatValue(d.target)}</td>
-                                            <td className="py-2 px-2 font-mono font-semibold">{formatValue(d.actual)}</td>
-                                            <td className="py-2 px-2 font-mono font-bold">
+                                            <td className="py-1.5 px-1.5 text-center text-slate-500 font-medium whitespace-nowrap">{idx + 1}</td>
+                                            <td className="py-1.5 px-2.5 text-left font-bold text-slate-800">{d.label}</td>
+                                            {isPointsEnabled && <td className="py-1.5 px-1.5 text-center text-slate-400 whitespace-nowrap">-</td>}
+                                            <td className="py-1.5 px-2 text-right font-mono whitespace-nowrap">{formatValue(d.target)}</td>
+                                            <td className="py-1.5 px-2 text-right font-mono font-semibold whitespace-nowrap">{formatValue(d.actual)}</td>
+                                            <td className="py-1.5 px-1.5 text-right font-mono font-bold whitespace-nowrap">
                                                 {d.pctHT.toFixed(1)}%
                                             </td>
-                                            <td className="py-2 px-2 font-mono font-bold text-slate-700">
+                                            <td className="py-1.5 px-2 text-right font-mono font-bold text-slate-700 whitespace-nowrap">
                                                 {formatValue(remain)}
                                             </td>
-                                            <td className="py-2 px-2 align-middle">
+                                            <td className="py-1.5 px-1.5 text-center whitespace-nowrap align-middle">
                                                 {isPass ? (
                                                     <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-emerald-500 text-white text-[11px] font-bold">✓</span>
                                                 ) : (
