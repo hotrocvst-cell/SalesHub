@@ -19,9 +19,12 @@ import {
     Trash2,
     Search,
     Sliders,
-    Zap
+    Zap,
+    FileSpreadsheet
 } from 'lucide-react';
 import { useAuth } from '../../shared/contexts/AuthContext';
+import { useExcelExportPermission } from '../../shared/hooks/useExcelExportPermission';
+import { exportVoucherInventoryToExcel } from './utils/voucherExcelHelper';
 import { fetchStores, type StoreItem } from '../../core/lib/storage';
 import { getShortStoreName, isStoreMatch, formatDate } from '../../core/lib/formatters';
 import type { VoucherItem, VoucherDistributionRule } from './types';
@@ -86,6 +89,8 @@ export default function VoucherAdminPage() {
     // Cấu hình quy tắc cấp mã voucher (FIFO / FEFO / LIFO)
     const [distributionRule, setDistributionRule] = useState<VoucherDistributionRule>('FIFO');
     const [isRuleModalOpen, setIsRuleModalOpen] = useState<boolean>(false);
+    const { canExportExcel } = useExcelExportPermission('/quan-ly-voucher');
+    const [isExportingExcel, setIsExportingExcel] = useState<boolean>(false);
     // Edit / Batch-edit modal
     const [editingVoucher, setEditingVoucher] = useState<VoucherItem | null>(null);
     const [batchEditVouchers, setBatchEditVouchers] = useState<VoucherItem[]>([]);
@@ -287,6 +292,45 @@ export default function VoucherAdminPage() {
         }
     };
 
+    // Xuất toàn bộ data tồn kho mã voucher của cụm siêu thị đang phụ trách ra file Excel (.xlsx)
+    const handleExportExcel = async () => {
+        setIsExportingExcel(true);
+        try {
+            // Nạp toàn bộ kho mã của cụm siêu thị đang phụ trách
+            let exportVouchers = vouchers;
+            if (selectedStore !== 'all') {
+                exportVouchers = await fetchStoreVouchers(
+                    'all',
+                    accessible,
+                    currentUser.full_name || currentUser.employee_id,
+                    isAdmin
+                );
+            }
+
+            if (!exportVouchers || exportVouchers.length === 0) {
+                showToast('⚠️ Kho voucher của cụm hiện chưa có mã nào để xuất!');
+                return;
+            }
+
+            const clusterName = selectedStore !== 'all'
+                ? selectedStore
+                : (currentUser.store_name || (accessible.length > 0 ? accessible[0] : 'Toàn Cụm Siêu Thị'));
+
+            await exportVoucherInventoryToExcel({
+                vouchers: exportVouchers,
+                clusterName,
+                exportedBy: currentUser.full_name || currentUser.employee_id || 'Quản lý'
+            });
+
+            showToast(`🎉 Đã xuất thành công ${exportVouchers.length.toLocaleString('vi-VN')} mã voucher toàn cụm ra file Excel!`);
+        } catch (e: any) {
+            console.error('Lỗi xuất file Excel voucher:', e);
+            showToast(`❌ Lỗi khi xuất Excel: ${e.message || String(e)}`);
+        } finally {
+            setIsExportingExcel(false);
+        }
+    };
+
     if (!canManageVouchers) {
         return (
             <div className="bg-white rounded-3xl p-8 border border-slate-200 text-center font-avo max-w-md mx-auto my-12">
@@ -400,6 +444,19 @@ export default function VoucherAdminPage() {
                         <Trash2 className="w-4 h-4 text-rose-600" />
                         <span>Làm Sạch Kho</span>
                     </button>
+
+                    {canExportExcel && (
+                        <button
+                            type="button"
+                            onClick={handleExportExcel}
+                            disabled={isExportingExcel}
+                            className="px-3.5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 active:scale-[0.99] text-white text-xs font-black transition cursor-pointer shadow-xs flex items-center gap-1.5 border border-emerald-600 disabled:opacity-60"
+                            title="Xuất toàn bộ data tồn kho mã voucher của cụm siêu thị ra file Excel (.xlsx)"
+                        >
+                            <FileSpreadsheet className={`w-4 h-4 text-emerald-200 ${isExportingExcel ? 'animate-bounce' : ''}`} />
+                            <span>{isExportingExcel ? 'Đang xuất Excel...' : 'Xuất Excel'}</span>
+                        </button>
+                    )}
 
                     {cloudStatus && cloudStatus.tableExists && (
                         <button
@@ -613,6 +670,8 @@ export default function VoucherAdminPage() {
                 onOpenQrModal={handleOpenQrDoubleCheck}
                 onClearEmployeeFilter={() => setFilterEmployeeId('')}
                 onFilterEmployee={(empId) => setFilterEmployeeId(empId)}
+                onExportExcel={canExportExcel ? handleExportExcel : undefined}
+                isExportingExcel={isExportingExcel}
             />
 
             {/* MODAL NẠP MÃ */}

@@ -15,7 +15,8 @@ import {
     FileText,
     ChevronDown,
     ChevronUp,
-    Ban
+    Ban,
+    Search
 } from 'lucide-react';
 import type { VoucherItem, VoucherStockForecast, VoucherCampaignStatusConfig } from '../types';
 import { calculateStockForecasts, getDenominationHotStyle, formatCurrency, parseConditionLines } from '../voucherFormatters';
@@ -33,15 +34,27 @@ export default function VoucherStockSummaryTable({
     onOpenImportModalWithPreset,
     onToggleCampaignEndStatus
 }: Props) {
-    // Mặc định tự động thu ẩn hiển thị, chỉ hiện tiêu đề/badge cảnh báo cho đến khi người dùng click để mở rộng
-    const [isExpanded, setIsExpanded] = useState<boolean>(false);
-    const [filterAlert, setFilterAlert] = useState<'ALL' | 'URGENT' | 'WARNING' | 'SAFE' | 'ENDED'>('ALL');
+    // Mặc định mở rộng để hiển thị ngay các phiếu cần nạp gấp & sắp hết
+    const [isExpanded, setIsExpanded] = useState<boolean>(true);
+    // Bộ lọc xem theo chương trình
+    const [selectedCampaign, setSelectedCampaign] = useState<string>('ALL');
+    // Bộ lọc trạng thái: mặc định hiển thị Cần nạp gấp và Sắp hết (NEED_ATTENTION)
+    const [filterAlert, setFilterAlert] = useState<'NEED_ATTENTION' | 'SAFE' | 'ENDED' | 'ALL'>('NEED_ATTENTION');
     const [searchKeyword, setSearchKeyword] = useState<string>('');
 
     // Tính toán số liệu dự báo tồn kho và tốc độ tiêu thụ
     const forecasts = useMemo<VoucherStockForecast[]>(() => {
         return calculateStockForecasts(vouchers, campaignStatuses);
     }, [vouchers, campaignStatuses]);
+
+    // Danh sách các chương trình duy nhất từ dự báo
+    const campaignOptions = useMemo<string[]>(() => {
+        const set = new Set<string>();
+        forecasts.forEach(f => {
+            if (f.campaign_name) set.add(f.campaign_name.trim());
+        });
+        return Array.from(set).sort((a, b) => a.localeCompare(b, 'vi'));
+    }, [forecasts]);
 
     const urgentCount = useMemo(() => {
         return forecasts.filter(f => f.alertLevel === 'OUT_OF_STOCK' || f.alertLevel === 'CRITICAL').length;
@@ -51,28 +64,44 @@ export default function VoucherStockSummaryTable({
         return forecasts.filter(f => f.alertLevel === 'WARNING').length;
     }, [forecasts]);
 
+    // Dữ liệu theo chương trình đang chọn (nếu có) để tính số lượng badge trên các nút lọc trạng thái
+    const campaignScopedForecasts = useMemo(() => {
+        if (selectedCampaign === 'ALL') return forecasts;
+        return forecasts.filter(f => f.campaign_name.trim() === selectedCampaign.trim());
+    }, [forecasts, selectedCampaign]);
+
+    const needAttentionCount = useMemo(() => {
+        return campaignScopedForecasts.filter(f => f.alertLevel === 'OUT_OF_STOCK' || f.alertLevel === 'CRITICAL' || f.alertLevel === 'WARNING').length;
+    }, [campaignScopedForecasts]);
+
     const safeCount = useMemo(() => {
-        return forecasts.filter(f => f.alertLevel === 'SAFE' || f.alertLevel === 'INACTIVE').length;
-    }, [forecasts]);
+        return campaignScopedForecasts.filter(f => f.alertLevel === 'SAFE' || f.alertLevel === 'INACTIVE').length;
+    }, [campaignScopedForecasts]);
 
     const endedCount = useMemo(() => {
-        return forecasts.filter(f => f.alertLevel === 'ENDED').length;
-    }, [forecasts]);
+        return campaignScopedForecasts.filter(f => f.alertLevel === 'ENDED').length;
+    }, [campaignScopedForecasts]);
 
-    // Lọc theo trạng thái cảnh báo và từ khóa
+    // Lọc theo chương trình, trạng thái cảnh báo và từ khóa
     const filteredForecasts = useMemo(() => {
         let list = forecasts;
 
-        if (filterAlert === 'URGENT') {
-            list = list.filter(f => f.alertLevel === 'OUT_OF_STOCK' || f.alertLevel === 'CRITICAL');
-        } else if (filterAlert === 'WARNING') {
-            list = list.filter(f => f.alertLevel === 'WARNING');
+        // 1. Lọc theo chương trình
+        if (selectedCampaign !== 'ALL') {
+            list = list.filter(f => f.campaign_name.trim() === selectedCampaign.trim());
+        }
+
+        // 2. Lọc theo trạng thái cảnh báo (gộp chung Cần nạp gấp & Sắp hết, Đủ dùng, Đã kết thúc, Tất cả)
+        if (filterAlert === 'NEED_ATTENTION') {
+            list = list.filter(f => f.alertLevel === 'OUT_OF_STOCK' || f.alertLevel === 'CRITICAL' || f.alertLevel === 'WARNING');
         } else if (filterAlert === 'SAFE') {
             list = list.filter(f => f.alertLevel === 'SAFE' || f.alertLevel === 'INACTIVE');
         } else if (filterAlert === 'ENDED') {
             list = list.filter(f => f.alertLevel === 'ENDED');
         }
+        // filterAlert === 'ALL' => không lọc bỏ theo trạng thái
 
+        // 3. Lọc theo từ khóa tìm kiếm (nếu có)
         if (searchKeyword.trim()) {
             const q = searchKeyword.trim().toLowerCase();
             list = list.filter(f =>
@@ -83,7 +112,7 @@ export default function VoucherStockSummaryTable({
         }
 
         return list;
-    }, [forecasts, filterAlert, searchKeyword]);
+    }, [forecasts, selectedCampaign, filterAlert, searchKeyword]);
 
     if (forecasts.length === 0) {
         return null;
@@ -143,49 +172,87 @@ export default function VoucherStockSummaryTable({
             {/* VÙNG NỘI DUNG MỞ RỘNG */}
             {isExpanded && (
                 <>
-                    {/* Thanh lọc trạng thái & Bộ lọc nhanh */}
-                    <div className="bg-slate-900/95 px-4 py-2.5 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2 animate-in fade-in duration-150">
-                        <span className="text-xs font-bold text-slate-300">Lọc theo mức độ cảnh báo tồn kho:</span>
+                    {/* Thanh lọc chương trình, từ khóa & trạng thái cảnh báo */}
+                    <div className="bg-slate-900/95 px-4 py-3 border-t border-slate-800 flex flex-wrap items-center justify-between gap-3 animate-in fade-in duration-150">
+                        {/* Nhóm 1: Bộ lọc Chương trình & Ô tìm kiếm */}
+                        <div className="flex items-center gap-2.5 flex-wrap">
+                            <div className="flex items-center gap-2">
+                                <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5 shrink-0">
+                                    <Filter className="w-3.5 h-3.5 text-amber-400" />
+                                    <span>Chương trình:</span>
+                                </label>
+                                <select
+                                    value={selectedCampaign}
+                                    onChange={(e) => setSelectedCampaign(e.target.value)}
+                                    className="bg-slate-800 border border-slate-700 hover:border-slate-600 rounded-xl px-3 py-1.5 text-xs font-bold text-amber-300 focus:outline-none focus:border-amber-400 max-w-[220px] sm:max-w-[280px] truncate cursor-pointer shadow-xs transition"
+                                >
+                                    <option value="ALL">✨ Tất Cả Chương Trình ({campaignOptions.length})</option>
+                                    {campaignOptions.map((c) => (
+                                        <option key={c} value={c} className="bg-slate-900 text-white">
+                                            {c}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {/* Ô tìm kiếm nhanh */}
+                            <div className="relative min-w-[140px] max-w-[190px]">
+                                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                                <input
+                                    type="text"
+                                    value={searchKeyword}
+                                    onChange={(e) => setSearchKeyword(e.target.value)}
+                                    placeholder="Tìm mệnh giá, ghi chú..."
+                                    className="w-full pl-8 pr-6 py-1.5 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white placeholder:text-slate-400 focus:outline-none focus:border-amber-400"
+                                />
+                                {searchKeyword && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setSearchKeyword('')}
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-xs cursor-pointer"
+                                        title="Xóa tìm kiếm"
+                                    >
+                                        ✕
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Nhóm 2: Bộ lọc 4 trạng thái cảnh báo */}
                         <div className="flex items-center gap-1.5 flex-wrap">
+                            {/* 1. Tất Cả */}
                             <button
                                 type="button"
                                 onClick={() => setFilterAlert('ALL')}
-                                className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer ${
+                                className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${
                                     filterAlert === 'ALL'
                                         ? 'bg-white text-slate-900 shadow-xs'
                                         : 'bg-slate-800/80 text-slate-300 hover:bg-slate-800'
                                 }`}
                             >
-                                Tất Cả ({forecasts.length})
+                                <Layers className="w-3.5 h-3.5" />
+                                <span>Tất Cả ({campaignScopedForecasts.length})</span>
                             </button>
+
+                            {/* 2. Gộp chung Cần nạp gấp & Sắp hết */}
                             <button
                                 type="button"
-                                onClick={() => setFilterAlert('URGENT')}
-                                className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1 ${
-                                    filterAlert === 'URGENT'
+                                onClick={() => setFilterAlert('NEED_ATTENTION')}
+                                className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${
+                                    filterAlert === 'NEED_ATTENTION'
                                         ? 'bg-rose-600 text-white shadow-xs'
                                         : 'bg-slate-800/80 text-rose-300 hover:bg-rose-950/50'
                                 }`}
                             >
                                 <Flame className="w-3.5 h-3.5" />
-                                <span>Cần Nạp Gấp ({urgentCount})</span>
+                                <span>Cần Nạp Gấp & Sắp Hết ({needAttentionCount})</span>
                             </button>
-                            <button
-                                type="button"
-                                onClick={() => setFilterAlert('WARNING')}
-                                className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1 ${
-                                    filterAlert === 'WARNING'
-                                        ? 'bg-amber-500 text-slate-950 shadow-xs'
-                                        : 'bg-slate-800/80 text-amber-300 hover:bg-amber-950/50'
-                                }`}
-                            >
-                                <Clock className="w-3.5 h-3.5" />
-                                <span>Sắp Hết ({warningCount})</span>
-                            </button>
+
+                            {/* 3. Đủ dùng */}
                             <button
                                 type="button"
                                 onClick={() => setFilterAlert('SAFE')}
-                                className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1 ${
+                                className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${
                                     filterAlert === 'SAFE'
                                         ? 'bg-emerald-600 text-white shadow-xs'
                                         : 'bg-slate-800/80 text-emerald-300 hover:bg-emerald-950/50'
@@ -194,13 +261,15 @@ export default function VoucherStockSummaryTable({
                                 <CheckCircle2 className="w-3.5 h-3.5" />
                                 <span>Đủ Dùng ({safeCount})</span>
                             </button>
+
+                            {/* 4. Đã kết thúc */}
                             <button
                                 type="button"
                                 onClick={() => setFilterAlert('ENDED')}
-                                className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1 ${
+                                className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${
                                     filterAlert === 'ENDED'
-                                        ? 'bg-rose-900 text-white shadow-xs'
-                                        : 'bg-slate-800/80 text-rose-300 hover:bg-slate-800'
+                                        ? 'bg-slate-700 text-white shadow-xs'
+                                        : 'bg-slate-800/80 text-slate-300 hover:bg-slate-800'
                                 }`}
                             >
                                 <Ban className="w-3.5 h-3.5 text-rose-400" />
@@ -228,8 +297,31 @@ export default function VoucherStockSummaryTable({
                     <tbody className="divide-y divide-slate-100">
                         {filteredForecasts.length === 0 ? (
                             <tr>
-                                <td colSpan={9} className="py-6 text-center text-slate-400 font-bold">
-                                    Không có loại voucher nào thỏa mãn điều kiện lọc.
+                                <td colSpan={9} className="py-8 text-center text-slate-500 font-bold">
+                                    <div className="flex flex-col items-center justify-center gap-2">
+                                        <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
+                                            {filterAlert === 'NEED_ATTENTION' ? (
+                                                <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                                            ) : (
+                                                <Filter className="w-5 h-5 text-slate-400" />
+                                            )}
+                                        </div>
+                                        <div className="text-sm font-black text-slate-700">
+                                            {filterAlert === 'NEED_ATTENTION'
+                                                ? 'Không có loại voucher nào ở trạng thái Cần nạp gấp hoặc Sắp hết.'
+                                                : 'Không có loại voucher nào thỏa mãn điều kiện lọc.'}
+                                        </div>
+                                        {filterAlert === 'NEED_ATTENTION' && campaignScopedForecasts.length > 0 && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setFilterAlert('ALL')}
+                                                className="mt-1 px-3.5 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold transition cursor-pointer shadow-xs inline-flex items-center gap-1.5"
+                                            >
+                                                <Layers className="w-3.5 h-3.5" />
+                                                <span>Xem tất cả ({campaignScopedForecasts.length} nhóm mã)</span>
+                                            </button>
+                                        )}
+                                    </div>
                                 </td>
                             </tr>
                         ) : (

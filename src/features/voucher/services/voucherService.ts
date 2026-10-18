@@ -1762,20 +1762,15 @@ export function analyzeHoardingRisks(
         const reasons: string[] = [];
         let risk: 'NORMAL' | 'WARNING' | 'CRITICAL' = 'NORMAL';
 
-        if (todayCount >= 5) {
+        // Chỉ cảnh báo nếu số lượng mã chưa dùng lớn hơn hoặc bằng số mã đã lấy đang bị cảnh báo theo ngưỡng
+        // Ngưỡng nguy cơ cao (CRITICAL): lấy từ 5 mã trong ngày VÀ chưa sử dụng >= 5 mã
+        // Ngưỡng cần theo dõi (WARNING): lấy từ 3 mã trong ngày VÀ chưa sử dụng >= 3 mã
+        if (todayCount >= 5 && unspentCount >= 5) {
             risk = 'CRITICAL';
-            reasons.push(`Lấy ${todayCount} mã trong ngày (vượt ngưỡng an toàn)`);
-        } else if (todayCount >= 3) {
+            reasons.push(`Lấy ${todayCount} mã trong ngày và đang giữ ${unspentCount} mã chưa dùng`);
+        } else if (todayCount >= 3 && unspentCount >= 3) {
             risk = 'WARNING';
-            reasons.push(`Lấy ${todayCount} mã trong hôm nay`);
-        }
-
-        if (unspentCount >= 4) {
-            risk = 'CRITICAL';
-            reasons.push(`Đang giữ ${unspentCount} mã chưa hoàn tất đơn hàng`);
-        } else if (unspentCount >= 2 && risk !== 'CRITICAL') {
-            risk = 'WARNING';
-            reasons.push(`Đang giữ ${unspentCount} mã chưa sử dụng`);
+            reasons.push(`Lấy ${todayCount} mã trong ngày và đang giữ ${unspentCount} mã chưa dùng`);
         }
 
         const sortedClaimed = [...e.total_month].sort(

@@ -20,6 +20,7 @@ import AddNewPageModal from './components/AddNewPageModal';
 import ReorderSidebarModal from './components/ReorderSidebarModal';
 import ChangeGroupModal from './components/ChangeGroupModal';
 import EditPageModal from './components/EditPageModal';
+import ExcelExportPermissionModal from './components/ExcelExportPermissionModal';
 import { getBadgeStyles } from '../../core/lib/badgeConfig';
 import {
     ShieldCheck,
@@ -48,7 +49,9 @@ import {
     MoveVertical,
     ChevronUp,
     ChevronDown,
-    Edit3
+    Edit3,
+    FileSpreadsheet,
+    Lock
 } from 'lucide-react';
 
 export default function SystemAdminPage() {
@@ -87,6 +90,10 @@ export default function SystemAdminPage() {
     const [selectedPageForEdit, setSelectedPageForEdit] = useState<SystemPagePermission | null>(null);
     const [isEditModalOpen, setIsEditModalOpen] = useState<boolean>(false);
 
+    // Quản lý cấu hình quyền Xuất File Excel theo vai trò cho từng trang
+    const [selectedPageForExcel, setSelectedPageForExcel] = useState<SystemPagePermission | null>(null);
+    const [isExcelModalOpen, setIsExcelModalOpen] = useState<boolean>(false);
+
     // Tải danh sách siêu thị từ cơ sở dữ liệu
     useEffect(() => {
         fetchStores().then(res => {
@@ -111,6 +118,25 @@ export default function SystemAdminPage() {
         showToast(count > 0
             ? `🏢 Đã giới hạn quyền cho ${count} siêu thị! Nhấn "Lưu lên Cloud" để kích hoạt.`
             : `🌍 Đã mở quyền cho tất cả siêu thị! Nhấn "Lưu lên Cloud" để kích hoạt.`
+        );
+    };
+
+    // Lưu cấu hình quyền xuất file Excel theo vai trò cho trang
+    const handleSavePageExcel = (path: string, allowExcel: boolean, allowedRoles: UserRole[]) => {
+        setPageList(prev => prev.map(p => {
+            if (p.path === path) {
+                return {
+                    ...p,
+                    allow_excel_export: allowExcel,
+                    allowed_excel_roles: allowedRoles
+                };
+            }
+            return p;
+        }));
+        setHasChanges(true);
+        showToast(allowExcel
+            ? `📥 Đã cập nhật quyền Xuất Excel (${allowedRoles.length} vai trò)! Nhấn "Lưu lên Cloud" để kích hoạt.`
+            : `🔒 Đã khóa tính năng Xuất Excel cho trang này! Nhấn "Lưu lên Cloud" để kích hoạt.`
         );
     };
 
@@ -826,6 +852,9 @@ export default function SystemAdminPage() {
                                 <th className="py-3 px-3 w-36 text-center bg-violet-50/70 text-violet-900 border-r border-violet-100">
                                     🏢 PHÂN QUYỀN SIÊU THỊ
                                 </th>
+                                <th className="py-3 px-3 w-36 text-center bg-emerald-50/70 text-emerald-900 border-r border-emerald-100">
+                                    📥 XUẤT EXCEL
+                                </th>
                                 <th className="py-3 px-3 text-center">TÁC VỤ NHANH</th>
                             </tr>
                         </thead>
@@ -1099,6 +1128,47 @@ export default function SystemAdminPage() {
                                             )}
                                         </td>
 
+                                        {/* Phân Quyền Xuất File Excel Theo Vai Trò */}
+                                        <td className="py-3 px-3 text-center bg-emerald-50/20 border-r border-emerald-100">
+                                            {(() => {
+                                                const isAllowed = Boolean(item.allow_excel_export);
+                                                const roles = item.allowed_excel_roles || ['ADMIN'];
+                                                const roleCount = roles.length;
+
+                                                if (!isAllowed) {
+                                                    return (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setSelectedPageForExcel(item);
+                                                                setIsExcelModalOpen(true);
+                                                            }}
+                                                            className="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-slate-100 hover:bg-emerald-50 text-slate-500 hover:text-emerald-700 border border-slate-200 hover:border-emerald-300 transition cursor-pointer inline-flex items-center gap-1 shadow-2xs"
+                                                            title="Chức năng xuất Excel đang bị khóa. Nhấn để cấp quyền theo vai trò"
+                                                        >
+                                                            <Lock className="w-3 h-3 text-slate-400" />
+                                                            <span>Đang khóa</span>
+                                                        </button>
+                                                    );
+                                                }
+
+                                                return (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setSelectedPageForExcel(item);
+                                                            setIsExcelModalOpen(true);
+                                                        }}
+                                                        className="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-emerald-600 hover:bg-emerald-700 text-white transition cursor-pointer inline-flex items-center gap-1 shadow-2xs shadow-emerald-200"
+                                                        title={`Đang mở xuất Excel cho ${roleCount} vai trò: ${roles.join(', ')}. Nhấn để chỉnh sửa.`}
+                                                    >
+                                                        <FileSpreadsheet className="w-3 h-3 text-emerald-100" />
+                                                        <span>{roleCount > 1 ? `${roleCount} vai trò` : 'Chỉ Admin'}</span>
+                                                    </button>
+                                                );
+                                            })()}
+                                        </td>
+
                                         {/* Tác vụ nhanh */}
                                         <td className="py-3 px-3 text-center">
                                             <div className="flex items-center justify-center gap-1.5 flex-wrap">
@@ -1340,6 +1410,17 @@ export default function SystemAdminPage() {
                 }}
                 page={selectedPageForEdit}
                 onSave={handleSavePageName}
+            />
+
+            {/* Modal Cấu Hình Quyền Xuất Excel Theo Vai Trò */}
+            <ExcelExportPermissionModal
+                isOpen={isExcelModalOpen}
+                onClose={() => {
+                    setIsExcelModalOpen(false);
+                    setSelectedPageForExcel(null);
+                }}
+                page={selectedPageForExcel}
+                onSave={handleSavePageExcel}
             />
         </div>
     );

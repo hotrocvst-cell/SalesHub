@@ -16,7 +16,8 @@ import {
     Pencil,
     Edit3,
     ChevronDown,
-    ChevronUp
+    ChevronUp,
+    FileSpreadsheet
 } from 'lucide-react';
 import type { VoucherItem } from '../types';
 import { formatDate, formatDateTime, getShortStoreName, isStoreMatch } from '../../../core/lib/formatters';
@@ -67,6 +68,8 @@ interface Props {
     onOpenQrModal?: (selectedVouchers: VoucherItem[]) => void;
     onClearEmployeeFilter?: () => void;
     onFilterEmployee?: (empId: string) => void;
+    onExportExcel?: () => void;
+    isExportingExcel?: boolean;
 }
 
 export default function VoucherListTable({
@@ -82,7 +85,9 @@ export default function VoucherListTable({
     prefilterStatus,
     onOpenQrModal,
     onClearEmployeeFilter,
-    onFilterEmployee
+    onFilterEmployee,
+    onExportExcel,
+    isExportingExcel
 }: Props) {
     const [searchQuery, setSearchQuery] = useState<string>('');
     const [filterStatus, setFilterStatus] = useState<string>(prefilterStatus || 'ALL');
@@ -644,6 +649,20 @@ export default function VoucherListTable({
                             >
                                 <Trash2 className="w-3.5 h-3.5 text-rose-500" />
                                 <span>Làm sạch kho</span>
+                            </button>
+                        )}
+
+                        {/* Nút Xuất Excel toàn cụm */}
+                        {onExportExcel && (
+                            <button
+                                type="button"
+                                onClick={onExportExcel}
+                                disabled={isExportingExcel}
+                                className="px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 text-xs font-black transition cursor-pointer flex items-center gap-1.5 shadow-2xs disabled:opacity-60"
+                                title="Xuất toàn bộ data tồn kho mã voucher của cụm siêu thị ra file Excel (.xlsx)"
+                            >
+                                <FileSpreadsheet className={`w-3.5 h-3.5 text-emerald-600 ${isExportingExcel ? 'animate-bounce' : ''}`} />
+                                <span>{isExportingExcel ? 'Đang xuất...' : 'Xuất Excel'}</span>
                             </button>
                         )}
                     </div>

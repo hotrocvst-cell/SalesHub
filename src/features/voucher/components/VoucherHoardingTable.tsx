@@ -1,32 +1,43 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
     AlertTriangle,
     Flame,
     ShieldAlert,
-    Eye,
     UserCheck,
     ArrowRight,
     ChevronDown,
     ChevronUp,
-    ShieldCheck
+    ShieldCheck,
+    Filter,
+    Layers,
+    Search
 } from 'lucide-react';
 import type { VoucherHoardingAlert } from '../types';
+import { cleanEmployeeName, getShortenedEmployeeName } from '../../../core/lib/formatters';
 
 interface Props {
     alerts: VoucherHoardingAlert[];
     onFilterEmployee?: (empId: string) => void;
     currentFilteredEmployeeId?: string;
+    defaultExpanded?: boolean;
+    defaultRiskFilter?: 'CRITICAL' | 'WARNING' | 'RISK' | 'ALL' | 'NORMAL';
 }
 
-export default function VoucherHoardingTable({ alerts, onFilterEmployee, currentFilteredEmployeeId }: Props) {
-    // Mặc định tự động thu ẩn hiển thị, chỉ hiện tiêu đề và badge cảnh báo cho đến khi người dùng click để mở rộng
-    const [isExpanded, setIsExpanded] = useState<boolean>(false);
+export default function VoucherHoardingTable({
+    alerts,
+    onFilterEmployee,
+    currentFilteredEmployeeId,
+    defaultExpanded = true,
+    defaultRiskFilter = 'CRITICAL'
+}: Props) {
+    // Mặc định tự động mở rộng hiển thị để người dùng thấy ngay danh sách nhân viên có nguy cơ
+    const [isExpanded, setIsExpanded] = useState<boolean>(defaultExpanded);
+    // Bộ lọc hiển thị theo mức độ cảnh báo: mặc định hiển thị user đang có 'CRITICAL' (Nguy cơ cao)
+    const [filterRisk, setFilterRisk] = useState<'CRITICAL' | 'WARNING' | 'RISK' | 'ALL' | 'NORMAL'>(defaultRiskFilter);
+    const [hasUserChangedFilter, setHasUserChangedFilter] = useState<boolean>(false);
+    const [searchKeyword, setSearchKeyword] = useState<string>('');
 
     // Tính toán số nhân sự có dấu hiệu bất thường (CRITICAL hoặc WARNING)
-    const abnormalAlerts = useMemo(() => {
-        return alerts.filter(a => a.risk_level === 'CRITICAL' || a.risk_level === 'WARNING');
-    }, [alerts]);
-
     const criticalCount = useMemo(() => {
         return alerts.filter(a => a.risk_level === 'CRITICAL').length;
     }, [alerts]);
@@ -35,13 +46,67 @@ export default function VoucherHoardingTable({ alerts, onFilterEmployee, current
         return alerts.filter(a => a.risk_level === 'WARNING').length;
     }, [alerts]);
 
+    const riskCount = criticalCount + warningCount;
+
+    const normalCount = useMemo(() => {
+        return alerts.filter(a => a.risk_level === 'NORMAL').length;
+    }, [alerts]);
+
+    // Đồng bộ mức lọc mặc định khi alerts nạp vào:
+    // Nếu có user nguy cơ cao (CRITICAL) -> hiển thị CRITICAL
+    // Nếu không có CRITICAL nhưng có WARNING -> hiển thị WARNING
+    // Nếu hoàn toàn an toàn (không có nguy cơ) -> hiển thị ALL
+    useEffect(() => {
+        if (!hasUserChangedFilter && alerts.length > 0) {
+            if (criticalCount > 0) {
+                setFilterRisk('CRITICAL');
+            } else if (warningCount > 0) {
+                setFilterRisk('WARNING');
+            } else {
+                setFilterRisk('ALL');
+            }
+        }
+    }, [alerts, criticalCount, warningCount, hasUserChangedFilter]);
+
+    // Đồng bộ chiều rộng badge mã nhân viên theo Rule 11
+    const maxIdLength = useMemo(() => {
+        if (!alerts || alerts.length === 0) return 6;
+        return Math.max(6, ...alerts.map(r => String(r.employee_id || '').trim().length));
+    }, [alerts]);
+
+    // Lọc danh sách nhân viên theo mức độ cảnh báo và từ khóa tìm kiếm
+    const filteredAlerts = useMemo(() => {
+        let list = alerts;
+
+        if (filterRisk === 'CRITICAL') {
+            list = list.filter(a => a.risk_level === 'CRITICAL');
+        } else if (filterRisk === 'WARNING') {
+            list = list.filter(a => a.risk_level === 'WARNING');
+        } else if (filterRisk === 'RISK') {
+            list = list.filter(a => a.risk_level === 'CRITICAL' || a.risk_level === 'WARNING');
+        } else if (filterRisk === 'NORMAL') {
+            list = list.filter(a => a.risk_level === 'NORMAL');
+        }
+
+        if (searchKeyword.trim()) {
+            const q = searchKeyword.trim().toLowerCase();
+            list = list.filter(a =>
+                a.employee_name.toLowerCase().includes(q) ||
+                a.employee_id.toLowerCase().includes(q) ||
+                (a.store_name && a.store_name.toLowerCase().includes(q))
+            );
+        }
+
+        return list;
+    }, [alerts, filterRisk, searchKeyword]);
+
     return (
         <div className="bg-white rounded-3xl border border-slate-200 shadow-2xs overflow-hidden font-avo">
             {/* Header phân hệ: Click để mở rộng hoặc thu gọn */}
             <div
                 onClick={() => setIsExpanded(!isExpanded)}
                 className={`p-4 sm:p-5 text-white flex items-center justify-between flex-wrap gap-3 cursor-pointer select-none transition ${
-                    abnormalAlerts.length > 0
+                    riskCount > 0
                         ? 'bg-gradient-to-r from-slate-900 via-rose-950 to-slate-900 hover:brightness-105'
                         : 'bg-gradient-to-r from-slate-900 via-slate-950 to-slate-900 hover:brightness-105'
                 }`}
@@ -49,9 +114,9 @@ export default function VoucherHoardingTable({ alerts, onFilterEmployee, current
             >
                 <div className="flex items-center gap-3">
                     <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black shadow-md shrink-0 ${
-                        abnormalAlerts.length > 0 ? 'bg-rose-500 text-white' : 'bg-emerald-500 text-white'
+                        riskCount > 0 ? 'bg-rose-500 text-white' : 'bg-emerald-500 text-white'
                     }`}>
-                        {abnormalAlerts.length > 0 ? <Flame className="w-5 h-5" /> : <ShieldCheck className="w-5 h-5" />}
+                        {riskCount > 0 ? <Flame className="w-5 h-5" /> : <ShieldCheck className="w-5 h-5" />}
                     </div>
 
                     <div>
@@ -71,16 +136,16 @@ export default function VoucherHoardingTable({ alerts, onFilterEmployee, current
                                     ⚠️ {warningCount} user cần lưu ý
                                 </span>
                             )}
-                            {abnormalAlerts.length === 0 && (
+                            {riskCount === 0 && (
                                 <span className="bg-emerald-500/20 text-emerald-300 text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-emerald-500/30 flex items-center gap-1">
                                     🟢 An toàn: Không phát hiện bất thường ({alerts.length} nhân sự)
                                 </span>
                             )}
                         </div>
                         <p className="text-xs text-slate-300 mt-0.5">
-                            {abnormalAlerts.length > 0
-                                ? `Phát hiện ${abnormalAlerts.length} nhân sự có dấu hiệu nhận nhiều mã hoặc tích trữ chưa gán đơn hàng.`
-                                : 'Hệ thống tự động giám sát tần suất nhận mã và đối chiếu trạng thái gắn đơn hàng thực tế.'}
+                            {riskCount > 0
+                                ? `Phát hiện ${riskCount} nhân sự nhận nhiều mã nhưng chưa dùng đủ đơn hàng đối ứng.`
+                                : 'Hệ thống tự động đối chiếu số lượng mã đã lấy với mã chưa dùng theo ngưỡng an toàn.'}
                         </p>
                     </div>
                 </div>
@@ -97,13 +162,158 @@ export default function VoucherHoardingTable({ alerts, onFilterEmployee, current
             {/* VÙNG NỘI DUNG MỞ RỘNG */}
             {isExpanded && (
                 <div className="animate-in fade-in duration-150">
-                    {alerts.length === 0 ? (
+                    {/* Thanh lọc mức độ cảnh báo & tìm kiếm nhanh */}
+                    <div className="bg-slate-900/95 px-4 py-2.5 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2.5">
+                        <div className="flex items-center gap-2.5 flex-wrap">
+                            <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5 shrink-0">
+                                <Filter className="w-3.5 h-3.5 text-amber-400" />
+                                <span>Mức độ cảnh báo:</span>
+                            </span>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                                {/* 1. Nguy cơ cao (Mặc định) */}
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setHasUserChangedFilter(true);
+                                        setFilterRisk('CRITICAL');
+                                    }}
+                                    className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${
+                                        filterRisk === 'CRITICAL'
+                                            ? 'bg-rose-600 text-white shadow-xs ring-2 ring-rose-400'
+                                            : 'bg-slate-800/80 text-rose-300 hover:bg-rose-950/50'
+                                    }`}
+                                >
+                                    <Flame className="w-3.5 h-3.5" />
+                                    <span>Nguy Cơ Cao ({criticalCount})</span>
+                                </button>
+
+                                {/* 2. Cần theo dõi */}
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setHasUserChangedFilter(true);
+                                        setFilterRisk('WARNING');
+                                    }}
+                                    className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${
+                                        filterRisk === 'WARNING'
+                                            ? 'bg-amber-500 text-slate-950 shadow-xs ring-2 ring-amber-300'
+                                            : 'bg-slate-800/80 text-amber-300 hover:bg-amber-950/50'
+                                    }`}
+                                >
+                                    <AlertTriangle className="w-3.5 h-3.5" />
+                                    <span>Cần Theo Dõi ({warningCount})</span>
+                                </button>
+
+                                {/* 3. Tất cả nguy cơ (khi có cả 2 nhóm) */}
+                                {criticalCount > 0 && warningCount > 0 && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setHasUserChangedFilter(true);
+                                            setFilterRisk('RISK');
+                                        }}
+                                        className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${
+                                            filterRisk === 'RISK'
+                                                ? 'bg-gradient-to-r from-rose-600 to-amber-600 text-white shadow-xs'
+                                                : 'bg-slate-800/80 text-orange-300 hover:bg-slate-800'
+                                        }`}
+                                    >
+                                        <ShieldAlert className="w-3.5 h-3.5" />
+                                        <span>Tất Cả Nguy Cơ ({riskCount})</span>
+                                    </button>
+                                )}
+
+                                {/* 4. Tất cả */}
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setHasUserChangedFilter(true);
+                                        setFilterRisk('ALL');
+                                    }}
+                                    className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${
+                                        filterRisk === 'ALL'
+                                            ? 'bg-white text-slate-900 shadow-xs'
+                                            : 'bg-slate-800/80 text-slate-300 hover:bg-slate-800'
+                                    }`}
+                                >
+                                    <Layers className="w-3.5 h-3.5" />
+                                    <span>Tất Cả ({alerts.length})</span>
+                                </button>
+
+                                {/* 5. Bình thường */}
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setHasUserChangedFilter(true);
+                                        setFilterRisk('NORMAL');
+                                    }}
+                                    className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${
+                                        filterRisk === 'NORMAL'
+                                            ? 'bg-emerald-600 text-white shadow-xs'
+                                            : 'bg-slate-800/80 text-emerald-300 hover:bg-emerald-950/50'
+                                    }`}
+                                >
+                                    <UserCheck className="w-3.5 h-3.5" />
+                                    <span>Bình Thường ({normalCount})</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Ô tìm kiếm nhanh */}
+                        <div className="relative min-w-[150px] max-w-[210px]">
+                            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                            <input
+                                type="text"
+                                value={searchKeyword}
+                                onChange={(e) => setSearchKeyword(e.target.value)}
+                                placeholder="Tìm tên, mã NV, kho..."
+                                className="w-full pl-8 pr-6 py-1.5 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white placeholder:text-slate-400 focus:outline-none focus:border-amber-400"
+                            />
+                            {searchKeyword && (
+                                <button
+                                    type="button"
+                                    onClick={() => setSearchKeyword('')}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-xs cursor-pointer"
+                                    title="Xóa tìm kiếm"
+                                >
+                                    ✕
+                                </button>
+                            )}
+                        </div>
+                    </div>
+
+                    {filteredAlerts.length === 0 ? (
                         <div className="p-8 text-center bg-slate-50/50">
-                            <ShieldAlert className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
-                            <div className="text-sm font-black text-slate-800">Không có dấu hiệu đầu cơ tích trữ</div>
+                            <ShieldCheck className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
+                            <div className="text-sm font-black text-slate-800">
+                                {filterRisk === 'CRITICAL'
+                                    ? 'Không có nhân sự nào trong nhóm nguy cơ cao gom mã'
+                                    : filterRisk === 'WARNING'
+                                    ? 'Không có nhân sự nào trong nhóm cần theo dõi'
+                                    : filterRisk === 'RISK'
+                                    ? 'Không có nhân sự nào trong nhóm nguy cơ đầu cơ gom mã'
+                                    : filterRisk === 'NORMAL'
+                                    ? 'Không có nhân sự nào trong nhóm bình thường'
+                                    : 'Không có nhân sự nào phù hợp với bộ lọc'}
+                            </div>
                             <p className="text-xs text-slate-500 mt-1">
-                                Các nhân viên đều lấy số lượng mã hợp lý và gắn với đơn hàng thực tế.
+                                {filterRisk === 'CRITICAL' || filterRisk === 'RISK'
+                                    ? 'Tuyệt vời! Tất cả nhân viên đều gắn mã vào đơn hàng thực tế theo đúng ngưỡng an toàn.'
+                                    : 'Các giao dịch nhận voucher đều nằm trong giới hạn an toàn.'}
                             </p>
+                            {filterRisk !== 'ALL' && alerts.length > 0 && (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setHasUserChangedFilter(true);
+                                        setFilterRisk('ALL');
+                                    }}
+                                    className="mt-3 px-3.5 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold transition cursor-pointer shadow-xs inline-flex items-center gap-1.5"
+                                >
+                                    <Layers className="w-3.5 h-3.5" />
+                                    <span>Xem tất cả ({alerts.length} nhân sự)</span>
+                                </button>
+                            )}
                         </div>
                     ) : (
                         <div className="overflow-x-auto">
@@ -119,7 +329,7 @@ export default function VoucherHoardingTable({ alerts, onFilterEmployee, current
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
-                                    {alerts.map((item) => {
+                                    {filteredAlerts.map((item) => {
                                         const isCritical = item.risk_level === 'CRITICAL';
                                         const isWarning = item.risk_level === 'WARNING';
                                         const isCurrentlyFiltered = Boolean(currentFilteredEmployeeId && currentFilteredEmployeeId.trim() === item.employee_id.trim());
@@ -137,18 +347,31 @@ export default function VoucherHoardingTable({ alerts, onFilterEmployee, current
                                                         : ''
                                                 }`}
                                             >
-                                                {/* Nhân viên */}
+                                                {/* Nhân viên theo Rule 11 */}
                                                 <td className="py-2.5 px-3">
-                                                    <div className="font-black text-slate-900 text-xs flex items-center gap-1.5">
-                                                        <span>{item.employee_name}</span>
-                                                        {isCurrentlyFiltered && (
-                                                            <span className="text-[9.5px] bg-indigo-600 text-white px-1.5 py-0.2 rounded font-black">
-                                                                Đang xem
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                    <div className="text-[10px] text-slate-500 font-mono">
-                                                        Mã: {item.employee_id} • {item.store_name}
+                                                    <div className="flex items-center gap-2">
+                                                        <span
+                                                            className="font-mono font-bold text-xs px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-800 border border-blue-200 inline-block text-center leading-normal shrink-0"
+                                                            style={{ minWidth: `${maxIdLength + 2.2}ch`, width: `${maxIdLength + 2.2}ch` }}
+                                                        >
+                                                            {item.employee_id}
+                                                        </span>
+                                                        <div className="min-w-0">
+                                                            <div
+                                                                className="font-black text-slate-900 text-xs flex items-center gap-1.5 truncate"
+                                                                title={`Mã NV: ${item.employee_id} - ${cleanEmployeeName(item.employee_name)}`}
+                                                            >
+                                                                <span>{getShortenedEmployeeName(item.employee_name)}</span>
+                                                                {isCurrentlyFiltered && (
+                                                                    <span className="text-[9.5px] bg-indigo-600 text-white px-1.5 py-0.2 rounded font-black shrink-0">
+                                                                        Đang xem
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <div className="text-[10px] text-slate-500 truncate" title={item.store_name}>
+                                                                {item.store_name}
+                                                            </div>
+                                                        </div>
                                                     </div>
                                                 </td>
 
@@ -168,10 +391,10 @@ export default function VoucherHoardingTable({ alerts, onFilterEmployee, current
                                                 {/* Chưa dùng */}
                                                 <td className="py-2.5 px-2 text-center font-mono">
                                                     <span className={`inline-block px-2 py-0.5 rounded font-bold text-xs ${
-                                                        item.unspent_count >= 4
+                                                        isCritical
                                                             ? 'bg-rose-100 text-rose-800 font-black'
-                                                            : item.unspent_count >= 2
-                                                            ? 'bg-amber-100 text-amber-800'
+                                                            : isWarning
+                                                            ? 'bg-amber-100 text-amber-800 font-bold'
                                                             : 'text-slate-600'
                                                     }`}>
                                                         {item.unspent_count} mã
@@ -216,7 +439,7 @@ export default function VoucherHoardingTable({ alerts, onFilterEmployee, current
                                                                 isCurrentlyFiltered
                                                                     ? 'bg-rose-100 hover:bg-rose-200 text-rose-800 border border-rose-300'
                                                                     : 'bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 text-slate-700 border border-slate-200'
-                                                            }`}
+                                                                }`}
                                                             title={isCurrentlyFiltered ? 'Bỏ lọc nhân viên này để xem tất cả mã' : 'Xem chi tiết các mã voucher mà nhân viên này đang giữ'}
                                                         >
                                                             <span>{isCurrentlyFiltered ? '✕ Bỏ lọc' : 'Xem mã'}</span>

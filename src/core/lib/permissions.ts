@@ -307,7 +307,9 @@ export const DEFAULT_PAGE_PERMISSIONS: SystemPagePermission[] = [
         badge_enabled: true,
         badge_icon: '🔑',
         badge_text: 'QL',
-        badge_color: 'amber'
+        badge_color: 'amber',
+        allow_excel_export: true,
+        allowed_excel_roles: ['ADMIN']
     },
     {
         page_key: 'xmusic_playlist',
@@ -490,6 +492,8 @@ ALTER TABLE public.system_page_permissions ADD COLUMN IF NOT EXISTS badge_enable
 ALTER TABLE public.system_page_permissions ADD COLUMN IF NOT EXISTS badge_text TEXT DEFAULT NULL;
 ALTER TABLE public.system_page_permissions ADD COLUMN IF NOT EXISTS badge_icon TEXT DEFAULT NULL;
 ALTER TABLE public.system_page_permissions ADD COLUMN IF NOT EXISTS badge_color TEXT DEFAULT 'blue';
+ALTER TABLE public.system_page_permissions ADD COLUMN IF NOT EXISTS allow_excel_export BOOLEAN DEFAULT false;
+ALTER TABLE public.system_page_permissions ADD COLUMN IF NOT EXISTS allowed_excel_roles TEXT[] DEFAULT '{"ADMIN"}';
 
 -- Kích hoạt RLS
 ALTER TABLE public.system_page_permissions ENABLE ROW LEVEL SECURITY;
@@ -558,6 +562,14 @@ export async function fetchSystemPagePermissions(): Promise<{ success: boolean; 
                     badge_color = defaultDef.badge_color || 'blue';
                 }
 
+                const allow_excel_export = item.allow_excel_export !== undefined && item.allow_excel_export !== null
+                    ? Boolean(item.allow_excel_export)
+                    : (defaultDef?.allow_excel_export ?? false);
+
+                const allowed_excel_roles = (Array.isArray(item.allowed_excel_roles) && item.allowed_excel_roles.length > 0)
+                    ? (item.allowed_excel_roles as UserRole[])
+                    : (defaultDef?.allowed_excel_roles || ['ADMIN']);
+
                 return {
                     id: item.id,
                     page_key: item.page_key,
@@ -573,7 +585,9 @@ export async function fetchSystemPagePermissions(): Promise<{ success: boolean; 
                     badge_enabled,
                     badge_text,
                     badge_icon,
-                    badge_color
+                    badge_color,
+                    allow_excel_export,
+                    allowed_excel_roles
                 };
             });
 
@@ -671,6 +685,8 @@ export async function saveSystemPagePermissions(permissions: SystemPagePermissio
             badge_text: p.badge_text ? p.badge_text.trim() : null,
             badge_icon: p.badge_icon ? p.badge_icon.trim() : null,
             badge_color: p.badge_color || 'blue',
+            allow_excel_export: p.allow_excel_export !== undefined ? Boolean(p.allow_excel_export) : false,
+            allowed_excel_roles: (Array.isArray(p.allowed_excel_roles) && p.allowed_excel_roles.length > 0) ? p.allowed_excel_roles : ['ADMIN'],
             updated_at: new Date().toISOString()
         }));
 
@@ -680,10 +696,10 @@ export async function saveSystemPagePermissions(permissions: SystemPagePermissio
 
         if (error) {
             console.warn('Cảnh báo khi lưu Supabase system_page_permissions:', error.message);
-            // Nếu lỗi do cột badge chưa được tạo trên Supabase
-            if (error.message && (error.message.includes('badge_') || error.message.includes('column'))) {
+            // Nếu lỗi do cột badge hoặc excel chưa được tạo trên Supabase
+            if (error.message && (error.message.includes('badge_') || error.message.includes('excel') || error.message.includes('column'))) {
                 try {
-                    const fallbackPayloads = payloads.map(({ badge_enabled, badge_text, badge_icon, badge_color, ...rest }: any) => rest);
+                    const fallbackPayloads = payloads.map(({ badge_enabled, badge_text, badge_icon, badge_color, allow_excel_export, allowed_excel_roles, ...rest }: any) => rest);
                     const { error: fallbackError } = await supabase
                         .from('system_page_permissions')
                         .upsert(fallbackPayloads, { onConflict: 'page_key' });
@@ -691,7 +707,7 @@ export async function saveSystemPagePermissions(permissions: SystemPagePermissio
                         return {
                             success: true,
                             fromSupabase: false,
-                            error: 'Chưa có các cột badge trên Supabase. Đã lưu cấu hình an toàn trên máy này. Hãy chạy lệnh ALTER TABLE để đồng bộ lên Cloud.'
+                            error: 'Chưa có các cột mở rộng trên Supabase. Đã lưu cấu hình an toàn trên máy này. Hãy chạy lệnh ALTER TABLE để đồng bộ lên Cloud.'
                         };
                     }
                 } catch {
@@ -723,17 +739,24 @@ function getLocalPermissions(): SystemPagePermission[] {
                 const currentPaths = new Set(parsed.map((p: any) => p.path));
                 const missingDefaults = DEFAULT_PAGE_PERMISSIONS.filter(d => !currentPaths.has(d.path));
                 return [...parsed, ...missingDefaults].map(item => {
+                    const defaultDef = DEFAULT_PAGE_PERMISSIONS.find(d => d.path === item.path || d.page_key === item.page_key);
                     const cached = customBadgeCache[item.path];
-                    if (cached) {
-                        return {
-                            ...item,
-                            badge_enabled: cached.badge_enabled !== false,
-                            badge_text: cached.badge_text ?? item.badge_text,
-                            badge_icon: cached.badge_icon ?? item.badge_icon,
-                            badge_color: cached.badge_color || item.badge_color || 'blue'
-                        };
-                    }
-                    return item;
+                    const allow_excel_export = item.allow_excel_export !== undefined && item.allow_excel_export !== null
+                        ? Boolean(item.allow_excel_export)
+                        : (defaultDef?.allow_excel_export ?? false);
+                    const allowed_excel_roles = (Array.isArray(item.allowed_excel_roles) && item.allowed_excel_roles.length > 0)
+                        ? item.allowed_excel_roles
+                        : (defaultDef?.allowed_excel_roles || ['ADMIN']);
+
+                    return {
+                        ...item,
+                        badge_enabled: cached ? (cached.badge_enabled !== false) : (item.badge_enabled ?? true),
+                        badge_text: cached ? (cached.badge_text ?? item.badge_text) : (item.badge_text || ''),
+                        badge_icon: cached ? (cached.badge_icon ?? item.badge_icon) : (item.badge_icon || ''),
+                        badge_color: cached ? (cached.badge_color || item.badge_color || 'blue') : (item.badge_color || 'blue'),
+                        allow_excel_export,
+                        allowed_excel_roles
+                    };
                 });
             }
         }
