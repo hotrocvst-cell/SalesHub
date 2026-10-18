@@ -37,6 +37,8 @@ interface Props {
     assessmentTemplates?: AssessmentTemplate[];
     periodLabel?: string;
     storeName?: string;
+    onAutoMapDictionary?: () => void;
+    unmappedCount?: number;
 }
 
 export default function CampaignDirectoryHeader({
@@ -60,7 +62,9 @@ export default function CampaignDirectoryHeader({
     copySuccess = false,
     assessmentTemplates,
     periodLabel = '',
-    storeName = ''
+    storeName = '',
+    onAutoMapDictionary,
+    unmappedCount = 0
 }: Props) {
     return (
         <div className="bg-white rounded-3xl border border-slate-200 p-4 sm:p-5 shadow-xs space-y-4 font-avo">
@@ -150,17 +154,29 @@ export default function CampaignDirectoryHeader({
                         copyTextLabel="Chép Text Zalo"
                     />
 
-                    {/* Dán Nhanh Excel & Thêm Mới (Cho Admin / Quản lý) */}
+                    {/* Dán Nhanh Excel & Thêm Mới & Tự Động Mapping (Cho Admin / Quản lý) */}
                     {canManage && (
                         <>
+                            {onAutoMapDictionary && unmappedCount !== undefined && unmappedCount > 0 && (
+                                <button
+                                    type="button"
+                                    onClick={onAutoMapDictionary}
+                                    className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
+                                    title={`Tự động mapping ${unmappedCount} chương trình với Tên viết tắt và khóa dữ liệu nhập trong Từ điển thi đua`}
+                                >
+                                    <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                                    <span>Mapping Từ Điển ({unmappedCount})</span>
+                                </button>
+                            )}
+
                             <button
                                 type="button"
                                 onClick={onOpenPasteModal}
-                                className="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                                title="Dán nhanh hàng loạt từ bảng Excel"
+                                className="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
+                                title="Nhập dữ liệu từ file Excel (.xlsx) hoặc dán nhanh nhiều chương trình"
                             >
                                 <FileSpreadsheet className="w-3.5 h-3.5 text-purple-600" />
-                                <span className="hidden sm:inline">Dán Excel</span>
+                                <span className="hidden sm:inline">Nhập / Dán Excel</span>
                             </button>
 
                             <button

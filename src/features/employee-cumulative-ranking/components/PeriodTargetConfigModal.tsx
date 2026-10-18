@@ -58,8 +58,6 @@ export default function PeriodTargetConfigModal({
         return Math.max(6, ...employees.map(e => String(e.employee_id || '').trim().length));
     }, [employees]);
 
-    if (!isOpen) return null;
-
     const [periodTitle, setPeriodTitle] = useState<string>(
         `Giai đoạn ${fromDate} - ${toDate}`
     );
@@ -84,6 +82,8 @@ export default function PeriodTargetConfigModal({
 
     // Nạp dữ liệu cấu hình đã có (nếu có)
     useEffect(() => {
+        if (!isOpen) return;
+
         const loadConfig = async () => {
             setLoading(true);
             const check = await checkSupabasePeriodTargetTable();
@@ -112,7 +112,7 @@ export default function PeriodTargetConfigModal({
         };
 
         loadConfig();
-    }, [fromDate, toDate, selectedStore]);
+    }, [isOpen, fromDate, toDate, selectedStore]);
 
     // Thay đổi target của 1 nhân viên
     const handleEmpTargetChange = (empId: string, valStr: string) => {
@@ -233,6 +233,8 @@ export default function PeriodTargetConfigModal({
             showToast(`⚠️ ${res.error || 'Lỗi khi xóa'}`);
         }
     };
+
+    if (!isOpen) return null;
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-2 sm:p-4 animate-fade-in font-avo">

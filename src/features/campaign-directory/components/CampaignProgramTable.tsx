@@ -1,6 +1,6 @@
-import React from 'react';
-import { Edit3, Trash2, Gift, FileText } from 'lucide-react';
+import { Edit3, Trash2, Gift, FileText, Tag } from 'lucide-react';
 import type { CampaignProgramItem } from '../types';
+import FormattedCampaignText from './FormattedCampaignText';
 
 interface Props {
     items: CampaignProgramItem[];
@@ -98,62 +98,69 @@ export default function CampaignProgramTable({
 
                                     {/* Chương trình thi đua */}
                                     <td className="py-2.5 px-3 font-extrabold text-slate-900 border-r border-slate-100">
-                                        <div className="space-y-0.5">
-                                            <div className="text-xs leading-snug">{item.program_name}</div>
-                                            {item.target_period && (
-                                                <div className="text-[10px] text-slate-400 font-normal">
-                                                    Kỳ: {item.target_period}
-                                                </div>
-                                            )}
-                                        </div>
-                                    </td>
+                                         <div className="space-y-1">
+                                             <div className="flex items-center gap-1.5 flex-wrap">
+                                                 <span className="text-xs leading-snug">{item.program_name}</span>
+                                                 {item.short_name && (
+                                                     <span
+                                                         className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-md text-[10px] font-black bg-purple-50 text-purple-900 border border-purple-200"
+                                                         title={`Tên viết tắt cấu hình admin • Khóa nhập: ${item.mapped_key || item.short_name}`}
+                                                     >
+                                                         <Tag className="w-2.5 h-2.5 text-purple-600" />
+                                                         <span>{item.short_name}</span>
+                                                     </span>
+                                                 )}
+                                             </div>
+                                             {item.target_period && (
+                                                 <div className="text-[10px] text-slate-400 font-normal">
+                                                     Kỳ: {item.target_period}
+                                                 </div>
+                                             )}
+                                         </div>
+                                     </td>
 
-                                    {/* Định hướng */}
-                                    <td className="py-2.5 px-2 text-center border-r border-slate-100 whitespace-nowrap">
-                                        <span className={`px-2 py-0.5 rounded-md text-[10.5px] font-bold border ${
-                                            item.orientation === 'Chính'
-                                                ? 'bg-rose-50 text-rose-800 border-rose-200'
-                                                : item.orientation === 'Bán kèm'
-                                                ? 'bg-purple-50 text-purple-800 border-purple-200'
-                                                : 'bg-amber-50 text-amber-800 border-amber-200'
-                                        }`}>
-                                            {item.orientation}
-                                        </span>
-                                    </td>
+                                     {/* Định hướng */}
+                                     <td className="py-2.5 px-2 text-center border-r border-slate-100 whitespace-nowrap">
+                                         <span className={`px-2 py-0.5 rounded-md text-[10.5px] font-bold border ${
+                                             item.orientation === 'Chính'
+                                                 ? 'bg-rose-50 text-rose-800 border-rose-200'
+                                                 : item.orientation === 'Bán kèm'
+                                                 ? 'bg-purple-50 text-purple-800 border-purple-200'
+                                                 : 'bg-amber-50 text-amber-800 border-amber-200'
+                                         }`}>
+                                             {item.orientation}
+                                         </span>
+                                     </td>
 
-                                    {/* Cách tính */}
-                                    <td className="py-2.5 px-2 text-center border-r border-slate-100 whitespace-nowrap">
-                                        <span className="px-2 py-0.5 rounded-md text-[10.5px] font-black font-mono bg-blue-50 text-blue-900 border border-blue-200">
-                                            {item.calculation_method}
-                                        </span>
-                                    </td>
+                                     {/* Cách tính */}
+                                     <td className="py-2.5 px-2 text-center border-r border-slate-100 whitespace-nowrap">
+                                         <span className="px-2 py-0.5 rounded-md text-[10.5px] font-black font-mono bg-blue-50 text-blue-900 border border-blue-200">
+                                             {item.calculation_method}
+                                         </span>
+                                     </td>
 
-                                    {/* Thể lệ */}
-                                    <td className="py-2.5 px-3 text-slate-700 text-xs border-r border-slate-100">
-                                        <p className="line-clamp-3 leading-relaxed whitespace-pre-line" title={item.rules}>
-                                            {item.rules}
-                                        </p>
-                                    </td>
+                                     {/* Thể lệ */}
+                                     <td className="py-2.5 px-3 text-slate-700 text-xs border-r border-slate-100 min-w-[220px]">
+                                         <div className="line-clamp-4 leading-relaxed">
+                                             <FormattedCampaignText text={item.rules} fallback="Chưa cập nhật thể lệ chi tiết." />
+                                         </div>
+                                     </td>
 
-                                    {/* Trạng thái sản phẩm */}
-                                    <td className="py-2.5 px-2 text-center border-r border-slate-100 whitespace-nowrap">
-                                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-50 text-slate-700 border border-slate-200">
-                                            {item.product_status}
-                                        </span>
-                                    </td>
+                                     {/* Trạng thái sản phẩm */}
+                                     <td className="py-2.5 px-2 text-center border-r border-slate-100 whitespace-nowrap">
+                                         <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-50 text-slate-700 border border-slate-200">
+                                             {item.product_status}
+                                         </span>
+                                     </td>
 
-                                    {/* Cơ hội (CTKM) */}
-                                    {showOpportunity && (
-                                        <td className="py-2.5 px-3 border-r border-slate-100">
-                                            {item.opportunity ? (
-                                                <p className="text-amber-950 font-semibold text-xs line-clamp-3 leading-relaxed" title={item.opportunity}>
-                                                    {item.opportunity}
-                                                </p>
-                                            ) : (
-                                                <span className="text-slate-300 italic text-[11px]">—</span>
-                                            )}
-                                        </td>
-                                    )}
+                                     {/* Cơ hội (CTKM) */}
+                                     {showOpportunity && (
+                                         <td className="py-2.5 px-3 border-r border-slate-100 min-w-[200px]">
+                                             <div className="line-clamp-4 leading-relaxed text-amber-950 font-medium">
+                                                 <FormattedCampaignText text={item.opportunity} fallback="—" />
+                                             </div>
+                                         </td>
+                                     )}
 
                                     {/* Thao tác */}
                                     {canManage && (

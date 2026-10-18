@@ -18,6 +18,7 @@ import {
     CheckCircle2
 } from 'lucide-react';
 import type { CampaignProgramItem } from '../types';
+import FormattedCampaignText from './FormattedCampaignText';
 
 interface Props {
     item: CampaignProgramItem;
@@ -211,13 +212,22 @@ ${item.rules}${oppSection ? `\n${oppSection}` : ''}`;
                         <div className="min-w-0 flex-1 space-y-1">
                             <div className="flex items-center gap-1.5 flex-wrap">
                                 <span className={`px-2 py-0.5 rounded-md text-[10.5px] font-black uppercase tracking-wider ${getGroupBadge(item.group_name)}`}>
-                                    {item.group_name}
+                                     {item.group_name}
                                 </span>
+                                {item.short_name && (
+                                    <span
+                                        className="px-2 py-0.5 rounded-md text-[10.5px] font-black bg-purple-50 text-purple-900 border border-purple-200 inline-flex items-center gap-1"
+                                        title={`Tên viết tắt theo cấu hình admin • Khóa nhập: ${item.mapped_key || item.short_name}`}
+                                    >
+                                        <Tag className="w-3 h-3 text-purple-600" />
+                                        <span>{item.short_name}</span>
+                                    </span>
+                                )}
                                 <span className={`px-2 py-0.5 rounded-md text-[10.5px] border ${getOrientationBadge(item.orientation)}`}>
-                                    {item.orientation}
+                                     {item.orientation}
                                 </span>
                                 <span className={`px-2 py-0.5 rounded-md text-[10.5px] border ${getCalcBadge(item.calculation_method)}`}>
-                                    {item.calculation_method}
+                                     {item.calculation_method}
                                 </span>
                                 {!item.is_active && (
                                     <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200">
@@ -239,9 +249,9 @@ ${item.rules}${oppSection ? `\n${oppSection}` : ''}`;
                         <FileText className="w-3.5 h-3.5 text-blue-600 shrink-0" />
                         <span>Thể lệ & Điều kiện đạt</span>
                     </div>
-                    <p className="text-xs text-slate-800 leading-relaxed font-medium whitespace-pre-line pl-5">
-                        {item.rules || 'Chưa cập nhật thể lệ chi tiết.'}
-                    </p>
+                    <div className="text-xs text-slate-800 leading-relaxed font-medium pl-5">
+                        <FormattedCampaignText text={item.rules} fallback="Chưa cập nhật thể lệ chi tiết." />
+                    </div>
                 </div>
 
                 {/* Khối Cơ Hội / CTKM (Nếu có và đang bật hiển thị) */}
@@ -251,9 +261,9 @@ ${item.rules}${oppSection ? `\n${oppSection}` : ''}`;
                             <Gift className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                             <span>Cơ hội & Khuyến mãi (CTKM)</span>
                         </div>
-                        <p className="text-xs text-amber-950 leading-relaxed font-semibold pl-5 whitespace-pre-line">
-                            {item.opportunity}
-                        </p>
+                        <div className="text-xs text-amber-950 leading-relaxed font-medium pl-5">
+                            <FormattedCampaignText text={item.opportunity} />
+                        </div>
                     </div>
                 )}
 

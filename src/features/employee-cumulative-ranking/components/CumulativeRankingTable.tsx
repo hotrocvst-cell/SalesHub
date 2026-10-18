@@ -88,12 +88,12 @@ export default function CumulativeRankingTable({
 
                             {showTarget && (
                                 <th className="px-2.5 py-2.5 text-right min-w-[95px] text-amber-300 font-black bg-amber-950/70 border-x border-amber-600/30">
-                                    {summary.targetSource === 'PERIOD' ? 'Target đợt (tr) 🎯' : 'Target tháng (tr) 🎯'}
+                                    {summary.targetSource === 'PERIOD' ? 'Target 🎯' : 'Target 🎯'}
                                 </th>
                             )}
 
                             <th className="px-2.5 py-2.5 text-right min-w-[105px] text-emerald-300 font-black bg-slate-950/60">
-                                Lũy Kế DT (tr)
+                                Lũy Kế
                             </th>
 
                             {showTarget && (
@@ -103,7 +103,7 @@ export default function CumulativeRankingTable({
                             )}
 
                             <th className="px-2 py-2.5 text-right min-w-[65px] text-slate-300">
-                                % Đóng góp
+                                %ĐÓNG GÓP
                             </th>
 
                             {/* CÁC CỘT CHI TIẾT TỪNG NGÀY KHI CHẾ ĐỘ WITH_DAILY ĐƯỢC CHỌN */}
@@ -141,9 +141,8 @@ export default function CumulativeRankingTable({
                                 return (
                                     <tr
                                         key={row.employeeId || idx}
-                                        className={`hover:bg-slate-50/90 transition-colors ${
-                                            isTop3 ? 'bg-amber-50/20' : idx % 2 === 1 ? 'bg-slate-50/40' : 'bg-white'
-                                        }`}
+                                        className={`hover:bg-slate-50/90 transition-colors ${isTop3 ? 'bg-amber-50/20' : idx % 2 === 1 ? 'bg-slate-50/40' : 'bg-white'
+                                            }`}
                                     >
                                         {/* HẠNG */}
                                         <td className="px-2 py-2 text-center sticky left-0 z-10 bg-inherit border-r border-slate-100 whitespace-nowrap">
@@ -198,13 +197,12 @@ export default function CumulativeRankingTable({
                                             <td className="px-2 py-2 text-center font-mono">
                                                 {row.target > 0 ? (
                                                     <span
-                                                        className={`px-1.5 py-0.5 rounded-md text-[10px] font-black ${
-                                                            row.completionRate >= 100
-                                                                ? 'bg-emerald-100 text-emerald-800'
-                                                                : row.completionRate >= 80
+                                                        className={`px-1.5 py-0.5 rounded-md text-[10px] font-black ${row.completionRate >= 100
+                                                            ? 'bg-emerald-100 text-emerald-800'
+                                                            : row.completionRate >= 80
                                                                 ? 'bg-blue-100 text-blue-800'
                                                                 : 'bg-rose-100 text-rose-800'
-                                                        }`}
+                                                            }`}
                                                     >
                                                         {row.completionRate.toFixed(1)}%
                                                     </span>
@@ -225,9 +223,8 @@ export default function CumulativeRankingTable({
                                             return (
                                                 <td
                                                     key={d}
-                                                    className={`px-1.5 py-2 text-right font-mono border-l border-slate-100 whitespace-nowrap ${
-                                                        dayRev > 0 ? 'text-slate-800 font-bold' : 'text-slate-300'
-                                                    }`}
+                                                    className={`px-1.5 py-2 text-right font-mono border-l border-slate-100 whitespace-nowrap ${dayRev > 0 ? 'text-slate-800 font-bold' : 'text-slate-300'
+                                                        }`}
                                                 >
                                                     {dayRev > 0 ? formatValue(dayRev) : '-'}
                                                 </td>
@@ -325,29 +322,6 @@ export default function CumulativeRankingTable({
                         </tr>
                     </tfoot>
                 </table>
-            </div>
-
-            {/* DÒNG ĐỐI CHIẾU MINH BẠCH VÀ CHÚ THÍCH */}
-            <div className="p-2.5 sm:p-3 bg-slate-50 border-t border-slate-200 text-[10px] sm:text-[11px] text-slate-600 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                    <Info className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                    <span className="font-bold text-slate-800">Quy chuẩn dữ liệu:</span>
-                    <span>
-                        Hàng tổng là <strong>Doanh thu lũy kế của Siêu thị</strong> ({formatValue(storeCumulativeRevenue)} tr) theo dữ liệu chốt bc tháng.
-                    </span>
-                    {summary.targetSource === 'PERIOD' ? (
-                        <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300 font-black text-[9.5px]">
-                            🎯 Target giai đoạn riêng: {summary.activePeriodTitle}
-                        </span>
-                    ) : (
-                        <span className="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-800 border border-indigo-200 font-black text-[9.5px]">
-                            📅 Target Tháng đã cấu hình
-                        </span>
-                    )}
-                </div>
-                <div className="text-[10.5px] text-slate-500 font-bold">
-                    Sắp xếp theo: <span className="text-indigo-700 font-black">% Hoàn Thành (%HT) giảm dần</span>
-                </div>
             </div>
         </div>
     );

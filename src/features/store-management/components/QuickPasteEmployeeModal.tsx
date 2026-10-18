@@ -50,8 +50,6 @@ export default function QuickPasteEmployeeModal({
     const [isImporting, setIsImporting] = useState(false);
     const [importError, setImportError] = useState('');
 
-    if (!isOpen) return null;
-
     // Phân tích cú pháp văn bản: Vai trò cũng là bộ phận
     const parsedEmployees = useMemo(() => {
         if (!rawText.trim()) return [];
@@ -121,6 +119,8 @@ export default function QuickPasteEmployeeModal({
             setIsImporting(false);
         }
     };
+
+    if (!isOpen) return null;
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">

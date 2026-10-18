@@ -7,6 +7,8 @@ export interface CampaignProgramItem {
     id: string;
     group_name: CampaignGroup;          // Nhóm thi đua (ICT, CE, Dịch vụ...)
     program_name: string;                // Chương trình thi đua
+    short_name?: string;                 // Tên viết tắt / hiển thị theo cấu hình admin (từ điển thi đua)
+    mapped_key?: string;                 // Tên chương trình theo dữ liệu nhập (raw_key trong campaign_dictionary)
     orientation: CampaignOrientation;    // Định hướng (Chính, Phụ, Bán kèm)
     calculation_method: CampaignCalculationMethod; // Cách tính (Doanh thu, DTQĐ, Số lượng, SLQĐ)
     rules: string;                       // Thể lệ (điều kiện đạt, cách tính điểm/thưởng)

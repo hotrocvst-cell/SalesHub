@@ -40,8 +40,6 @@ export default function PeriodTargetSessionManagerModal({
     onOpenEditSession,
     onOpenCreateNew
 }: PeriodTargetSessionManagerModalProps) {
-    if (!isOpen) return null;
-
     const [sessions, setSessions] = useState<PeriodTargetConfig[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
     const [syncingAll, setSyncingAll] = useState<boolean>(false);
@@ -61,8 +59,9 @@ export default function PeriodTargetSessionManagerModal({
     };
 
     useEffect(() => {
+        if (!isOpen) return;
         loadSessions();
-    }, [currentStore]);
+    }, [isOpen, currentStore]);
 
     const handleSyncAll = async () => {
         setSyncingAll(true);
@@ -94,6 +93,8 @@ export default function PeriodTargetSessionManagerModal({
     };
 
     const unsyncedCount = sessions.filter(s => !s.isCloudStored).length;
+
+    if (!isOpen) return null;
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-3 sm:p-4 animate-fade-in">

@@ -8,6 +8,8 @@ CREATE TABLE IF NOT EXISTS public.campaign_programs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     group_name TEXT NOT NULL DEFAULT 'ICT',
     program_name TEXT NOT NULL,
+    short_name TEXT DEFAULT '',
+    mapped_key TEXT DEFAULT '',
     orientation TEXT NOT NULL DEFAULT 'Chính',
     calculation_method TEXT NOT NULL DEFAULT 'Doanh thu',
     rules TEXT NOT NULL DEFAULT '',
@@ -22,6 +24,10 @@ CREATE TABLE IF NOT EXISTS public.campaign_programs (
     updated_at TIMESTAMPTZ DEFAULT now(),
     created_by TEXT DEFAULT ''
 );
+
+-- Tự động bổ sung các cột mới nếu đã có bảng trước đó
+ALTER TABLE public.campaign_programs ADD COLUMN IF NOT EXISTS short_name TEXT DEFAULT '';
+ALTER TABLE public.campaign_programs ADD COLUMN IF NOT EXISTS mapped_key TEXT DEFAULT '';
 
 -- 2. KÍCH HOẠT ROW LEVEL SECURITY (RLS)
 ALTER TABLE public.campaign_programs ENABLE ROW LEVEL SECURITY;
@@ -191,6 +197,8 @@ export async function fetchCampaignPrograms(): Promise<{
                 id: d.id,
                 group_name: d.group_name || 'ICT',
                 program_name: d.program_name || '',
+                short_name: d.short_name || '',
+                mapped_key: d.mapped_key || '',
                 orientation: d.orientation || 'Chính',
                 calculation_method: d.calculation_method || 'Doanh thu',
                 rules: d.rules || '',
@@ -234,6 +242,8 @@ export async function saveCampaignProgram(
         id,
         group_name: item.group_name || 'ICT',
         program_name: item.program_name || 'Chương trình mới',
+        short_name: item.short_name || '',
+        mapped_key: item.mapped_key || '',
         orientation: item.orientation || 'Chính',
         calculation_method: item.calculation_method || 'Doanh thu',
         rules: item.rules || '',
@@ -268,6 +278,8 @@ export async function saveCampaignProgram(
                 id: fullItem.id,
                 group_name: fullItem.group_name,
                 program_name: fullItem.program_name,
+                short_name: fullItem.short_name || '',
+                mapped_key: fullItem.mapped_key || '',
                 orientation: fullItem.orientation,
                 calculation_method: fullItem.calculation_method,
                 rules: fullItem.rules,
@@ -302,6 +314,8 @@ export async function batchUpsertCampaignPrograms(
                 id: item.id.startsWith('seed-') ? undefined : item.id,
                 group_name: item.group_name,
                 program_name: item.program_name,
+                short_name: item.short_name || '',
+                mapped_key: item.mapped_key || '',
                 orientation: item.orientation,
                 calculation_method: item.calculation_method,
                 rules: item.rules,

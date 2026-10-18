@@ -18,6 +18,8 @@ import CampaignProgramPasteModal from './components/CampaignProgramPasteModal';
 import CampaignProgramSqlModal from './components/CampaignProgramSqlModal';
 import { useAuth } from '../../shared/contexts/AuthContext';
 import { useUserStoreCampaignFilter } from './hooks/useUserStoreCampaignFilter';
+import { fetchCampaignDictionary, type CampaignDictItem } from '../../core/lib/storage';
+import { matchCampaignDictionary } from './utils/campaignExcelHelper';
 import { CheckCircle2, Sparkles, AlertCircle, Copy, Download, Camera } from 'lucide-react';
 
 export default function CampaignDirectoryPage() {
@@ -32,6 +34,7 @@ export default function CampaignDirectoryPage() {
 
     // 1. Dữ liệu chương trình thi đua
     const [programs, setPrograms] = useState<CampaignProgramItem[]>([]);
+    const [campaignDict, setCampaignDict] = useState<CampaignDictItem[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
     const [cloudSource, setCloudSource] = useState<'cloud' | 'local'>('local');
     const [isCloudReady, setIsCloudReady] = useState<boolean>(false);
@@ -42,6 +45,11 @@ export default function CampaignDirectoryPage() {
     const [searchQuery, setSearchQuery] = useState<string>('');
     const [orientationFilter, setOrientationFilter] = useState<string>('ALL');
     const [calcFilter, setCalcFilter] = useState<string>('ALL');
+
+    // Số chương trình chưa mapping viết tắt
+    const unmappedCount = useMemo(() => {
+        return programs.filter(p => !p.short_name).length;
+    }, [programs]);
 
     // 2b. Tùy chọn ẩn/hiển thị Cơ hội & CTKM (Lưu bộ nhớ trình duyệt)
     const [showOpportunity, setShowOpportunity] = useState<boolean>(() => {
@@ -111,10 +119,16 @@ export default function CampaignDirectoryPage() {
     const loadPrograms = async () => {
         setLoading(true);
         try {
-            const res = await fetchCampaignPrograms();
+            const [res, dictRes] = await Promise.all([
+                fetchCampaignPrograms(),
+                fetchCampaignDictionary()
+            ]);
             setPrograms(res.data);
             setCloudSource(res.source);
             setIsCloudReady(res.cloudReady);
+            if (dictRes.success && dictRes.data) {
+                setCampaignDict(dictRes.data);
+            }
         } finally {
             setLoading(false);
         }
@@ -123,6 +137,33 @@ export default function CampaignDirectoryPage() {
     useEffect(() => {
         loadPrograms();
     }, []);
+
+    // Tự động mapping toàn bộ chương trình chưa có short_name với Từ điển thi đua
+    const handleAutoMapAllWithDict = async () => {
+        if (!canManage) {
+            showToast('⛔ Chỉ Admin mới có quyền mapping Từ điển thi đua!');
+            return;
+        }
+        let count = 0;
+        const updated = programs.map(p => {
+            if (!p.short_name) {
+                const m = matchCampaignDictionary(p.program_name, campaignDict);
+                if (m) {
+                    count++;
+                    return { ...p, short_name: m.short_name, mapped_key: m.mapped_key };
+                }
+            }
+            return p;
+        });
+
+        if (count > 0) {
+            await batchUpsertCampaignPrograms(updated);
+            setPrograms(updated);
+            showToast(`⚡ Đã tự động mapping thành công ${count} chương trình với Từ điển thi đua!`);
+        } else {
+            showToast('ℹ️ Toàn bộ chương trình đã được mapping hoặc không tìm thấy mục tương ứng.');
+        }
+    };
 
     // Danh sách các nhóm thi đua hiện có
     const groups = useMemo(() => {
@@ -156,11 +197,13 @@ export default function CampaignDirectoryPage() {
             if (searchQuery.trim()) {
                 const q = searchQuery.toLowerCase().trim();
                 const matchName = item.program_name.toLowerCase().includes(q);
+                const matchShort = (item.short_name || '').toLowerCase().includes(q);
+                const matchMapped = (item.mapped_key || '').toLowerCase().includes(q);
                 const matchRules = item.rules.toLowerCase().includes(q);
                 const matchOpp = (item.opportunity || '').toLowerCase().includes(q);
                 const matchGroup = item.group_name.toLowerCase().includes(q);
                 const matchStatus = item.product_status.toLowerCase().includes(q);
-                if (!matchName && !matchRules && !matchOpp && !matchGroup && !matchStatus) {
+                if (!matchName && !matchShort && !matchMapped && !matchRules && !matchOpp && !matchGroup && !matchStatus) {
                     return false;
                 }
             }
@@ -563,6 +606,8 @@ Số lượng: ${programsToExport.length} chương trình
                 assessmentTemplates={assessmentTemplates}
                 periodLabel={reportMonthDisplay}
                 storeName={selectedStore === 'all' ? 'Toàn Cụm' : selectedStore}
+                onAutoMapDictionary={handleAutoMapAllWithDict}
+                unmappedCount={unmappedCount}
             />
 
             {/* 2. Thanh Bộ Lọc & Lựa Chọn Checkbox (Tuân thủ Mục 10 - Store-first on dedicated row) */}
@@ -658,6 +703,7 @@ Số lượng: ${programsToExport.length} chương trình
                 onSave={handleSaveProgram}
                 editingItem={editingItem}
                 existingGroups={groups}
+                campaignDict={campaignDict}
             />
 
             <CampaignProgramPasteModal
@@ -665,6 +711,7 @@ Số lượng: ${programsToExport.length} chương trình
                 onClose={() => setIsPasteModalOpen(false)}
                 onBatchSave={handleBatchSave}
                 currentPrograms={programs}
+                campaignDict={campaignDict}
             />
 
             <CampaignProgramSqlModal

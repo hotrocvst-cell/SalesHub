@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { fetchStores, fetchEmployees, type StoreItem, type EmployeeItem } from '../../core/lib/storage';
-import { getYesterdayDateString, formatDate, getStartOfWeek } from '../../core/lib/formatters';
+import { getYesterdayDateString, formatDate, getStartOfWeek, getShortStoreName } from '../../core/lib/formatters';
 import { useUserStoreFilter } from '../../shared/hooks/useUserStoreFilter';
 import { useExcelExportPermission } from '../../shared/hooks/useExcelExportPermission';
 import type { CumulativeRankingViewMode, EmployeeCumulativeRankingRow, StoreCumulativeSummary, PeriodTargetConfig, TargetSelectionMode } from './types';
@@ -332,9 +332,13 @@ export default function EmployeeCumulativeRankingPage() {
                 allowTaint: true,
                 backgroundColor: '#f8fafc',
                 logging: false,
+                ignoreElements: (element) =>
+                    element.getAttribute('data-html2canvas-ignore') === 'true' ||
+                    element.getAttribute('data-export-ignore') === 'true',
                 onclone: (clonedDoc) => {
                     clonedDoc.documentElement.style.height = 'auto';
                     clonedDoc.body.style.height = 'auto';
+                    clonedDoc.querySelectorAll('[data-html2canvas-ignore="true"], [data-export-ignore="true"]').forEach(el => el.remove());
                     const el = clonedDoc.getElementById('cumulative-ranking-export-area');
                     if (el) {
                         el.style.height = 'auto';
@@ -470,6 +474,39 @@ export default function EmployeeCumulativeRankingPage() {
                 ref={reportRef}
                 className="max-w-[960px] mx-auto space-y-4"
             >
+                {/* 1. HEADER NỘI DUNG XUẤT BÁO CÁO (BAO GỒM TIÊU ĐỀ, SIÊU THỊ & GIAI ĐOẠN TÍNH DOANH THU) */}
+                <div className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3 font-avo">
+                    <div className="space-y-1.5">
+                        <div className="flex items-center gap-2.5">
+                            <div className="w-9 h-9 rounded-2xl bg-gradient-to-br from-amber-400 via-amber-500 to-amber-600 flex items-center justify-center text-white shadow-xs shrink-0">
+                                <Trophy className="w-5 h-5 text-white" />
+                            </div>
+                            <div>
+                                <h2 className="text-base sm:text-lg md:text-xl font-black text-slate-900 tracking-tight leading-tight mt-0.5">
+                                    XẾP HẠNG DOANH THU LŨY KẾ
+                                </h2>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 flex-wrap pt-0.5">
+
+                            <span className="text-xs sm:text-sm font-black text-indigo-950 bg-indigo-50 px-3 py-1 rounded-xl border border-indigo-200 flex items-center gap-1.5">
+                                📅 Giai đoạn: <strong>{formatDate(fromDate)}</strong> → <strong>{formatDate(toDate)}</strong>
+                                <span className="text-[11px] font-bold text-indigo-600">({summary.dateList.length} ngày)</span>
+                            </span>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-wrap md:justify-end">
+                        <span className="text-xs sm:text-sm font-black text-slate-800 bg-slate-100 px-3 py-1 rounded-xl border border-slate-200">
+                            🏪 {selectedStore === 'all' ? 'TOÀN CỤM SIÊU THỊ' : getShortStoreName(selectedStore)}
+                        </span>
+                        <div className="px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-black flex items-center gap-1.5">
+                            👥 <span>{summary.totalEmployeesWithSales} Nhân Viên</span>
+                        </div>
+                    </div>
+                </div>
+
                 {/* KHỐI KPI TỔNG HỢP */}
                 <CumulativeRankingKpiCards
                     summary={summary}
