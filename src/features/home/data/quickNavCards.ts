@@ -18,7 +18,9 @@ import {
     Tag,
     BarChart3,
     HeartPulse,
-    Music
+    Music,
+    Banknote,
+    Coins
 } from 'lucide-react';
 
 export interface QuickCard {
@@ -309,6 +311,18 @@ export const QUICK_NAV_CARDS: QuickCard[] = [
         iconColor: 'text-slate-600'
     },
     {
+        title: 'Tài Khoản Trải Nghiệm',
+        path: '/quan-tri-he-thong/tai-khoan-trai-nghiem',
+        groupTitle: 'HỆ THỐNG & CẤU HÌNH',
+        badge: '✨ Demo',
+        badgeColor: 'bg-amber-100 text-amber-800 border-amber-200',
+        description: 'Quản lý 1-3 tài khoản trải nghiệm quảng cáo cho khách & cấu hình hạn dùng theo ngày',
+        icon: UserCheck,
+        gradient: 'from-amber-500/10 via-orange-500/5 to-transparent hover:border-amber-300',
+        iconBg: 'bg-amber-100 text-amber-700',
+        iconColor: 'text-amber-600'
+    },
+    {
         title: 'Quản Trị Hệ Thống',
         path: '/quan-tri-he-thong',
         groupTitle: 'HỆ THỐNG & CẤU HÌNH',
@@ -319,6 +333,20 @@ export const QUICK_NAV_CARDS: QuickCard[] = [
         gradient: 'from-red-500/10 via-rose-500/5 to-transparent hover:border-red-300',
         iconBg: 'bg-red-100 text-red-700',
         iconColor: 'text-red-600'
+    },
+
+    // 6. HỖ TRỢ CVST
+    {
+        title: 'Kiểm Quỹ - Kiểm Tiền',
+        path: '/kiem-quy',
+        groupTitle: 'HỖ TRỢ CVST',
+        badge: '💵 Mới',
+        badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+        description: 'Đếm tiền ca trực, kiểm soát chênh lệch thừa thiếu, in bill nhiệt 80mm và lưu lịch sử quỹ',
+        icon: Banknote,
+        gradient: 'from-emerald-500/10 via-teal-500/5 to-transparent hover:border-emerald-300',
+        iconBg: 'bg-emerald-100 text-emerald-700',
+        iconColor: 'text-emerald-600'
     }
 ];
 
@@ -346,6 +374,12 @@ export const GROUP_CONFIGS: Record<string, { label: string; icon: React.Componen
         icon: Ticket,
         colorClass: 'text-pink-700',
         bgClass: 'bg-pink-50 text-pink-700 border-pink-200'
+    },
+    'HỖ TRỢ CVST': {
+        label: 'Hỗ Trợ CVST',
+        icon: Coins,
+        colorClass: 'text-teal-700',
+        bgClass: 'bg-teal-50 text-teal-700 border-teal-200'
     },
     'HỆ THỐNG & CẤU HÌNH': {
         label: 'Hệ Thống & Cấu Hình',

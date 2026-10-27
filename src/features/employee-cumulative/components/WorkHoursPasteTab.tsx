@@ -29,6 +29,11 @@ export default function WorkHoursPasteTab({ onApply, initialHoursMap = {} }: Pro
             if (!rawText) {
                 setRawText(formatWorkHoursToRawText(initialHoursMap));
             }
+        } else {
+            setManualAdjustMap({});
+            setBatches([]);
+            setRawText('');
+            setErrorMsg('');
         }
     }, [initialHoursMap]);
 

@@ -18,6 +18,7 @@ import { getStoreOperatingConfig, getShortenedEmployeeName } from '../../employe
 import { resolveCanonicalCampaign, isEmployeeInStore, normalizeCampaignToken } from '../../campaign-summary/utils/campaignSummaryStorage';
 import { formatDate, getYesterdayDateString, isStoreMatch, calculateRemainingTarget } from '../../../core/lib/formatters';
 import { useAuth } from '../../../shared/contexts/AuthContext';
+import { GUEST_DEMO_STORE } from '../../../core/lib/guestDemoStoreService';
 import type {
     CampaignProgressItem,
     EmployeeCampaignProgressDetail,
@@ -29,14 +30,31 @@ import type {
 export function useCampaignProgressData() {
     const { currentUser } = useAuth();
     const today = new Date();
-    const [selectedMonth, setSelectedMonth] = useState<number>(today.getMonth() + 1);
-    const [selectedYear, setSelectedYear] = useState<number>(today.getFullYear());
+    const [selectedMonth, setSelectedMonth] = useState<number>(() => {
+        if (currentUser?.is_guest) return 10;
+        return today.getMonth() + 1;
+    });
+    const [selectedYear, setSelectedYear] = useState<number>(() => {
+        if (currentUser?.is_guest) return 2026;
+        return today.getFullYear();
+    });
     const [selectedStore, setSelectedStore] = useState<string>(() => {
+        if (currentUser?.is_guest) {
+            return GUEST_DEMO_STORE;
+        }
         if (currentUser?.role === 'NHAN_VIEN' && currentUser.store_name) {
             return currentUser.store_name;
         }
         return 'all';
     });
+
+    useEffect(() => {
+        if (currentUser?.is_guest) {
+            setSelectedMonth(10);
+            setSelectedYear(2026);
+            setSelectedStore(GUEST_DEMO_STORE);
+        }
+    }, [currentUser?.is_guest]);
 
     const [stores, setStores] = useState<StoreItem[]>([]);
     const [employees, setEmployees] = useState<EmployeeItem[]>([]);

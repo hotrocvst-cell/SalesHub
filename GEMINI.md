@@ -34,13 +34,25 @@
 - **Tầng bảo mật**: Frontend chỉ để hiển thị, Row Level Security (RLS) tại Supabase là chốt chặn bảo mật cuối cùng.
 
 ## 4. QUY TẮC BẮT BUỘC KHI TẠO TRANG/PHÂN HỆ MỚI (NEW PAGE & PERMISSION REGISTRATION RULE)
+- **QUY TRÌNH TIẾP NHẬN & PHÊ DUYỆT KẾ HOẠCH TRƯỚC KHI CODE (PLANNING & APPROVAL FIRST)**:
+  - Khi nhận yêu cầu tạo bất kỳ một trang hoặc module mới nào từ Boss, Agent **TUYỆT ĐỐI KHÔNG TỰ Ý BẮT ĐẦU CODE NGAY**.
+  - **Bắt buộc thông tin lại kế hoạch triển khai tổng quan** theo các đầu mục lớn:
+    1. *Mục tiêu & Nghiệp vụ cốt lõi của trang*.
+    2. *Bố cục Giao diện (Mobile-First UI layout, KPI cards, Bảng biểu)*.
+    3. *Mô hình Dữ liệu & Lưu trữ Supabase (Bảng DDL, RLS, trạng thái Cloud)*.
+    4. *Kế hoạch đồng bộ 4 điểm chốt chặn và phân quyền*.
+  - **Sau khi Boss xem xét và xác nhận thông qua kế hoạch, Agent mới được phép tiến hành code.**
+- **MẶC ĐỊNH PHÂN QUYỀN TRANG MỚI: CHỈ DUY NHẤT ADMIN (DEFAULT ADMIN-ONLY ACCESS)**:
+  - Các trang mới phát triển đều ở trong giai đoạn thử nghiệm (beta/testing), vì vậy cấu hình phân quyền ban đầu **MẶC ĐỊNH CHỈ MỞ DUY NHẤT CHO VAI TRÒ ADMIN**:
+    `allowed_roles: ['ADMIN']` trong `src/core/lib/permissions.ts` (`APP_SYSTEM_PAGES_REGISTRY` và `DEFAULT_PAGE_PERMISSIONS`).
+  - Khi tính năng đã vận hành ổn định và có chỉ đạo từ Boss, mới tiến hành cấp quyền mở rộng cho các vai trò khác (`QUAN_LY`, `TRUONG_CA`, `NHAN_VIEN`).
 - **BẮT BUỘC ĐỒNG BỘ 4 ĐIỂM CHỐT CHẶN (MANDATORY 4-POINT REGISTRATION)**:
   Mỗi khi tạo bất kỳ trang, phân hệ, hoặc tuyến đường (route) mới nào trên hệ thống SalesHub, nhà phát triển và Agent **BẮT BUỘC PHẢI KHAI BÁO ĐỒNG BỘ TẠI 4 VỊ TRÍ**, tuyệt đối không được bỏ sót:
   1. **Router thực thi chính (`src/App.tsx`)**:
      - Khai báo import trang dạng `lazy()` và đăng ký thẻ `<Route path="/duong-dan" element={<ProtectedRoute path="/duong-dan"><TrangMoi /></ProtectedRoute>} />`.
      - *Lưu ý*: `App.tsx` là Router chính điều hướng của ứng dụng và thực thi `ProtectedRoute`, bắt buộc phải có route tại đây.
   2. **Quản trị phân quyền (`src/core/lib/permissions.ts`)**:
-     - Khai báo trang vào `APP_SYSTEM_PAGES_REGISTRY` và `DEFAULT_PAGE_PERMISSIONS` với đầy đủ: `page_key`, `page_name`, `path`, `group_title`, `description`, `is_enabled: true`, `allowed_roles` và `order_index`.
+     - Khai báo trang vào `APP_SYSTEM_PAGES_REGISTRY` và `DEFAULT_PAGE_PERMISSIONS` với đầy đủ: `page_key`, `page_name`, `path`, `group_title`, `description`, `is_enabled: true`, `allowed_roles: ['ADMIN']` (mặc định Admin) và `order_index`.
      - Tránh tuyệt đối việc trang bị chặn bởi `ProtectedRoute` do không tìm thấy định nghĩa phân quyền hoặc chưa có vai trò được phép.
   3. **Menu điều hướng Sidebar (`src/shared/components/layout/SidebarNav.tsx`)**:
      - Thêm mục điều hướng (name, path, icon, badge) vào đúng nhóm chức năng tương ứng trong `NAVIGATION_GROUPS`.
@@ -62,7 +74,7 @@
 - **CHUẨN HÓA SCHEMA DDL, SẴN SÀNG KHỞI TẠO BẢNG & BẢO MẬT RLS**:
   - Mọi thực thể dữ liệu mới trên Supabase bắt buộc phải có câu lệnh SQL DDL chuẩn (`CREATE TABLE`, `ROW LEVEL SECURITY`, `INDEX`, `POLICIES` cho phép phân quyền truy cập).
   - Phải có hàm kiểm tra tính sẵn sàng của bảng (nhận diện lỗi mã `PGRST205: Could not find table in schema cache`) để cảnh báo minh bạch trên giao diện nếu bảng chưa được tạo.
-  - Giao diện trang quản trị phải có thông báo trạng thái kết nối Cloud (🟢 Đã kết nối / 🟡 Cảnh báo chưa tạo bảng) và cung cấp modal/nút hỗ trợ sao chép SQL để Quản trị viên dễ dàng dán chạy 1 lần trong Supabase SQL Editor.
+  - Giao diện trang quản trị phải có thông báo trạng thái kết nối Cloud (🟢 Đã kết nối / 🟡 Cảnh báo chưa tạo bảng) và cung cấp modal/nút hỗ trợ sao chép SQL dành riêng cho Quản trị viên (Admin-only) để dễ dàng dán chạy 1 lần trong Supabase SQL Editor.
 - **ĐỒNG BỘ ĐA THIẾT BỊ XUYÊN SUỐT (CROSS-DEVICE CONSISTENCY)**:
   - Dữ liệu cấu hình, cấp phát do Quản lý/Admin nạp từ máy tính để bàn (PC) phải phản ánh ngay lập tức và chính xác trên điện thoại di động (smartphone/Messaging App) của nhân viên và ngược lại thông qua Supabase Cloud.
 
@@ -86,8 +98,8 @@
   - Tất cả các báo cáo, phân hệ quản lý hoặc trang chức năng có liên quan đến lưu trữ dữ liệu (phiên nhân viên, chỉ tiêu thi đua, target giai đoạn, chốt số kinh doanh, voucher,...) **BẮT BUỘC PHẢI CÓ THÀNH PHẦN BÁO CÁO Ở ĐẦU TRANG** (`CloudDataSyncStatusBanner`):
     1. **Nguồn dữ liệu hiện tại**: Supabase Cloud hay LocalStorage cache.
     2. **Trạng thái đồng bộ**: Đã đồng bộ thời gian thực hay còn bản ghi máy khách chưa đồng bộ.
-    3. **Trạng thái sẵn sàng kết nối Cloud**: Bảng cơ sở dữ liệu Supabase đã tồn tại hay chưa (nếu chưa, hiển thị cảnh báo kèm nút xem/sao chép mã SQL DDL để Quản trị viên kích hoạt).
-  - Thành phần này luôn gắn thuộc tính `data-html2canvas-ignore="true"` và `data-export-ignore="true"` để không bao giờ bị dính vào hình ảnh báo cáo khi người dùng xuất ảnh gửi Zalo.
+    3. **Trạng thái sẵn sàng kết nối Cloud**: Bảng cơ sở dữ liệu Supabase đã tồn tại hay chưa (nếu chưa, hiển thị cảnh báo; nút xem/sao chép mã SQL DDL chỉ hiển thị cho tài khoản Quản trị viên ADMIN theo Quy chuẩn 12).
+  - Thành phần này luôn gắn thuộc tính `data-html2canvas-ignore="true"` và `data-export-ignore="true"` để không bao giờ bị dính vào hình ảnh báo cáo khi người dùng xuất ảnh báo cáo.
 
 ## 9. QUY CHUẨN XUẤT FILE EXCEL TOÀN HỆ THỐNG (MANDATORY EXCEL EXPORT PERMISSION RULE)
 - **MẶC ĐỊNH KHÓA VÀ ẨN NÚT XUẤT EXCEL (LOCKED & HIDDEN BY DEFAULT)**:
@@ -126,4 +138,19 @@
     ```
     và gắn thuộc tính `style={{ minWidth: `${maxIdLength + 2.2}ch`, width: `${maxIdLength + 2.2}ch` }}`.
   - **Mục đích**: Đảm bảo tất cả các badge mã nhân viên có kích thước hoàn toàn bằng nhau, giúp toàn bộ phần tên nhân viên phía sau được căn thẳng tắp một hàng dọc từ trên xuống dưới, tạo giao diện chuyên nghiệp, sắc nét và ngay ngắn.
+
+## 12. QUY CHUẨN NÚT VÀ MODAL MÃ LỆNH SQL SUPABASE CHỈ KHẢ DỤNG VỚI ADMIN (ADMIN-ONLY SQL ACCESS RULE)
+- **CHỈ HIỂN THỊ NÚT MÃ SQL CHO TÀI KHOẢN ADMIN (ADMIN ONLY)**:
+  - Mọi nút bấm, biểu tượng (icon `<Code />`, `<Database />`), hoặc liên kết mở Modal xem/sao chép mã lệnh SQL Supabase (`showSqlModal`, mã DDL `CREATE TABLE`, lệnh kích hoạt Cloud...) trên toàn bộ hệ thống (trên thanh công cụ, trong banner cảnh báo trạng thái lưu trữ, hoặc trong các modal cấu hình) **BẮT BUỘC CHỈ KHẢ DỤNG VÀ CHỈ HIỂN THỊ VỚI TÀI KHOẢN ADMIN** (`isAdmin` hoặc vai trò `ADMIN`).
+  - Các tài khoản người dùng khác (Quản lý khu vực, Quản lý siêu thị, Trưởng ca, Nhân viên) tuyệt đối không nhìn thấy các nút mã SQL này, tránh làm lộ cấu trúc cơ sở dữ liệu và tránh gây nhầm lẫn/hoang mang trong vận hành hàng ngày.
+  - Điều kiện hiển thị và điều kiện render Modal phải luôn kiểm tra kèm `isAdmin` (ví dụ: `{isAdmin && (<button onClick={() => setShowSqlModal(true)}>...</button>)}` và `{showSqlModal && isAdmin && (<Modal ... />)}`).
+
+## 13. QUY CHUẨN FONT CHỮ TOÀN HỆ THỐNG (SYSTEM FONT CONVENTIONS)
+- **FONT ROBOTO LÀ FONT TIÊU CHUẨN TOÀN HỆ THỐNG (SYSTEM-WIDE ROBOTO STANDARD)**:
+  - Toàn bộ giao diện hệ thống SalesHub (thanh điều hướng Sidebar, Header, Modal, Form nhập liệu, Thẻ thông tin KPI, Bộ lọc, Nút bấm và các trang tính năng) **MẶC ĐỊNH SỬ DỤNG FONT ROBOTO** (`font-family: 'Roboto', sans-serif`).
+  - Font Roboto được tải từ Google Fonts (các trọng số `300, 400, 500, 700, 900`) qua `index.html`, `src/index.css` và cấu hình Tailwind `fontFamily.sans`, `fontFamily.roboto`.
+- **NGOẠI LỆ ĐẶC BIỆT DÀNH CHO BẢNG BÁO CÁO & XUẤT ẢNH: FONT UTM-AVO (UTM-AVO EXCEPTION FOR REPORTS)**:
+  - Các module, bảng dữ liệu kết quả kinh doanh và vùng xuất ảnh đã được cấu hình font **UTM-Avo** (`.report-table`, `[data-report-table="true"]`, `.font-avo`) **TUYỆT ĐỐI GIỮ NGUYÊN FONT UTM-AVO**.
+  - Font UTM-Avo mang tính nhận diện thương hiệu đặc thù cho các báo cáo xuất gửi Messaging App, đảm bảo số liệu kinh doanh hiển thị rõ nét, cân đối và tương thích tuyệt đối khi render canvas/hình ảnh.
+
 

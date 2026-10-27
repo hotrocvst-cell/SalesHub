@@ -9,6 +9,7 @@ import {
     auditRouteCoverage,
     syncMissingPagesToPermissions,
     DEFAULT_PAGE_PERMISSIONS,
+    isGuestPathRestricted,
     type SystemPagePermission,
     type RouteAuditReport
 } from '../../core/lib/permissions';
@@ -114,7 +115,37 @@ export function PermissionProvider({ children }: { children: ReactNode }) {
             page = permissions.find(p => p.path !== '/' && p.path.startsWith(path + '/'));
         }
 
-        const isAdmin = currentUser?.role === 'ADMIN';
+        const isGuest = Boolean(currentUser?.is_guest);
+        const isAdmin = !isGuest && currentUser?.role === 'ADMIN';
+
+        // CHỐT CHẶN BẢO VỆ CHẾ ĐỘ TRẢI NGHIỆM (GUEST / TRIAL SANDBOX):
+        // 1. Tuyệt đối khóa toàn bộ các phân hệ cấu hình nghiệp vụ, nạp số liệu & quản trị
+        if (isGuest && isGuestPathRestricted(path)) {
+            return {
+                allowed: false,
+                isEnabled: true,
+                roleAllowed: false,
+                storeAllowed: false,
+                page
+            };
+        }
+
+        // 2. Phân quyền linh hoạt cho tài khoản trải nghiệm dựa trên cờ allow_guest của từng trang
+        if (isGuest) {
+            if (!page) {
+                // Hỗ trợ route phụ / redirect
+                return { allowed: true, isEnabled: true, roleAllowed: true, storeAllowed: true };
+            }
+            const isEnabled = Boolean(page.is_enabled);
+            const guestAllowed = Boolean(page.allow_guest);
+            return {
+                allowed: isEnabled && guestAllowed,
+                isEnabled,
+                roleAllowed: guestAllowed,
+                storeAllowed: true,
+                page
+            };
+        }
 
         // Trang Quản trị hệ thống: ĐẶC BIỆT CHỈ DÀNH CHO ADMIN
         if (path === '/quan-tri-he-thong' || (page && page.path === '/quan-tri-he-thong')) {

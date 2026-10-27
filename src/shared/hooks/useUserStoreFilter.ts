@@ -2,6 +2,7 @@ import { useMemo, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import type { StoreItem } from '../../core/lib/storage';
 import { isStoreMatch } from '../../core/lib/formatters';
+import { GUEST_DEMO_STORE, GUEST_DEMO_STORE_CODE, getGuestDemoStoreItem } from '../../core/lib/guestDemoStoreService';
 
 export function useUserStoreFilter(
     stores: StoreItem[],
@@ -9,11 +10,27 @@ export function useUserStoreFilter(
     setSelectedStore: (store: string) => void
 ) {
     const { currentUser, isAdmin } = useAuth();
+    const isGuest = Boolean(currentUser?.is_guest);
 
     // Danh sách siêu thị khả dụng theo phân quyền của tài khoản hiện tại
     const allowedStores = useMemo<StoreItem[]>(() => {
-        if (!stores || stores.length === 0) return [];
+        if (!stores || stores.length === 0) {
+            return isGuest ? [getGuestDemoStoreItem()] : [];
+        }
         if (isAdmin) return stores;
+
+        // TÀI KHOẢN TRẢI NGHIỆM: CỐ ĐỊNH DUY NHẤT SIÊU THỊ 838679 - DEMO STORE
+        if (isGuest) {
+            const guestTarget = currentUser.store_name || GUEST_DEMO_STORE;
+            const matched = stores.filter(s =>
+                isStoreMatch(s.name, guestTarget, stores) ||
+                s.code === GUEST_DEMO_STORE_CODE ||
+                s.name.includes(GUEST_DEMO_STORE_CODE) ||
+                s.name.includes('Demo Store')
+            );
+            if (matched.length > 0) return matched;
+            return [getGuestDemoStoreItem()];
+        }
 
         if (currentUser.role === 'NHAN_VIEN') {
             // Nhân viên: CHỈ ĐƯỢC XEM SIÊU THỊ ĐÃ ĐĂNG KÝ
@@ -33,11 +50,20 @@ export function useUserStoreFilter(
 
         if (accessible.length === 0) return stores;
         return stores.filter(s => accessible.some(acc => isStoreMatch(s.name, acc, stores)));
-    }, [stores, currentUser, isAdmin]);
+    }, [stores, currentUser, isAdmin, isGuest]);
 
     // Tự động kiểm soát selectedStore nếu người dùng không có quyền xem siêu thị hiện tại
     useEffect(() => {
         if (isAdmin) return; // Admin được xem mọi thứ kể cả 'all'
+
+        if (isGuest) {
+            // Tài khoản trải nghiệm: BẮT BUỘC CHỌN SHOP 838679 - DEMO STORE
+            const guestStore = allowedStores[0]?.name || GUEST_DEMO_STORE;
+            if (guestStore && selectedStore !== guestStore) {
+                setSelectedStore(guestStore);
+            }
+            return;
+        }
 
         if (currentUser.role === 'NHAN_VIEN') {
             // Nhân viên: BẮT BUỘC CHỌN SHOP CỦA MÌNH, KHÔNG ĐƯỢC CHỌN 'all' HOẶC SHOP KHÁC
@@ -62,13 +88,13 @@ export function useUserStoreFilter(
                 setSelectedStore(allowedStores[0].name);
             }
         }
-    }, [allowedStores, selectedStore, currentUser, isAdmin, setSelectedStore, stores]);
+    }, [allowedStores, selectedStore, currentUser, isAdmin, isGuest, setSelectedStore, stores]);
 
-    const isLockedToSingleStore = !isAdmin && currentUser.role === 'NHAN_VIEN';
+    const isLockedToSingleStore = (!isAdmin && currentUser.role === 'NHAN_VIEN') || isGuest;
 
     return {
         allowedStores,
         isLockedToSingleStore,
-        canViewAllStores: isAdmin || (currentUser.role !== 'NHAN_VIEN' && allowedStores.length > 1)
+        canViewAllStores: !isGuest && (isAdmin || (currentUser.role !== 'NHAN_VIEN' && allowedStores.length > 1))
     };
 }

@@ -25,6 +25,7 @@ export interface VoucherCampaignStatusConfig {
     campaign_name: string;
     denomination?: number;
     is_ended: boolean;                 // true = Hết mã hoàn toàn / Kết thúc chương trình; false = Đang hoạt động / Còn nạp thêm
+    is_hidden?: boolean;               // true = Ẩn chương trình (Lưu trữ); false = Đang hiển thị hoạt động
     updated_by?: string;
     updated_at?: string;
 }
@@ -37,6 +38,7 @@ export interface DenominationStock {
     used: number;
     description?: string;              // Điều kiện sử dụng của mệnh giá
     is_ended?: boolean;                // Trạng thái: Hết mã hoàn toàn - Kết thúc chương trình
+    is_hidden?: boolean;               // Trạng thái: Đã ẩn mệnh giá (lưu trữ)
 }
 
 export interface VoucherCampaignSummary {
@@ -45,6 +47,7 @@ export interface VoucherCampaignSummary {
     total_vouchers: number;
     denominations: DenominationStock[];
     is_ended?: boolean;                // Toàn bộ chương trình đã kết thúc
+    is_hidden?: boolean;               // Toàn bộ chương trình đã được ẩn (lưu trữ)
 }
 
 export interface VoucherStockForecast {
@@ -60,6 +63,7 @@ export interface VoucherStockForecast {
     alertLevel: 'OUT_OF_STOCK' | 'CRITICAL' | 'WARNING' | 'SAFE' | 'INACTIVE' | 'ENDED';
     alertMessage: string;
     is_ended?: boolean;                // Đã chốt kết thúc chương trình
+    is_hidden?: boolean;               // Đã ẩn chương trình (lưu trữ kho)
 }
 
 export interface VoucherClaimRequest {

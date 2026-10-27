@@ -230,6 +230,16 @@ export function calculateStockForecasts(
         return false;
     };
 
+    // Helper kiểm tra trạng thái ẩn chương trình
+    const checkIsHidden = (cName: string) => {
+        if (!campaignStatuses) return false;
+        const campVal = (campaignStatuses as any)[cName];
+        if (campVal !== undefined && typeof campVal === 'object') {
+            return Boolean(campVal.is_hidden);
+        }
+        return false;
+    };
+
     groups.forEach((g) => {
         // Tính tốc độ trung bình sử dụng mỗi ngày:
         // Lấy các lượt cấp trong 14 ngày gần nhất (hoặc toàn bộ nếu ít hơn 14 ngày)
@@ -291,6 +301,8 @@ export function calculateStockForecasts(
 
         const descriptionsArr = Array.from(g.descriptions);
 
+        const isHidden = checkIsHidden(g.campaign_name);
+
         forecasts.push({
             campaign_name: g.campaign_name,
             denomination: g.denomination,
@@ -303,7 +315,8 @@ export function calculateStockForecasts(
             daysRemaining,
             alertLevel,
             alertMessage,
-            is_ended: isEnded
+            is_ended: isEnded,
+            is_hidden: isHidden
         });
     });
 

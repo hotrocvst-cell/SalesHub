@@ -12,6 +12,7 @@ import {
     Sparkles
 } from 'lucide-react';
 import { formatDate } from '../../../core/lib/formatters';
+import { useAuth } from '../../contexts/AuthContext';
 
 export interface CloudDataSyncStatusBannerProps {
     /** Nguồn dữ liệu hiện tại: 'cloud' (Supabase) | 'local' (LocalStorage cache) | 'hybrid' (kết hợp) */
@@ -51,6 +52,7 @@ export default function CloudDataSyncStatusBanner({
     compact = false,
     className = ''
 }: CloudDataSyncStatusBannerProps) {
+    const { isAdmin } = useAuth();
     const [isSyncing, setIsSyncing] = useState<boolean>(false);
     const [showSqlModal, setShowSqlModal] = useState<boolean>(false);
     const [sqlCopied, setSqlCopied] = useState<boolean>(false);
@@ -150,7 +152,7 @@ export default function CloudDataSyncStatusBanner({
                                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                                 <span>Bảng Cloud sẵn sàng {tableName ? `(${tableName})` : ''}</span>
                             </span>
-                        ) : (
+                        ) : isAdmin ? (
                             <button
                                 type="button"
                                 onClick={() => setShowSqlModal(true)}
@@ -159,6 +161,11 @@ export default function CloudDataSyncStatusBanner({
                                 <AlertTriangle className="w-3 h-3 text-rose-600 shrink-0" />
                                 <span>Chưa tạo bảng Cloud (Bấm xem SQL DDL)</span>
                             </button>
+                        ) : (
+                            <span className="text-rose-800 bg-rose-100 border border-rose-300 px-2 py-0.5 rounded-lg font-bold flex items-center gap-1">
+                                <AlertTriangle className="w-3 h-3 text-rose-600 shrink-0" />
+                                <span>Chưa tạo bảng Cloud</span>
+                            </span>
                         )}
                     </div>
 
@@ -193,7 +200,7 @@ export default function CloudDataSyncStatusBanner({
                         </button>
                     )}
 
-                    {sqlDdl && !tableReady && (
+                    {sqlDdl && !tableReady && isAdmin && (
                         <button
                             type="button"
                             onClick={() => setShowSqlModal(true)}
@@ -206,8 +213,8 @@ export default function CloudDataSyncStatusBanner({
                 </div>
             </div>
 
-            {/* MODAL XEM & SAO CHÉP SQL DDL NẾU BẢNG CHƯA TẠO */}
-            {showSqlModal && sqlDdl && (
+            {/* MODAL XEM & SAO CHÉP SQL DDL NẾU BẢNG CHƯA TẠO (CHỈ DÀNH CHO ADMIN) */}
+            {showSqlModal && sqlDdl && isAdmin && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 animate-fade-in">
                     <div className="bg-white rounded-2xl max-w-xl w-full border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
                         <div className="p-4 bg-slate-900 text-white flex items-center justify-between">

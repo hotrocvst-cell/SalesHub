@@ -163,7 +163,7 @@ export default function CampaignProgramCard({
         }
     };
 
-    // 3. Sao chép text tóm tắt gửi Zalo
+    // 3. Sao chép text tóm tắt
     const handleCopyZaloText = async () => {
         const oppSection = showOpportunity && item.opportunity
             ? `----------------------------------------\n🎁 CƠ HỘI & CTKM:\n${item.opportunity}`

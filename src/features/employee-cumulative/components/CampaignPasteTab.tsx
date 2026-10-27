@@ -27,9 +27,15 @@ export default function CampaignPasteTab({
             if (!rawText) {
                 setRawText(formatEmployeeCampaignToRawText(initialCampaigns));
             }
+        } else {
+            setCampaignList([]);
+            setRawText('');
+            setErrorMsg('');
         }
         if (initialMatrix && Object.keys(initialMatrix).length > 0) {
             setMatrix(initialMatrix);
+        } else {
+            setMatrix({});
         }
     }, [initialCampaigns, initialMatrix]);
 

@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback, useMemo, t
 import { type EmployeeItem, parseEmployeeRoleAndDept } from '../../core/lib/storage';
 import { supabase } from '../../core/lib/supabase';
 import { isStoreMatch } from '../../core/lib/formatters';
+import { GUEST_DEMO_STORE } from '../../core/lib/guestDemoStoreService';
 import {
     type UserProfile,
     type UserRole,
@@ -36,6 +37,8 @@ export interface CurrentUser {
     status: UserAccountStatus;
     phone?: string;
     rejection_reason?: string;
+    is_guest?: boolean;
+    guest_expires_at?: string;
 }
 
 interface AuthContextType {
@@ -48,6 +51,7 @@ interface AuthContextType {
     isActualAdmin: boolean;
     isManager: boolean;
     isShiftLeader: boolean;
+    isGuest: boolean;
     accessibleStores: string[];
     canAccessStore: (storeName: string) => boolean;
     // Kiểm thử / Mô phỏng dành riêng cho Admin
@@ -99,23 +103,34 @@ export const ANONYMOUS_USER: CurrentUser = {
 };
 
 function profileToCurrentUser(profile: UserProfile, authUserId?: string, actualRole?: UserRole): CurrentUser {
-    const accessible = profile.accessible_stores && profile.accessible_stores.length > 0
-        ? profile.accessible_stores
-        : (profile.store_name ? [profile.store_name] : []);
+    const isGuestUser = Boolean(profile.is_guest);
+    const guestStore = GUEST_DEMO_STORE;
+    const effectiveStore = isGuestUser
+        ? (profile.store_name && (profile.store_name.includes('838679') || profile.store_name.includes('Demo Store')) ? profile.store_name : guestStore)
+        : profile.store_name;
+
+    const accessible = isGuestUser
+        ? [effectiveStore]
+        : (profile.accessible_stores && profile.accessible_stores.length > 0
+            ? profile.accessible_stores
+            : (effectiveStore ? [effectiveStore] : []));
+
     return {
         id: profile.id,
         auth_user_id: authUserId || profile.auth_user_id,
         email: profile.email,
         employee_id: profile.employee_id,
         full_name: profile.full_name,
-        store_name: profile.store_name,
+        store_name: effectiveStore,
         accessible_stores: accessible,
         role: profile.role,
         actual_role: actualRole || profile.role,
         role_title: profile.role_title,
         status: profile.status,
         phone: profile.phone,
-        rejection_reason: profile.rejection_reason
+        rejection_reason: profile.rejection_reason,
+        is_guest: profile.is_guest,
+        guest_expires_at: profile.guest_expires_at
     };
 }
 
@@ -129,9 +144,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 const parsed = JSON.parse(saved);
                 // Phải có cả id và email hợp lệ thì mới coi là đã đăng nhập trước đó
                 if (parsed && parsed.id && parsed.email) {
+                    const isGuest = Boolean(parsed.is_guest);
+                    const guestStore = GUEST_DEMO_STORE;
+                    const storeName = isGuest
+                        ? (parsed.store_name && (parsed.store_name.includes('838679') || parsed.store_name.includes('Demo Store')) ? parsed.store_name : guestStore)
+                        : parsed.store_name;
                     return {
                         ...parsed,
-                        accessible_stores: parsed.accessible_stores || (parsed.store_name ? [parsed.store_name] : []),
+                        store_name: storeName,
+                        accessible_stores: isGuest ? [storeName] : (parsed.accessible_stores || (storeName ? [storeName] : [])),
                         actual_role: parsed.actual_role || parsed.role || 'NHAN_VIEN',
                         status: parsed.status || 'ACTIVE'
                     };
@@ -187,6 +208,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Tính toán currentUser hiệu lực (đã áp dụng mô phỏng nếu Admin đang testing)
     const currentUser = useMemo<CurrentUser>(() => {
         if (!isActualAdmin || !impersonationState.isActive) {
+            if (rawUser.is_guest) {
+                const guestStore = (rawUser.store_name && (rawUser.store_name.includes('838679') || rawUser.store_name.includes('Demo Store')))
+                    ? rawUser.store_name
+                    : GUEST_DEMO_STORE;
+                return {
+                    ...rawUser,
+                    store_name: guestStore,
+                    accessible_stores: [guestStore]
+                };
+            }
             return rawUser;
         }
 
@@ -220,6 +251,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Danh sách siêu thị được phép xem của tài khoản hiện tại
     const accessibleStores = useMemo<string[]>(() => {
         if (!currentUser || !currentUser.id) return [];
+        if (currentUser.is_guest) {
+            return [currentUser.store_name || GUEST_DEMO_STORE];
+        }
         if (currentUser.role === 'ADMIN') return ['all'];
         if (currentUser.accessible_stores && currentUser.accessible_stores.length > 0) {
             return currentUser.accessible_stores;
@@ -230,6 +264,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Kiểm tra xem user hiện tại có quyền xem một siêu thị cụ thể không
     const canAccessStore = useCallback((storeName: string): boolean => {
         if (!currentUser) return false;
+        if (currentUser.is_guest) {
+            if (storeName === 'all' || storeName === 'Tổng') return false;
+            const guestStore = currentUser.store_name || GUEST_DEMO_STORE;
+            return isStoreMatch(guestStore, storeName) || isStoreMatch('838679', storeName);
+        }
         if (currentUser.role === 'ADMIN') return true;
         if (currentUser.role === 'NHAN_VIEN') {
             if (storeName === 'all') return false;
@@ -294,10 +333,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         };
     }, []);
 
-    const isAdmin = isAuthenticated && (currentUser.role === 'ADMIN');
-    const canConfigure = isAuthenticated && (currentUser.role === 'ADMIN' || currentUser.role === 'QUAN_LY' || currentUser.role === 'TRUONG_CA');
-    const isManager = isAuthenticated && (currentUser.role === 'ADMIN' || currentUser.role === 'QUAN_LY');
-    const isShiftLeader = isAuthenticated && (currentUser.role === 'TRUONG_CA');
+    const isGuest = Boolean(currentUser?.is_guest);
+    const isAdmin = isAuthenticated && !isGuest && (currentUser.role === 'ADMIN');
+    const canConfigure = isAuthenticated && !isGuest && (currentUser.role === 'ADMIN' || currentUser.role === 'QUAN_LY' || currentUser.role === 'TRUONG_CA');
+    const isManager = isAuthenticated && !isGuest && (currentUser.role === 'ADMIN' || currentUser.role === 'QUAN_LY');
+    const isShiftLeader = isAuthenticated && !isGuest && (currentUser.role === 'TRUONG_CA');
 
     // =========================================================================
     // HỆ THỐNG MÔ PHỎNG / TESTING PHÂN QUYỀN DÀNH CHO ADMIN
@@ -396,6 +436,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                         return {
                             success: false,
                             error: 'Mật khẩu không chính xác! Vui lòng kiểm tra lại hoặc liên hệ Quản trị viên (Admin) để cấp lại mật khẩu.'
+                        };
+                    }
+                }
+
+                // Kiểm tra giới hạn thời gian hoạt động theo ngày (Account Expiration)
+                if (profile.guest_expires_at) {
+                    const expiryDate = new Date(profile.guest_expires_at);
+                    expiryDate.setHours(23, 59, 59, 999);
+                    if (new Date() > expiryDate) {
+                        setIsLoading(false);
+                        const formatted = `${String(expiryDate.getDate()).padStart(2, '0')}/${String(expiryDate.getMonth() + 1).padStart(2, '0')}/${expiryDate.getFullYear()}`;
+                        return {
+                            success: false,
+                            error: `Tài khoản trải nghiệm đã hết hạn sử dụng vào ngày ${formatted}. Quý khách vui lòng liên hệ Quản trị viên để đăng ký gói Premium!`
                         };
                     }
                 }
@@ -585,7 +639,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     role_title: profile.role_title,
                     status: profile.status,
                     phone: profile.phone,
-                    rejection_reason: profile.rejection_reason
+                    rejection_reason: profile.rejection_reason,
+                    is_guest: profile.is_guest,
+                    guest_expires_at: profile.guest_expires_at
                 }));
             }
         } catch (e) {
@@ -689,6 +745,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 isActualAdmin,
                 isManager,
                 isShiftLeader,
+                isGuest,
                 accessibleStores,
                 canAccessStore,
                 isImpersonating,

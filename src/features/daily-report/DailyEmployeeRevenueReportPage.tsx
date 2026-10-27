@@ -50,6 +50,7 @@ import {
     LayoutGrid,
     Lock
 } from 'lucide-react';
+import { useAuth } from '../../shared/contexts/AuthContext';
 import { useUserStoreFilter } from '../../shared/hooks/useUserStoreFilter';
 import ReportActionButtons, { type AssessmentTemplate } from '../../shared/components/report/ReportActionButtons';
 import { calculate8KScale } from '../../shared/utils/exportImage';
@@ -59,6 +60,7 @@ const DRAFT_DATE_KEY = 'saleshub_daily_emp_revenue_date_v1';
 
 export default function DailyEmployeeRevenueReportPage() {
     const reportRef = useRef<HTMLDivElement>(null);
+    const { currentUser } = useAuth();
 
     // 1. DỮ LIỆU DANH BẠ HỆ THỐNG
     const [stores, setStores] = useState<StoreItem[]>([]);
@@ -102,7 +104,7 @@ export default function DailyEmployeeRevenueReportPage() {
     const [reminderViewMode, setReminderViewMode] = useState<'CARDS' | 'TABLE'>('CARDS');
 
     const [searchQuery, setSearchQuery] = useState<string>('');
-    const [sortField, setSortField] = useState<'rank' | 'qd' | 'actual' | 'installment' | 'qty' | 'name'>('qd');
+    const [sortField, setSortField] = useState<'rank' | 'qd' | 'actual' | 'installment' | 'qty' | 'name' | 'return_qd'>('qd');
     const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
     const [filterCategory, setFilterCategory] = useState<'ALL' | 'ACTIVE_ONLY' | 'TOP_30' | 'BELOW_AVG' | 'ZERO_OR_NEG' | 'ZERO_INSTALLMENT'>('ALL');
 
@@ -301,6 +303,7 @@ export default function DailyEmployeeRevenueReportPage() {
             if (sortField === 'rank') diff = a.rank - b.rank;
             else if (sortField === 'qd') diff = a.revenue_qd - b.revenue_qd;
             else if (sortField === 'actual') diff = a.revenue_actual - b.revenue_actual;
+            else if (sortField === 'return_qd') diff = (a.revenue_return_qd || 0) - (b.revenue_return_qd || 0);
             else if (sortField === 'installment') diff = a.installment_revenue - b.installment_revenue;
             else if (sortField === 'qty') diff = a.quantity - b.quantity;
             else if (sortField === 'name') diff = a.short_name.localeCompare(b.short_name, 'vi');
@@ -652,7 +655,7 @@ export default function DailyEmployeeRevenueReportPage() {
             },
             {
                 id: 'template_full_zalo',
-                label: 'Mẫu 3: Chi tiết gửi Zalo',
+                label: 'Mẫu 3: Chi tiết',
                 description: 'Bản báo cáo chi tiết đầy đủ định dạng nhóm chat Zalo',
                 content: fullZaloText
             }
@@ -706,7 +709,7 @@ export default function DailyEmployeeRevenueReportPage() {
                                     value={selectedStore}
                                     onChange={e => setSelectedStore(e.target.value)}
                                     disabled={isLockedToSingleStore}
-                                    title={isLockedToSingleStore ? 'Tài khoản nhân viên được cố định theo siêu thị đã đăng ký' : undefined}
+                                    title={currentUser?.is_guest ? 'Tài khoản trải nghiệm sử dụng dữ liệu siêu thị 10335 - AAR_BRV_VTA - 290 Trương Công Định' : (isLockedToSingleStore ? 'Tài khoản nhân viên được cố định theo siêu thị đã đăng ký' : undefined)}
                                     className={`bg-transparent font-black outline-hidden min-w-[200px] sm:min-w-[260px] ${isLockedToSingleStore
                                         ? 'cursor-not-allowed text-amber-900'
                                         : 'cursor-pointer text-slate-900'
@@ -723,7 +726,7 @@ export default function DailyEmployeeRevenueReportPage() {
                                 </select>
                                 {isLockedToSingleStore && (
                                     <span className="text-[10px] bg-amber-200/80 text-amber-800 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">
-                                        Đã khóa
+                                        {currentUser?.is_guest ? 'Trải nghiệm' : 'Đã khóa'}
                                     </span>
                                 )}
                             </div>
@@ -1611,21 +1614,22 @@ export default function DailyEmployeeRevenueReportPage() {
                             {/* Bảng dữ liệu chính - Tinh gọn cho Smartphone */}
                             <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
                                 <div className="overflow-x-auto max-h-[600px] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300">
-                                    <table className="w-full text-left text-xs border-collapse" style={{ tableLayout: 'fixed', minWidth: hasInstallmentData ? '580px' : '460px' }}>
+                                    <table className="w-full text-left text-xs border-collapse" style={{ tableLayout: 'fixed', minWidth: hasInstallmentData ? '650px' : '530px' }}>
                                         <colgroup>
                                             <col style={{ width: '34px' }} />
-                                            <col style={{ width: '56px' }} />
-                                            <col style={{ minWidth: '135px' }} />
-                                            <col style={{ width: '38px' }} />
-                                            <col style={{ width: '68px' }} />
-                                            <col style={{ width: '76px' }} />
-                                            <col style={{ width: '48px' }} />
+                                            <col style={{ width: '54px' }} />
+                                            <col style={{ minWidth: '130px' }} />
+                                            <col style={{ width: '36px' }} />
+                                            <col style={{ width: '64px' }} />
+                                            <col style={{ width: '72px' }} />
+                                            <col style={{ width: '44px' }} />
                                             {hasInstallmentData && (
                                                 <>
-                                                    <col style={{ width: '68px' }} />
-                                                    <col style={{ width: '48px' }} />
+                                                    <col style={{ width: '64px' }} />
+                                                    <col style={{ width: '44px' }} />
                                                 </>
                                             )}
+                                            <col style={{ width: '68px' }} />
                                         </colgroup>
                                         <thead className="sticky top-0 z-20 shadow-2xs select-none">
                                             <tr className="bg-slate-900 text-white text-[10.5px] font-black uppercase h-9 tracking-wider">
@@ -1695,7 +1699,7 @@ export default function DailyEmployeeRevenueReportPage() {
                                                 </th>
 
                                                 {/* Tỷ trọng ST */}
-                                                <th className={`py-1.5 px-1 text-right ${hasInstallmentData ? 'border-r border-slate-800' : ''}`} title="Tỷ trọng đóng góp vào doanh thu siêu thị">
+                                                <th className="py-1.5 px-1 text-right border-r border-slate-800" title="Tỷ trọng đóng góp vào doanh thu siêu thị">
                                                     % ST
                                                 </th>
 
@@ -1713,11 +1717,26 @@ export default function DailyEmployeeRevenueReportPage() {
                                                             </div>
                                                         </th>
 
-                                                        <th className="py-1.5 px-1 text-right" title="Tỷ lệ trả góp trên doanh thu thực">
+                                                        <th className="py-1.5 px-1 text-right border-r border-slate-800" title="Tỷ lệ trả góp trên doanh thu thực">
                                                             % TG
                                                         </th>
                                                     </>
                                                 )}
+
+                                                {/* DTQĐ Nhập trả */}
+                                                <th
+                                                    onClick={() => handleSort('return_qd')}
+                                                    className="py-1.5 px-1 text-right cursor-pointer hover:bg-slate-800 transition"
+                                                    title="Doanh thu quy đổi nhập trả (triệu đồng)"
+                                                >
+                                                    <div className="flex items-center justify-end gap-0.5">
+                                                        <span className="leading-tight text-right">
+                                                            <span className="block sm:inline">DTQĐ </span>
+                                                            <span>N.trả</span>
+                                                        </span>
+                                                        <ArrowUpDown className="w-2.5 h-2.5 opacity-60 shrink-0" />
+                                                    </div>
+                                                </th>
                                             </tr>
                                         </thead>
 
@@ -1806,7 +1825,7 @@ export default function DailyEmployeeRevenueReportPage() {
                                                         </td>
 
                                                         {/* 7. Tỷ trọng (%) */}
-                                                        <td className={`py-1.5 px-1 text-right font-bold text-slate-600 text-[11px] ${hasInstallmentData ? 'border-r border-slate-100' : ''}`}>
+                                                        <td className="py-1.5 px-1 text-right font-bold text-slate-600 text-[11px] border-r border-slate-100">
                                                             {row.contribution_rate}%
                                                         </td>
 
@@ -1821,7 +1840,7 @@ export default function DailyEmployeeRevenueReportPage() {
                                                                     )}
                                                                 </td>
 
-                                                                <td className="py-1.5 px-1 text-right font-bold text-[11px]">
+                                                                <td className="py-1.5 px-1 text-right font-bold text-[11px] border-r border-slate-100">
                                                                     {row.installment_rate > 0 ? (
                                                                         <span className={row.installment_rate >= 30 ? 'text-emerald-700 font-black' : 'text-slate-700'}>
                                                                             {row.installment_rate}%
@@ -1832,6 +1851,17 @@ export default function DailyEmployeeRevenueReportPage() {
                                                                 </td>
                                                             </>
                                                         )}
+
+                                                        {/* 6b. DTQĐ Nhập trả (tr) - Cột cuối */}
+                                                        <td className="py-1.5 px-1.5 text-right font-bold text-slate-800 text-[11.5px]">
+                                                            {row.revenue_return_qd && row.revenue_return_qd !== 0 ? (
+                                                                <span className={row.revenue_return_qd > 0 ? "text-rose-600" : "text-amber-700"}>
+                                                                    {formatValue(row.revenue_return_qd)}
+                                                                </span>
+                                                            ) : (
+                                                                <span className="text-slate-300 font-medium">0</span>
+                                                            )}
+                                                        </td>
                                                     </tr>
                                                 );
                                             })}
@@ -1852,7 +1882,7 @@ export default function DailyEmployeeRevenueReportPage() {
                                                 <td className="py-1.5 px-1.5 text-right bg-[#005a43] text-[#fde047] text-xs border-r border-[#004735]">
                                                     {formatValue(summary.totalRevenueQd)}
                                                 </td>
-                                                <td className={`py-1.5 px-1 text-right ${hasInstallmentData ? 'border-r border-slate-800' : ''} text-[11px]`}>
+                                                <td className="py-1.5 px-1 text-right border-r border-slate-800 text-[11px]">
                                                     100%
                                                 </td>
                                                 {hasInstallmentData && (
@@ -1860,11 +1890,15 @@ export default function DailyEmployeeRevenueReportPage() {
                                                         <td className="py-1.5 px-1.5 text-right text-purple-300 border-r border-slate-800 text-[11.5px]">
                                                             {formatValue(summary.totalInstallmentRevenue)}
                                                         </td>
-                                                        <td className="py-1.5 px-1 text-right text-amber-300 text-[11px]">
+                                                        <td className="py-1.5 px-1 text-right text-amber-300 border-r border-slate-800 text-[11px]">
                                                             {summary.avgInstallmentRate}%
                                                         </td>
                                                     </>
                                                 )}
+                                                {/* TỔNG DTQĐ NHẬP TRẢ */}
+                                                <td className="py-1.5 px-1.5 text-right font-black text-[11.5px] text-rose-300">
+                                                    {formatValue(summary.totalRevenueReturnQd)}
+                                                </td>
                                             </tr>
                                         </tfoot>
                                     </table>

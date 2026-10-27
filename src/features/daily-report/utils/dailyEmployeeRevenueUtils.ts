@@ -51,6 +51,8 @@ export interface DailyReportSummary {
     totalRevenueQd: number;
     totalActualRevenue: number;
     totalInstallmentRevenue: number;
+    totalRevenueReturnQd: number; // Tổng DTQĐ Nhập trả
+    totalRevenueLoanQd?: number;  // Tổng DTQĐ Khoản vay
     avgInstallmentRate: number;
     avgRevenueQd: number;
     avgActualRevenue: number;
@@ -142,7 +144,9 @@ export function processDailyEmployeeRevenueData(
                     revenue_qd: 0,
                     revenue_actual: 0,
                     installment_revenue: 0,
-                    installment_rate: 0
+                    installment_rate: 0,
+                    revenue_return_qd: 0,
+                    revenue_loan_qd: 0
                 });
             }
         }
@@ -158,6 +162,8 @@ export function processDailyEmployeeRevenueData(
     const totalRevenueQd = mergedList.reduce((s, e) => s + (e.revenue_qd || 0), 0);
     const totalActualRevenue = mergedList.reduce((s, e) => s + (e.revenue_actual || 0), 0);
     const totalInstallmentRevenue = mergedList.reduce((s, e) => s + (e.installment_revenue || 0), 0);
+    const totalRevenueReturnQd = mergedList.reduce((s, e) => s + (e.revenue_return_qd || 0), 0);
+    const totalRevenueLoanQd = mergedList.reduce((s, e) => s + (e.revenue_loan_qd || 0), 0);
     const totalQuantity = mergedList.reduce((s, e) => s + (e.quantity || 0), 0);
 
     const activeCount = activeList.length;
@@ -245,6 +251,8 @@ export function processDailyEmployeeRevenueData(
         totalRevenueQd: Number(totalRevenueQd.toFixed(2)),
         totalActualRevenue: Number(totalActualRevenue.toFixed(2)),
         totalInstallmentRevenue: Number(totalInstallmentRevenue.toFixed(2)),
+        totalRevenueReturnQd: Number(totalRevenueReturnQd.toFixed(2)),
+        totalRevenueLoanQd: Number(totalRevenueLoanQd.toFixed(2)),
         avgInstallmentRate,
         avgRevenueQd,
         avgActualRevenue,
@@ -326,6 +334,10 @@ export function generateDailyZaloText(
 
 💰 Doanh Thu Thực: ${formatValue(summary.totalActualRevenue)} tr
 💎 DTQĐ: ${formatValue(summary.totalRevenueQd)} tr (TB: ${formatValue(summary.avgRevenueQd)} tr/nv)`;
+
+    if (summary.totalRevenueReturnQd !== 0) {
+        txt += `\n🔄 DTQĐ Nhập Trả: ${formatValue(summary.totalRevenueReturnQd)} tr`;
+    }
 
     if (hasInstallmentData) {
         txt += `\n💳 DT Trả Chậm: ${formatValue(summary.totalInstallmentRevenue)} tr (${summary.avgInstallmentRate}%)`;

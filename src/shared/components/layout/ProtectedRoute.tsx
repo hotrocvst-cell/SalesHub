@@ -42,6 +42,26 @@ export default function ProtectedRoute({ path, children }: Props) {
         return <Navigate to="/cho-xet-duyet" replace />;
     }
 
+    // 3.1. Kiểm tra tài khoản trải nghiệm đã hết hạn sử dụng theo ngày
+    if (currentUser.guest_expires_at) {
+        const expiryDate = new Date(currentUser.guest_expires_at);
+        expiryDate.setHours(23, 59, 59, 999);
+        if (new Date() > expiryDate) {
+            const formatted = `${String(expiryDate.getDate()).padStart(2, '0')}/${String(expiryDate.getMonth() + 1).padStart(2, '0')}/${expiryDate.getFullYear()}`;
+            return (
+                <UnauthorizedAccessView
+                    title="Thời Gian Trải Nghiệm Đã Hết Hạn"
+                    badgeText="Hết Hạn Trải Nghiệm"
+                    pageName="SalesHub Trial"
+                    path={path}
+                    message={`Tài khoản dùng thử của Quý khách đã kết thúc thời gian hoạt động vào ngày ${formatted}. Để tiếp tục sử dụng toàn bộ tính năng và quyền năng điều hành của SalesHub, Quý khách vui lòng liên hệ Admin để đăng ký gói Premium!`}
+                    countdownSeconds={0}
+                    homePath="/dang-nhap"
+                />
+            );
+        }
+    }
+
     const access = canAccessPage(path);
 
     // 4. Nếu trang bị tắt / tạm ẩn toàn hệ thống
@@ -63,6 +83,21 @@ export default function ProtectedRoute({ path, children }: Props) {
     // 5. Nếu người dùng không đủ quyền truy cập vai trò này
     if (!access.roleAllowed) {
         const pageName = access.page?.page_name || 'Trang này';
+
+        // Phản hồi chuyên biệt cho tài khoản trải nghiệm (Guest Sandbox)
+        if (currentUser.is_guest) {
+            return (
+                <UnauthorizedAccessView
+                    title="Chế Độ Trải Nghiệm (Chỉ Xem - Read Only)"
+                    badgeText="Trải Nghiệm • Sandbox"
+                    pageName={pageName}
+                    path={path}
+                    message={`Phân hệ [${pageName}] yêu cầu quyền quản trị và chỉnh sửa dữ liệu kinh doanh. Tài khoản trải nghiệm đang ở chế độ Chỉ Xem (Sandbox Read-Only) để bảo vệ toàn vẹn dữ liệu. Quý khách vui lòng nâng cấp gói Premium để sử dụng toàn quyền tính năng này!`}
+                    countdownSeconds={0}
+                    homePath="/bao-cao-cum-sieu-thi"
+                />
+            );
+        }
         const allowedRoleLabels = (access.page?.allowed_roles || [])
             .map(r => r === 'ADMIN' ? 'Admin' : r === 'QUAN_LY' ? 'Quản lý' : r === 'TRUONG_CA' ? 'Trưởng Ca' : 'Nhân viên')
             .join(', ');

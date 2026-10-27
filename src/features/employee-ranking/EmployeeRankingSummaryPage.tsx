@@ -72,7 +72,7 @@ import { calculate8KScale } from '../../shared/utils/exportImage';
 export default function EmployeeRankingSummaryPage() {
     const navigate = useNavigate();
     const { currentUser, canConfigure } = useAuth();
-    const canManage = canConfigure || ['ADMIN', 'QUAN_LY', 'TRUONG_CA'].includes(currentUser?.role || '');
+    const canManage = !currentUser?.is_guest && (canConfigure || ['ADMIN', 'QUAN_LY', 'TRUONG_CA'].includes(currentUser?.role || ''));
     const reportRef = useRef<HTMLDivElement>(null);
 
     // 1. STATE BỘ LỌC CƠ BẢN
@@ -815,8 +815,8 @@ export default function EmployeeRankingSummaryPage() {
                             ))}
                         </select>
                         {isLockedToSingleStore && (
-                            <span className="text-[10px] bg-amber-100 text-amber-800 border border-amber-200 px-2 py-1 rounded-lg font-bold uppercase tracking-wider">
-                                Đã khóa theo shop
+                            <span className="text-[10px] bg-amber-100 text-amber-800 border border-amber-200 px-2 py-1 rounded-lg font-bold uppercase tracking-wider shrink-0">
+                                {currentUser?.is_guest ? 'Trải nghiệm (10335)' : 'Đã khóa theo shop'}
                             </span>
                         )}
                     </div>

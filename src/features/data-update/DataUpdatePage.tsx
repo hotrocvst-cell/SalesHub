@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../shared/contexts/AuthContext';
 import {
     getLocalDraft,
     saveLocalDraft,
@@ -8,7 +9,7 @@ import {
     fetchBusinessRecordsByDate,
     type BusinessDayRecord
 } from '../../core/lib/storage';
-import { getYesterdayDateString, getShortStoreName, getCampaignLabel, formatDate, formatDateTime, normalizeToMillion } from '../../core/lib/formatters';
+import { getYesterdayDateString, getShortStoreName, getCampaignLabel, formatDate, formatDateTime, normalizeToMillion, isStoreMatch } from '../../core/lib/formatters';
 import CloudDataSyncStatusBanner from '../../shared/components/report/CloudDataSyncStatusBanner';
 import { Save, Trash2, Calendar, RefreshCw, CheckCircle2, ArrowRight, CloudUpload, Store, RotateCcw, AlertCircle, AlertTriangle, X } from 'lucide-react';
 
@@ -45,6 +46,7 @@ CREATE POLICY "Allow public insert/update/delete access" ON public.daily_busines
 
 export default function DataUpdatePage() {
     const navigate = useNavigate();
+    const { currentUser, isAdmin, canAccessStore } = useAuth();
 
     // Khởi tạo ngày chốt là hôm qua (Hôm nay - 1)
     const [reportDate, setReportDate] = useState<string>(() => getYesterdayDateString());
@@ -73,8 +75,8 @@ export default function DataUpdatePage() {
     const [isDraftSynced, setIsDraftSynced] = useState<boolean>(false);
     const [syncError, setSyncError] = useState<string>('');
 
-    // Quản lý kiểm tra trùng phiên trên Cloud
-    const [existingSessionRecords, setExistingSessionRecords] = useState<BusinessDayRecord[]>([]);
+    // Quản lý kiểm tra trùng phiên trên Cloud theo siêu thị phụ trách
+    const [allExistingRecords, setAllExistingRecords] = useState<BusinessDayRecord[]>([]);
     const [isCheckingExisting, setIsCheckingExisting] = useState<boolean>(false);
     const [showOverwriteModal, setShowOverwriteModal] = useState<boolean>(false);
 
@@ -86,15 +88,15 @@ export default function DataUpdatePage() {
     // Kiểm tra dữ liệu phiên trên Cloud khi ngày chốt thay đổi
     const checkExistingSession = useCallback(async (date: string) => {
         if (!date) {
-            setExistingSessionRecords([]);
+            setAllExistingRecords([]);
             return;
         }
         setIsCheckingExisting(true);
         const res = await fetchBusinessRecordsByDate(date);
         if (res.success && res.data) {
-            setExistingSessionRecords(res.data);
+            setAllExistingRecords(res.data);
         } else {
-            setExistingSessionRecords([]);
+            setAllExistingRecords([]);
         }
         setIsCheckingExisting(false);
     }, []);
@@ -102,6 +104,25 @@ export default function DataUpdatePage() {
     useEffect(() => {
         checkExistingSession(reportDate);
     }, [reportDate, checkExistingSession]);
+
+    // 1. Lọc các bản ghi trên Cloud theo phạm vi siêu thị mà user được phân quyền / phụ trách
+    const userScopeExistingRecords = useMemo(() => {
+        if (isAdmin) return allExistingRecords;
+        return allExistingRecords.filter(r => canAccessStore(r.storeName) || canAccessStore(getShortStoreName(r.storeName)));
+    }, [allExistingRecords, isAdmin, canAccessStore]);
+
+    // 2. Xác định các bản ghi thực sự bị trùng phiên:
+    // - Nếu đã nhận diện siêu thị từ dữ liệu dán (detectedStores.length > 0): chỉ tính các siêu thị VỪA thuộc quyền phụ trách, VỪA có mặt trong dữ liệu dán mới
+    // - Nếu chưa dán dữ liệu: kiểm tra xem các siêu thị thuộc quyền phụ trách của user đã có bản ghi nào ngày này chưa
+    const existingSessionRecords = useMemo(() => {
+        if (detectedStores.length > 0) {
+            return userScopeExistingRecords.filter(r => {
+                const rShort = getShortStoreName(r.storeName);
+                return detectedStores.some(dStore => isStoreMatch(dStore, r.storeName) || isStoreMatch(dStore, rShort));
+            });
+        }
+        return userScopeExistingRecords;
+    }, [userScopeExistingRecords, detectedStores]);
 
     // Nạp dữ liệu bản nháp (Giữ nguyên số liệu dán nháp nhưng KHÔNG ghi đè passedDays và totalDays để luôn theo ngày hiện tại)
     useEffect(() => {
@@ -701,7 +722,7 @@ export default function DataUpdatePage() {
                                         ⚠️ Trùng phiên ngày chốt: {formatDate(reportDate)}
                                     </span>
                                     <span className="text-xs text-slate-600 font-medium">
-                                        Đã có <b className="text-amber-950">{existingSessionRecords.length} siêu thị</b> trên Cloud
+                                        Đã có <b className="text-amber-950">{existingSessionRecords.length} siêu thị bạn phụ trách</b> trên Cloud
                                     </span>
                                     {isCheckingExisting && (
                                         <span className="text-[10px] text-amber-700 italic animate-pulse">Đang rà soát...</span>
@@ -709,10 +730,10 @@ export default function DataUpdatePage() {
                                 </div>
                                 <p className="text-xs text-slate-700 mt-1 leading-relaxed">
                                     Phiên ngày <b>{formatDate(reportDate)}</b> đã từng được cập nhật{existingSessionRecords[0]?.updatedAt ? ` (lần gần nhất lúc ${formatDateTime(existingSessionRecords[0].updatedAt)})` : ''}. 
-                                    Khi lưu, hệ thống sẽ <b className="text-amber-900 underline">TỰ ĐỘNG GHI ĐÈ & LÀM SẠCH</b> toàn bộ số liệu cũ của ngày này để khắc phục dữ liệu bị lỗi và đảm bảo không bị nhân bản nhiều dòng.
+                                    Khi lưu, hệ thống sẽ <b className="text-amber-900 underline">TỰ ĐỘNG GHI ĐÈ & LÀM SẠCH</b> đúng các siêu thị bạn nạp mới ({detectedStores.length} siêu thị), tuyệt đối không ảnh hưởng đến dữ liệu của các siêu thị khác trên Cloud.
                                 </p>
                                 <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-[11px]">
-                                    <span className="font-bold text-slate-700">Dữ liệu hiện có:</span>
+                                    <span className="font-bold text-slate-700">Siêu thị trùng phiên:</span>
                                     {existingSessionRecords.slice(0, 6).map((r, i) => (
                                         <span key={r.id || `${r.storeName}_${i}`} className="px-1.5 py-0.5 bg-white border border-amber-300 rounded font-bold text-slate-800 shadow-2xs">
                                             {getShortStoreName(r.storeName)}
@@ -871,12 +892,12 @@ export default function DataUpdatePage() {
 
                         <div className="bg-amber-50/80 border border-amber-200/90 rounded-2xl p-3.5 text-xs text-amber-950 space-y-2">
                             <p className="font-medium leading-relaxed">
-                                Phiên ngày <b>{formatDate(reportDate)}</b> hiện đã có <b>{existingSessionRecords.length} siêu thị</b> trên Cloud. Bạn đang chuẩn bị lưu mới cho <b>{detectedStores.length} siêu thị</b>.
+                                Phiên ngày <b>{formatDate(reportDate)}</b> hiện đã có <b>{existingSessionRecords.length} siêu thị bạn phụ trách</b> trên Cloud. Bạn đang chuẩn bị lưu mới cho <b>{detectedStores.length} siêu thị</b>.
                             </p>
                             <div className="space-y-1.5 pt-1 text-[11.5px] border-t border-amber-200/70 text-slate-700 font-medium">
                                 <div className="flex items-start gap-1.5 text-emerald-800">
                                     <span className="font-bold shrink-0">✓</span>
-                                    <span><b>Khắc phục dữ liệu lỗi:</b> Xóa sạch số liệu cũ của ngày này để nạp dữ liệu chuẩn mới nhất.</span>
+                                    <span><b>Chỉ ghi đè siêu thị phụ trách:</b> Hệ thống chỉ làm sạch & nạp lại các siêu thị bạn đang cập nhật, các siêu thị khác trên Cloud được bảo lưu an toàn 100%.</span>
                                 </div>
                                 <div className="flex items-start gap-1.5 text-blue-800">
                                     <span className="font-bold shrink-0">✓</span>

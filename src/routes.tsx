@@ -23,6 +23,7 @@ const CampaignProgressPage = lazy(() => import('./features/campaign-progress/Cam
 const SystemAdminPage = lazy(() => import('./features/admin-config/SystemAdminPage'));
 const UserManagementPage = lazy(() => import('./features/admin-config/UserManagementPage'));
 const UserStorePermissionPage = lazy(() => import('./features/admin-config/UserStorePermissionPage'));
+const GuestAccountsPage = lazy(() => import('./features/admin-config/GuestAccountsPage'));
 const DataStatusPage = lazy(() => import('./features/data-status/DataStatusPage'));
 const EmployeeCumulativeRankingPage = lazy(() => import('./features/employee-cumulative-ranking/EmployeeCumulativeRankingPage'));
 const CampaignDirectoryPage = lazy(() => import('./features/campaign-directory/CampaignDirectoryPage'));
@@ -58,6 +59,7 @@ export function AppRoutes() {
                     {/* Phân hệ BC Ngày */}
                     <Route path="/bc-ngay" element={<Navigate to="/bc-ngay/tong-quan" replace />} />
                     <Route path="/bc-ngay/tong-quan" element={<DailyReportPage />} />
+                    <Route path="/bc-realtime-con-lai" element={<Navigate to="/bc-ngay/tong-quan?tab=remaining" replace />} />
                     <Route path="/bc-ngay-nhan-vien" element={<DailyEmployeeRevenueReportPage />} />
 
                     {/* Báo Cáo Hiệu Quả Doanh Thu Nhân Viên & Chi Tiết */}
@@ -91,6 +93,7 @@ export function AppRoutes() {
                     <Route path="/quan-ly-tai-khoan" element={<UserManagementPage />} />
                     <Route path="/phan-quyen-sieu-thi" element={<UserStorePermissionPage />} />
                     <Route path="/quan-tri-he-thong" element={<SystemAdminPage />} />
+                    <Route path="/quan-tri-he-thong/tai-khoan-trai-nghiem" element={<GuestAccountsPage />} />
 
                     {/* Tuyến đường dự phòng */}
                     <Route path="*" element={

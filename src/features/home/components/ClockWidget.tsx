@@ -23,8 +23,8 @@ export default function ClockWidget() {
     const getGreeting = () => {
         if (hours >= 5 && hours < 12) return { text: 'Chào buổi sáng', icon: '🌅', sub: 'Chúc bạn một ngày mới tràn đầy năng lượng & bứt phá doanh số!' };
         if (hours >= 12 && hours < 14) return { text: 'Chào buổi trưa', icon: '☀️', sub: 'Nghỉ trưa tái tạo năng lượng cho ca chiều bùng nổ nhé!' };
-        if (hours >= 14 && hours < 18) return { text: 'Chào buổi chiều', icon: '🌤️', sub: 'Tăng tốc hoàn thành các chỉ tiêu trọng tâm trong ngày!' };
-        if (hours >= 18 && hours < 23) return { text: 'Chào buổi tối', icon: '🌙', sub: 'Tổng kết doanh số ca tối và chốt số liệu xuất sắc!' };
+        if (hours >= 14 && hours < 18) return { text: 'Chào buổi chiều', icon: '🌤️', sub: 'Tăng tốc hoàn thành các mục tiêu trọng tâm trong ngày!' };
+        if (hours >= 18 && hours < 23) return { text: 'Chào buổi tối', icon: '🌙', sub: 'Tổng kết doanh thu và chốt số hôm nay nhé!' };
         return { text: 'Đêm muộn rồi', icon: '✨', sub: 'Hãy nghỉ ngơi thật tốt để chuẩn bị cho ngày làm việc mới nhé!' };
     };
 

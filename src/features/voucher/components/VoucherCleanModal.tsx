@@ -157,20 +157,27 @@ export default function VoucherCleanModal({
                     </div>
                 </div>
 
+                {/* Gợi ý tính năng Ẩn chương trình thay vì xóa */}
+                <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-3 text-xs text-indigo-950 flex items-start gap-2">
+                    <Sparkles className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
+                    <div className="leading-relaxed">
+                        <strong className="text-indigo-900">Gợi ý lưu trữ an toàn:</strong> Nếu bạn chỉ muốn tắt cảnh báo và thu gọn giao diện mà <strong>không làm mất dữ liệu lịch sử</strong>, hãy chọn giải pháp <strong>Ẩn Chương Trình</strong> thay vì xóa vĩnh viễn khỏi kho.
+                    </div>
+                </div>
+
                 {/* 1. Chọn loại mã cần làm sạch */}
                 <div className="space-y-1.5">
                     <label className="block text-xs font-black uppercase tracking-wider text-slate-700">
-                        1. Nhóm mã cần xử lý:
+                        1. Loại PMH cần xử lý:
                     </label>
                     <div className="grid grid-cols-3 gap-2">
                         <button
                             type="button"
                             onClick={() => setCleanType('EXPIRED')}
-                            className={`p-2.5 rounded-xl border text-center transition cursor-pointer text-xs font-bold ${
-                                cleanType === 'EXPIRED'
+                            className={`p-2.5 rounded-xl border text-center transition cursor-pointer text-xs font-bold ${cleanType === 'EXPIRED'
                                     ? 'bg-rose-50 border-rose-500 text-rose-900 ring-2 ring-rose-300'
                                     : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-700'
-                            }`}
+                                }`}
                         >
                             <div className="text-[11px] font-black">⚠️ Quá Hạn</div>
                             <div className="text-[9.5px] text-slate-500 mt-0.5">Chưa dùng &amp; hết hạn</div>
@@ -179,11 +186,10 @@ export default function VoucherCleanModal({
                         <button
                             type="button"
                             onClick={() => setCleanType('USED')}
-                            className={`p-2.5 rounded-xl border text-center transition cursor-pointer text-xs font-bold ${
-                                cleanType === 'USED'
+                            className={`p-2.5 rounded-xl border text-center transition cursor-pointer text-xs font-bold ${cleanType === 'USED'
                                     ? 'bg-emerald-50 border-emerald-500 text-emerald-900 ring-2 ring-emerald-300'
                                     : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-700'
-                            }`}
+                                }`}
                         >
                             <div className="text-[11px] font-black">🎉 Đã Dùng</div>
                             <div className="text-[9.5px] text-slate-500 mt-0.5">Đã hoàn tất hóa đơn</div>
@@ -192,11 +198,10 @@ export default function VoucherCleanModal({
                         <button
                             type="button"
                             onClick={() => setCleanType('ALL_INACTIVE')}
-                            className={`p-2.5 rounded-xl border text-center transition cursor-pointer text-xs font-bold ${
-                                cleanType === 'ALL_INACTIVE'
+                            className={`p-2.5 rounded-xl border text-center transition cursor-pointer text-xs font-bold ${cleanType === 'ALL_INACTIVE'
                                     ? 'bg-amber-50 border-amber-500 text-amber-900 ring-2 ring-amber-300'
                                     : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-700'
-                            }`}
+                                }`}
                         >
                             <div className="text-[11px] font-black">🧹 Toàn Bộ</div>
                             <div className="text-[9.5px] text-slate-500 mt-0.5">Hết hạn + Đã dùng</div>
@@ -213,11 +218,10 @@ export default function VoucherCleanModal({
                         <button
                             type="button"
                             onClick={() => setCleanMode('DELETE')}
-                            className={`p-3 rounded-2xl border text-left transition cursor-pointer ${
-                                cleanMode === 'DELETE'
+                            className={`p-3 rounded-2xl border text-left transition cursor-pointer ${cleanMode === 'DELETE'
                                     ? 'bg-rose-50 border-rose-500 ring-2 ring-rose-300'
                                     : 'bg-slate-50 border-slate-200 hover:bg-slate-100'
-                            }`}
+                                }`}
                         >
                             <div className="flex items-center gap-1.5 text-xs font-black text-rose-700">
                                 <Trash2 className="w-3.5 h-3.5" />
@@ -231,11 +235,10 @@ export default function VoucherCleanModal({
                         <button
                             type="button"
                             onClick={() => setCleanMode('MARK_EXPIRED')}
-                            className={`p-3 rounded-2xl border text-left transition cursor-pointer ${
-                                cleanMode === 'MARK_EXPIRED'
+                            className={`p-3 rounded-2xl border text-left transition cursor-pointer ${cleanMode === 'MARK_EXPIRED'
                                     ? 'bg-amber-50 border-amber-500 ring-2 ring-amber-300'
                                     : 'bg-slate-50 border-slate-200 hover:bg-slate-100'
-                            }`}
+                                }`}
                         >
                             <div className="flex items-center gap-1.5 text-xs font-black text-amber-800">
                                 <Archive className="w-3.5 h-3.5" />
@@ -287,11 +290,10 @@ export default function VoucherCleanModal({
                         type="button"
                         disabled={isProcessing || targetVouchers.length === 0}
                         onClick={handleExecuteClean}
-                        className={`px-4 py-2 rounded-xl text-xs font-black text-white transition cursor-pointer shadow-sm flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed ${
-                            cleanMode === 'DELETE'
+                        className={`px-4 py-2 rounded-xl text-xs font-black text-white transition cursor-pointer shadow-sm flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed ${cleanMode === 'DELETE'
                                 ? 'bg-rose-600 hover:bg-rose-700 active:scale-[0.99]'
                                 : 'bg-amber-600 hover:bg-amber-700 active:scale-[0.99]'
-                        }`}
+                            }`}
                     >
                         <Trash2 className="w-3.5 h-3.5" />
                         <span>

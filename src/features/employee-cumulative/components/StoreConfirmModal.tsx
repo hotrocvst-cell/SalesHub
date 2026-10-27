@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import type { StoreItem } from '../../../core/lib/storage';
-import { Store, AlertTriangle, Check, X, ShieldAlert, Database, RefreshCw, PlusCircle } from 'lucide-react';
+import { Store, AlertTriangle, Check, X, ShieldAlert, Database, RefreshCw, PlusCircle, Calendar, RotateCcw } from 'lucide-react';
+import { formatDate, getYesterdayDateString } from '../../../core/lib/formatters';
 
 interface Props {
     isOpen: boolean;
     onClose: () => void;
-    onConfirm: (storeName: string, saveMode: 'update' | 'new') => Promise<void>;
+    onConfirm: (storeName: string, saveMode: 'update' | 'new', reportDate?: string) => Promise<void>;
     stores: StoreItem[];
     defaultStoreName: string;
     month: number;
     year: number;
+    reportDate?: string;
     employeeCount: number;
     totalRevenueActual: number;
     campaignCount: number;
@@ -19,6 +21,7 @@ interface Props {
         session_title: string;
         session_type: string;
         store_name: string;
+        report_date?: string;
     } | null;
 }
 
@@ -30,6 +33,7 @@ export default function StoreConfirmModal({
     defaultStoreName,
     month,
     year,
+    reportDate,
     employeeCount,
     totalRevenueActual,
     campaignCount,
@@ -38,6 +42,9 @@ export default function StoreConfirmModal({
 }: Props) {
     const [selectedStore, setSelectedStore] = useState<string>(
         defaultStoreName !== 'all' ? defaultStoreName : (stores[0]?.name || '')
+    );
+    const [selectedReportDate, setSelectedReportDate] = useState<string>(
+        () => reportDate || editingSession?.report_date || getYesterdayDateString()
     );
     const [saveMode, setSaveMode] = useState<'update' | 'new'>('update');
     const [errorMsg, setErrorMsg] = useState('');
@@ -50,6 +57,12 @@ export default function StoreConfirmModal({
         }
     }, [defaultStoreName, stores]);
 
+    useEffect(() => {
+        if (isOpen) {
+            setSelectedReportDate(reportDate || editingSession?.report_date || getYesterdayDateString());
+        }
+    }, [isOpen, reportDate, editingSession?.report_date]);
+
     if (!isOpen) return null;
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -58,8 +71,12 @@ export default function StoreConfirmModal({
             setErrorMsg('Vui lòng chọn đích danh một siêu thị cụ thể!');
             return;
         }
+        if (!selectedReportDate) {
+            setErrorMsg('Vui lòng chọn ngày chốt dữ liệu!');
+            return;
+        }
         setErrorMsg('');
-        await onConfirm(selectedStore, saveMode);
+        await onConfirm(selectedStore, saveMode, selectedReportDate);
     };
 
     return (
@@ -175,11 +192,58 @@ export default function StoreConfirmModal({
                         </select>
                     </div>
 
+                    {/* Lựa chọn Ngày chốt dữ liệu (Report Date) */}
+                    <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                            <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                                <Calendar className="w-3.5 h-3.5 text-blue-600" />
+                                <span>Ngày chốt dữ liệu (Report Date):</span>
+                                <span className="text-rose-500">*</span>
+                            </label>
+                            {editingSession?.report_date && selectedReportDate !== editingSession.report_date && (
+                                <button
+                                    type="button"
+                                    onClick={() => setSelectedReportDate(editingSession.report_date!)}
+                                    className="text-[11px] font-bold text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1 cursor-pointer"
+                                    title="Khôi phục lại ngày chốt gốc của phiên này"
+                                >
+                                    <RotateCcw className="w-3 h-3 text-blue-600" />
+                                    <span>Nạp lại ngày chốt gốc ({formatDate(editingSession.report_date)})</span>
+                                </button>
+                            )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <input
+                                type="date"
+                                value={selectedReportDate}
+                                onChange={e => { setSelectedReportDate(e.target.value); setErrorMsg(''); }}
+                                disabled={isSaving}
+                                className="flex-1 text-xs font-bold font-mono px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500 text-slate-900 cursor-pointer"
+                            />
+                            {selectedReportDate && (
+                                <span className="text-xs font-mono font-extrabold text-blue-700 bg-blue-50 px-3 py-2.5 rounded-xl border border-blue-200 shrink-0">
+                                    {formatDate(selectedReportDate)}
+                                </span>
+                            )}
+                        </div>
+                        {editingSession?.report_date && (
+                            <p className="text-[11px] text-slate-500 mt-1">
+                                📅 Ngày chốt đã lưu trước đó của phiên: <b className="text-slate-700 font-mono">{formatDate(editingSession.report_date)}</b>
+                            </p>
+                        )}
+                    </div>
+
                     {/* Tóm tắt số liệu sắp cập nhật */}
                     <div className="bg-slate-50 rounded-xl p-3 border border-slate-200 space-y-1.5 text-xs">
                         <div className="flex justify-between text-slate-600">
                             <span>Kỳ báo cáo:</span>
                             <span className="font-bold text-slate-800">Tháng {month} / {year}</span>
+                        </div>
+                        <div className="flex justify-between text-slate-600">
+                            <span>Ngày chốt số liệu:</span>
+                            <span className="font-bold text-blue-700 font-mono">
+                                {selectedReportDate ? formatDate(selectedReportDate) : '—'}
+                            </span>
                         </div>
                         <div className="flex justify-between text-slate-600">
                             <span>Số nhân sự nhận số liệu:</span>

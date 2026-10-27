@@ -102,7 +102,7 @@ export default function EmployeeRankingAssessmentModal({
         return lines.join('\n');
     };
 
-    // 3. MẪU 3: SÚC TÍCH GỬI ZALO (Quick Chat & Mobile Friendly)
+    // 3. MẪU 3: SÚC TÍCH (Quick Chat & Mobile Friendly)
     const generateTemplate3 = () => {
         const lines: string[] = [];
         lines.push(`📢 [KẾT QUẢ XẾP HẠNG NV T${month}/${year} - ${displayName}]`);

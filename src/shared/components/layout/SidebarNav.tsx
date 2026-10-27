@@ -30,7 +30,11 @@ import {
     Medal,
     Sparkles,
     Layers,
-    Music
+    Music,
+    MessageSquareText,
+    Boxes,
+    Banknote,
+    Coins
 } from 'lucide-react';
 
 export interface NavItem {
@@ -204,6 +208,32 @@ export const NAVIGATION_GROUPS: NavGroup[] = [
                 path: '/xmusic-playlist',
                 icon: Music,
                 badge: '🎵 Mới'
+            },
+            {
+                name: 'Hỗ Trợ & Góp Ý',
+                path: '/ho-tro-gop-y',
+                icon: MessageSquareText,
+                badge: '💬 Mới'
+            },
+            {
+                name: 'Cân tồn kho',
+                path: '/can-ton-kho',
+                icon: Boxes,
+                badge: '📦 Mới'
+            }
+        ]
+    },
+    {
+        groupTitle: 'HỖ TRỢ CVST',
+        icon: Coins,
+        colorClass: 'text-emerald-700',
+        bgClass: 'bg-emerald-100 text-emerald-700',
+        items: [
+            {
+                name: 'Kiểm quỹ - Kiểm tiền',
+                path: '/kiem-quy',
+                icon: Banknote,
+                badge: '💵 Mới'
             }
         ]
     },
@@ -242,6 +272,12 @@ export const NAVIGATION_GROUPS: NavGroup[] = [
                 badge: '🏢 Mới'
             },
             {
+                name: 'Tài khoản trải nghiệm',
+                path: '/quan-tri-he-thong/tai-khoan-trai-nghiem',
+                icon: UserCheck,
+                badge: '✨ Demo'
+            },
+            {
                 name: 'Quản trị hệ thống',
                 path: '/quan-tri-he-thong',
                 icon: ShieldCheck,
@@ -261,16 +297,6 @@ export default function SidebarNav({ isCollapsed, onToggleCollapse, onItemClick 
     const location = useLocation();
     const { canAccessPage, permissions } = usePermissions();
 
-    // Quản lý trạng thái thu gọn/mở rộng từng groupTitle do người dùng chủ động bấm
-    const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>(() => {
-        try {
-            const saved = localStorage.getItem('saleshub_collapsed_nav_groups');
-            return saved ? JSON.parse(saved) : {};
-        } catch {
-            return {};
-        }
-    });
-
     // Kiểm tra xem nhóm có chứa route đang active hay không
     const isGroupActive = (items: NavItem[] = []) => {
         return items.some(item => {
@@ -278,21 +304,6 @@ export default function SidebarNav({ isCollapsed, onToggleCollapse, onItemClick 
                 return location.pathname === '/';
             }
             return location.pathname === item.path || location.pathname.startsWith(item.path + '/');
-        });
-    };
-
-    const toggleGroup = (title: string, currentlyCollapsed: boolean) => {
-        setCollapsedGroups(prev => {
-            const updated = {
-                ...prev,
-                [title]: !currentlyCollapsed
-            };
-            try {
-                localStorage.setItem('saleshub_collapsed_nav_groups', JSON.stringify(updated));
-            } catch {
-                // ignore
-            }
-            return updated;
         });
     };
 
@@ -385,6 +396,9 @@ export default function SidebarNav({ isCollapsed, onToggleCollapse, onItemClick 
         const homeItems: NavItem[] = [];
 
         allPaths.forEach(path => {
+            // Loại bỏ hoàn toàn các trang đã cũ, chuyển hướng hoặc không hiển thị trên sidebar
+            if (path === '/bc-realtime-con-lai') return;
+
             // Kiểm tra quyền truy cập
             if (!canAccessPage(path).allowed) return;
 
@@ -475,111 +489,130 @@ export default function SidebarNav({ isCollapsed, onToggleCollapse, onItemClick 
         return permittedGroups.filter(g => Boolean(g.groupTitle)).length;
     }, [permittedGroups]);
 
-    // Bật tính năng thu gọn/mở rộng khi user được phân quyền sử dụng từ 2 grouptitle trở lên
-    const isCollapsible = permittedGroupTitlesCount >= 2;
-
-    // Tự động mở rộng nhóm chứa trang đang truy cập khi chuyển route
-    useEffect(() => {
-        const activeGroup = permittedGroups.find(g => g.groupTitle && isGroupActive(g.visibleItems));
-        if (activeGroup && activeGroup.groupTitle) {
-            const title = activeGroup.groupTitle;
-            if (collapsedGroups[title] === true) {
-                setCollapsedGroups(prev => {
-                    const updated = {
-                        ...prev,
-                        [title]: false
-                    };
-                    try {
-                        localStorage.setItem('saleshub_collapsed_nav_groups', JSON.stringify(updated));
-                    } catch {
-                        // ignore
-                    }
-                    return updated;
-                });
+    // Trạng thái nhóm mở rộng khi có từ 3 grouptitle trở lên (mặc định thu gọn, chỉ mở nhóm chứa trang active)
+    const [expandedGroupInMultiMode, setExpandedGroupInMultiMode] = useState<string | null>(() => {
+        for (const g of NAVIGATION_GROUPS) {
+            if (g.groupTitle && g.items.some(item => location.pathname === item.path || (item.path !== '/' && location.pathname.startsWith(item.path + '/')))) {
+                return g.groupTitle;
             }
         }
-    }, [location.pathname, permittedGroups]);
+        return null;
+    });
 
-    // Xác định xem một nhóm có đang bị thu gọn hay không
-    // MẶC ĐỊNH: Thu gọn tất cả các nhóm, CHỈ mở nhóm đang chứa trang hiện tại
-    const checkIsGroupCollapsed = (title?: string, items: NavItem[] = []) => {
-        if (!title || !isCollapsible) return false;
+    // Trạng thái thu gọn thủ công khi có ít hơn 3 grouptitle (mặc định mở rộng hết, user có thể bấm thu gọn thủ công nếu muốn)
+    const [collapsedInSmallMode, setCollapsedInSmallMode] = useState<Record<string, boolean>>({});
 
-        // Nếu người dùng đã từng bấm toggle nhóm này cụ thể thì tôn trọng lựa chọn đã lưu
-        if (collapsedGroups[title] !== undefined) {
-            return collapsedGroups[title];
+    // Tự động mở rộng nhóm chứa trang đang truy cập khi chuyển route (khi có từ 3 grouptitle trở lên)
+    useEffect(() => {
+        if (permittedGroupTitlesCount >= 3) {
+            const activeGroup = permittedGroups.find(g => g.groupTitle && isGroupActive(g.visibleItems));
+            setExpandedGroupInMultiMode(activeGroup?.groupTitle || null);
         }
+    }, [location.pathname, permittedGroups, permittedGroupTitlesCount]);
 
-        // Mặc định: Thu gọn nếu không phải nhóm chứa trang đang truy cập
-        return !isGroupActive(items);
+    // Xử lý đóng/mở nhóm khi người dùng bấm vào tiêu đề nhóm (grouptitle)
+    const toggleGroup = (title: string) => {
+        if (permittedGroupTitlesCount >= 3) {
+            // Khi từ 3 grouptitle: Bấm nhóm đang mở -> thu gọn; bấm nhóm khác -> mở nhóm đó và thu gọn các nhóm còn lại
+            setExpandedGroupInMultiMode(prev => (prev === title ? null : title));
+        } else {
+            // Khi dưới 3 grouptitle: Mặc định mở rộng hết, bấm để chuyển đổi trạng thái riêng của nhóm
+            setCollapsedInSmallMode(prev => ({
+                ...prev,
+                [title]: !prev[title]
+            }));
+        }
+    };
+
+    // Kiểm tra xem nhóm có đang bị thu gọn hay không
+    const checkIsGroupCollapsed = (title?: string) => {
+        if (!title) return false;
+        if (permittedGroupTitlesCount < 3) {
+            // Dưới 3 grouptitle: Mặc định mở rộng hết (không thu gọn)
+            return Boolean(collapsedInSmallMode[title]);
+        } else {
+            // Từ 3 grouptitle trở lên: Mặc định thu gọn, chỉ mở nhóm được chọn / nhóm active
+            return expandedGroupInMultiMode !== title;
+        }
+    };
+
+    // Xử lý khi user chọn trang chức năng: gọi onItemClick và cuộn hiển thị về đầu trang
+    const handleItemClick = () => {
+        onItemClick();
+        window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+        const mainEl = document.querySelector('main');
+        if (mainEl) {
+            mainEl.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+        }
     };
 
     return (
         <div className="flex flex-col h-full justify-between">
             {/* Danh sách module */}
-            <div className={`p-3 space-y-4 overflow-y-auto overflow-x-hidden flex-1 ${isCollapsed ? 'px-2' : 'px-3'}`}>
+            <div className={`p-3 space-y-3 overflow-y-auto overflow-x-hidden flex-1 ${isCollapsed ? 'px-2' : 'px-3'}`}>
                 {permittedGroups.map((group, gIdx) => {
                     const visibleItems = group.visibleItems;
                     const GroupIcon = group.icon;
-                    const isGroupCollapsed = checkIsGroupCollapsed(group.groupTitle, visibleItems);
+                    const isGroupCollapsed = checkIsGroupCollapsed(group.groupTitle);
+                    const hasActiveChild = isGroupActive(visibleItems);
 
                     return (
-                        <div key={group.groupTitle || gIdx} className="space-y-1.5">
+                        <div key={group.groupTitle || gIdx} className="space-y-1">
                             {/* Tiêu đề nhóm */}
                             {isCollapsed ? (
                                 group.groupTitle ? (
                                     <div className="border-t border-slate-200/80 my-2 mx-1" title={group.groupTitle} />
                                 ) : null
                             ) : group.groupTitle ? (
-                                isCollapsible ? (
-                                    <button
-                                        type="button"
-                                        onClick={() => group.groupTitle && toggleGroup(group.groupTitle, isGroupCollapsed)}
-                                        className="w-full flex items-center justify-between gap-1.5 px-2 py-1.5 rounded-lg hover:bg-slate-100 active:bg-slate-200/70 transition-colors select-none text-left cursor-pointer group/title"
-                                        title={`${isGroupCollapsed ? 'Mở rộng' : 'Thu gọn'} nhóm ${group.groupTitle}`}
-                                        aria-expanded={!isGroupCollapsed}
-                                    >
-                                        <div className="flex items-center gap-2 min-w-0 flex-1">
-                                            {GroupIcon && (
-                                                <span className={`p-1 rounded-lg ${group.bgClass || 'bg-slate-100 text-slate-600'} shrink-0 shadow-2xs`}>
-                                                    <GroupIcon className="w-3.5 h-3.5" />
-                                                </span>
-                                            )}
-                                            <span className={`text-[10px] font-black uppercase tracking-wider truncate ${group.colorClass || 'text-slate-500'}`}>
-                                                {group.groupTitle}
-                                            </span>
-                                        </div>
-                                        <div className="flex items-center gap-1.5 shrink-0 ml-1">
-                                            {isGroupCollapsed && (
-                                                <span className="text-[9px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.2 rounded border border-slate-200/70">
-                                                    {visibleItems.length}
-                                                </span>
-                                            )}
-                                            <ChevronDown
-                                                className={`w-3.5 h-3.5 text-slate-400 group-hover/title:text-slate-600 transition-transform duration-200 ${
-                                                    isGroupCollapsed ? '-rotate-90' : 'rotate-0'
-                                                }`}
-                                            />
-                                        </div>
-                                    </button>
-                                ) : (
-                                    <div className="flex items-center gap-2 px-2.5 pt-2 pb-0.5 select-none">
+                                <button
+                                    type="button"
+                                    onClick={() => group.groupTitle && toggleGroup(group.groupTitle)}
+                                    className={`w-full flex items-center justify-between gap-1.5 px-2.5 py-1.5 rounded-lg transition-all select-none text-left cursor-pointer group/title ${
+                                        !isGroupCollapsed
+                                            ? 'bg-slate-100/90 text-slate-800 font-extrabold shadow-2xs'
+                                            : 'hover:bg-slate-100/70 text-slate-600'
+                                    }`}
+                                    title={`${isGroupCollapsed ? 'Mở rộng' : 'Thu gọn'} nhóm ${group.groupTitle}`}
+                                    aria-expanded={!isGroupCollapsed}
+                                >
+                                    <div className="flex items-center gap-2 min-w-0 flex-1">
                                         {GroupIcon && (
-                                            <span className={`p-1 rounded-lg ${group.bgClass || 'bg-slate-100 text-slate-600'} shrink-0 shadow-2xs`}>
+                                            <span className={`p-1 rounded-md ${group.bgClass || 'bg-slate-100 text-slate-600'} shrink-0 shadow-2xs ${
+                                                !isGroupCollapsed ? 'ring-1 ring-slate-300/70' : ''
+                                            }`}>
                                                 <GroupIcon className="w-3.5 h-3.5" />
                                             </span>
                                         )}
-                                        <span className={`text-[10px] font-black uppercase tracking-wider ${group.colorClass || 'text-slate-500'}`}>
+                                        <span className={`text-[10.5px] font-black uppercase tracking-wider truncate ${group.colorClass || 'text-slate-600'}`}>
                                             {group.groupTitle}
                                         </span>
-                                        <span className="flex-1 h-px bg-slate-200/60 ml-0.5" />
                                     </div>
-                                )
+                                    <div className="flex items-center gap-1.5 shrink-0 ml-1">
+                                        {isGroupCollapsed && (
+                                            <span className="text-[9px] font-bold text-slate-500 bg-white px-1.5 py-0.5 rounded border border-slate-200/80 shadow-2xs">
+                                                {visibleItems.length}
+                                            </span>
+                                        )}
+                                        <ChevronDown
+                                            className={`w-3.5 h-3.5 text-slate-400 group-hover/title:text-slate-600 transition-transform duration-200 ${
+                                                isGroupCollapsed ? '-rotate-90' : 'rotate-0 text-slate-600'
+                                            }`}
+                                        />
+                                    </div>
+                                </button>
                             ) : null}
 
-                            {/* Danh sách items */}
+                            {/* Danh sách items: Thụt lề và có viền cây thư mục dọc để dễ phân biệt giữa nhóm chính và các trang chức năng */}
                             {(!isGroupCollapsed || isCollapsed) && (
-                                <div className="space-y-1">
+                                <div
+                                    className={
+                                        group.groupTitle && !isCollapsed
+                                            ? `ml-3.5 pl-2.5 border-l-2 ${
+                                                  hasActiveChild ? 'border-blue-400/80' : 'border-slate-200/80'
+                                              } space-y-1 my-1 transition-colors duration-200`
+                                            : 'space-y-1'
+                                    }
+                                >
                                     {visibleItems.map((item) => {
                                         const Icon = item.icon;
                                         const badgeInfo = resolveBadge(item);
@@ -589,68 +622,72 @@ export default function SidebarNav({ isCollapsed, onToggleCollapse, onItemClick 
                                                 key={item.path}
                                                 to={item.path}
                                                 end={true}
-                                                onClick={onItemClick}
+                                                onClick={handleItemClick}
                                                 title={isCollapsed ? item.name : undefined}
                                                 className={({ isActive }) => `
-                                                group relative flex items-center rounded-xl text-xs font-bold transition-all
-                                                ${isCollapsed
+                                                group relative flex items-center rounded-lg text-xs font-bold transition-all
+                                                ${
+                                                    isCollapsed
                                                         ? 'justify-center p-2.5'
-                                                        : 'justify-between px-3 py-2.5'
-                                                    }
-                                                ${isActive
+                                                        : group.groupTitle
+                                                            ? 'justify-between px-2.5 py-2'
+                                                            : 'justify-between px-3 py-2.5 rounded-xl'
+                                                }
+                                                ${
+                                                    isActive
                                                         ? 'bg-blue-600 text-white shadow-xs'
                                                         : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                                                    }
+                                                }
                                             `}
                                             >
-                                            {({ isActive }) => (
-                                                <>
-                                                    <div className={`flex items-center gap-2.5 ${isCollapsed ? 'justify-center' : 'truncate'}`}>
-                                                        <Icon className="w-4 h-4 flex-shrink-0" />
-                                                        {!isCollapsed && (
-                                                            <span className="truncate">{item.name}</span>
-                                                        )}
-                                                    </div>
-
-                                                    {/* Badge khi Mở rộng */}
-                                                    {!isCollapsed && badgeInfo.enabled && badgeInfo.fullBadge && (
-                                                        <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-black tracking-tight shrink-0 shadow-2xs ${
-                                                            getBadgeStyles(badgeInfo.color, isActive)
-                                                        }`}>
-                                                            {badgeInfo.fullBadge}
-                                                        </span>
-                                                    )}
-
-                                                    {/* Dấu chấm chỉ báo nhỏ khi Thu gọn */}
-                                                    {isCollapsed && badgeInfo.enabled && badgeInfo.fullBadge && (
-                                                        <span className={`absolute top-1.5 right-1.5 w-2 h-2 rounded-full ring-2 ring-white ${
-                                                            getBadgeDotColor(badgeInfo.color)
-                                                        }`} />
-                                                    )}
-
-                                                    {/* Tooltip khi hover ở chế độ thu gọn */}
-                                                    {isCollapsed && (
-                                                        <div className="absolute left-full ml-3 px-2.5 py-1.5 bg-slate-900 text-white text-xs font-semibold rounded-lg shadow-xl whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity z-50">
-                                                            <div className="flex items-center gap-1.5">
-                                                                <span>{item.name}</span>
-                                                                {badgeInfo.enabled && badgeInfo.fullBadge && (
-                                                                    <span className="text-[10px] font-bold text-amber-300">
-                                                                        ({badgeInfo.fullBadge})
-                                                                    </span>
-                                                                )}
-                                                            </div>
+                                                {({ isActive }) => (
+                                                    <>
+                                                        <div className={`flex items-center gap-2.5 ${isCollapsed ? 'justify-center' : 'truncate'}`}>
+                                                            <Icon className={`${group.groupTitle && !isCollapsed ? 'w-3.5 h-3.5' : 'w-4 h-4'} flex-shrink-0`} />
+                                                            {!isCollapsed && (
+                                                                <span className="truncate">{item.name}</span>
+                                                            )}
                                                         </div>
-                                                    )}
-                                                </>
-                                            )}
-                                        </NavLink>
-                                    );
-                                })}
-                            </div>
-                        )}
-                    </div>
-                );
-            })}
+
+                                                        {/* Badge khi Mở rộng */}
+                                                        {!isCollapsed && badgeInfo.enabled && badgeInfo.fullBadge && (
+                                                            <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-black tracking-tight shrink-0 shadow-2xs ${
+                                                                getBadgeStyles(badgeInfo.color, isActive)
+                                                            }`}>
+                                                                {badgeInfo.fullBadge}
+                                                            </span>
+                                                        )}
+
+                                                        {/* Dấu chấm chỉ báo nhỏ khi Thu gọn */}
+                                                        {isCollapsed && badgeInfo.enabled && badgeInfo.fullBadge && (
+                                                            <span className={`absolute top-1.5 right-1.5 w-2 h-2 rounded-full ring-2 ring-white ${
+                                                                getBadgeDotColor(badgeInfo.color)
+                                                            }`} />
+                                                        )}
+
+                                                        {/* Tooltip khi hover ở chế độ thu gọn */}
+                                                        {isCollapsed && (
+                                                            <div className="absolute left-full ml-3 px-2.5 py-1.5 bg-slate-900 text-white text-xs font-semibold rounded-lg shadow-xl whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity z-50">
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <span>{item.name}</span>
+                                                                    {badgeInfo.enabled && badgeInfo.fullBadge && (
+                                                                        <span className="text-[10px] font-bold text-amber-300">
+                                                                            ({badgeInfo.fullBadge})
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </>
+                                                )}
+                                            </NavLink>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                    );
+                })}
             </div>
 
             {/* Footer Sidebar & Nút toggle thu gọn / mở rộng */}

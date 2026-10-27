@@ -16,6 +16,7 @@ import {
     Calculator
 } from 'lucide-react';
 import { formatValue, normalizeToMillion, cleanEmployeeName, getShortenedEmployeeName } from '../../../core/lib/formatters';
+import { useAuth } from '../../../shared/contexts/AuthContext';
 import type { PeriodTargetConfig } from '../types';
 import {
     EMPLOYEE_PERIOD_TARGETS_SQL,
@@ -52,6 +53,7 @@ export default function PeriodTargetConfigModal({
     employees,
     onSaved
 }: PeriodTargetConfigModalProps) {
+    const { isAdmin } = useAuth();
     // Chiều rộng badge mã nhân viên tự động thích ứng theo mã dài nhất trong bảng để thẳng cột thẳng lề
     const maxIdLength = React.useMemo(() => {
         if (!employees || employees.length === 0) return 6;
@@ -355,7 +357,7 @@ export default function PeriodTargetConfigModal({
                                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                                     Cloud Sẵn Sàng
                                 </span>
-                            ) : (
+                            ) : isAdmin ? (
                                 <button
                                     type="button"
                                     onClick={() => setShowSqlModal(true)}
@@ -364,6 +366,11 @@ export default function PeriodTargetConfigModal({
                                     <AlertTriangle className="w-3 h-3 text-amber-600" />
                                     Chưa tạo bảng (Xem SQL)
                                 </button>
+                            ) : (
+                                <span className="text-amber-800 bg-amber-50 border border-amber-300 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                                    <AlertTriangle className="w-3 h-3 text-amber-600" />
+                                    Chưa tạo bảng Cloud
+                                </span>
                             )}
                         </div>
                     </div>
@@ -502,8 +509,8 @@ export default function PeriodTargetConfigModal({
                 </div>
             </div>
 
-            {/* MODAL XEM & SAO CHÉP SQL DDL (RULE 5 GEMINI.MD) */}
-            {showSqlModal && (
+            {/* MODAL XEM & SAO CHÉP SQL DDL (RULE 5 GEMINI.MD - CHỈ ADMIN) */}
+            {showSqlModal && isAdmin && (
                 <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/70 p-4">
                     <div className="bg-slate-900 text-white rounded-2xl max-w-xl w-full p-4 border border-slate-700 space-y-3">
                         <div className="flex items-center justify-between">

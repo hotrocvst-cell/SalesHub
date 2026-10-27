@@ -19,6 +19,8 @@ export interface UserProfile {
     status: UserAccountStatus;
     password?: string;
     rejection_reason?: string;
+    is_guest?: boolean;
+    guest_expires_at?: string;
     created_at: string;
     updated_at: string;
 }
@@ -91,6 +93,8 @@ CREATE TABLE IF NOT EXISTS public.user_profiles (
 -- Tự động thêm cột accessible_stores nếu bảng đã tồn tại từ trước
 ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS accessible_stores JSONB DEFAULT '[]'::jsonb;
 ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS department TEXT;
+ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS is_guest BOOLEAN DEFAULT false;
+ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS guest_expires_at TIMESTAMPTZ;
 ALTER TABLE public.user_approval_requests ADD COLUMN IF NOT EXISTS department TEXT;
 ALTER TABLE public.employees ADD COLUMN IF NOT EXISTS department TEXT;
 
@@ -1442,16 +1446,24 @@ export async function adminUpdateUserProfile(
             if (updated.rejection_reason !== undefined) {
                 updatePayload.rejection_reason = updated.rejection_reason;
             }
+            if (updated.is_guest !== undefined) {
+                updatePayload.is_guest = updated.is_guest;
+            }
+            if (updated.guest_expires_at !== undefined) {
+                updatePayload.guest_expires_at = updated.guest_expires_at;
+            }
 
             const { error: updateErr } = await supabase
                 .from('user_profiles')
                 .update(updatePayload)
                 .eq('id', userId);
 
-            // Nếu lỗi do cột accessible_stores chưa tồn tại trong Supabase (42703) -> lưu fallback qua rejection_reason
+            // Nếu lỗi do cột mới chưa tồn tại trong Supabase (42703) -> lưu fallback
             if (updateErr) {
-                console.warn('Supabase chưa có cột accessible_stores, tự động lưu fallback qua Cloud:', updateErr.message);
+                console.warn('Supabase chưa có cột mới, tự động lưu fallback qua Cloud:', updateErr.message);
                 delete updatePayload.accessible_stores;
+                delete updatePayload.is_guest;
+                delete updatePayload.guest_expires_at;
                 storageMode = 'FALLBACK';
 
                 if (updated.status !== 'REJECTED' && updated.accessible_stores !== undefined) {
@@ -1464,8 +1476,7 @@ export async function adminUpdateUserProfile(
                     .eq('id', userId);
 
                 if (fallbackErr) {
-                    console.error('Lỗi khi ghi fallback lên Supabase:', fallbackErr);
-                    throw fallbackErr;
+                    console.warn('Lỗi khi ghi fallback lên Supabase:', fallbackErr.message);
                 }
             } else {
                 // Đã lưu native thành công! Nếu trước đây từng lưu fallback trong rejection_reason thì dọn dẹp

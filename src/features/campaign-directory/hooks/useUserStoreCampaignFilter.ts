@@ -189,6 +189,11 @@ export function useUserStoreCampaignFilter(
             }
         });
 
+        // Nếu là tài khoản trải nghiệm, chỉ xem siêu thị 10335
+        if (currentUser?.is_guest) {
+            return [defaultUserStore || '10335 - AAR_BRV_VTA - 290 Trương Công Định'];
+        }
+
         // Nếu là nhân viên thông thường, chỉ xem shop của mình
         if (currentUser?.role === 'NHAN_VIEN' && defaultUserStore) {
             return [defaultUserStore];
@@ -206,8 +211,8 @@ export function useUserStoreCampaignFilter(
         return list;
     }, [stores, businessRecords, currentUser, defaultUserStore, isAdmin]);
 
-    // Quyền đổi siêu thị (Chỉ Quản lý, Trưởng ca hoặc Admin)
-    const isStoreSelectable = isAdmin || (currentUser?.role !== 'NHAN_VIEN' && storeOptions.length > 1);
+    // Quyền đổi siêu thị (Chỉ Quản lý, Trưởng ca hoặc Admin, không áp dụng cho tài khoản trải nghiệm)
+    const isStoreSelectable = !currentUser?.is_guest && (isAdmin || (currentUser?.role !== 'NHAN_VIEN' && storeOptions.length > 1));
 
     // 3. Trích xuất danh sách các mục tiêu thi đua có target > 0 của selectedStore từ báo cáo lũy kế tháng
     const storeTargetTerms = useMemo(() => {

@@ -7,6 +7,7 @@ import {
     BADGE_MIGRATION_SQL,
     auditRouteCoverage,
     syncMissingPagesToPermissions,
+    isGuestPathRestricted,
     type SystemPagePermission
 } from '../../core/lib/permissions';
 import { AUTH_SYSTEM_SQL } from '../../core/lib/authService';
@@ -308,6 +309,18 @@ export default function SystemAdminPage() {
                     : [...currentRoles, role];
 
                 return { ...p, allowed_roles: nextRoles };
+            }
+            return p;
+        }));
+        setHasChanges(true);
+    };
+
+    // Bật / Tắt quyền truy cập cho Tài khoản Trải nghiệm (Guest Trial)
+    const handleToggleGuest = (path: string) => {
+        if (isGuestPathRestricted(path)) return;
+        setPageList(prev => prev.map(p => {
+            if (p.path === path) {
+                return { ...p, allow_guest: !p.allow_guest };
             }
             return p;
         }));
@@ -849,6 +862,9 @@ export default function SystemAdminPage() {
                                 <th className="py-3 px-3 w-28 text-center bg-slate-50 text-slate-800 border-r border-slate-200">
                                     👤 NHÂN VIÊN
                                 </th>
+                                <th className="py-3 px-3 w-32 text-center bg-amber-50/70 text-amber-900 border-r border-amber-100" title="Cấp quyền cho tài khoản trải nghiệm (Guest) truy cập trang này">
+                                    🎁 TRẢI NGHIỆM
+                                </th>
                                 <th className="py-3 px-3 w-36 text-center bg-violet-50/70 text-violet-900 border-r border-violet-100">
                                     🏢 PHÂN QUYỀN SIÊU THỊ
                                 </th>
@@ -1096,6 +1112,23 @@ export default function SystemAdminPage() {
                                                     onChange={() => handleToggleRole(item.path, 'NHAN_VIEN')}
                                                     className="w-4 h-4 text-slate-700 rounded border-slate-300 focus:ring-slate-500 cursor-pointer"
                                                 />
+                                            )}
+                                        </td>
+
+                                        {/* Quyền Tài Khoản Trải Nghiệm (Guest) */}
+                                        <td className="py-3 px-2 text-center bg-amber-50/20 border-r border-amber-100">
+                                            {isGuestPathRestricted(item.path) || isAdminPage ? (
+                                                <span className="text-slate-300 text-xs font-bold" title="Trang quản trị & cấu hình: Luôn khóa với tài khoản trải nghiệm">—</span>
+                                            ) : (
+                                                <label className="inline-flex items-center justify-center cursor-pointer">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={Boolean(item.allow_guest)}
+                                                        onChange={() => handleToggleGuest(item.path)}
+                                                        className="w-4 h-4 text-amber-600 rounded border-slate-300 focus:ring-amber-500 cursor-pointer"
+                                                        title={item.allow_guest ? 'Đang mở cho tài khoản trải nghiệm (Nhấn để khóa)' : 'Đang khóa (Nhấn để cho phép tài khoản trải nghiệm xem)'}
+                                                    />
+                                                </label>
                                             )}
                                         </td>
 

@@ -11,7 +11,8 @@ import {
     Ticket,
     Settings,
     FolderKanban,
-    CheckCircle2
+    CheckCircle2,
+    Coins
 } from 'lucide-react';
 
 interface Props {
@@ -27,6 +28,7 @@ const DEFAULT_STANDARD_GROUPS = [
     'SỨC KHỎE NHÂN VIÊN',
     'DỮ LIỆU & PHIÊN LÀM VIỆC',
     'TIỆN ÍCH BÁN HÀNG',
+    'HỖ TRỢ CVST',
     'HỆ THỐNG & CẤU HÌNH'
 ];
 
@@ -36,6 +38,7 @@ function getGroupIcon(groupTitle: string) {
     if (upper.includes('SỨC KHỎE') || upper.includes('NHÂN VIÊN') || upper.includes('THI ĐUA')) return HeartPulse;
     if (upper.includes('DỮ LIỆU') || upper.includes('PHIÊN')) return Database;
     if (upper.includes('TIỆN ÍCH') || upper.includes('VOUCHER')) return Ticket;
+    if (upper.includes('HỖ TRỢ') || upper.includes('CVST') || upper.includes('KIỂM QUỸ')) return Coins;
     if (upper.includes('HỆ THỐNG') || upper.includes('CẤU HÌNH')) return Settings;
     return FolderKanban;
 }

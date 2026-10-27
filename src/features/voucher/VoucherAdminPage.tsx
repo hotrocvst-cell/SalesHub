@@ -20,7 +20,9 @@ import {
     Search,
     Sliders,
     Zap,
-    FileSpreadsheet
+    FileSpreadsheet,
+    Eye,
+    EyeOff
 } from 'lucide-react';
 import { useAuth } from '../../shared/contexts/AuthContext';
 import { useExcelExportPermission } from '../../shared/hooks/useExcelExportPermission';
@@ -41,7 +43,10 @@ import {
     STORE_VOUCHERS_SQL,
     getVoucherDistributionConfig,
     fetchVoucherCampaignStatuses,
-    saveVoucherCampaignStatus
+    saveVoucherCampaignStatus,
+    saveVoucherCampaignHiddenStatus,
+    isCampaignHidden,
+    isCampaignEndedOrHidden
 } from './services/voucherService';
 import type { VoucherCampaignStatusConfig } from './types';
 import VoucherAdminStats from './components/VoucherAdminStats';
@@ -56,6 +61,7 @@ import VoucherCleanModal from './components/VoucherCleanModal';
 import VoucherEditModal from './components/VoucherEditModal';
 import VoucherBatchEditModal from './components/VoucherBatchEditModal';
 import VoucherRuleConfigModal from './components/VoucherRuleConfigModal';
+import VoucherHideCampaignModal from './components/VoucherHideCampaignModal';
 
 export default function VoucherAdminPage() {
     const { currentUser, isAdmin, canConfigure } = useAuth();
@@ -82,6 +88,7 @@ export default function VoucherAdminPage() {
     const [isResetModalOpen, setIsResetModalOpen] = useState<boolean>(false);
     const [isQrModalOpen, setIsQrModalOpen] = useState<boolean>(false);
     const [isCleanModalOpen, setIsCleanModalOpen] = useState<boolean>(false);
+    const [isHideCampaignModalOpen, setIsHideCampaignModalOpen] = useState<boolean>(false);
     const [qrModalVouchers, setQrModalVouchers] = useState<VoucherItem[]>([]);
     const [filterEmployeeId, setFilterEmployeeId] = useState<string>('');
     const [filterStatusFromStats, setFilterStatusFromStats] = useState<string>('ALL');
@@ -177,6 +184,58 @@ export default function VoucherAdminPage() {
         }
     };
 
+    const handleToggleCampaignHiddenStatus = async (campaignName: string, currentIsHidden: boolean) => {
+        if (!currentIsHidden) {
+            const confirm = window.confirm(
+                `Xác nhận ẨN CHƯƠNG TRÌNH "${campaignName}"?\n\n• Dữ liệu toàn bộ mã voucher của chương trình này vẫn được BẢO TOÀN LƯU TRỮ 100% trong kho.\n• Hệ thống sẽ TẮT CẢNH BÁO MÃ HẾT HẠN của chương trình này.\n• Chương trình sẽ được ẩn khỏi danh sách lấy mã của nhân viên để rút gọn giao diện.\n\nBạn có thể mở lại hiển thị bất kỳ lúc nào!`
+            );
+            if (!confirm) return;
+
+            const res = await saveVoucherCampaignHiddenStatus(
+                campaignName,
+                true,
+                currentUser.full_name || currentUser.employee_id || 'Quản lý'
+            );
+            if (res.success) {
+                showToast(`👁️‍🗨️ Đã ẩn & lưu trữ chương trình "${campaignName}"!`);
+                await loadData();
+            } else {
+                showToast(`❌ Lỗi cập nhật: ${res.error}`);
+            }
+        } else {
+            const confirm = window.confirm(
+                `Mở lại hiển thị cho chương trình "${campaignName}" trên hệ thống và danh sách lấy mã?`
+            );
+            if (!confirm) return;
+
+            const res = await saveVoucherCampaignHiddenStatus(
+                campaignName,
+                false,
+                currentUser.full_name || currentUser.employee_id || 'Quản lý'
+            );
+            if (res.success) {
+                showToast(`🟢 Đã mở lại hiển thị cho chương trình "${campaignName}"!`);
+                await loadData();
+            } else {
+                showToast(`❌ Lỗi cập nhật: ${res.error}`);
+            }
+        }
+    };
+
+    const handleBulkHideEndedCampaigns = async (campaignNames: string[]) => {
+        let count = 0;
+        for (const name of campaignNames) {
+            const res = await saveVoucherCampaignHiddenStatus(
+                name,
+                true,
+                currentUser.full_name || currentUser.employee_id || 'Quản lý'
+            );
+            if (res.success) count++;
+        }
+        showToast(`🎉 Đã ẩn thành công ${count} chương trình để lưu trữ kho an toàn!`);
+        await loadData();
+    };
+
     const handleSyncToCloud = async () => {
         setIsSyncingCloud(true);
         try {
@@ -263,13 +322,28 @@ export default function VoucherAdminPage() {
 
     // Thống kê mã quá hạn phục vụ cảnh báo tồn kho
     const todayStr = new Date().toISOString().slice(0, 10);
-    const expiredVouchers = useMemo(() => {
+    const allExpiredVouchers = useMemo(() => {
         return vouchers.filter(v => Boolean(v.expires_at && v.expires_at < todayStr && v.status !== 'USED'));
     }, [vouchers, todayStr]);
-    const expiredCount = expiredVouchers.length;
+
+    // Phân tách: Mã quá hạn của chương trình ĐANG HOẠT ĐỘNG (cần cảnh báo) vs ĐÃ ẨN HOẶC ĐÃ KẾT THÚC (được bảo toàn lưu trữ an toàn, không cảnh báo)
+    const activeExpiredVouchers = useMemo(() => {
+        return allExpiredVouchers.filter(v => !isCampaignEndedOrHidden(campaignStatuses, v.campaign_name, v.denomination));
+    }, [allExpiredVouchers, campaignStatuses]);
+
+    const hiddenExpiredVouchers = useMemo(() => {
+        return allExpiredVouchers.filter(v => isCampaignEndedOrHidden(campaignStatuses, v.campaign_name, v.denomination));
+    }, [allExpiredVouchers, campaignStatuses]);
+
+    const expiredCount = activeExpiredVouchers.length;
     const expiredTotalValue = useMemo(() => {
-        return expiredVouchers.reduce((sum, v) => sum + (Number(v.denomination) || 0), 0);
-    }, [expiredVouchers]);
+        return activeExpiredVouchers.reduce((sum, v) => sum + (Number(v.denomination) || 0), 0);
+    }, [activeExpiredVouchers]);
+
+    // Thống kê số lượng chương trình đang bị ẩn
+    const hiddenCampaignsCount = useMemo(() => {
+        return Object.values(campaignStatuses).filter(s => s.is_hidden).length;
+    }, [campaignStatuses]);
 
     const handleOpenQrDoubleCheck = (customList?: VoucherItem[]) => {
         if (customList && customList.length > 0) {
@@ -360,7 +434,7 @@ export default function VoucherAdminPage() {
                     </div>
                     <div>
                         <h1 className="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2 flex-wrap">
-                            <span>Quản Trị Kho Mã Voucher</span>
+                            <span>Quản Lý Tồn Kho PMH</span>
                             <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
                                 QL / TC / Admin
                             </span>
@@ -377,7 +451,7 @@ export default function VoucherAdminPage() {
                             ) : null}
                         </h1>
                         <p className="text-xs text-slate-500 hidden sm:block">
-                            Nạp mã phiếu, double check mã chưa dùng, phát hiện đầu cơ & reset về danh sách chờ
+                            Nạp mã PMH, lọc mã chưa dùng, cảnh báo đầu cơ & reset PMH
                         </p>
                     </div>
                 </div>
@@ -391,7 +465,7 @@ export default function VoucherAdminPage() {
                         title="Cài đặt ưu tiên quy tắc cấp mã voucher (FIFO - Nhập trước cấp trước)"
                     >
                         <Sliders className="w-4 h-4 text-emerald-400" />
-                        <span>Ưu Tiên Cấp: <span className="text-emerald-400 font-black">{distributionRule}</span></span>
+                        <span>Quy tắc Cấp: <span className="text-emerald-400 font-black">{distributionRule}</span></span>
                     </button>
 
                     <button
@@ -445,6 +519,21 @@ export default function VoucherAdminPage() {
                         <span>Làm Sạch Kho</span>
                     </button>
 
+                    <button
+                        type="button"
+                        onClick={() => setIsHideCampaignModalOpen(true)}
+                        className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-black transition cursor-pointer shadow-xs flex items-center gap-1.5 border border-slate-300"
+                        title="Quản lý ẩn/hiện các chương trình voucher để lưu trữ kho an toàn và rút gọn giao diện"
+                    >
+                        <EyeOff className="w-4 h-4 text-slate-600" />
+                        <span>Quản Lý Ẩn/Hiện CT</span>
+                        {hiddenCampaignsCount > 0 && (
+                            <span className="bg-amber-400 text-slate-950 text-[10px] font-black px-1.5 py-0.2 rounded-full">
+                                {hiddenCampaignsCount}
+                            </span>
+                        )}
+                    </button>
+
                     {canExportExcel && (
                         <button
                             type="button"
@@ -470,14 +559,16 @@ export default function VoucherAdminPage() {
                         </button>
                     )}
 
-                    <button
-                        type="button"
-                        onClick={() => setShowSqlModal(true)}
-                        className="p-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 transition cursor-pointer"
-                        title="Xem mã lệnh SQL Supabase"
-                    >
-                        <Code className="w-4 h-4" />
-                    </button>
+                    {isAdmin && (
+                        <button
+                            type="button"
+                            onClick={() => setShowSqlModal(true)}
+                            className="p-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 transition cursor-pointer"
+                            title="Xem mã lệnh SQL Supabase"
+                        >
+                            <Code className="w-4 h-4" />
+                        </button>
+                    )}
 
                     <button
                         type="button"
@@ -518,14 +609,16 @@ export default function VoucherAdminPage() {
                     </div>
 
                     <div className="flex items-center gap-2 flex-wrap pt-1 sm:pl-13">
-                        <button
-                            type="button"
-                            onClick={() => setShowSqlModal(true)}
-                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white rounded-xl text-xs font-black transition cursor-pointer shadow-sm flex items-center gap-1.5"
-                        >
-                            <Code className="w-4 h-4 text-amber-300" />
-                            <span>Xem Lệnh SQL & Hướng Dẫn Kích Hoạt Cloud (1 Phút)</span>
-                        </button>
+                        {isAdmin && (
+                            <button
+                                type="button"
+                                onClick={() => setShowSqlModal(true)}
+                                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white rounded-xl text-xs font-black transition cursor-pointer shadow-sm flex items-center gap-1.5"
+                            >
+                                <Code className="w-4 h-4 text-amber-300" />
+                                <span>Xem Lệnh SQL & Hướng Dẫn Kích Hoạt Cloud (1 Phút)</span>
+                            </button>
+                        )}
                         <button
                             type="button"
                             onClick={handleSyncToCloud}
@@ -543,7 +636,7 @@ export default function VoucherAdminPage() {
             <div className="bg-white rounded-2xl p-3 border border-slate-200 shadow-2xs flex items-center justify-between gap-3 text-xs flex-wrap">
                 <div className="flex items-center gap-2">
                     <Store className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span className="font-bold text-slate-600">Phạm Vi Xem:</span>
+                    <span className="font-bold text-slate-600">Xem theo Cụm/ST:</span>
                     <select
                         value={selectedStore}
                         onChange={(e) => {
@@ -556,8 +649,8 @@ export default function VoucherAdminPage() {
                             {isAdmin
                                 ? '🏢 Toàn Bộ Hệ Thống (Tất Cả Cụm)'
                                 : allowedStores.length > 1
-                                ? `🏢 Toàn Cụm Của Tôi (${allowedStores.length} shop)`
-                                : '🏢 Kho Siêu Thị Của Tôi'}
+                                    ? `🏢 Toàn Cụm Của Tôi (${allowedStores.length} shop)`
+                                    : '🏢 Kho Siêu Thị Của Tôi'}
                         </option>
                         {allowedStores.map(s => (
                             <option key={s.id || s.name} value={s.name}>
@@ -581,7 +674,7 @@ export default function VoucherAdminPage() {
                 )}
             </div>
 
-            {/* BANNER CẢNH BÁO TỒN KHO MÃ HẾT HẠN */}
+            {/* BANNER CẢNH BÁO TỒN KHO MÃ HẾT HẠN (Chỉ hiển thị với các chương trình đang hoạt động/chưa ẩn) */}
             {expiredCount > 0 && (
                 <div className="bg-gradient-to-r from-rose-50 via-rose-50/80 to-amber-50/90 border-2 border-rose-300 rounded-3xl p-4 sm:p-5 shadow-xs text-slate-800 space-y-2.5 animate-in fade-in">
                     <div className="flex items-start justify-between gap-3 flex-wrap sm:flex-nowrap">
@@ -595,16 +688,16 @@ export default function VoucherAdminPage() {
                                         Cảnh Báo Tồn Kho: Có {expiredCount} Mã Coupon Đã Quá Hạn Sử Dụng ({expiredTotalValue.toLocaleString('vi-VN')}đ)
                                     </h3>
                                     <span className="text-[10px] font-bold bg-rose-200 text-rose-900 px-2 py-0.5 rounded-full">
-                                        Cần Dọn Dẹp
+                                        Cần Xử Lý
                                     </span>
                                 </div>
                                 <p className="text-xs text-rose-900 leading-relaxed">
-                                    Các mã này đã hết hạn trước ngày <strong>{formatDate(todayStr)}</strong> nhưng vẫn đang chiếm chỗ trong kho. Hãy làm sạch dữ liệu để tránh cấp nhầm cho nhân viên và giải phóng tồn kho.
+                                    Các mã này đã hết hạn trước ngày <strong>{formatDate(todayStr)}</strong> nhưng vẫn đang chiếm chỗ trong kho. Bạn có thể chọn <strong>Ẩn Chương Trình</strong> để lưu trữ an toàn mà không bị mất dữ liệu, hoặc <strong>Làm Sạch Kho</strong> nếu muốn xóa dọn.
                                 </p>
                             </div>
                         </div>
 
-                        <div className="flex items-center gap-2 shrink-0 pt-1 sm:pt-0">
+                        <div className="flex items-center gap-2 shrink-0 pt-1 sm:pt-0 flex-wrap">
                             <button
                                 type="button"
                                 onClick={() => setFilterStatusFromStats('EXPIRED')}
@@ -614,14 +707,42 @@ export default function VoucherAdminPage() {
                             </button>
                             <button
                                 type="button"
+                                onClick={() => setIsHideCampaignModalOpen(true)}
+                                className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 active:scale-[0.99] text-white rounded-xl text-xs font-black transition cursor-pointer shadow-xs flex items-center gap-1.5"
+                                title="Ẩn các chương trình hết hạn để lưu trữ mà không mất dữ liệu"
+                            >
+                                <EyeOff className="w-3.5 h-3.5" />
+                                <span>Ẩn Chương Trình</span>
+                            </button>
+                            <button
+                                type="button"
                                 onClick={() => setIsCleanModalOpen(true)}
                                 className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 active:scale-[0.99] text-white rounded-xl text-xs font-black transition cursor-pointer shadow-sm flex items-center gap-1.5"
                             >
                                 <Trash2 className="w-3.5 h-3.5" />
-                                <span>Làm Sạch Kho Ngay</span>
+                                <span>Làm Sạch Kho</span>
                             </button>
                         </div>
                     </div>
+                </div>
+            )}
+
+            {/* BANNER THÔNG BÁO LƯU TRỮ CHƯƠNG TRÌNH ĐÃ ẨN (Khi không có mã hết hạn đang hoạt động) */}
+            {expiredCount === 0 && hiddenExpiredVouchers.length > 0 && (
+                <div className="bg-emerald-50/70 border border-emerald-200 rounded-2xl p-3 px-4 text-xs text-emerald-950 flex items-center justify-between gap-3 flex-wrap animate-in fade-in">
+                    <div className="flex items-center gap-2">
+                        <span className="text-sm shrink-0">📦</span>
+                        <span>
+                            Đang lưu trữ an toàn <strong>{hiddenExpiredVouchers.length}</strong> mã voucher quá hạn của <strong>{hiddenCampaignsCount}</strong> chương trình đã ẩn (Dữ liệu lịch sử được bảo toàn 100%, không phát cảnh báo quấy rầy).
+                        </span>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => setIsHideCampaignModalOpen(true)}
+                        className="px-3 py-1 bg-white hover:bg-emerald-100 border border-emerald-300 text-emerald-800 rounded-xl font-bold transition cursor-pointer shrink-0"
+                    >
+                        Quản lý {hiddenCampaignsCount} CT đã ẩn
+                    </button>
                 </div>
             )}
 
@@ -629,6 +750,7 @@ export default function VoucherAdminPage() {
             <VoucherAdminStats
                 vouchers={vouchers}
                 hoardingAlerts={hoardingAlerts}
+                campaignStatuses={campaignStatuses}
                 onFilterExpired={() => setFilterStatusFromStats('EXPIRED')}
                 onOpenCleanModal={() => setIsCleanModalOpen(true)}
             />
@@ -638,6 +760,8 @@ export default function VoucherAdminPage() {
                 vouchers={vouchers}
                 campaignStatuses={campaignStatuses}
                 onToggleCampaignEndStatus={handleToggleCampaignEndStatus}
+                onToggleCampaignHiddenStatus={handleToggleCampaignHiddenStatus}
+                defaultExpanded={false}
                 onOpenImportModalWithPreset={(cName, denom, desc) => {
                     setImportPreset({
                         campaignName: cName,
@@ -652,12 +776,14 @@ export default function VoucherAdminPage() {
             <VoucherHoardingTable
                 alerts={hoardingAlerts}
                 currentFilteredEmployeeId={filterEmployeeId}
+                defaultExpanded={false}
                 onFilterEmployee={(empId) => setFilterEmployeeId(empId)}
             />
 
             {/* 6. DANH SÁCH MÃ VÀ DOUBLE CHECK */}
             <VoucherListTable
                 vouchers={vouchers}
+                campaignStatuses={campaignStatuses}
                 onResetVoucher={handleResetVoucher}
                 onMarkUsed={handleMarkUsed}
                 onDeleteVoucher={handleDeleteSingleVoucher}
@@ -808,8 +934,8 @@ export default function VoucherAdminPage() {
                 }}
             />
 
-            {/* MODAL HƯỚNG DẪN & XUẤT SQL SUPABASE */}
-            {showSqlModal && (
+            {/* MODAL HƯỚNG DẪN & XUẤT SQL SUPABASE (CHỈ DÀNH CHO ADMIN) */}
+            {showSqlModal && isAdmin && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs font-avo animate-in fade-in">
                     <div className="bg-white rounded-3xl max-w-xl w-full border border-slate-200 shadow-2xl p-5 sm:p-6 space-y-4 max-h-[92vh] overflow-y-auto">
                         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -890,6 +1016,16 @@ export default function VoucherAdminPage() {
                 onSaved={(newRule) => setDistributionRule(newRule)}
                 currentUserDisplayName={currentUser.full_name || currentUser.employee_id}
                 showToast={showToast}
+            />
+
+            {/* MODAL QUẢN LÝ ẨN / HIỆN CHƯƠNG TRÌNH VOUCHER */}
+            <VoucherHideCampaignModal
+                isOpen={isHideCampaignModalOpen}
+                onClose={() => setIsHideCampaignModalOpen(false)}
+                vouchers={vouchers}
+                campaignStatuses={campaignStatuses}
+                onToggleHideCampaign={handleToggleCampaignHiddenStatus}
+                onBulkHideEndedCampaigns={handleBulkHideEndedCampaigns}
             />
         </div>
     );

@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
-import { Clock, Check, X, Database, RefreshCw, PlusCircle, Split, Store, Layers } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Clock, Check, X, Database, RefreshCw, PlusCircle, Split, Store, Layers, Calendar, RotateCcw } from 'lucide-react';
 import type { StoreItem } from '../../../core/lib/storage';
-import { getShortStoreName } from '../../../core/lib/formatters';
+import { getShortStoreName, formatDate, getYesterdayDateString } from '../../../core/lib/formatters';
 
 export type WorkHoursSaveScope = 'split_by_store' | 'single_store' | 'all';
 
@@ -12,9 +12,11 @@ interface Props {
         saveMode: 'update' | 'new';
         scope: WorkHoursSaveScope;
         selectedStoreName?: string;
+        reportDate?: string;
     }) => Promise<void>;
     month: number;
     year: number;
+    reportDate?: string;
     employeeCount: number;
     totalHours: number;
     isSaving: boolean;
@@ -26,7 +28,9 @@ interface Props {
         session_title: string;
         session_type: string;
         store_name: string;
+        report_date?: string;
     } | null;
+    canViewAllStores?: boolean;
 }
 
 export default function WorkHoursConfirmModal({
@@ -35,15 +39,20 @@ export default function WorkHoursConfirmModal({
     onConfirm,
     month,
     year,
+    reportDate,
     employeeCount,
     totalHours,
     isSaving,
     stores,
     currentSelectedStore = 'all',
     storeBreakdown = [],
-    editingSession
+    editingSession,
+    canViewAllStores = true
 }: Props) {
     const [saveMode, setSaveMode] = useState<'update' | 'new'>('update');
+    const [selectedReportDate, setSelectedReportDate] = useState<string>(
+        () => reportDate || editingSession?.report_date || getYesterdayDateString()
+    );
     // Mặc định: nếu phát hiện nhiều siêu thị thì chọn tách riêng theo siêu thị, nếu đang chọn 1 siêu thị cụ thể thì chọn single_store
     const [scope, setScope] = useState<WorkHoursSaveScope>(() => {
         if (currentSelectedStore && currentSelectedStore !== 'all') {
@@ -59,6 +68,12 @@ export default function WorkHoursConfirmModal({
         return stores[0]?.name || '';
     });
 
+    useEffect(() => {
+        if (isOpen) {
+            setSelectedReportDate(reportDate || editingSession?.report_date || getYesterdayDateString());
+        }
+    }, [isOpen, reportDate, editingSession?.report_date]);
+
     if (!isOpen) return null;
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -66,7 +81,8 @@ export default function WorkHoursConfirmModal({
         await onConfirm({
             saveMode,
             scope,
-            selectedStoreName: scope === 'single_store' ? selectedStoreName : undefined
+            selectedStoreName: scope === 'single_store' ? selectedStoreName : undefined,
+            reportDate: selectedReportDate
         });
     };
 
@@ -197,34 +213,36 @@ export default function WorkHoursConfirmModal({
                                 </div>
                             </label>
 
-                            {/* Option 3: Lưu gộp chung toàn cụm */}
-                            <label className={`block p-3 rounded-xl border transition cursor-pointer text-xs ${
-                                scope === 'all'
-                                    ? 'bg-emerald-50/70 border-emerald-500 ring-2 ring-emerald-500/20 shadow-xs'
-                                    : 'bg-white border-slate-200 hover:bg-slate-50'
-                            }`}>
-                                <div className="flex items-start gap-2.5">
-                                    <input
-                                        type="radio"
-                                        name="workHoursScope"
-                                        value="all"
-                                        checked={scope === 'all'}
-                                        onChange={() => setScope('all')}
-                                        className="mt-0.5 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
-                                    />
-                                    <div className="flex-1">
-                                        <div className="flex items-center gap-1.5">
-                                            <Layers className="w-3.5 h-3.5 text-slate-600" />
-                                            <strong className="text-slate-800 font-extrabold">
-                                                Lưu chung toàn cụm (1 phiên gộp)
-                                            </strong>
+                            {/* Option 3: Lưu gộp chung toàn cụm (chỉ hiển thị nếu được quyền xem toàn cụm) */}
+                            {canViewAllStores && (
+                                <label className={`block p-3 rounded-xl border transition cursor-pointer text-xs ${
+                                    scope === 'all'
+                                        ? 'bg-emerald-50/70 border-emerald-500 ring-2 ring-emerald-500/20 shadow-xs'
+                                        : 'bg-white border-slate-200 hover:bg-slate-50'
+                                }`}>
+                                    <div className="flex items-start gap-2.5">
+                                        <input
+                                            type="radio"
+                                            name="workHoursScope"
+                                            value="all"
+                                            checked={scope === 'all'}
+                                            onChange={() => setScope('all')}
+                                            className="mt-0.5 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                                        />
+                                        <div className="flex-1">
+                                            <div className="flex items-center gap-1.5">
+                                                <Layers className="w-3.5 h-3.5 text-slate-600" />
+                                                <strong className="text-slate-800 font-extrabold">
+                                                    Lưu chung toàn cụm (1 phiên gộp)
+                                                </strong>
+                                            </div>
+                                            <p className="text-[11px] text-slate-500 mt-0.5">
+                                                Lưu 1 phiên duy nhất với tên &quot;Toàn Cụm Siêu Thị&quot; cho toàn bộ nhân sự
+                                            </p>
                                         </div>
-                                        <p className="text-[11px] text-slate-500 mt-0.5">
-                                            Lưu 1 phiên duy nhất với tên &quot;Toàn Cụm Siêu Thị&quot; cho toàn bộ nhân sự
-                                        </p>
                                     </div>
-                                </div>
-                            </label>
+                                </label>
+                            )}
                         </div>
                     </div>
 
@@ -284,11 +302,57 @@ export default function WorkHoursConfirmModal({
                         </div>
                     )}
 
+                    {/* KHỐI CHỌN NGÀY CHỐT DỮ LIỆU */}
+                    <div className="space-y-1.5 p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                        <div className="flex items-center justify-between">
+                            <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                                <Calendar className="w-3.5 h-3.5 text-emerald-600" />
+                                <span>Ngày chốt dữ liệu (Report Date):</span>
+                            </label>
+                            {editingSession?.report_date && selectedReportDate !== editingSession.report_date && (
+                                <button
+                                    type="button"
+                                    onClick={() => setSelectedReportDate(editingSession.report_date!)}
+                                    className="text-[11px] font-bold text-emerald-600 hover:text-emerald-800 hover:underline flex items-center gap-1 cursor-pointer"
+                                    title="Khôi phục lại ngày chốt gốc của phiên này"
+                                >
+                                    <RotateCcw className="w-3 h-3 text-emerald-600" />
+                                    <span>Nạp lại ngày chốt gốc ({formatDate(editingSession.report_date)})</span>
+                                </button>
+                            )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <input
+                                type="date"
+                                value={selectedReportDate}
+                                onChange={e => setSelectedReportDate(e.target.value)}
+                                disabled={isSaving}
+                                className="flex-1 text-xs font-bold font-mono px-3 py-2 bg-white border border-slate-300 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-emerald-500 text-slate-900 cursor-pointer"
+                            />
+                            {selectedReportDate && (
+                                <span className="text-xs font-mono font-extrabold text-emerald-700 bg-emerald-50 px-3 py-2 rounded-xl border border-emerald-200 shrink-0">
+                                    {formatDate(selectedReportDate)}
+                                </span>
+                            )}
+                        </div>
+                        {editingSession?.report_date && (
+                            <p className="text-[11px] text-slate-500">
+                                📅 Ngày chốt đã lưu trước đó của phiên: <b className="text-slate-700 font-mono">{formatDate(editingSession.report_date)}</b>
+                            </p>
+                        )}
+                    </div>
+
                     {/* TÓM TẮT SỐ LIỆU */}
                     <div className="bg-slate-50 rounded-xl p-3.5 border border-slate-200 space-y-1.5 text-xs">
                         <div className="flex justify-between text-slate-600">
                             <span>Kỳ báo cáo:</span>
                             <span className="font-bold text-slate-800">Tháng {month} / {year}</span>
+                        </div>
+                        <div className="flex justify-between text-slate-600">
+                            <span>Ngày chốt số liệu:</span>
+                            <span className="font-bold text-emerald-700 font-mono">
+                                {selectedReportDate ? formatDate(selectedReportDate) : '—'}
+                            </span>
                         </div>
                         <div className="flex justify-between text-slate-600">
                             <span>Số nhân sự có giờ công:</span>

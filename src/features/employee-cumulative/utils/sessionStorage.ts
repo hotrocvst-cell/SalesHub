@@ -12,6 +12,9 @@ export interface EmployeeSessionRecord {
     installment_rate: number;
     work_hours?: number;
     campaigns?: Record<string, number>;
+    job_title?: string;
+    short_name?: string;
+    store_name?: string;
 }
 
 export interface EmployeeDataSession {
@@ -37,6 +40,7 @@ const STORAGE_KEY = 'saleshub_emp_data_sessions_v1';
 
 import { isStoreMatch } from '../../../core/lib/formatters';
 import { supabase } from '../../../core/lib/supabase';
+import { isGuestDemoStore, transformDemoSessions } from '../../../core/lib/guestDemoStoreService';
 
 export const EMPLOYEE_DATA_SESSIONS_SQL = `-- Bảng lưu trữ phiên dữ liệu cập nhật nhân viên (Doanh thu, Thi đua, Giờ công)
 CREATE TABLE IF NOT EXISTS public.employee_data_sessions (
@@ -118,13 +122,25 @@ export async function fetchCloudEmployeeDataSessions(filters?: {
 
         let list = (data || []) as EmployeeDataSession[];
 
+        // Tự động sinh phiên Demo Store (chuyển đổi từ shop 10335) cho tháng 10/2026
+        const isMonth10Match = (!filters?.month || filters.month === 10) && (!filters?.year || filters.year === 2026);
+        const demoSessions = isMonth10Match ? transformDemoSessions(list) : [];
+
         // Lọc theo tên siêu thị (hỗ trợ so khớp linh hoạt theo mã/tên/cụm)
         if (filters?.storeName && filters.storeName !== 'all') {
             const targetStore = filters.storeName.trim();
+            if (isGuestDemoStore(targetStore)) {
+                return { success: true, data: demoSessions };
+            }
             list = list.filter(s => {
                 if (!s.store_name) return false;
                 return isStoreMatch(s.store_name, targetStore);
             });
+        } else {
+            // Khi không lọc siêu thị hoặc lấy 'all', gộp demoSessions vào danh sách
+            if (demoSessions.length > 0) {
+                list = [...list, ...demoSessions];
+            }
         }
 
         return { success: true, data: list };
@@ -268,12 +284,22 @@ export function fetchEmployeeDataSessions(filters?: {
             if (filters.year !== undefined && filters.year > 0) {
                 list = list.filter(s => s.year === filters.year);
             }
+            const isMonth10Match = (!filters.month || filters.month === 10) && (!filters.year || filters.year === 2026);
+            const demoSessions = isMonth10Match ? transformDemoSessions(list) : [];
+
             if (filters.storeName && filters.storeName !== 'all') {
                 const targetStore = filters.storeName.trim();
+                if (isGuestDemoStore(targetStore)) {
+                    return demoSessions;
+                }
                 list = list.filter(s => {
                     if (!s.store_name) return false;
                     return isStoreMatch(s.store_name, targetStore);
                 });
+            } else {
+                if (demoSessions.length > 0) {
+                    list = [...list, ...demoSessions];
+                }
             }
             if (filters.sessionType && filters.sessionType !== 'all') {
                 list = list.filter(s => s.session_type === filters.sessionType);

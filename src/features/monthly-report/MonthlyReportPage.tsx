@@ -13,7 +13,8 @@ import {
     formatDate,
     getYesterdayDateString,
     calculateRemainingTarget,
-    formatRemainingTarget
+    formatRemainingTarget,
+    isStoreMatch
 } from "../../core/lib/formatters";
 import ReportDataFreshnessBar from "../../shared/components/report/ReportDataFreshnessBar";
 import ReportActionButtons from "../../shared/components/report/ReportActionButtons";
@@ -24,6 +25,10 @@ import {
     type BusinessDayRecord,
     type CampaignDictItem
 } from "../../core/lib/storage";
+import {
+    GUEST_DEMO_STORE,
+    isDemoDateAllowed
+} from "../../core/lib/guestDemoStoreService";
 import {
     BarChart3,
     Store,
@@ -124,8 +129,22 @@ export default function MonthlyReportPage() {
         return Array.from(s).sort();
     }, [records]);
 
+    const isGuest = Boolean(currentUser?.is_guest);
+    const isStaff = currentUser?.role === 'NHAN_VIEN';
+
+    // Cố định tháng 10/2026 cho tài khoản trải nghiệm
+    useEffect(() => {
+        if (isGuest) {
+            if (selectedMonth !== 10) setSelectedMonth(10);
+            if (selectedYear !== 2026) setSelectedYear(2026);
+        }
+    }, [isGuest, selectedMonth, selectedYear]);
+
     // Lọc siêu thị theo phân quyền tài khoản (Nhân viên chỉ xem shop mình, Quản lý/Trưởng ca xem các shop được phân quyền)
     const storeList = useMemo(() => {
+        if (isGuest) {
+            return [getShortStoreName(GUEST_DEMO_STORE)];
+        }
         if (isAdmin) return allStoreList;
         const matched = allStoreList.filter(sName => {
             if (canAccessStore(sName)) return true;
@@ -140,16 +159,24 @@ export default function MonthlyReportPage() {
             ? currentUser.accessible_stores
             : (currentUser?.store_name ? [currentUser.store_name] : []);
         return Array.from(new Set(accessible.map(s => getShortStoreName(s))));
-    }, [allStoreList, isAdmin, canAccessStore, records, currentUser]);
+    }, [allStoreList, isAdmin, canAccessStore, records, currentUser, isGuest]);
 
-    const isStaff = currentUser?.role === 'NHAN_VIEN';
-    // CHỈ KHÓA TÀI KHOẢN NHÂN VIÊN. QUẢN LÝ (QL) VÀ TRƯỞNG CA (TC) LUÔN ĐƯỢC MỞ KHÓA
-    const isLockedToSingleStore = !isAdmin && isStaff;
-    const canViewAllStores = isAdmin || (!isStaff && storeList.length > 1);
+    // CHỈ KHÓA TÀI KHOẢN NHÂN VIÊN VÀ TÀI KHOẢN TRẢI NGHIỆM. QUẢN LÝ (QL) VÀ TRƯỞNG CA (TC) LUÔN ĐƯỢC MỞ KHÓA
+    const isLockedToSingleStore = (!isAdmin && isStaff) || isGuest;
+    const canViewAllStores = !isGuest && (isAdmin || (!isStaff && storeList.length > 1));
 
-    // Tự động điều chỉnh siêu thị được chọn cho nhân viên hoặc quản lý
+    // Tự động điều chỉnh siêu thị được chọn cho nhân viên hoặc quản lý hoặc tài khoản trải nghiệm
     useEffect(() => {
         if (isAdmin) return;
+
+        if (isGuest) {
+            const guestShort = getShortStoreName(GUEST_DEMO_STORE);
+            if (selectedStore !== guestShort) {
+                setSelectedStore(guestShort);
+            }
+            return;
+        }
+
         if (currentUser?.role === 'NHAN_VIEN') {
             const myStore = storeList[0] || (currentUser.store_name ? getShortStoreName(currentUser.store_name) : '');
             if (myStore && selectedStore !== myStore) {
@@ -169,17 +196,25 @@ export default function MonthlyReportPage() {
         if (selectedStore !== 'all' && !storeList.includes(selectedStore) && storeList.length > 0) {
             setSelectedStore(canViewAllStores ? 'all' : storeList[0]);
         }
-    }, [currentUser, isAdmin, storeList, selectedStore, canViewAllStores]);
+    }, [currentUser, isAdmin, isGuest, storeList, selectedStore, canViewAllStores]);
 
-    // 3. DANH SÁCH NGÀY BÁO CÁO CÓ SỐ LIỆU
+    // 3. DANH SÁCH NGÀY BÁO CÁO CÓ SỐ LIỆU PHÙ HỢP THEO PHẠM VI SIÊU THỊ ĐANG XEM
     const availableDates = useMemo(() => {
-        return Array.from(new Set(records.map(r => r.reportDate))).sort().reverse();
-    }, [records]);
+        let storeRecords = records;
+        if (isGuest) {
+            storeRecords = records.filter(r => isStoreMatch(r.storeName, GUEST_DEMO_STORE) || isStoreMatch(r.storeName, '838679'));
+        } else if (selectedStore !== 'all') {
+            storeRecords = records.filter(r => getShortStoreName(r.storeName) === selectedStore || isStoreMatch(r.storeName, selectedStore));
+        } else if (!isAdmin) {
+            storeRecords = records.filter(r => canAccessStore(r.storeName) || canAccessStore(getShortStoreName(r.storeName)));
+        }
+        return Array.from(new Set(storeRecords.map(r => r.reportDate))).filter(Boolean).sort().reverse();
+    }, [records, selectedStore, isGuest, isAdmin, canAccessStore]);
 
     // 4. MỐC NGÀY ĐANG ĐƯỢC CHỌN ĐỂ XEM
     const activeReportDate = useMemo(() => {
         if (availableDates.length === 0) return '';
-        if (selectedDate === 'latest' || !selectedDate) {
+        if (selectedDate === 'latest' || !selectedDate || !availableDates.includes(selectedDate)) {
             return availableDates[0];
         }
         return selectedDate;
@@ -246,9 +281,13 @@ export default function MonthlyReportPage() {
             };
         }
 
-        const singleStore = recordsInActiveDay.find(r => getShortStoreName(r.storeName) === selectedStore);
+        const singleStore = recordsInActiveDay.find(r => 
+            getShortStoreName(r.storeName) === selectedStore || 
+            isStoreMatch(r.storeName, selectedStore) ||
+            (isGuest && (isStoreMatch(r.storeName, GUEST_DEMO_STORE) || isStoreMatch(r.storeName, '838679')))
+        );
         return singleStore || null;
-    }, [recordsInActiveDay, activeReportDate, selectedStore, selectedMonth, selectedYear, isAdmin, canAccessStore]);
+    }, [recordsInActiveDay, activeReportDate, selectedStore, selectedMonth, selectedYear, isAdmin, canAccessStore, isGuest]);
 
     // 7. BÓC TÁCH DANH SÁCH THI ĐUA (HIỂN THỊ ĐẦY ĐỦ TÊN SIÊU THỊ KHI XEM CỤM)
     const emulationRowList = useMemo<EmulationRowItem[]>(() => {
@@ -296,7 +335,11 @@ export default function MonthlyReportPage() {
                 }
             });
         } else {
-            const shop = recordsInActiveDay.find(r => getShortStoreName(r.storeName) === selectedStore);
+            const shop = recordsInActiveDay.find(r => 
+                getShortStoreName(r.storeName) === selectedStore || 
+                isStoreMatch(r.storeName, selectedStore) ||
+                (isGuest && (isStoreMatch(r.storeName, GUEST_DEMO_STORE) || isStoreMatch(r.storeName, '838679')))
+            );
             if (shop?.emulationSummary) {
                 const sName = getShortStoreName(shop.storeName);
                 Object.entries(shop.emulationSummary).forEach(([rawKey, val]) => {
@@ -342,7 +385,7 @@ export default function MonthlyReportPage() {
         });
 
         return filtered;
-    }, [recordsInActiveDay, activeReportDate, selectedStore, campaigns, statusFilter, sortOrder, isAdmin, canAccessStore]);
+    }, [recordsInActiveDay, activeReportDate, selectedStore, campaigns, statusFilter, sortOrder, isAdmin, canAccessStore, isGuest]);
 
     // 8. TÍNH TOÁN SỐ MỤC THI ĐUA ĐẠT / CHƯA ĐẠT CHO SUMMARY
     const emulationStats = useMemo(() => {
@@ -365,37 +408,52 @@ export default function MonthlyReportPage() {
 
         const dates = Object.keys(groupedByDate).sort();
 
-        const paceList = dates.map(d => {
-            const dayRecords = groupedByDate[d];
-            if (selectedStore === "all" || selectedStore === "Tổng") {
-                const memberStores = dayRecords.filter(r => {
-                    const sName = getShortStoreName(r.storeName);
-                    if (sName === 'Tổng' || /^(tổng|tong)/i.test(r.storeName)) return false;
-                    return isAdmin || canAccessStore(r.storeName) || canAccessStore(sName);
-                });
-                const targets = memberStores.length > 0 ? memberStores : dayRecords.filter(r => {
-                    const sName = getShortStoreName(r.storeName);
-                    if (sName === 'Tổng' || /^(tổng|tong)/i.test(r.storeName)) return false;
-                    return isAdmin || canAccessStore(r.storeName) || canAccessStore(sName);
-                });
-                const totalActual = targets.reduce((sum, r) => sum + (Number(r.revenueActual) || 0), 0);
+        const paceList = dates
+            .filter(d => {
+                if (isGuest) return isDemoDateAllowed(d);
+                if (selectedStore !== 'all') {
+                    return groupedByDate[d]?.some(r => 
+                        getShortStoreName(r.storeName) === selectedStore || 
+                        isStoreMatch(r.storeName, selectedStore)
+                    );
+                }
+                return true;
+            })
+            .map(d => {
+                const dayRecords = groupedByDate[d] || [];
+                if (selectedStore === "all" || selectedStore === "Tổng") {
+                    const memberStores = dayRecords.filter(r => {
+                        const sName = getShortStoreName(r.storeName);
+                        if (sName === 'Tổng' || /^(tổng|tong)/i.test(r.storeName)) return false;
+                        return isAdmin || canAccessStore(r.storeName) || canAccessStore(sName);
+                    });
+                    const targets = memberStores.length > 0 ? memberStores : dayRecords.filter(r => {
+                        const sName = getShortStoreName(r.storeName);
+                        if (sName === 'Tổng' || /^(tổng|tong)/i.test(r.storeName)) return false;
+                        return isAdmin || canAccessStore(r.storeName) || canAccessStore(sName);
+                    });
+                    const totalActual = targets.reduce((sum, r) => sum + (Number(r.revenueActual) || 0), 0);
 
-                return {
-                    date: d,
-                    dayLabel: `Ngày ${new Date(d).getDate()}`,
-                    cumulativeRevenue: totalActual,
-                    dailyPace: 0
-                };
-            } else {
-                const shop = dayRecords.find(r => getShortStoreName(r.storeName) === selectedStore);
-                return {
-                    date: d,
-                    dayLabel: `Ngày ${new Date(d).getDate()}`,
-                    cumulativeRevenue: shop ? (Number(shop.revenueActual) || 0) : 0,
-                    dailyPace: 0
-                };
-            }
-        });
+                    return {
+                        date: d,
+                        dayLabel: `Ngày ${new Date(d).getDate()}`,
+                        cumulativeRevenue: totalActual,
+                        dailyPace: 0
+                    };
+                } else {
+                    const shop = dayRecords.find(r => 
+                        getShortStoreName(r.storeName) === selectedStore || 
+                        isStoreMatch(r.storeName, selectedStore) ||
+                        (isGuest && (isStoreMatch(r.storeName, GUEST_DEMO_STORE) || isStoreMatch(r.storeName, '838679')))
+                    );
+                    return {
+                        date: d,
+                        dayLabel: `Ngày ${new Date(d).getDate()}`,
+                        cumulativeRevenue: shop ? (Number(shop.revenueActual) || 0) : 0,
+                        dailyPace: 0
+                    };
+                }
+            });
 
         for (let i = 0; i < paceList.length; i++) {
             if (i === 0) {
@@ -840,7 +898,7 @@ export default function MonthlyReportPage() {
                             storeName={currentRecord?.storeName}
                             actionUrl="/cap-nhat"
                             actionLabel="Cập nhật số liệu LK"
-                            canUpdate={isAdmin || ['ADMIN', 'QUAN_LY', 'TRUONG_CA'].includes(currentUser?.role || '')}
+                            canUpdate={!currentUser?.is_guest && (isAdmin || ['ADMIN', 'QUAN_LY', 'TRUONG_CA'].includes(currentUser?.role || ''))}
                         />
 
                         {/* 1. BANNER TIÊU ĐỀ BÁO CÁO */}

@@ -1,5 +1,13 @@
 import { supabase } from './supabase';
 import { formatCapitalizeWords } from './formatters';
+import {
+    getGuestDemoStoreItem,
+    getGuestDemoEmployees,
+    isGuestDemoStore,
+    isDemoDateAllowed,
+    transformDemoBusinessRecords,
+    DEMO_EMPLOYEE_MAPPINGS
+} from './guestDemoStoreService';
 
 // ==========================================
 // 1. CÁC KIỂU DỮ LIỆU CỐT LÕI (INTERFACES)
@@ -68,6 +76,7 @@ export interface StoreItem {
     id?: string;
     code: string;             // Mã siêu thị (e.g. 10335, 111)
     name: string;             // Tên siêu thị
+    short_name?: string;       // Tên rút gọn
     address?: string;         // Địa chỉ
     brand?: string;           // Thương hiệu (TGDĐ / ĐMX / TopZone / AAR)
     is_active?: boolean;      // Trạng thái hoạt động
@@ -206,9 +215,17 @@ export async function fetchBusinessRecords(month: number, year: number) {
             .order('report_date', { ascending: true });
 
         if (error) throw error;
+        const mapped = (data || []).map(mapDbToBusinessDayRecord);
+        if (month === 10 && year === 2026) {
+            const demoRecs = transformDemoBusinessRecords(mapped);
+            return {
+                success: true,
+                data: [...mapped, ...demoRecs]
+            };
+        }
         return {
             success: true,
-            data: (data || []).map(mapDbToBusinessDayRecord)
+            data: mapped
         };
     } catch (err: any) {
         console.error('Lỗi fetchBusinessRecords:', err);
@@ -226,9 +243,18 @@ export async function fetchBusinessRecordsByDate(reportDate: string) {
             .eq('report_date', reportDate.trim());
 
         if (error) throw error;
+        const mapped = (data || []).map(mapDbToBusinessDayRecord);
+        if (isDemoDateAllowed(reportDate)) {
+            const demoRecs = transformDemoBusinessRecords(mapped);
+            return {
+                success: true,
+                data: [...mapped, ...demoRecs],
+                count: mapped.length + demoRecs.length
+            };
+        }
         return {
             success: true,
-            data: (data || []).map(mapDbToBusinessDayRecord),
+            data: mapped,
             count: data?.length || 0
         };
     } catch (err: any) {
@@ -263,14 +289,18 @@ export async function syncBatchDailyRecordsToSupabase(
     try {
         const targetReportDate = records[0]?.reportDate?.trim();
 
-        // Nếu bật chế độ ghi đè: xóa sạch toàn bộ bản ghi cũ của ngày chốt đó trước
+        // Nếu bật chế độ ghi đè: chỉ xóa các bản ghi cũ của các siêu thị đang được ghi đè trong ngày chốt đó
         if (options?.overwrite && targetReportDate) {
-            const { error: delError } = await supabase
-                .from('daily_business_records')
-                .delete()
-                .eq('report_date', targetReportDate);
-            if (delError) {
-                console.warn('Cảnh báo khi dọn dẹp bản ghi cũ để ghi đè:', delError);
+            const storeNamesToOverwrite = Array.from(new Set(records.map(r => r.storeName?.trim()).filter(Boolean)));
+            if (storeNamesToOverwrite.length > 0) {
+                const { error: delError } = await supabase
+                    .from('daily_business_records')
+                    .delete()
+                    .eq('report_date', targetReportDate)
+                    .in('store_name', storeNamesToOverwrite);
+                if (delError) {
+                    console.warn('Cảnh báo khi dọn dẹp bản ghi cũ để ghi đè:', delError);
+                }
             }
         }
 
@@ -443,16 +473,23 @@ export async function fetchStores() {
             .select('*')
             .order('name', { ascending: true });
 
+        let storeList: StoreItem[] = [];
         if (error) {
             console.warn('Cảnh báo fetchStores, thử truy vấn không order:', error.message);
             const fallback = await supabase.from('stores').select('*');
             if (fallback.error) throw fallback.error;
-            return { success: true, data: (fallback.data as StoreItem[]) || [] };
+            storeList = (fallback.data as StoreItem[]) || [];
+        } else {
+            storeList = (data as StoreItem[]) || [];
         }
-        return { success: true, data: (data as StoreItem[]) || [] };
+
+        if (!storeList.some(s => s.code === '838679' || s.name.includes('838679'))) {
+            storeList.push(getGuestDemoStoreItem());
+        }
+        return { success: true, data: storeList };
     } catch (err: any) {
         console.error('Lỗi fetchStores:', err);
-        return { success: false, data: [] as StoreItem[], error: err.message || err };
+        return { success: false, data: [getGuestDemoStoreItem()] as StoreItem[], error: err.message || err };
     }
 }
 
@@ -502,6 +539,10 @@ export async function deleteStoreById(id: string) {
 }
 
 export async function fetchEmployees(storeName?: string) {
+    if (storeName && isGuestDemoStore(storeName)) {
+        return { success: true, data: getGuestDemoEmployees() };
+    }
+
     try {
         let query = supabase
             .from('employees')
@@ -515,10 +556,14 @@ export async function fetchEmployees(storeName?: string) {
 
         const { data, error } = await query;
         if (error) throw error;
-        return { success: true, data: (data as EmployeeItem[]) || [] };
+        const list = (data as EmployeeItem[]) || [];
+        if (!storeName || storeName === 'all') {
+            return { success: true, data: [...list, ...getGuestDemoEmployees()] };
+        }
+        return { success: true, data: list };
     } catch (err: any) {
         console.error('Lỗi fetchEmployees:', err);
-        return { success: false, data: [] as EmployeeItem[], error: err.message || err };
+        return { success: false, data: (storeName && isGuestDemoStore(storeName) ? getGuestDemoEmployees() : []) as EmployeeItem[], error: err.message || err };
     }
 }
 
@@ -952,7 +997,24 @@ export async function fetchEmployeeRevenueTargets(month: number, year: number) {
             .eq('year', year);
 
         if (error) throw error;
-        return { success: true, data: data || [] };
+        let list = data || [];
+        if (month === 10 && year === 2026) {
+            const demoTargets: any[] = [];
+            list.forEach((row: any) => {
+                const empId = String(row.employee_id || '').trim();
+                const mapping = DEMO_EMPLOYEE_MAPPINGS.find(m => m.originalId === empId);
+                if (mapping) {
+                    demoTargets.push({
+                        ...row,
+                        employee_id: mapping.demoId
+                    });
+                }
+            });
+            if (demoTargets.length > 0) {
+                list = [...list, ...demoTargets];
+            }
+        }
+        return { success: true, data: list };
     } catch (err: any) {
         console.error('Lỗi fetchEmployeeRevenueTargets:', err);
         return { success: false, data: [], error: err.message || err };
@@ -968,7 +1030,25 @@ export async function fetchEmployeeCampaignTargets(month: number, year: number) 
             .eq('year', year);
 
         if (error) throw error;
-        return { success: true, data: data || [] };
+        let list = data || [];
+        if (month === 10 && year === 2026) {
+            const demoTargets: any[] = [];
+            list.forEach((row: any) => {
+                const empId = String(row.employee_id || '').trim();
+                const mapping = DEMO_EMPLOYEE_MAPPINGS.find(m => m.originalId === empId);
+                if (mapping) {
+                    demoTargets.push({
+                        ...row,
+                        id: `demo_${row.id || Math.random()}`,
+                        employee_id: mapping.demoId
+                    });
+                }
+            });
+            if (demoTargets.length > 0) {
+                list = [...list, ...demoTargets];
+            }
+        }
+        return { success: true, data: list };
     } catch (err: any) {
         console.error('Lỗi fetchEmployeeCampaignTargets:', err);
         return { success: false, data: [], error: err.message || err };
@@ -1098,6 +1178,11 @@ export async function fetchMonthlyRecordsForChart(month: number, year: number, s
             dataType: row.data_type || 'daily',
             updatedAt: row.updated_at || ''
         }));
+
+        if (month === 10 && year === 2026) {
+            const demoRecs = transformDemoBusinessRecords(formatted as BusinessDayRecord[]);
+            return { success: true, data: [...formatted, ...demoRecs] as BusinessDayRecord[] };
+        }
 
         return { success: true, data: formatted as BusinessDayRecord[] };
     } catch (err: any) {

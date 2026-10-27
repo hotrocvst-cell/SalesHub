@@ -1,8 +1,8 @@
 import { useState, useMemo } from 'react';
 import type { ParsedEmployeeRevenue, ParsedCampaignBlock } from '../utils/employeeParsers';
 import type { EmployeeItem } from '../../../core/lib/storage';
-import { cleanEmployeeName, getShortenedEmployeeName } from '../../../core/lib/formatters';
-import { Download, Search, Clock, Store } from 'lucide-react';
+import { cleanEmployeeName, getShortenedEmployeeName, formatDate } from '../../../core/lib/formatters';
+import { Download, Search, Clock, Store, Calendar } from 'lucide-react';
 import ExcelJS from 'exceljs';
 
 interface Props {
@@ -11,6 +11,7 @@ interface Props {
     campaignBlocks: ParsedCampaignBlock[];
     campaignMatrix: Record<string, Record<string, number>>;
     workHoursMap: Record<string, number>;
+    reportDate?: string;
     onOpenStoreConfirm: () => void;
     onSaveWorkHoursOnly: () => Promise<void>;
     isSaving: boolean;
@@ -22,6 +23,7 @@ export default function CumulativeSummaryTab({
     campaignBlocks,
     campaignMatrix,
     workHoursMap,
+    reportDate,
     onOpenStoreConfirm,
     onSaveWorkHoursOnly,
     isSaving
@@ -40,8 +42,10 @@ export default function CumulativeSummaryTab({
     }, [employees]);
 
     // Danh sách mã nhân viên hiển thị:
-    // BẮT BUỘC hiển thị TẤT CẢ nhân viên có trong dữ liệu doanh thu bóc tách,
-    // cùng các nhân viên có dữ liệu thi đua, giờ công, và nhân viên đã cấu hình của siêu thị.
+    // Danh sách mã nhân viên hiển thị:
+    // BẮT BUỘC hiển thị các nhân viên có trong dữ liệu doanh thu bóc tách,
+    // cùng các nhân viên có dữ liệu thi đua hoặc giờ công.
+    // KHÔNG tự ý lôi toàn bộ danh sách cấu hình vào nếu chưa có dữ liệu nạp/bóc tách!
     const allEmpIds = useMemo(() => {
         const idSet = new Set<string>();
         // 1. Luôn đưa tất cả nhân viên có dữ liệu doanh thu bóc tách vào
@@ -59,13 +63,8 @@ export default function CumulativeSummaryTab({
             const clean = id?.trim();
             if (clean) idSet.add(clean);
         });
-        // 4. Bổ sung danh sách nhân viên cấu hình siêu thị (nếu có)
-        employees.forEach(e => {
-            const clean = e.employee_id?.trim();
-            if (clean) idSet.add(clean);
-        });
         return Array.from(idSet);
-    }, [employees, revenueData, campaignMatrix, workHoursMap]);
+    }, [revenueData, campaignMatrix, workHoursMap]);
 
     // Hợp nhất dữ liệu từng nhân viên
     const unifiedRows = useMemo(() => {
@@ -263,6 +262,13 @@ export default function CumulativeSummaryTab({
                         <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 font-bold">
                             <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
                             <span>Giờ công: {Object.keys(workHoursMap).length} NV ({totals.hours.toLocaleString('vi-VN')}h)</span>
+                        </div>
+                    )}
+
+                    {reportDate && (
+                        <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-100 text-purple-800 font-bold border border-purple-200">
+                            <Calendar className="w-3.5 h-3.5 text-purple-600" />
+                            <span>Ngày chốt: <strong className="font-mono">{formatDate(reportDate)}</strong></span>
                         </div>
                     )}
                 </div>

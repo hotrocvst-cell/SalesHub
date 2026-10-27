@@ -22,9 +22,55 @@ export interface SystemPagePermission {
     // Phân quyền Xuất Excel (Mặc định: false - Khóa & Ẩn)
     allow_excel_export?: boolean;
     allowed_excel_roles?: UserRole[];
+    // Phân quyền Tài khoản Trải nghiệm (Guest Trial)
+    allow_guest?: boolean; // Cho phép tài khoản trải nghiệm xem trang này
 }
 
-export const DEFAULT_PAGE_PERMISSIONS: SystemPagePermission[] = [
+/**
+ * Danh sách các phân hệ quản trị, cấu hình và nạp dữ liệu bị KHÓA CỐ ĐỊNH đối với tài khoản trải nghiệm (Guest)
+ */
+export const GUEST_RESTRICTED_CONFIG_PATHS = [
+    '/cau-hinh-sieu-thi-nhan-vien',
+    '/cau-hinh-thi-dua',
+    '/muc-tieu-nhan-vien',
+    '/quan-ly-voucher',
+    '/cap-nhat',
+    '/quan-ly-du-lieu',
+    '/cap-nhat-luy-ke-nhan-vien',
+    '/quan-ly-phien-nhan-vien',
+    '/quan-ly-tai-khoan',
+    '/phan-quyen-sieu-thi',
+    '/quan-tri-he-thong',
+    '/quan-tri-he-thong/tai-khoan-trai-nghiem'
+];
+
+export function isGuestPathRestricted(path: string): boolean {
+    return GUEST_RESTRICTED_CONFIG_PATHS.some(p => path === p || path.startsWith(p + '/'));
+}
+
+export const DEFAULT_GUEST_ALLOWED_PATHS = new Set<string>([
+    '/',
+    '/bao-cao-cum-sieu-thi',
+    '/bc-ngay/tong-quan',
+    '/bc-ngay-nhan-vien',
+    '/bc-thang/tong-quan',
+    '/bao-cao-hieu-qua-nhan-vien',
+    '/chi-tiet-nhan-vien',
+    '/tong-hop-xep-hang-nhan-vien',
+    '/xep-hang-doanh-thu-luy-ke',
+    '/tong-hop-thi-dua',
+    '/tien-do-thi-dua',
+    '/tra-cuu-thi-dua',
+    '/nhip-doanh-thu',
+    '/trang-thai-du-lieu',
+    '/cap-ma-voucher',
+    '/xmusic-playlist',
+    '/ho-tro-gop-y',
+    '/can-ton-kho',
+    '/kiem-quy'
+]);
+
+const RAW_DEFAULT_PAGE_PERMISSIONS: SystemPagePermission[] = [
     // TỔNG QUAN
     {
         page_key: 'trang_chu',
@@ -325,6 +371,55 @@ export const DEFAULT_PAGE_PERMISSIONS: SystemPagePermission[] = [
         badge_text: 'Mới',
         badge_color: 'indigo'
     },
+    {
+        page_key: 'ho_tro_gop_y',
+        page_name: 'Hỗ Trợ & Góp Ý',
+        path: '/ho-tro-gop-y',
+        group_title: 'TIỆN ÍCH BÁN HÀNG',
+        description: 'Kênh tương tác Admin & User, giải đáp hướng dẫn, tiếp nhận góp ý giao diện, tính năng mới và báo lỗi hệ thống',
+        is_enabled: true,
+        allowed_roles: ['ADMIN', 'QUAN_LY', 'TRUONG_CA', 'NHAN_VIEN'],
+        order_index: 13,
+        badge_enabled: true,
+        badge_icon: '💬',
+        badge_text: 'Mới',
+        badge_color: 'emerald',
+        allow_excel_export: false,
+        allowed_excel_roles: ['ADMIN']
+    },
+    {
+        page_key: 'can_ton_kho',
+        page_name: 'Cân tồn kho',
+        path: '/can-ton-kho',
+        group_title: 'TIỆN ÍCH BÁN HÀNG',
+        description: 'Hỗ trợ cân đối tồn kho, lọc sản phẩm thiếu hàng (<1), tìm siêu thị dư hàng (>=2) và tạo danh sách gợi ý xin hàng',
+        is_enabled: true,
+        allowed_roles: ['ADMIN', 'QUAN_LY', 'TRUONG_CA', 'NHAN_VIEN'],
+        order_index: 14,
+        badge_enabled: true,
+        badge_icon: '📦',
+        badge_text: 'Mới',
+        badge_color: 'amber',
+        allow_excel_export: true,
+        allowed_excel_roles: ['ADMIN', 'QUAN_LY', 'TRUONG_CA', 'NHAN_VIEN']
+    },
+    // HỖ TRỢ CVST
+    {
+        page_key: 'kiem_quy',
+        page_name: 'Kiểm quỹ - Kiểm tiền',
+        path: '/kiem-quy',
+        group_title: 'HỖ TRỢ CVST',
+        description: 'Công cụ đếm tiền, kiểm quỹ ca trực, chốt tiền nộp, in bill 80mm và lưu lịch sử bàn giao quỹ',
+        is_enabled: true,
+        allowed_roles: ['ADMIN'],
+        order_index: 15,
+        badge_enabled: true,
+        badge_icon: '💵',
+        badge_text: 'Mới',
+        badge_color: 'emerald',
+        allow_excel_export: false,
+        allowed_excel_roles: ['ADMIN']
+    },
     // HỆ THỐNG & CẤU HÌNH
     {
         page_key: 'cau_hinh_st_nv',
@@ -409,8 +504,27 @@ export const DEFAULT_PAGE_PERMISSIONS: SystemPagePermission[] = [
         badge_icon: '⚙️',
         badge_text: 'Cấu hình',
         badge_color: 'purple'
+    },
+    {
+        page_key: 'tai_khoan_trai_nghiem',
+        page_name: 'Tài Khoản Trải Nghiệm & Cấu Hình Hạn Dùng',
+        path: '/quan-tri-he-thong/tai-khoan-trai-nghiem',
+        group_title: 'HỆ THỐNG & CẤU HÌNH',
+        description: 'Quản lý 1-3 tài khoản trải nghiệm dùng thử cho khách & cấu hình giới hạn thời gian hoạt động theo ngày',
+        is_enabled: true,
+        allowed_roles: ['ADMIN'],
+        order_index: 16,
+        badge_enabled: true,
+        badge_icon: '✨',
+        badge_text: 'Demo',
+        badge_color: 'amber'
     }
 ];
+
+export const DEFAULT_PAGE_PERMISSIONS: SystemPagePermission[] = RAW_DEFAULT_PAGE_PERMISSIONS.map(p => ({
+    ...p,
+    allow_guest: p.allow_guest !== undefined ? p.allow_guest : DEFAULT_GUEST_ALLOWED_PATHS.has(p.path)
+}));
 
 /**
  * Danh mục chuẩn 100% các trang thực tế trong hệ thống (App Route Registry)
@@ -444,17 +558,26 @@ export function auditRouteCoverage(currentPermissions: SystemPagePermission[]): 
     };
 }
 
+export const DEPRECATED_SYSTEM_PATHS = new Set<string>([
+    '/bc-realtime-con-lai'
+]);
+
+export const DEPRECATED_SYSTEM_PAGE_KEYS = new Set<string>([
+    'bc_realtime_con_lai'
+]);
+
 /**
  * Tự động hợp nhất tất cả các trang thực tế còn thiếu vào danh sách phân quyền hiện tại
  */
 export function syncMissingPagesToPermissions(currentPermissions: SystemPagePermission[]): SystemPagePermission[] {
-    const existingPaths = new Set(currentPermissions.map(p => p.path));
-    const existingKeys = new Set(currentPermissions.map(p => p.page_key));
+    const cleaned = currentPermissions.filter(p => !DEPRECATED_SYSTEM_PATHS.has(p.path) && !DEPRECATED_SYSTEM_PAGE_KEYS.has(p.page_key));
+    const existingPaths = new Set(cleaned.map(p => p.path));
+    const existingKeys = new Set(cleaned.map(p => p.page_key));
     const toAdd = APP_SYSTEM_PAGES_REGISTRY.filter(
         def => !existingPaths.has(def.path) && !existingKeys.has(def.page_key)
     );
 
-    return [...currentPermissions, ...toAdd].sort((a, b) => a.order_index - b.order_index);
+    return [...cleaned, ...toAdd].sort((a, b) => a.order_index - b.order_index);
 }
 
 const LOCAL_STORAGE_KEY = 'saleshub_system_page_permissions_v1';
@@ -482,6 +605,8 @@ CREATE TABLE IF NOT EXISTS public.system_page_permissions (
     badge_text TEXT DEFAULT NULL,
     badge_icon TEXT DEFAULT NULL,
     badge_color TEXT DEFAULT 'blue',
+    allow_excel_export BOOLEAN DEFAULT false,
+    allow_guest BOOLEAN DEFAULT false,
     created_at TIMESTAMPTZ DEFAULT now(),
     updated_at TIMESTAMPTZ DEFAULT now()
 );
@@ -494,6 +619,7 @@ ALTER TABLE public.system_page_permissions ADD COLUMN IF NOT EXISTS badge_icon T
 ALTER TABLE public.system_page_permissions ADD COLUMN IF NOT EXISTS badge_color TEXT DEFAULT 'blue';
 ALTER TABLE public.system_page_permissions ADD COLUMN IF NOT EXISTS allow_excel_export BOOLEAN DEFAULT false;
 ALTER TABLE public.system_page_permissions ADD COLUMN IF NOT EXISTS allowed_excel_roles TEXT[] DEFAULT '{"ADMIN"}';
+ALTER TABLE public.system_page_permissions ADD COLUMN IF NOT EXISTS allow_guest BOOLEAN DEFAULT false;
 
 -- Kích hoạt RLS
 ALTER TABLE public.system_page_permissions ENABLE ROW LEVEL SECURITY;
@@ -520,8 +646,26 @@ export async function fetchSystemPagePermissions(): Promise<{ success: boolean; 
             .order('order_index', { ascending: true });
 
         if (!error && data && data.length > 0) {
+            // Tự động dọn dẹp các route deprecated còn sót lại trên Supabase
+            const hasDeprecated = data.some((item: any) =>
+                DEPRECATED_SYSTEM_PATHS.has(item.path) || DEPRECATED_SYSTEM_PAGE_KEYS.has(item.page_key)
+            );
+            if (hasDeprecated) {
+                supabase
+                    .from('system_page_permissions')
+                    .delete()
+                    .or('path.eq./bc-realtime-con-lai,page_key.eq.bc_realtime_con_lai')
+                    .then(() => {
+                        console.log('Đã dọn dẹp route cũ bc_realtime_con_lai khỏi Supabase');
+                    });
+            }
+
+            const validRows = data.filter((item: any) =>
+                !DEPRECATED_SYSTEM_PATHS.has(item.path) && !DEPRECATED_SYSTEM_PAGE_KEYS.has(item.page_key)
+            );
+
             // Kiểm tra xem dữ liệu từ Supabase đã có các cột badge hay chưa
-            const sampleRow = data[0];
+            const sampleRow = validRows[0] || {};
             const cloudHasBadge = 'badge_enabled' in sampleRow || 'badge_text' in sampleRow;
 
             // Đọc custom badges dự phòng từ LocalStorage
@@ -533,7 +677,7 @@ export async function fetchSystemPagePermissions(): Promise<{ success: boolean; 
                 // ignore
             }
 
-            const mapped: SystemPagePermission[] = data.map((item: any) => {
+            const mapped: SystemPagePermission[] = validRows.map((item: any) => {
                 const defaultDef = DEFAULT_PAGE_PERMISSIONS.find(d => d.page_key === item.page_key || d.path === item.path);
                 const cachedBadge = customBadgeCache[item.path];
 
@@ -570,6 +714,10 @@ export async function fetchSystemPagePermissions(): Promise<{ success: boolean; 
                     ? (item.allowed_excel_roles as UserRole[])
                     : (defaultDef?.allowed_excel_roles || ['ADMIN']);
 
+                const allow_guest = item.allow_guest !== undefined && item.allow_guest !== null
+                    ? Boolean(item.allow_guest)
+                    : (defaultDef?.allow_guest ?? false);
+
                 return {
                     id: item.id,
                     page_key: item.page_key,
@@ -587,7 +735,8 @@ export async function fetchSystemPagePermissions(): Promise<{ success: boolean; 
                     badge_icon,
                     badge_color,
                     allow_excel_export,
-                    allowed_excel_roles
+                    allowed_excel_roles,
+                    allow_guest
                 };
             });
 
@@ -687,6 +836,7 @@ export async function saveSystemPagePermissions(permissions: SystemPagePermissio
             badge_color: p.badge_color || 'blue',
             allow_excel_export: p.allow_excel_export !== undefined ? Boolean(p.allow_excel_export) : false,
             allowed_excel_roles: (Array.isArray(p.allowed_excel_roles) && p.allowed_excel_roles.length > 0) ? p.allowed_excel_roles : ['ADMIN'],
+            allow_guest: p.allow_guest !== undefined ? Boolean(p.allow_guest) : false,
             updated_at: new Date().toISOString()
         }));
 
@@ -696,10 +846,10 @@ export async function saveSystemPagePermissions(permissions: SystemPagePermissio
 
         if (error) {
             console.warn('Cảnh báo khi lưu Supabase system_page_permissions:', error.message);
-            // Nếu lỗi do cột badge hoặc excel chưa được tạo trên Supabase
-            if (error.message && (error.message.includes('badge_') || error.message.includes('excel') || error.message.includes('column'))) {
+            // Nếu lỗi do cột badge, excel hoặc allow_guest chưa được tạo trên Supabase
+            if (error.message && (error.message.includes('badge_') || error.message.includes('excel') || error.message.includes('guest') || error.message.includes('column'))) {
                 try {
-                    const fallbackPayloads = payloads.map(({ badge_enabled, badge_text, badge_icon, badge_color, allow_excel_export, allowed_excel_roles, ...rest }: any) => rest);
+                    const fallbackPayloads = payloads.map(({ badge_enabled, badge_text, badge_icon, badge_color, allow_excel_export, allowed_excel_roles, allow_guest, ...rest }: any) => rest);
                     const { error: fallbackError } = await supabase
                         .from('system_page_permissions')
                         .upsert(fallbackPayloads, { onConflict: 'page_key' });
@@ -736,9 +886,12 @@ function getLocalPermissions(): SystemPagePermission[] {
         if (saved) {
             const parsed = JSON.parse(saved);
             if (Array.isArray(parsed) && parsed.length > 0) {
-                const currentPaths = new Set(parsed.map((p: any) => p.path));
+                const cleanedParsed = parsed.filter((p: any) =>
+                    !DEPRECATED_SYSTEM_PATHS.has(p.path) && !DEPRECATED_SYSTEM_PAGE_KEYS.has(p.page_key)
+                );
+                const currentPaths = new Set(cleanedParsed.map((p: any) => p.path));
                 const missingDefaults = DEFAULT_PAGE_PERMISSIONS.filter(d => !currentPaths.has(d.path));
-                return [...parsed, ...missingDefaults].map(item => {
+                return [...cleanedParsed, ...missingDefaults].map(item => {
                     const defaultDef = DEFAULT_PAGE_PERMISSIONS.find(d => d.path === item.path || d.page_key === item.page_key);
                     const cached = customBadgeCache[item.path];
                     const allow_excel_export = item.allow_excel_export !== undefined && item.allow_excel_export !== null
@@ -747,6 +900,9 @@ function getLocalPermissions(): SystemPagePermission[] {
                     const allowed_excel_roles = (Array.isArray(item.allowed_excel_roles) && item.allowed_excel_roles.length > 0)
                         ? item.allowed_excel_roles
                         : (defaultDef?.allowed_excel_roles || ['ADMIN']);
+                    const allow_guest = item.allow_guest !== undefined && item.allow_guest !== null
+                        ? Boolean(item.allow_guest)
+                        : (defaultDef?.allow_guest ?? false);
 
                     return {
                         ...item,
@@ -755,7 +911,8 @@ function getLocalPermissions(): SystemPagePermission[] {
                         badge_icon: cached ? (cached.badge_icon ?? item.badge_icon) : (item.badge_icon || ''),
                         badge_color: cached ? (cached.badge_color || item.badge_color || 'blue') : (item.badge_color || 'blue'),
                         allow_excel_export,
-                        allowed_excel_roles
+                        allowed_excel_roles,
+                        allow_guest
                     };
                 });
             }

@@ -27,10 +27,10 @@ export default function VoucherHoardingTable({
     alerts,
     onFilterEmployee,
     currentFilteredEmployeeId,
-    defaultExpanded = true,
+    defaultExpanded = false,
     defaultRiskFilter = 'CRITICAL'
 }: Props) {
-    // Mặc định tự động mở rộng hiển thị để người dùng thấy ngay danh sách nhân viên có nguy cơ
+    // Mặc định hiển thị thu gọn theo yêu cầu
     const [isExpanded, setIsExpanded] = useState<boolean>(defaultExpanded);
     // Bộ lọc hiển thị theo mức độ cảnh báo: mặc định hiển thị user đang có 'CRITICAL' (Nguy cơ cao)
     const [filterRisk, setFilterRisk] = useState<'CRITICAL' | 'WARNING' | 'RISK' | 'ALL' | 'NORMAL'>(defaultRiskFilter);
@@ -105,17 +105,15 @@ export default function VoucherHoardingTable({
             {/* Header phân hệ: Click để mở rộng hoặc thu gọn */}
             <div
                 onClick={() => setIsExpanded(!isExpanded)}
-                className={`p-4 sm:p-5 text-white flex items-center justify-between flex-wrap gap-3 cursor-pointer select-none transition ${
-                    riskCount > 0
-                        ? 'bg-gradient-to-r from-slate-900 via-rose-950 to-slate-900 hover:brightness-105'
-                        : 'bg-gradient-to-r from-slate-900 via-slate-950 to-slate-900 hover:brightness-105'
-                }`}
+                className={`p-4 sm:p-5 text-white flex items-center justify-between flex-wrap gap-3 cursor-pointer select-none transition ${riskCount > 0
+                    ? 'bg-gradient-to-r from-slate-900 via-rose-950 to-slate-900 hover:brightness-105'
+                    : 'bg-gradient-to-r from-slate-900 via-slate-950 to-slate-900 hover:brightness-105'
+                    }`}
                 title="Bấm để mở rộng hoặc thu ẩn bảng theo dõi đầu cơ tích trữ"
             >
                 <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black shadow-md shrink-0 ${
-                        riskCount > 0 ? 'bg-rose-500 text-white' : 'bg-emerald-500 text-white'
-                    }`}>
+                    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black shadow-md shrink-0 ${riskCount > 0 ? 'bg-rose-500 text-white' : 'bg-emerald-500 text-white'
+                        }`}>
                         {riskCount > 0 ? <Flame className="w-5 h-5" /> : <ShieldCheck className="w-5 h-5" />}
                     </div>
 
@@ -144,7 +142,7 @@ export default function VoucherHoardingTable({
                         </div>
                         <p className="text-xs text-slate-300 mt-0.5">
                             {riskCount > 0
-                                ? `Phát hiện ${riskCount} nhân sự nhận nhiều mã nhưng chưa dùng đủ đơn hàng đối ứng.`
+                                ? `Phát hiện ${riskCount} user nhận nhiều mã nhưng có thể chưa dùng.`
                                 : 'Hệ thống tự động đối chiếu số lượng mã đã lấy với mã chưa dùng theo ngưỡng an toàn.'}
                         </p>
                     </div>
@@ -153,7 +151,7 @@ export default function VoucherHoardingTable({
                 {/* Nút bấm chuyển đổi thu gọn / mở rộng */}
                 <div className="flex items-center gap-2">
                     <span className="text-xs font-bold text-slate-200 bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-xl border border-white/10 flex items-center gap-1.5 transition">
-                        <span>{isExpanded ? 'Thu gọn bảng' : 'Bấm để mở rộng xem chi tiết'}</span>
+                        <span>{isExpanded ? 'Thu gọn' : 'Xem chi tiết'}</span>
                         {isExpanded ? <ChevronUp className="w-4 h-4 text-amber-300" /> : <ChevronDown className="w-4 h-4 text-amber-300" />}
                     </span>
                 </div>
@@ -177,11 +175,10 @@ export default function VoucherHoardingTable({
                                         setHasUserChangedFilter(true);
                                         setFilterRisk('CRITICAL');
                                     }}
-                                    className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${
-                                        filterRisk === 'CRITICAL'
-                                            ? 'bg-rose-600 text-white shadow-xs ring-2 ring-rose-400'
-                                            : 'bg-slate-800/80 text-rose-300 hover:bg-rose-950/50'
-                                    }`}
+                                    className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${filterRisk === 'CRITICAL'
+                                        ? 'bg-rose-600 text-white shadow-xs ring-2 ring-rose-400'
+                                        : 'bg-slate-800/80 text-rose-300 hover:bg-rose-950/50'
+                                        }`}
                                 >
                                     <Flame className="w-3.5 h-3.5" />
                                     <span>Nguy Cơ Cao ({criticalCount})</span>
@@ -194,11 +191,10 @@ export default function VoucherHoardingTable({
                                         setHasUserChangedFilter(true);
                                         setFilterRisk('WARNING');
                                     }}
-                                    className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${
-                                        filterRisk === 'WARNING'
-                                            ? 'bg-amber-500 text-slate-950 shadow-xs ring-2 ring-amber-300'
-                                            : 'bg-slate-800/80 text-amber-300 hover:bg-amber-950/50'
-                                    }`}
+                                    className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${filterRisk === 'WARNING'
+                                        ? 'bg-amber-500 text-slate-950 shadow-xs ring-2 ring-amber-300'
+                                        : 'bg-slate-800/80 text-amber-300 hover:bg-amber-950/50'
+                                        }`}
                                 >
                                     <AlertTriangle className="w-3.5 h-3.5" />
                                     <span>Cần Theo Dõi ({warningCount})</span>
@@ -212,11 +208,10 @@ export default function VoucherHoardingTable({
                                             setHasUserChangedFilter(true);
                                             setFilterRisk('RISK');
                                         }}
-                                        className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${
-                                            filterRisk === 'RISK'
-                                                ? 'bg-gradient-to-r from-rose-600 to-amber-600 text-white shadow-xs'
-                                                : 'bg-slate-800/80 text-orange-300 hover:bg-slate-800'
-                                        }`}
+                                        className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${filterRisk === 'RISK'
+                                            ? 'bg-gradient-to-r from-rose-600 to-amber-600 text-white shadow-xs'
+                                            : 'bg-slate-800/80 text-orange-300 hover:bg-slate-800'
+                                            }`}
                                     >
                                         <ShieldAlert className="w-3.5 h-3.5" />
                                         <span>Tất Cả Nguy Cơ ({riskCount})</span>
@@ -230,11 +225,10 @@ export default function VoucherHoardingTable({
                                         setHasUserChangedFilter(true);
                                         setFilterRisk('ALL');
                                     }}
-                                    className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${
-                                        filterRisk === 'ALL'
-                                            ? 'bg-white text-slate-900 shadow-xs'
-                                            : 'bg-slate-800/80 text-slate-300 hover:bg-slate-800'
-                                    }`}
+                                    className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${filterRisk === 'ALL'
+                                        ? 'bg-white text-slate-900 shadow-xs'
+                                        : 'bg-slate-800/80 text-slate-300 hover:bg-slate-800'
+                                        }`}
                                 >
                                     <Layers className="w-3.5 h-3.5" />
                                     <span>Tất Cả ({alerts.length})</span>
@@ -247,11 +241,10 @@ export default function VoucherHoardingTable({
                                         setHasUserChangedFilter(true);
                                         setFilterRisk('NORMAL');
                                     }}
-                                    className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${
-                                        filterRisk === 'NORMAL'
-                                            ? 'bg-emerald-600 text-white shadow-xs'
-                                            : 'bg-slate-800/80 text-emerald-300 hover:bg-emerald-950/50'
-                                    }`}
+                                    className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${filterRisk === 'NORMAL'
+                                        ? 'bg-emerald-600 text-white shadow-xs'
+                                        : 'bg-slate-800/80 text-emerald-300 hover:bg-emerald-950/50'
+                                        }`}
                                 >
                                     <UserCheck className="w-3.5 h-3.5" />
                                     <span>Bình Thường ({normalCount})</span>
@@ -289,12 +282,12 @@ export default function VoucherHoardingTable({
                                 {filterRisk === 'CRITICAL'
                                     ? 'Không có nhân sự nào trong nhóm nguy cơ cao gom mã'
                                     : filterRisk === 'WARNING'
-                                    ? 'Không có nhân sự nào trong nhóm cần theo dõi'
-                                    : filterRisk === 'RISK'
-                                    ? 'Không có nhân sự nào trong nhóm nguy cơ đầu cơ gom mã'
-                                    : filterRisk === 'NORMAL'
-                                    ? 'Không có nhân sự nào trong nhóm bình thường'
-                                    : 'Không có nhân sự nào phù hợp với bộ lọc'}
+                                        ? 'Không có nhân sự nào trong nhóm cần theo dõi'
+                                        : filterRisk === 'RISK'
+                                            ? 'Không có nhân sự nào trong nhóm nguy cơ đầu cơ gom mã'
+                                            : filterRisk === 'NORMAL'
+                                                ? 'Không có nhân sự nào trong nhóm bình thường'
+                                                : 'Không có nhân sự nào phù hợp với bộ lọc'}
                             </div>
                             <p className="text-xs text-slate-500 mt-1">
                                 {filterRisk === 'CRITICAL' || filterRisk === 'RISK'
@@ -337,15 +330,14 @@ export default function VoucherHoardingTable({
                                         return (
                                             <tr
                                                 key={item.employee_id}
-                                                className={`hover:bg-slate-50/80 transition ${
-                                                    isCurrentlyFiltered
-                                                        ? 'bg-indigo-50/70 border-l-4 border-l-indigo-600 font-bold'
-                                                        : isCritical
+                                                className={`hover:bg-slate-50/80 transition ${isCurrentlyFiltered
+                                                    ? 'bg-indigo-50/70 border-l-4 border-l-indigo-600 font-bold'
+                                                    : isCritical
                                                         ? 'bg-rose-50/30'
                                                         : isWarning
-                                                        ? 'bg-amber-50/20'
-                                                        : ''
-                                                }`}
+                                                            ? 'bg-amber-50/20'
+                                                            : ''
+                                                    }`}
                                             >
                                                 {/* Nhân viên theo Rule 11 */}
                                                 <td className="py-2.5 px-3">
@@ -377,26 +369,24 @@ export default function VoucherHoardingTable({
 
                                                 {/* Số mã hôm nay */}
                                                 <td className="py-2.5 px-2 text-center font-mono">
-                                                    <span className={`inline-block px-2 py-0.5 rounded font-black text-xs ${
-                                                        item.claimed_today_count >= 5
-                                                            ? 'bg-rose-600 text-white shadow-xs'
-                                                            : item.claimed_today_count >= 3
+                                                    <span className={`inline-block px-2 py-0.5 rounded font-black text-xs ${item.claimed_today_count >= 5
+                                                        ? 'bg-rose-600 text-white shadow-xs'
+                                                        : item.claimed_today_count >= 3
                                                             ? 'bg-amber-100 text-amber-800'
                                                             : 'text-slate-700'
-                                                    }`}>
+                                                        }`}>
                                                         {item.claimed_today_count} mã
                                                     </span>
                                                 </td>
 
                                                 {/* Chưa dùng */}
                                                 <td className="py-2.5 px-2 text-center font-mono">
-                                                    <span className={`inline-block px-2 py-0.5 rounded font-bold text-xs ${
-                                                        isCritical
-                                                            ? 'bg-rose-100 text-rose-800 font-black'
-                                                            : isWarning
+                                                    <span className={`inline-block px-2 py-0.5 rounded font-bold text-xs ${isCritical
+                                                        ? 'bg-rose-100 text-rose-800 font-black'
+                                                        : isWarning
                                                             ? 'bg-amber-100 text-amber-800 font-bold'
                                                             : 'text-slate-600'
-                                                    }`}>
+                                                        }`}>
                                                         {item.unspent_count} mã
                                                     </span>
                                                 </td>
@@ -435,10 +425,9 @@ export default function VoucherHoardingTable({
                                                         <button
                                                             type="button"
                                                             onClick={() => onFilterEmployee(isCurrentlyFiltered ? '' : item.employee_id)}
-                                                            className={`px-2.5 py-1 rounded-lg text-[10.5px] font-black inline-flex items-center gap-1 transition cursor-pointer shadow-2xs ${
-                                                                isCurrentlyFiltered
-                                                                    ? 'bg-rose-100 hover:bg-rose-200 text-rose-800 border border-rose-300'
-                                                                    : 'bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 text-slate-700 border border-slate-200'
+                                                            className={`px-2.5 py-1 rounded-lg text-[10.5px] font-black inline-flex items-center gap-1 transition cursor-pointer shadow-2xs ${isCurrentlyFiltered
+                                                                ? 'bg-rose-100 hover:bg-rose-200 text-rose-800 border border-rose-300'
+                                                                : 'bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 text-slate-700 border border-slate-200'
                                                                 }`}
                                                             title={isCurrentlyFiltered ? 'Bỏ lọc nhân viên này để xem tất cả mã' : 'Xem chi tiết các mã voucher mà nhân viên này đang giữ'}
                                                         >

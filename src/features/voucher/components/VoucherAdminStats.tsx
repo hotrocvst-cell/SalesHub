@@ -1,26 +1,35 @@
 import React from 'react';
 import { Ticket, CheckCircle2, Clock, AlertTriangle, Flame, Trash2 } from 'lucide-react';
-import type { VoucherItem, VoucherHoardingAlert } from '../types';
+import type { VoucherItem, VoucherHoardingAlert, VoucherCampaignStatusConfig } from '../types';
+import { isCampaignEndedOrHidden } from '../services/voucherService';
 
 interface Props {
     vouchers: VoucherItem[];
     hoardingAlerts: VoucherHoardingAlert[];
+    campaignStatuses?: Record<string, VoucherCampaignStatusConfig>;
     onFilterExpired?: () => void;
     onOpenCleanModal?: () => void;
 }
 
-export default function VoucherAdminStats({ vouchers, hoardingAlerts, onFilterExpired, onOpenCleanModal }: Props) {
+export default function VoucherAdminStats({ vouchers, hoardingAlerts, campaignStatuses, onFilterExpired, onOpenCleanModal }: Props) {
     const todayStr = new Date().toISOString().slice(0, 10);
     const total = vouchers.length;
 
-    // Mã khả dụng (chưa cấp và chưa quá hạn)
-    const available = vouchers.filter(v => v.status === 'AVAILABLE' && (!v.expires_at || v.expires_at >= todayStr)).length;
+    const isArchived = (cName: string, denom?: number) => {
+        return isCampaignEndedOrHidden(campaignStatuses, cName, denom);
+    };
+
+    // Mã khả dụng (chưa cấp và chưa quá hạn của các chương trình đang hoạt động)
+    const available = vouchers.filter(v => v.status === 'AVAILABLE' && (!v.expires_at || v.expires_at >= todayStr) && !isArchived(v.campaign_name, v.denomination)).length;
     const claimed = vouchers.filter(v => v.status === 'CLAIMED').length;
 
-    // Mã đã quá hạn (chưa sử dụng hoàn tất)
-    const expiredVouchers = vouchers.filter(v => Boolean(v.expires_at && v.expires_at < todayStr && v.status !== 'USED'));
-    const expiredCount = expiredVouchers.length;
-    const expiredValue = expiredVouchers.reduce((sum, v) => sum + (Number(v.denomination) || 0), 0);
+    // Mã đã quá hạn trong các chương trình ĐANG HOẠT ĐỘNG (cần xử lý)
+    const activeExpiredVouchers = vouchers.filter(v => Boolean(v.expires_at && v.expires_at < todayStr && v.status !== 'USED') && !isArchived(v.campaign_name, v.denomination));
+    const expiredCount = activeExpiredVouchers.length;
+    const expiredValue = activeExpiredVouchers.reduce((sum, v) => sum + (Number(v.denomination) || 0), 0);
+
+    // Mã quá hạn đã được ẩn hoặc kết thúc an toàn trong các chương trình lưu trữ
+    const hiddenExpiredCount = vouchers.filter(v => Boolean(v.expires_at && v.expires_at < todayStr && v.status !== 'USED') && isArchived(v.campaign_name, v.denomination)).length;
 
     const criticalAlerts = hoardingAlerts.filter(a => a.risk_level === 'CRITICAL').length;
     const warningAlerts = hoardingAlerts.filter(a => a.risk_level === 'WARNING').length;
@@ -30,7 +39,7 @@ export default function VoucherAdminStats({ vouchers, hoardingAlerts, onFilterEx
             {/* 1. Tổng kho */}
             <div className="bg-white rounded-2xl p-3 sm:p-3.5 border border-slate-200 shadow-2xs">
                 <div className="flex items-center justify-between text-slate-500 mb-1">
-                    <span className="text-[10.5px] font-bold uppercase tracking-wider">Tổng Kho Mã</span>
+                    <span className="text-[10.5px] font-bold uppercase tracking-wider">Tổng Kho</span>
                     <Ticket className="w-4 h-4 text-blue-600" />
                 </div>
                 <div className="text-xl sm:text-2xl font-black font-mono text-slate-900">
@@ -44,14 +53,14 @@ export default function VoucherAdminStats({ vouchers, hoardingAlerts, onFilterEx
             {/* 2. Khả dụng (chưa cấp và còn hạn) */}
             <div className="bg-white rounded-2xl p-3 sm:p-3.5 border border-emerald-200 bg-emerald-50/30 shadow-2xs">
                 <div className="flex items-center justify-between text-emerald-700 mb-1">
-                    <span className="text-[10.5px] font-bold uppercase tracking-wider">Khả Dụng (Sẵn Sàng)</span>
+                    <span className="text-[10.5px] font-bold uppercase tracking-wider">Khả Dụng</span>
                     <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                 </div>
                 <div className="text-xl sm:text-2xl font-black font-mono text-emerald-700">
                     {available.toLocaleString('vi-VN')}
                 </div>
                 <div className="text-[10px] text-emerald-600 font-semibold mt-0.5">
-                    {total > 0 ? Math.round((available / total) * 100) : 0}% tồn khả dụng
+                    {total > 0 ? Math.round((available / total) * 100) : 0}% khả dụng
                 </div>
             </div>
 
@@ -70,11 +79,10 @@ export default function VoucherAdminStats({ vouchers, hoardingAlerts, onFilterEx
             </div>
 
             {/* 4. Mã Hết Hạn / Cần Dọn Kho */}
-            <div className={`rounded-2xl p-3 sm:p-3.5 border shadow-2xs transition ${
-                expiredCount > 0
-                    ? 'bg-rose-50/50 border-rose-300 text-rose-950 ring-1 ring-rose-200'
-                    : 'bg-white border-slate-200 text-slate-700'
-            }`}>
+            <div className={`rounded-2xl p-3 sm:p-3.5 border shadow-2xs transition ${expiredCount > 0
+                ? 'bg-rose-50/50 border-rose-300 text-rose-950 ring-1 ring-rose-200'
+                : 'bg-white border-slate-200 text-slate-700'
+                }`}>
                 <div className="flex items-center justify-between text-slate-500 mb-1">
                     <span className={`text-[10.5px] font-bold uppercase tracking-wider ${expiredCount > 0 ? 'text-rose-700 font-black' : ''}`}>
                         Quá Hạn (Cần Dọn)
@@ -98,7 +106,11 @@ export default function VoucherAdminStats({ vouchers, hoardingAlerts, onFilterEx
                 </div>
                 <div className="flex items-center justify-between text-[10px] mt-0.5">
                     <span className={expiredCount > 0 ? 'text-rose-600 font-bold' : 'text-slate-400'}>
-                        {expiredCount > 0 ? `${(expiredValue / 1000).toLocaleString('vi-VN')}k tồn chết` : 'Kho sạch, 0 mã hết hạn'}
+                        {expiredCount > 0
+                            ? `${(expiredValue / 1000).toLocaleString('vi-VN')}k tồn chết`
+                            : hiddenExpiredCount > 0
+                            ? `Đã lưu trữ ${hiddenExpiredCount} mã cũ`
+                            : 'Kho sạch, 0 mã hết hạn'}
                     </span>
                     {expiredCount > 0 && onFilterExpired && (
                         <button
@@ -113,9 +125,8 @@ export default function VoucherAdminStats({ vouchers, hoardingAlerts, onFilterEx
             </div>
 
             {/* 5. Cảnh báo đầu cơ */}
-            <div className={`rounded-2xl p-3 sm:p-3.5 border shadow-2xs ${
-                criticalAlerts > 0 ? 'border-rose-300 bg-rose-50/40 text-rose-950 col-span-2 sm:col-span-1' : 'bg-white border-slate-200 col-span-2 sm:col-span-1'
-            }`}>
+            <div className={`rounded-2xl p-3 sm:p-3.5 border shadow-2xs ${criticalAlerts > 0 ? 'border-rose-300 bg-rose-50/40 text-rose-950 col-span-2 sm:col-span-1' : 'bg-white border-slate-200 col-span-2 sm:col-span-1'
+                }`}>
                 <div className="flex items-center justify-between text-slate-500 mb-1">
                     <span className="text-[10.5px] font-bold uppercase tracking-wider">Cảnh Báo Đầu Cơ</span>
                     {criticalAlerts > 0 ? (

@@ -10,8 +10,15 @@ import {
     getShortStoreName,
     formatDate,
     getYesterdayDateString,
-    formatValue
+    formatValue,
+    isStoreMatch
 } from '../../core/lib/formatters';
+import { useAuth } from '../../shared/contexts/AuthContext';
+import {
+    GUEST_DEMO_STORE,
+    isGuestDemoStore,
+    isDemoDateAllowed
+} from '../../core/lib/guestDemoStoreService';
 
 /**
  * Rút gọn tên siêu thị & Loại bỏ mã số siêu thị:
@@ -105,17 +112,30 @@ import {
     Sliders,
     Cloud,
     Eye,
-    EyeOff
+    EyeOff,
+    Lock
 } from 'lucide-react';
 
 export default function ClusterReportPage() {
     const reportCaptureRef = useRef<HTMLDivElement | null>(null);
+    const { currentUser, isAdmin, canAccessStore } = useAuth();
+    const isGuest = Boolean(currentUser?.is_guest);
+    const isStaff = currentUser?.role === 'NHAN_VIEN';
 
     const today = new Date();
-    const [selectedMonth, setSelectedMonth] = useState<number>(today.getMonth() + 1);
-    const [selectedYear, setSelectedYear] = useState<number>(today.getFullYear());
+    const [selectedMonth, setSelectedMonth] = useState<number>(() => isGuest ? 10 : today.getMonth() + 1);
+    const [selectedYear, setSelectedYear] = useState<number>(() => isGuest ? 2026 : today.getFullYear());
+    const [selectedStore, setSelectedStore] = useState<string>('all');
     const [selectedDate, setSelectedDate] = useState<string>('latest');
     const [displayUnit, setDisplayUnit] = useState<'BILLION' | 'MILLION'>('BILLION'); // 'BILLION' (1.638 tỷ như ảnh) | 'MILLION' (1,638.0 tr)
+
+    // Cố định tháng 10/2026 cho tài khoản trải nghiệm
+    useEffect(() => {
+        if (isGuest) {
+            if (selectedMonth !== 10) setSelectedMonth(10);
+            if (selectedYear !== 2026) setSelectedYear(2026);
+        }
+    }, [isGuest, selectedMonth, selectedYear]);
 
     const [records, setRecords] = useState<BusinessDayRecord[]>([]);
     const [targetConfigs, setTargetConfigs] = useState<ClusterTargetConfigItem[]>([]);
@@ -167,14 +187,75 @@ export default function ClusterReportPage() {
         loadAllData();
     }, [selectedMonth, selectedYear]);
 
-    // 2. Danh sách các ngày có dữ liệu trong tháng
+    // 2a. Danh sách siêu thị mà user được phân quyền trong kỳ này
+    const accessibleStoreList = useMemo(() => {
+        if (isGuest) {
+            return [getCompactStoreName(GUEST_DEMO_STORE)];
+        }
+        const set = new Set<string>();
+        records.forEach(r => {
+            if (!r.storeName || /^(tổng|tong)/i.test(r.storeName)) return;
+            const cName = getCompactStoreName(r.storeName);
+            const sName = getShortStoreName(r.storeName);
+            if (isAdmin || canAccessStore(r.storeName) || canAccessStore(sName) || canAccessStore(cName)) {
+                set.add(cName);
+            }
+        });
+        const list = Array.from(set).sort();
+        if (list.length > 0) return list;
+
+        const accessible = currentUser?.accessible_stores && currentUser.accessible_stores.length > 0
+            ? currentUser.accessible_stores
+            : (currentUser?.store_name ? [currentUser.store_name] : []);
+        return Array.from(new Set(accessible.map(s => getCompactStoreName(s))));
+    }, [records, isGuest, isAdmin, canAccessStore, currentUser]);
+
+    const isLockedToSingleStore = (!isAdmin && isStaff) || isGuest || accessibleStoreList.length === 1;
+    const canViewAllStores = !isGuest && (isAdmin || (!isStaff && accessibleStoreList.length > 1));
+
+    // Điều chỉnh selectedStore tự động
+    useEffect(() => {
+        if (isGuest) {
+            const guestCompact = getCompactStoreName(GUEST_DEMO_STORE);
+            if (selectedStore !== guestCompact) {
+                setSelectedStore(guestCompact);
+            }
+            return;
+        }
+
+        if (isLockedToSingleStore && accessibleStoreList.length > 0) {
+            if (selectedStore !== accessibleStoreList[0]) {
+                setSelectedStore(accessibleStoreList[0]);
+            }
+            return;
+        }
+
+        if (selectedStore !== 'all' && !accessibleStoreList.includes(selectedStore) && accessibleStoreList.length > 0) {
+            setSelectedStore(canViewAllStores ? 'all' : accessibleStoreList[0]);
+        }
+    }, [isGuest, isLockedToSingleStore, accessibleStoreList, selectedStore, canViewAllStores]);
+
+    // 2b. Danh sách các ngày có dữ liệu trong tháng (đã lọc theo phân quyền siêu thị)
     const availableDates = useMemo(() => {
         const set = new Set<string>();
         records.forEach(r => {
-            if (r.reportDate) set.add(r.reportDate);
+            if (!r.reportDate) return;
+            if (isGuest) {
+                if ((isGuestDemoStore(r.storeName) || isStoreMatch(r.storeName, GUEST_DEMO_STORE) || isStoreMatch(r.storeName, '838679')) && isDemoDateAllowed(r.reportDate)) {
+                    set.add(r.reportDate);
+                }
+            } else if (isAdmin) {
+                set.add(r.reportDate);
+            } else {
+                const sShort = getShortStoreName(r.storeName);
+                const sCompact = getCompactStoreName(r.storeName);
+                if (canAccessStore(r.storeName) || canAccessStore(sShort) || canAccessStore(sCompact)) {
+                    set.add(r.reportDate);
+                }
+            }
         });
         return Array.from(set).sort((a, b) => b.localeCompare(a));
-    }, [records]);
+    }, [records, isAdmin, isGuest, canAccessStore]);
 
     // Xác định ngày đang xem thực tế
     const effectiveDate = useMemo(() => {
@@ -184,7 +265,7 @@ export default function ClusterReportPage() {
         return availableDates[0] || getYesterdayDateString();
     }, [selectedDate, availableDates]);
 
-    // 3. Tính toán và chuyển đổi dữ liệu cho từng siêu thị trong cụm
+    // 3. Tính toán và chuyển đổi dữ liệu cho từng siêu thị trong cụm (đã lọc theo phạm vi phụ trách)
     const clusterRows = useMemo<ClusterStoreRow[]>(() => {
         if (records.length === 0) return [];
 
@@ -205,10 +286,22 @@ export default function ClusterReportPage() {
         const dateRecords = records.filter(r => r.reportDate === effectiveDate);
         const sourceRecords = dateRecords.length > 0 ? dateRecords : records;
 
-        // Gom nhóm theo từng siêu thị (bỏ qua bản ghi tổng nếu có)
+        // Gom nhóm theo từng siêu thị (bỏ qua bản ghi tổng và lọc theo phân quyền user)
         const storeMap = new Map<string, BusinessDayRecord>();
         sourceRecords.forEach(r => {
             if (!r.storeName || /^(tổng|tong)/i.test(r.storeName)) return;
+
+            if (isGuest) {
+                if (!isGuestDemoStore(r.storeName) && !isStoreMatch(r.storeName, GUEST_DEMO_STORE) && !isStoreMatch(r.storeName, '838679')) return;
+                if (!isDemoDateAllowed(r.reportDate)) return;
+            } else if (!isAdmin) {
+                const sShort = getShortStoreName(r.storeName);
+                const sCompact = getCompactStoreName(r.storeName);
+                if (!canAccessStore(r.storeName) && !canAccessStore(sShort) && !canAccessStore(sCompact)) {
+                    return;
+                }
+            }
+
             const existing = storeMap.get(r.storeName);
             if (!existing || (Number(r.revenueActual) || 0) > (Number(existing.revenueActual) || 0)) {
                 storeMap.set(r.storeName, r);
@@ -220,6 +313,12 @@ export default function ClusterReportPage() {
 
         storeMap.forEach((rec, storeName) => {
             const shortName = getCompactStoreName(storeName);
+            // Lọc theo selectedStore nếu đang xem 1 siêu thị riêng biệt
+            if (selectedStore !== 'all') {
+                if (shortName !== selectedStore && !isStoreMatch(storeName, selectedStore)) {
+                    return;
+                }
+            }
             const cfg = targetConfigs.find(c => c.storeName === storeName);
 
             // Số ngày
@@ -362,7 +461,7 @@ export default function ClusterReportPage() {
         rows.forEach((r, idx) => { r.orderIndex = idx + 1; });
 
         return rows;
-    }, [records, effectiveDate, targetConfigs, globalPaceRate, selectedMonth, selectedYear]);
+    }, [records, effectiveDate, targetConfigs, globalPaceRate, selectedMonth, selectedYear, isGuest, isAdmin, canAccessStore, selectedStore]);
 
     // 4. Tổng kết toàn cụm (TỔNG CỤM)
     const clusterSummary = useMemo<ClusterSummaryData>(() => {
@@ -645,15 +744,17 @@ export default function ClusterReportPage() {
                 {/* Các nút hành động chính */}
                 <div className="flex items-center gap-2 flex-wrap self-end md:self-auto">
                     {/* Nút Cấu hình Target */}
-                    <button
-                        type="button"
-                        onClick={() => setIsTargetModalOpen(true)}
-                        className="px-3.5 py-2 rounded-2xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300/80 text-xs font-black flex items-center gap-1.5 shadow-2xs transition cursor-pointer"
-                        title="Tùy biến Target Vượt Trội & Doanh thu TB 3 tháng cho từng siêu thị"
-                    >
-                        <Target className="w-4 h-4 text-amber-600" />
-                        <span>CẤU HÌNH TARGET</span>
-                    </button>
+                    {(isAdmin || currentUser?.role === 'QUAN_LY') && !isGuest && (
+                        <button
+                            type="button"
+                            onClick={() => setIsTargetModalOpen(true)}
+                            className="px-3.5 py-2 rounded-2xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300/80 text-xs font-black flex items-center gap-1.5 shadow-2xs transition cursor-pointer"
+                            title="Tùy biến Target Vượt Trội & Doanh thu TB 3 tháng cho từng siêu thị"
+                        >
+                            <Target className="w-4 h-4 text-amber-600" />
+                            <span>CẤU HÌNH TARGET</span>
+                        </button>
+                    )}
 
                     {/* MẪU BUTTON CHUNG DÙNG CHO TOÀN BỘ PROJECT (XUẤT ẢNH, COPY ẢNH, NHẬN XÉT 1-3 MẪU) */}
                     <ReportActionButtons
@@ -683,7 +784,55 @@ export default function ClusterReportPage() {
             </div>
 
             {/* BỘ LỌC KỲ BÁO CÁO, CHỌN BẢNG & ĐƠN VỊ HIỂN THỊ */}
-            <div className="bg-white rounded-2xl p-3.5 border border-slate-200 shadow-2xs flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 text-xs">
+            <div className="bg-white rounded-2xl p-3.5 border border-slate-200 shadow-2xs space-y-3 text-xs">
+                {/* HÀNG 1: BỘ LỌC SIÊU THỊ / CỤM (BẮT BUỘC ĐẦU TIÊN & NẰM RIÊNG LẺ 1 DÒNG) */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2.5 border-b border-slate-100">
+                    <div className="flex items-center gap-2">
+                        <span className="text-xs font-black text-slate-600 uppercase tracking-wider shrink-0 flex items-center gap-1.5">
+                            <Store className="w-4 h-4 text-amber-600" />
+                            Siêu thị / Cụm:
+                        </span>
+                        <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all min-w-[200px] sm:min-w-[280px] ${isLockedToSingleStore
+                            ? 'bg-amber-50/90 border-amber-200 text-amber-900 shadow-2xs'
+                            : 'bg-slate-50 border-slate-300 text-slate-700 hover:border-amber-400'
+                            }`}>
+                            {isLockedToSingleStore ? (
+                                <Lock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                            ) : (
+                                <Store className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                            )}
+                            <select
+                                value={selectedStore}
+                                onChange={(e) => setSelectedStore(e.target.value)}
+                                disabled={isLockedToSingleStore}
+                                className={`bg-transparent outline-none font-bold w-full ${isLockedToSingleStore
+                                    ? 'cursor-not-allowed text-amber-900 font-black'
+                                    : 'cursor-pointer text-slate-700'
+                                    }`}
+                            >
+                                {canViewAllStores && (
+                                    <option value="all">
+                                        {isAdmin
+                                            ? `🏢 TỔNG TOÀN CỤM (${accessibleStoreList.length} siêu thị)`
+                                            : `🏢 TỔNG CỤM PHỤ TRÁCH (${accessibleStoreList.length} siêu thị)`
+                                        }
+                                    </option>
+                                )}
+                                {accessibleStoreList.map(s => (
+                                    <option key={s} value={s}>{s}</option>
+                                ))}
+                            </select>
+                            {isLockedToSingleStore && (
+                                <span className="text-[10px] bg-amber-200/80 text-amber-800 px-1 py-0.5 rounded font-bold uppercase tracking-wider hidden sm:inline shrink-0">
+                                    {isGuest ? 'Trải nghiệm' : 'Đã khóa'}
+                                </span>
+                            )}
+                        </div>
+                    </div>
+                </div>
+
+                {/* HÀNG 2: TIÊU CHÍ THỜI GIAN, CHỌN BẢNG & ĐƠN VỊ HIỂN THỊ */}
+                <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5 flex-wrap">
                     {/* Chọn Tháng / Năm */}
                     <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-300 rounded-xl px-2.5 py-1.5">
@@ -797,6 +946,7 @@ export default function ClusterReportPage() {
                         <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-indigo-600' : ''}`} />
                     </button>
                 </div>
+                </div>
             </div>
 
             {/* KHỐI THẺ CHỈ SỐ SỨC KHỎE CỐT LÕI (TỰ ĐỘNG CO DÃN 2 HOẶC 3 CỘT NẾU CÓ HOẶC KHÔNG CÓ % TRẢ GÓP) */}
@@ -905,7 +1055,7 @@ export default function ClusterReportPage() {
                                 <span>•</span>
                                 <span>Kỳ: <b className="text-white">Tháng {selectedMonth}/{selectedYear}</b></span>
                                 <span>•</span>
-                                <span>Cụm: <b className="text-emerald-400">{clusterRows.length} Siêu thị</b></span>
+                                <span>{selectedStore === 'all' ? (isAdmin ? 'Toàn cụm' : 'Cụm phụ trách') : selectedStore}: <b className="text-emerald-400">{clusterRows.length} Siêu thị</b></span>
                             </p>
                         </div>
 

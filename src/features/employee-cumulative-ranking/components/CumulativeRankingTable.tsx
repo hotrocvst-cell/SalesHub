@@ -67,9 +67,9 @@ export default function CumulativeRankingTable({
     };
 
     return (
-        <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden">
+        <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden" data-ranking-table-container="true">
             <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse text-[11px] sm:text-xs">
+                <table className="w-full text-left border-collapse text-[11px] sm:text-xs" data-ranking-table="true">
                     {/* TIÊU ĐỀ CỘT */}
                     <thead>
                         <tr className="bg-slate-900 text-white font-bold border-b border-slate-800">

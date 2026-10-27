@@ -55,10 +55,17 @@ export default function RevenuePasteTab({
         if (initialData && initialData.length > 0) {
             setParsedList(initialData);
             if (!rawQdText && !rawRealText) {
-                setRawQdText(formatEmployeeRevenueToRawText(initialData));
+                setRawQdText(initialQdText || formatEmployeeRevenueToRawText(initialData));
+                setRawRealText(initialRealText || '');
             }
+        } else {
+            setParsedList([]);
+            setRawQdText(initialQdText || '');
+            setRawRealText(initialRealText || '');
+            setDetectedStore(null);
+            setErrorMsg('');
         }
-    }, [initialData]);
+    }, [initialData, initialQdText, initialRealText]);
 
     // Đếm số lượng nhân sự nhận diện nhanh từ từng ô
     const detectedQdCount = useMemo(() => {

@@ -5,7 +5,9 @@ import {
     fetchMonthlyRecordsForChart,
     type BusinessDayRecord
 } from '../../core/lib/storage';
-import { formatValue, getShortStoreName, formatDate } from '../../core/lib/formatters';
+import { formatValue, getShortStoreName, formatDate, isStoreMatch } from '../../core/lib/formatters';
+import { GUEST_DEMO_STORE, isDemoDateAllowed } from '../../core/lib/guestDemoStoreService';
+import { useAuth } from '../../shared/contexts/AuthContext';
 import {
     TrendingUp,
     Store,
@@ -14,7 +16,8 @@ import {
     Target,
     Camera,
     Layers,
-    ArrowUpRight
+    ArrowUpRight,
+    Lock
 } from 'lucide-react';
 import ReportActionButtons from '../../shared/components/report/ReportActionButtons';
 
@@ -31,11 +34,22 @@ interface DailyAggregatedData {
 
 export default function RevenueTrendPage() {
     const chartRef = useRef<HTMLDivElement | null>(null);
+    const { currentUser, isAdmin, canAccessStore } = useAuth();
+    const isGuest = Boolean(currentUser?.is_guest);
+    const isStaff = currentUser?.role === 'NHAN_VIEN';
 
     const today = new Date();
-    const [selectedMonth, setSelectedMonth] = useState<number>(today.getMonth() + 1);
-    const [selectedYear, setSelectedYear] = useState<number>(today.getFullYear());
-    const [selectedStore, setSelectedStore] = useState<string>('Tổng');
+    const [selectedMonth, setSelectedMonth] = useState<number>(() => isGuest ? 10 : today.getMonth() + 1);
+    const [selectedYear, setSelectedYear] = useState<number>(() => isGuest ? 2026 : today.getFullYear());
+    const [selectedStore, setSelectedStore] = useState<string>(() => isGuest ? getShortStoreName(GUEST_DEMO_STORE) : 'Tổng');
+
+    // Cố định tháng 10/2026 cho tài khoản trải nghiệm
+    useEffect(() => {
+        if (isGuest) {
+            if (selectedMonth !== 10) setSelectedMonth(10);
+            if (selectedYear !== 2026) setSelectedYear(2026);
+        }
+    }, [isGuest, selectedMonth, selectedYear]);
 
     const [rawRecords, setRawRecords] = useState<BusinessDayRecord[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
@@ -57,17 +71,53 @@ export default function RevenueTrendPage() {
         loadData();
     }, [selectedMonth, selectedYear]);
 
-    // 2. DANH SÁCH SIÊU THỊ ĐỘC LẬP (LOẠI BỎ BẢN GHI TỔNG CÓ SẴN)
+    // 2. DANH SÁCH SIÊU THỊ ĐỘC LẬP (LOẠI BỎ BẢN GHI TỔNG VÀ LỌC THEO PHÂN QUYỀN USER)
     const storeList = useMemo(() => {
+        if (isGuest) {
+            return [getShortStoreName(GUEST_DEMO_STORE)];
+        }
         const set = new Set<string>();
         rawRecords.forEach(r => {
             const sName = getShortStoreName(r.storeName);
             if (sName && sName !== 'Tổng' && !/^(tổng|tong)/i.test(r.storeName)) {
-                set.add(sName);
+                if (isAdmin || canAccessStore(r.storeName) || canAccessStore(sName)) {
+                    set.add(sName);
+                }
             }
         });
-        return Array.from(set).sort();
-    }, [rawRecords]);
+        const list = Array.from(set).sort();
+        if (list.length > 0) return list;
+
+        const accessible = currentUser?.accessible_stores && currentUser.accessible_stores.length > 0
+            ? currentUser.accessible_stores
+            : (currentUser?.store_name ? [currentUser.store_name] : []);
+        return Array.from(new Set(accessible.map(s => getShortStoreName(s))));
+    }, [rawRecords, isGuest, isAdmin, canAccessStore, currentUser]);
+
+    const isLockedToSingleStore = (!isAdmin && isStaff) || isGuest || storeList.length === 1;
+    const canViewAllStores = !isGuest && (isAdmin || (!isStaff && storeList.length > 1));
+
+    // Tự động điều chỉnh selectedStore theo phân quyền
+    useEffect(() => {
+        if (isGuest) {
+            const guestShort = getShortStoreName(GUEST_DEMO_STORE);
+            if (selectedStore !== guestShort) {
+                setSelectedStore(guestShort);
+            }
+            return;
+        }
+
+        if (isLockedToSingleStore && storeList.length > 0) {
+            if (selectedStore !== storeList[0]) {
+                setSelectedStore(storeList[0]);
+            }
+            return;
+        }
+
+        if (selectedStore !== 'Tổng' && !storeList.includes(selectedStore) && storeList.length > 0) {
+            setSelectedStore(canViewAllStores ? 'Tổng' : storeList[0]);
+        }
+    }, [isGuest, isLockedToSingleStore, storeList, selectedStore, canViewAllStores]);
 
     // 3. TẬP HỢP SỐ LIỆU VÀ TÍNH TOÁN NHỊP PHÁT SINH CHUẨN XÁC
     const timelineData = useMemo<DailyAggregatedData[]>(() => {
@@ -80,6 +130,15 @@ export default function RevenueTrendPage() {
         rawRecords.forEach(r => {
             if (!r.reportDate) return;
             const sName = getShortStoreName(r.storeName);
+
+            // Chốt chặn phân quyền theo siêu thị phụ trách
+            if (isGuest) {
+                if (!isStoreMatch(r.storeName, GUEST_DEMO_STORE) && !isStoreMatch(r.storeName, '838679')) return;
+                if (!isDemoDateAllowed(r.reportDate)) return;
+            } else if (!isAdmin) {
+                if (!canAccessStore(r.storeName) && !canAccessStore(sName)) return;
+            }
+
             const key = `${r.reportDate}_${sName}`;
             const existing = storeDateMap.get(key);
             if (!existing || (Number(r.revenueActual) || 0) > (Number(existing.revenueActual) || 0)) {
@@ -139,19 +198,27 @@ export default function RevenueTrendPage() {
             groupedByDate[r.reportDate].push(r);
         });
 
-        const dates = Object.keys(groupedByDate).sort();
+        const dates = Object.keys(groupedByDate).sort().filter(d => {
+            if (isGuest) return isDemoDateAllowed(d);
+            return true;
+        });
         const dailyResult: DailyAggregatedData[] = [];
 
         dates.forEach(date => {
             const recordsInDate = groupedByDate[date];
 
             if (selectedStore === 'Tổng') {
-                // Lọc bỏ dòng mang tên Tổng nếu có sẵn
+                // Lọc bỏ dòng mang tên Tổng nếu có sẵn và chỉ tính các siêu thị thuộc quyền phụ trách
                 const memberStores = recordsInDate.filter(r => {
                     const sName = getShortStoreName(r.storeName);
-                    return sName !== 'Tổng' && !/^(tổng|tong)/i.test(r.storeName);
+                    if (sName === 'Tổng' || /^(tổng|tong)/i.test(r.storeName)) return false;
+                    return isAdmin || canAccessStore(r.storeName) || canAccessStore(sName);
                 });
-                const targetRecords = memberStores.length > 0 ? memberStores : recordsInDate;
+                const targetRecords = memberStores.length > 0 ? memberStores : recordsInDate.filter(r => {
+                    const sName = getShortStoreName(r.storeName);
+                    if (sName === 'Tổng' || /^(tổng|tong)/i.test(r.storeName)) return false;
+                    return isAdmin || canAccessStore(r.storeName) || canAccessStore(sName);
+                });
 
                 const totalActual = targetRecords.reduce((sum, r) => sum + (Number(r.revenueActual) || 0), 0);
                 const totalTarget = targetRecords.reduce((sum, r) => sum + (Number(r.revenueTarget) || 0), 0);
@@ -176,13 +243,17 @@ export default function RevenueTrendPage() {
                 });
             } else {
                 // Xem riêng 1 siêu thị
-                const shopRecord = recordsInDate.find(r => getShortStoreName(r.storeName) === selectedStore);
+                const shopRecord = recordsInDate.find(r => 
+                    getShortStoreName(r.storeName) === selectedStore || 
+                    isStoreMatch(r.storeName, selectedStore) ||
+                    (isGuest && (isStoreMatch(r.storeName, GUEST_DEMO_STORE) || isStoreMatch(r.storeName, '838679')))
+                );
                 if (shopRecord) {
                     const actual = Number(shopRecord.revenueActual) || 0;
                     const target = Number(shopRecord.revenueTarget) || 0;
                     const installment = Number(shopRecord.revenueInstallment) || 0;
                     const completionRate = target > 0 ? (actual / target * 100) : 0;
-                    const pace = paceByStoreDate.get(`${date}_${selectedStore}`) || 0;
+                    const pace = paceByStoreDate.get(`${date}_${getShortStoreName(shopRecord.storeName)}`) || paceByStoreDate.get(`${date}_${selectedStore}`) || 0;
 
                     dailyResult.push({
                         reportDate: date,
@@ -289,18 +360,36 @@ export default function RevenueTrendPage() {
                             <Store className="w-4 h-4 text-indigo-600" />
                             Siêu thị / Cụm:
                         </span>
-                        <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-300 px-3 py-1.5 rounded-xl min-w-[200px] sm:min-w-[280px]">
-                            <Store className="w-4 h-4 text-slate-500 shrink-0" />
+                        <div className={`flex items-center gap-1.5 border px-3 py-1.5 rounded-xl min-w-[200px] sm:min-w-[280px] ${isLockedToSingleStore ? 'bg-amber-50/90 border-amber-200 text-amber-900 shadow-2xs' : 'bg-slate-50 border-slate-300'}`}>
+                            {isLockedToSingleStore ? (
+                                <Lock className="w-4 h-4 text-amber-600 shrink-0" />
+                            ) : (
+                                <Store className="w-4 h-4 text-slate-500 shrink-0" />
+                            )}
                             <select
                                 value={selectedStore}
                                 onChange={(e) => setSelectedStore(e.target.value)}
-                                className="bg-transparent outline-none font-bold text-xs text-slate-700 cursor-pointer w-full"
+                                disabled={isLockedToSingleStore}
+                                title={isLockedToSingleStore ? (isGuest ? 'Tài khoản trải nghiệm sử dụng dữ liệu siêu thị 838679 - Demo Store' : 'Tài khoản nhân viên được cố định theo siêu thị đã đăng ký') : undefined}
+                                className={`bg-transparent outline-none font-bold text-xs w-full ${isLockedToSingleStore ? 'cursor-not-allowed text-amber-900 font-black' : 'cursor-pointer text-slate-700'}`}
                             >
-                                <option value="Tổng">🏢 TỔNG TOÀN CỤM ({storeList.length} siêu thị)</option>
+                                {canViewAllStores && (
+                                    <option value="Tổng">
+                                        {isAdmin 
+                                            ? `🏢 TỔNG TOÀN CỤM (${storeList.length} siêu thị)`
+                                            : `🏢 TỔNG CỤM PHỤ TRÁCH (${storeList.length} siêu thị)`
+                                        }
+                                    </option>
+                                )}
                                 {storeList.map(s => (
                                     <option key={s} value={s}>{s}</option>
                                 ))}
                             </select>
+                            {isLockedToSingleStore && (
+                                <span className="text-[10px] bg-amber-200/80 text-amber-800 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider shrink-0">
+                                    {isGuest ? 'Trải nghiệm' : 'Đã khóa'}
+                                </span>
+                            )}
                         </div>
                     </div>
                 </div>

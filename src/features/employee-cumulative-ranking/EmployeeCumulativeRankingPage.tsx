@@ -313,21 +313,49 @@ export default function EmployeeCumulativeRankingPage() {
         }
     };
 
-    // 7. XUẤT HÌNH ẢNH 8K (PORTRAIT RATIO SMARTPHONE, TUYỆT ĐỐI KHÔNG FOOTER WATERMARK)
+    // 7. XUẤT HÌNH ẢNH 8K (PORTRAIT DỌC CHO LŨY KẾ, TỰ ĐỘNG MỞ RỘNG TOÀN DIỆN CHO CHI TIẾT TỪNG NGÀY, TUYỆT ĐỐI KHÔNG FOOTER WATERMARK)
     const handleExportImage = async (mode: 'DOWNLOAD' | 'COPY') => {
         if (!reportRef.current) return;
         setIsExporting(true);
-        showToast('📸 Đang tạo hình ảnh báo cáo 8K dọc smartphone...');
+        showToast('📸 Đang tạo hình ảnh báo cáo 8K...');
+
+        const originalEl = reportRef.current;
+        const scrollContainers = originalEl.querySelectorAll<HTMLElement>('.overflow-x-auto');
+        const previousScrolls = Array.from(scrollContainers).map(c => c.scrollLeft);
 
         try {
             if (document.fonts && document.fonts.ready) {
                 await document.fonts.ready;
             }
 
-            const scale = calculate8KScale(reportRef.current, 960);
+            // Chờ 2 frames render để DOM layout và fonts hoàn toàn sẵn sàng
+            await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 
-            const canvas = await html2canvas(reportRef.current, {
+            // Reset scroll vị trí của tất cả các container cuộn ngang về 0 trước khi chụp để không bị lệch cột
+            scrollContainers.forEach(c => { c.scrollLeft = 0; });
+
+            const tableEl = originalEl.querySelector('table');
+            const tableScrollWidth = tableEl ? tableEl.scrollWidth : 0;
+            const isShowingDaily = viewMode === 'WITH_DAILY';
+
+            // Tính toán độ rộng cơ sở cần thiết để hiển thị 100% tất cả các cột mà không bao giờ bị cắt cụt:
+            // Cột cố định (Hạng + Mã & Tên NV + Siêu thị nếu có + Target nếu có + Lũy kế + %HT + %Đóng góp)
+            const baseColsWidth = (selectedStore === 'all' ? 110 : 0) + (showTarget ? 160 : 0) + 420;
+            const estimatedDailyWidth = isShowingDaily
+                ? baseColsWidth + (summary.dateList.length * 70) + 48
+                : 960;
+
+            // TargetWidth: Nếu chỉ xem lũy kế -> chuẩn dọc 960px; Nếu xem chi tiết từng ngày -> tự động mở rộng bao quát toàn bộ các ngày
+            const targetWidth = Math.max(960, tableScrollWidth + 32, estimatedDailyWidth);
+
+            const scale = calculate8KScale(originalEl, targetWidth);
+
+            const canvas = await html2canvas(originalEl, {
                 scale: scale,
+                width: targetWidth,
+                windowWidth: targetWidth + 40,
+                scrollX: 0,
+                scrollY: 0,
                 useCORS: true,
                 allowTaint: true,
                 backgroundColor: '#f8fafc',
@@ -336,17 +364,87 @@ export default function EmployeeCumulativeRankingPage() {
                     element.getAttribute('data-html2canvas-ignore') === 'true' ||
                     element.getAttribute('data-export-ignore') === 'true',
                 onclone: (clonedDoc) => {
+                    // 1. Nhúng trực tiếp font UTM Avo vào iframe clone
+                    const fontStyle = clonedDoc.createElement('style');
+                    fontStyle.innerHTML = `
+                        @font-face {
+                            font-family: 'UTM Avo';
+                            src: url('/fonts/UTM-Avo.ttf') format('truetype');
+                            font-weight: 400;
+                            font-style: normal;
+                        }
+                        @font-face {
+                            font-family: 'UTM Avo';
+                            src: url('/fonts/UTM-AvoBold.ttf') format('truetype');
+                            font-weight: 700;
+                            font-style: normal;
+                        }
+                        * {
+                            -webkit-font-smoothing: antialiased;
+                            -moz-osx-font-smoothing: grayscale;
+                            box-sizing: border-box;
+                        }
+                        img, svg { display: inline-block !important; vertical-align: middle !important; }
+                        td, th { vertical-align: middle !important; }
+                        #cumulative-ranking-export-area * { overflow: visible !important; }
+                    `;
+                    clonedDoc.head.appendChild(fontStyle);
+
+                    // 2. Không giới hạn chiều cao tài liệu theo Rule Unlimited Height & Mở rộng chiều ngang toàn diện
                     clonedDoc.documentElement.style.height = 'auto';
+                    clonedDoc.documentElement.style.maxHeight = 'none';
+                    clonedDoc.documentElement.style.overflow = 'visible';
+                    clonedDoc.documentElement.style.width = `${targetWidth}px`;
+
                     clonedDoc.body.style.height = 'auto';
+                    clonedDoc.body.style.maxHeight = 'none';
+                    clonedDoc.body.style.overflow = 'visible';
+                    clonedDoc.body.style.width = `${targetWidth}px`;
+
+                    // 3. Xóa các phần tử gắn cờ bỏ qua
                     clonedDoc.querySelectorAll('[data-html2canvas-ignore="true"], [data-export-ignore="true"]').forEach(el => el.remove());
+
                     const el = clonedDoc.getElementById('cumulative-ranking-export-area');
                     if (el) {
+                        el.classList.remove('max-w-[960px]');
+                        el.style.setProperty('width', `${targetWidth}px`, 'important');
+                        el.style.setProperty('min-width', `${targetWidth}px`, 'important');
+                        el.style.setProperty('max-width', `${targetWidth}px`, 'important');
                         el.style.height = 'auto';
+                        el.style.minHeight = 'auto';
                         el.style.maxHeight = 'none';
                         el.style.overflow = 'visible';
-                        el.style.width = '960px';
-                        el.style.maxWidth = '960px';
                         el.style.margin = '0 auto';
+                        el.style.boxSizing = 'border-box';
+                        el.style.padding = '16px';
+                        el.style.paddingBottom = '32px';
+
+                        // 4. Gỡ bỏ sticky trên thead, th, td để không bị lệch hoặc đè cột trong html2canvas
+                        el.querySelectorAll<HTMLElement>('.sticky, thead, th, td').forEach(stickyEl => {
+                            if (stickyEl.classList.contains('sticky') || stickyEl.style.position === 'sticky') {
+                                stickyEl.style.setProperty('position', 'static', 'important');
+                                stickyEl.style.setProperty('left', 'auto', 'important');
+                            }
+                        });
+
+                        // 5. Mở rộng tất cả container cuộn bên trong để lấy 100% chiều rộng và chiều cao tự nhiên
+                        el.querySelectorAll<HTMLElement>('.overflow-x-auto, .overflow-y-auto, [class*="max-h-"], .overflow-hidden').forEach(c => {
+                            c.style.setProperty('overflow', 'visible', 'important');
+                            c.style.setProperty('overflow-x', 'visible', 'important');
+                            c.style.setProperty('overflow-y', 'visible', 'important');
+                            c.style.setProperty('max-height', 'none', 'important');
+                            c.style.setProperty('height', 'auto', 'important');
+                            c.style.setProperty('width', '100%', 'important');
+                            c.scrollLeft = 0;
+                        });
+
+                        // 6. Căn chỉnh bảng dữ liệu hiển thị toàn bộ các cột
+                        const clonedTable = el.querySelector('table');
+                        if (clonedTable) {
+                            clonedTable.style.setProperty('width', '100%', 'important');
+                            clonedTable.style.setProperty('min-width', '100%', 'important');
+                            clonedTable.style.setProperty('table-layout', 'auto', 'important');
+                        }
                     }
                 }
             });
@@ -360,12 +458,17 @@ export default function EmployeeCumulativeRankingPage() {
             } else {
                 canvas.toBlob(async (blob) => {
                     if (blob && navigator.clipboard && navigator.clipboard.write) {
-                        await navigator.clipboard.write([
-                            new ClipboardItem({ 'image/png': blob })
-                        ]);
-                        showToast('📋 Đã sao chép ảnh 8K vào Clipboard! Dán trực tiếp vào Messaging App.');
+                        try {
+                            await navigator.clipboard.write([
+                                new ClipboardItem({ 'image/png': blob })
+                            ]);
+                            showToast('📋 Đã sao chép ảnh 8K vào Clipboard! Dán trực tiếp vào Messaging App.');
+                        } catch (clipErr) {
+                            console.warn('Lỗi clipboard API:', clipErr);
+                            showToast('⚠️ Không thể ghi clipboard tự động. Vui lòng bấm nút Tải ảnh!');
+                        }
                     } else {
-                        showToast('⚠️ Trình duyệt chưa hỗ trợ sao chép ảnh tự động.');
+                        showToast('⚠️ Trình duyệt chưa hỗ trợ sao chép ảnh tự động. Vui lòng bấm Tải ảnh!');
                     }
                 }, 'image/png');
             }
@@ -373,6 +476,14 @@ export default function EmployeeCumulativeRankingPage() {
             console.error('Lỗi xuất ảnh:', err);
             showToast('⚠️ Lỗi khi xuất ảnh báo cáo');
         } finally {
+            // Khôi phục lại scroll position trên màn hình
+            const originalReport = reportRef.current;
+            if (originalReport) {
+                const activeScrolls = originalReport.querySelectorAll<HTMLElement>('.overflow-x-auto');
+                activeScrolls.forEach((c, idx) => {
+                    c.scrollLeft = previousScrolls[idx] || 0;
+                });
+            }
             setIsExporting(false);
         }
     };
@@ -388,7 +499,7 @@ export default function EmployeeCumulativeRankingPage() {
             )}
 
             {/* HEADER TIÊU ĐỀ */}
-            <div className="max-w-[960px] mx-auto mb-4 bg-white rounded-2xl border border-slate-200 shadow-2xs p-3 sm:p-4">
+            <div className={`mx-auto mb-4 bg-white rounded-2xl border border-slate-200 shadow-2xs p-3 sm:p-4 transition-all ${viewMode === 'WITH_DAILY' ? 'max-w-full md:max-w-6xl xl:max-w-7xl' : 'max-w-[960px]'}`}>
                 <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-indigo-200 shrink-0">
                         <Trophy className="w-5 h-5" />
@@ -410,7 +521,7 @@ export default function EmployeeCumulativeRankingPage() {
             </div>
 
             {/* BÁO CÁO TRẠNG THÁI LƯU TRỮ CLOUD & LOCALSTORAGE (MANDATORY RULE) */}
-            <div className="max-w-[960px] mx-auto mb-3">
+            <div className={`mx-auto mb-3 transition-all ${viewMode === 'WITH_DAILY' ? 'max-w-full md:max-w-6xl xl:max-w-7xl' : 'max-w-[960px]'}`}>
                 <CloudDataSyncStatusBanner
                     storageType={summary.isPeriodTargetCloudStored === false ? 'local' : 'cloud'}
                     syncStatus={unsyncedCount > 0 ? 'unsynced' : 'synced'}
@@ -428,7 +539,7 @@ export default function EmployeeCumulativeRankingPage() {
             </div>
 
             {/* THANH ĐIỀU KHIỂN & BỘ LỌC */}
-            <div className="max-w-[960px] mx-auto">
+            <div className={`mx-auto transition-all ${viewMode === 'WITH_DAILY' ? 'max-w-full md:max-w-6xl xl:max-w-7xl' : 'max-w-[960px]'}`}>
                 <CumulativeRankingFilterBar
                     fromDate={fromDate}
                     toDate={toDate}
@@ -472,7 +583,7 @@ export default function EmployeeCumulativeRankingPage() {
             <div
                 id="cumulative-ranking-export-area"
                 ref={reportRef}
-                className="max-w-[960px] mx-auto space-y-4"
+                className={`mx-auto space-y-4 transition-all ${viewMode === 'WITH_DAILY' ? 'max-w-full md:max-w-6xl xl:max-w-7xl' : 'max-w-[960px]'}`}
             >
                 {/* 1. HEADER NỘI DUNG XUẤT BÁO CÁO (BAO GỒM TIÊU ĐỀ, SIÊU THỊ & GIAI ĐOẠN TÍNH DOANH THU) */}
                 <div className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3 font-avo">
@@ -548,9 +659,14 @@ export default function EmployeeCumulativeRankingPage() {
                     checkCloudStatus();
                 }}
                 currentStore={selectedStore}
+                storesList={allowedStores}
+                isLockedToSingleStore={isLockedToSingleStore}
                 onSelectSessionToApply={handleApplySession}
                 onOpenEditSession={handleEditSession}
-                onOpenCreateNew={() => {
+                onOpenCreateNew={(targetStore) => {
+                    if (targetStore && targetStore !== 'all') {
+                        setSelectedStore(targetStore);
+                    }
                     setIsSessionManagerOpen(false);
                     setIsPeriodTargetModalOpen(true);
                 }}

@@ -21,7 +21,8 @@ import {
     claimVoucher,
     resetClaimedVoucher,
     getCampaignSummaries,
-    fetchVoucherCampaignStatuses
+    fetchVoucherCampaignStatuses,
+    isCampaignHidden
 } from './services/voucherService';
 import VoucherCard from './components/VoucherCard';
 import { getDenominationHotStyle, formatCurrency, parseConditionLines } from './voucherFormatters';
@@ -76,9 +77,9 @@ export default function VoucherClaimPage() {
         loadData();
     }, [userStoreName, accessibleStores]);
 
-    // Tóm tắt các chương trình và tồn kho
+    // Tóm tắt các chương trình và tồn kho (ẩn các chương trình đã kết thúc/lưu trữ/đã ẩn)
     const campaignSummaries = useMemo<VoucherCampaignSummary[]>(() => {
-        return getCampaignSummaries(
+        const list = getCampaignSummaries(
             vouchers,
             userStoreName,
             accessibleStores,
@@ -86,23 +87,68 @@ export default function VoucherClaimPage() {
             false,
             campaignStatuses
         );
+        return list
+            .filter(c => {
+                // 1. Tuyệt đối không hiển thị chương trình đã bị ẩn
+                if (c.is_hidden || isCampaignHidden(campaignStatuses, c.campaign_name)) {
+                    return false;
+                }
+                // 2. Không hiển thị chương trình đã kết thúc và không còn mã nào khả dụng
+                if (c.is_ended && c.total_available === 0) {
+                    return false;
+                }
+                return true;
+            })
+            .map(c => {
+                // 3. Lọc bỏ các mệnh giá đã bị ẩn bên trong chương trình
+                const visibleDenominations = c.denominations.filter(d =>
+                    !d.is_hidden && !isCampaignHidden(campaignStatuses, c.campaign_name, d.denomination)
+                );
+                return {
+                    ...c,
+                    denominations: visibleDenominations,
+                    total_available: visibleDenominations.reduce((sum, d) => sum + d.available, 0)
+                };
+            })
+            // Chỉ giữ lại chương trình có ít nhất 1 mệnh giá hiển thị
+            .filter(c => c.denominations.length > 0);
     }, [vouchers, userStoreName, accessibleStores, currentUser, campaignStatuses]);
 
-    // Các mệnh giá khả dụng của chương trình đang chọn
+    // Các mệnh giá khả dụng của chương trình đang chọn (loại trừ các mệnh giá đã ẩn)
     const activeCampaignData = useMemo(() => {
         if (!selectedCampaign) return null;
-        return campaignSummaries.find(c => c.campaign_name === selectedCampaign) || null;
-    }, [campaignSummaries, selectedCampaign]);
+        const camp = campaignSummaries.find(c => c.campaign_name === selectedCampaign);
+        if (!camp) return null;
+        const visibleDenominations = camp.denominations.filter(d =>
+            !d.is_hidden && !isCampaignHidden(campaignStatuses, camp.campaign_name, d.denomination)
+        );
+        return {
+            ...camp,
+            denominations: visibleDenominations
+        };
+    }, [campaignSummaries, selectedCampaign, campaignStatuses]);
 
-    // Tự động chọn chương trình đầu tiên nếu chưa chọn
+    // Tự động chọn chương trình đầu tiên nếu chưa chọn hoặc nếu chương trình đang chọn bị ẩn/không hợp lệ
     useEffect(() => {
-        if (campaignSummaries.length > 0 && !selectedCampaign) {
-            const firstAvailable = campaignSummaries.find(c => c.total_available > 0) || campaignSummaries[0];
-            setSelectedCampaign(firstAvailable.campaign_name);
-            const firstDenom = firstAvailable.denominations.find(d => d.available > 0) || firstAvailable.denominations[0];
-            if (firstDenom) setSelectedDenomination(firstDenom.denomination);
+        if (campaignSummaries.length > 0) {
+            const currentValid = selectedCampaign && campaignSummaries.find(c => c.campaign_name === selectedCampaign);
+            if (!currentValid) {
+                const firstAvailable = campaignSummaries.find(c => c.total_available > 0) || campaignSummaries[0];
+                setSelectedCampaign(firstAvailable.campaign_name);
+                const firstDenom = firstAvailable.denominations.find(d => d.available > 0) || firstAvailable.denominations[0];
+                if (firstDenom) setSelectedDenomination(firstDenom.denomination);
+            } else {
+                const isDenomValid = currentValid.denominations.some(d => d.denomination === selectedDenomination);
+                if (!isDenomValid) {
+                    const firstDenom = currentValid.denominations.find(d => d.available > 0) || currentValid.denominations[0];
+                    if (firstDenom) setSelectedDenomination(firstDenom.denomination);
+                }
+            }
+        } else if (selectedCampaign) {
+            setSelectedCampaign('');
+            setSelectedDenomination(0);
         }
-    }, [campaignSummaries, selectedCampaign]);
+    }, [campaignSummaries, selectedCampaign, selectedDenomination]);
 
     // Khi đổi chương trình, chọn mệnh giá còn hàng đầu tiên
     const handleSelectCampaign = (cName: string) => {

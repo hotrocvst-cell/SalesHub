@@ -32,8 +32,12 @@ const DataStatusPage = lazy(() => import('./features/data-status/DataStatusPage'
 const VoucherClaimPage = lazy(() => import('./features/voucher/VoucherClaimPage'));
 const VoucherAdminPage = lazy(() => import('./features/voucher/VoucherAdminPage'));
 const XmusicPlaylistPage = lazy(() => import('./features/xmusic-playlist/XmusicPlaylistPage'));
+const SupportTicketPage = lazy(() => import('./features/support-ticket/SupportTicketPage'));
 const EmployeeCumulativeRankingPage = lazy(() => import('./features/employee-cumulative-ranking/EmployeeCumulativeRankingPage'));
 const CampaignDirectoryPage = lazy(() => import('./features/campaign-directory/CampaignDirectoryPage'));
+const InventoryBalancingPage = lazy(() => import('./features/inventory-balancing/InventoryBalancingPage'));
+const CashCounterPage = lazy(() => import('./features/cash-counter/CashCounterPage'));
+const GuestAccountsPage = lazy(() => import('./features/admin-config/GuestAccountsPage'));
 
 // Các trang Định danh, Đăng ký & Onboarding
 const LoginPage = lazy(() => import('./features/auth/LoginPage'));
@@ -97,6 +101,7 @@ export default function App() {
                                         <DailyReportPage />
                                     </ProtectedRoute>
                                 } />
+                                <Route path="/bc-realtime-con-lai" element={<Navigate to="/bc-ngay/tong-quan?tab=remaining" replace />} />
                                 <Route path="/bc-ngay-nhan-vien" element={
                                     <ProtectedRoute path="/bc-ngay-nhan-vien">
                                         <DailyEmployeeRevenueReportPage />
@@ -195,6 +200,21 @@ export default function App() {
                                         <XmusicPlaylistPage />
                                     </ProtectedRoute>
                                 } />
+                                <Route path="/ho-tro-gop-y" element={
+                                    <ProtectedRoute path="/ho-tro-gop-y">
+                                        <SupportTicketPage />
+                                    </ProtectedRoute>
+                                } />
+                                <Route path="/can-ton-kho" element={
+                                    <ProtectedRoute path="/can-ton-kho">
+                                        <InventoryBalancingPage />
+                                    </ProtectedRoute>
+                                } />
+                                <Route path="/kiem-quy" element={
+                                    <ProtectedRoute path="/kiem-quy">
+                                        <CashCounterPage />
+                                    </ProtectedRoute>
+                                } />
 
                                 {/* Phân hệ Sức khỏe NV & Admin */}
                                 <Route path="/muc-tieu-nhan-vien" element={
@@ -237,6 +257,12 @@ export default function App() {
                                 <Route path="/quan-tri-he-thong" element={
                                     <ProtectedRoute path="/quan-tri-he-thong">
                                         <SystemAdminPage />
+                                    </ProtectedRoute>
+                                } />
+
+                                <Route path="/quan-tri-he-thong/tai-khoan-trai-nghiem" element={
+                                    <ProtectedRoute path="/quan-tri-he-thong/tai-khoan-trai-nghiem">
+                                        <GuestAccountsPage />
                                     </ProtectedRoute>
                                 } />
 

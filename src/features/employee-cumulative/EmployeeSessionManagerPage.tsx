@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { fetchStores, type StoreItem } from '../../core/lib/storage';
-import { formatDateTime } from '../../core/lib/formatters';
+import { formatDateTime, formatDate } from '../../core/lib/formatters';
 import {
     syncAndFetchEmployeeDataSessions,
     deleteEmployeeDataSession,
@@ -177,6 +177,7 @@ export default function EmployeeSessionManagerPage() {
                 month: sess.month,
                 year: sess.year,
                 store: sess.store_name,
+                report_date: sess.report_date,
                 revenueData: restoredRev,
                 campaignBlocks: reconstructedCampaignBlocks,
                 campaignMatrix,
@@ -191,6 +192,7 @@ export default function EmployeeSessionManagerPage() {
             const draftKey = `saleshub_emp_cum_draft_${sess.month}_${sess.year}`;
             localStorage.setItem(draftKey, JSON.stringify({
                 selectedStore: sess.store_name,
+                reportDate: sess.report_date,
                 revenueData: restoredRev,
                 campaignBlocks: reconstructedCampaignBlocks,
                 campaignMatrix,
@@ -442,7 +444,14 @@ export default function EmployeeSessionManagerPage() {
                                     return (
                                         <tr key={sess.id} className="hover:bg-slate-50">
                                             <td className="p-3 text-center text-slate-400 font-mono">{idx + 1}</td>
-                                            <td className="p-3 font-mono text-slate-600">{dateStr}</td>
+                                            <td className="p-3 font-mono text-slate-600">
+                                                <div>{dateStr}</div>
+                                                {sess.report_date && (
+                                                    <span className="text-[10px] text-purple-700 font-bold bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200 inline-block mt-0.5" title="Ngày chốt dữ liệu của phiên">
+                                                        Chốt: {formatDate(sess.report_date)}
+                                                    </span>
+                                                )}
+                                            </td>
                                             <td className="p-3">
                                                 <span
                                                     className={`px-2 py-0.5 rounded-lg text-[10px] font-extrabold uppercase ${

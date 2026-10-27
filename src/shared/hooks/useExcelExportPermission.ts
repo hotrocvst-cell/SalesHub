@@ -31,6 +31,10 @@ export function useExcelExportPermission(customPath?: string): {
         return { canExportExcel: true, isAdmin: true };
     }
 
+    if (currentUser?.is_guest) {
+        return { canExportExcel: false, isAdmin: false, reason: 'Tài khoản trải nghiệm không được phép xuất dữ liệu Excel' };
+    }
+
     if (!currentUser) {
         return { canExportExcel: false, isAdmin: false, reason: 'Chưa đăng nhập' };
     }

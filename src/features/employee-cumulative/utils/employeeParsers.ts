@@ -10,6 +10,8 @@ export interface ParsedEmployeeRevenue {
     revenue_actual: number;   // Doanh thu thực (Triệu đồng)
     installment_revenue: number; // DT trả góp
     installment_rate: number;    // % trả góp
+    revenue_return_qd?: number;  // DTQĐ Nhập trả (Triệu đồng)
+    revenue_loan_qd?: number;    // DTQĐ Khoản vay (Triệu đồng)
 }
 
 export interface ParsedCampaignBlock {
@@ -134,7 +136,7 @@ export function parseSingleEmployeeRevenueTable(
     let isRealTable = forceType === 'REAL';
 
     if (!forceType) {
-        isQdTable = /(doanh thu qđ|dt trả góp qđ|dt trả thẳng qđ)/i.test(text);
+        isQdTable = /(doanh thu qđ|dt trả góp qđ|dt trả thẳng qđ|dt qđ khoản vay|khoản vay)/i.test(text);
         isRealTable = /(dt trả góp|dt trả thẳng)/i.test(text) && !isQdTable;
     }
 
@@ -142,6 +144,12 @@ export function parseSingleEmployeeRevenueTable(
         'nhân viên',
         'số lượng',
         'doanh thu qđ',
+        'dt qđ khoản vay',
+        'khoản vay',
+        'khoan vay',
+        'dt trả thẳng qđ',
+        'dt trả thẳng',
+        'dt trả góp qđ',
         '% tỉ trọng',
         'doanh thu',
         'target',
@@ -150,6 +158,11 @@ export function parseSingleEmployeeRevenueTable(
         '% tt',
         'dt trả góp',
         '% trả góp',
+        'dt nhập trả qđ',
+        'dt nhập trả',
+        'dt nhập trả quy đổi',
+        'doanh thu nhập trả',
+        'nhập trả',
         'tổng',
         'đơn vị:',
         'tỉ trọng tính',
@@ -163,6 +176,66 @@ export function parseSingleEmployeeRevenueTable(
         'thi đua',
         'doanh thu theo cấp'
     ];
+
+    // 1. Quét tìm dòng tiêu đề bảng để xác định chính xác vị trí các cột
+    let headerColMap: {
+        qtyColIdx: number;
+        revQdColIdx: number;
+        revRealColIdx: number;
+        revGenericColIdx: number;
+        loanColIdx: number;
+        directColIdx: number;
+        installmentColIdx: number;
+        installmentRateColIdx: number;
+        returnColIdx: number;
+        pctShareColIdx: number;
+    } | null = null;
+
+    let detectedReturnColIdx = -1;
+
+    for (const rawL of text.split(/\r?\n/)) {
+        const trimmedL = rawL.trim();
+        if (!trimmedL) continue;
+        const lowerL = trimmedL.toLowerCase();
+
+        // Kiểm tra dòng tiêu đề chứa Nhân Viên và các trường số liệu
+        if (
+            (lowerL.includes('nhân viên') || lowerL.includes('nhan vien')) &&
+            (lowerL.includes('doanh thu') || lowerL.includes('số lượng') || lowerL.includes('tỉ trọng') || lowerL.includes('ti trong'))
+        ) {
+            const parts = trimmedL.split(/\t+|\s{2,}/).map(p => p.trim());
+            const empIdx = parts.findIndex(p => /nhân viên|nhan vien/i.test(p));
+            if (empIdx >= 0 && parts.length >= 4) {
+                const hCols = parts.slice(empIdx + 1);
+                headerColMap = {
+                    qtyColIdx: hCols.findIndex(p => /số lượng|so luong|qty/i.test(p)),
+                    revQdColIdx: hCols.findIndex(p => /doanh thu qđ|dt qđ|doanh thu quy đổi|dt quy đổi/i.test(p)),
+                    revRealColIdx: hCols.findIndex(p => /doanh thu thực|dt thực/i.test(p)),
+                    revGenericColIdx: hCols.findIndex(p => /^doanh thu$/i.test(p.trim()) || (/doanh thu/i.test(p) && !/qđ|quy đổi|thực|khoản vay|trả thẳng|trả góp|nhập trả/i.test(p))),
+                    loanColIdx: hCols.findIndex(p => /khoản vay|khoan vay/i.test(p)),
+                    directColIdx: hCols.findIndex(p => /trả thẳng|tra thang/i.test(p)),
+                    installmentColIdx: hCols.findIndex(p => /trả góp|tra gop/i.test(p) && !/tỷ lệ|tỉ lệ|%/i.test(p)),
+                    installmentRateColIdx: hCols.findIndex(p => (/trả góp|tra gop/i.test(p) && /tỷ lệ|tỉ lệ|%/i.test(p)) || /% tg|%tg/i.test(p)),
+                    returnColIdx: hCols.findIndex(p => /nhập trả|nhap tra/i.test(p)),
+                    pctShareColIdx: hCols.findIndex(p => /tỉ trọng|ti trong/i.test(p))
+                };
+                if (headerColMap.returnColIdx >= 0) {
+                    detectedReturnColIdx = headerColMap.returnColIdx;
+                }
+                // Nếu tiêu đề có DTQĐ hoặc Khoản vay thì xác định rõ bảng QD
+                if (!forceType) {
+                    if (headerColMap.revQdColIdx >= 0 || headerColMap.loanColIdx >= 0) {
+                        isQdTable = true;
+                        isRealTable = false;
+                    } else if (headerColMap.revRealColIdx >= 0 || (headerColMap.installmentColIdx >= 0 && headerColMap.revQdColIdx < 0)) {
+                        isRealTable = true;
+                        isQdTable = false;
+                    }
+                }
+                break;
+            }
+        }
+    }
 
     const cleanLines = text.split(/\r?\n/)
         .map(l => l.trim())
@@ -194,6 +267,8 @@ export function parseSingleEmployeeRevenueTable(
             revenue_actual: number;
             installment_revenue: number;
             installment_rate: number;
+            revenue_return_qd?: number;
+            revenue_loan_qd?: number;
         }
     ) => {
         const existingIdx = results.findIndex(r => r.employee_id === empInfo.empId);
@@ -202,6 +277,12 @@ export function parseSingleEmployeeRevenueTable(
             results[existingIdx].revenue_qd = Number((results[existingIdx].revenue_qd + metrics.revenue_qd).toFixed(2));
             results[existingIdx].revenue_actual = Number((results[existingIdx].revenue_actual + metrics.revenue_actual).toFixed(2));
             results[existingIdx].installment_revenue = Number((results[existingIdx].installment_revenue + metrics.installment_revenue).toFixed(2));
+            if (metrics.revenue_return_qd !== undefined) {
+                results[existingIdx].revenue_return_qd = Number(((results[existingIdx].revenue_return_qd || 0) + metrics.revenue_return_qd).toFixed(2));
+            }
+            if (metrics.revenue_loan_qd !== undefined) {
+                results[existingIdx].revenue_loan_qd = Number(((results[existingIdx].revenue_loan_qd || 0) + metrics.revenue_loan_qd).toFixed(2));
+            }
             if (results[existingIdx].revenue_actual > 0 && isRealTable) {
                 results[existingIdx].installment_rate = Number(((results[existingIdx].installment_revenue / results[existingIdx].revenue_actual) * 100).toFixed(1));
             }
@@ -209,7 +290,9 @@ export function parseSingleEmployeeRevenueTable(
             results.push({
                 employee_id: empInfo.empId,
                 full_name: empInfo.fullName,
-                ...metrics
+                ...metrics,
+                revenue_return_qd: metrics.revenue_return_qd || 0,
+                revenue_loan_qd: metrics.revenue_loan_qd || 0
             });
         }
     };
@@ -244,9 +327,9 @@ export function parseSingleEmployeeRevenueTable(
         if (empInfo && cols.length === 0) {
             const collectedCols: string[] = [];
             let j = i + 1;
-            while (j < cleanLines.length && collectedCols.length < 8) {
+            while (j < cleanLines.length && collectedCols.length < 12) {
                 const checkLine = cleanLines[j];
-                if (extractEmployeeInfo(checkLine)) break;
+                if (extractEmployeeInfo(checkLine) || isStoreHeader(checkLine)) break;
                 collectedCols.push(checkLine);
                 j++;
             }
@@ -257,42 +340,137 @@ export function parseSingleEmployeeRevenueTable(
         }
 
         if (empInfo && cols.length >= 4) {
-            // Nhận diện cấu trúc mới 8 cột (Cột 7 là DT Nhập trả dạng số, KHÔNG phải % trả góp)
-            const isNew8ColFormat = cols.length === 8 && !cols[7].includes('%');
-
-            const quantity = parseNumber(cols[0]);
+            let quantity = 0;
             let revenue_qd = 0;
             let revenue_actual = 0;
             let installment_revenue = 0;
             let installment_rate = 0;
+            let revenue_return_qd = 0;
+            let revenue_loan_qd = 0;
 
-            if (isNew8ColFormat) {
+            if (headerColMap && headerColMap.qtyColIdx >= 0) {
+                // Nhánh 1: Bóc tách chính xác dựa trên Header dòng tiêu đề đã phát hiện
+                const qIdx = headerColMap.qtyColIdx;
+                quantity = qIdx < cols.length ? parseNumber(cols[qIdx]) : 0;
+
                 if (isRealTable) {
-                    // Bảng Doanh thu thực mới: Cột 1 = DT Thực, Cột 6 = DT Trả góp thực
-                    revenue_actual = parseNumber(cols[1]);
+                    const rIdx = headerColMap.revRealColIdx >= 0
+                        ? headerColMap.revRealColIdx
+                        : (headerColMap.revGenericColIdx >= 0 ? headerColMap.revGenericColIdx : 1);
+                    revenue_actual = rIdx < cols.length ? parseNumber(cols[rIdx]) : 0;
                     revenue_qd = revenue_actual;
-                    installment_revenue = parseNumber(cols[6]);
+
+                    const instIdx = headerColMap.installmentColIdx;
+                    installment_revenue = (instIdx >= 0 && instIdx < cols.length) ? parseNumber(cols[instIdx]) : 0;
                     installment_rate = revenue_actual > 0
                         ? Number(((installment_revenue / revenue_actual) * 100).toFixed(1))
                         : 0;
+
+                    revenue_return_qd = 0;
+                    revenue_loan_qd = 0;
                 } else {
-                    // Bảng Doanh thu quy đổi mới (hoặc mặc định): Cột 1 = DT QĐ, Cột 6 = DT Trả góp QĐ
-                    // Quy chuẩn: CHỈ lấy DT Trả góp từ bảng Doanh thu thực, KHÔNG lấy "DT Trả góp QĐ"
-                    revenue_qd = parseNumber(cols[1]);
+                    const qdIdx = headerColMap.revQdColIdx >= 0
+                        ? headerColMap.revQdColIdx
+                        : (headerColMap.revGenericColIdx >= 0 ? headerColMap.revGenericColIdx : 1);
+                    revenue_qd = qdIdx < cols.length ? parseNumber(cols[qdIdx]) : 0;
                     revenue_actual = revenue_qd;
+
+                    // Quy chuẩn: CHỈ lấy DT Trả góp từ bảng Doanh thu thực, KHÔNG lấy từ bảng Doanh thu quy đổi
                     installment_revenue = 0;
-                    installment_rate = 0; // Chưa có DT thực thì % trả góp để 0
+                    installment_rate = 0;
+
+                    const loanIdx = headerColMap.loanColIdx;
+                    revenue_loan_qd = (loanIdx >= 0 && loanIdx < cols.length) ? parseNumber(cols[loanIdx]) : 0;
+
+                    const retIdx = headerColMap.returnColIdx;
+                    revenue_return_qd = (retIdx >= 0 && retIdx < cols.length) ? parseNumber(cols[retIdx]) : 0;
                 }
             } else {
-                // Tương thích ngược: Bảng cũ 8 cột hoặc 10 cột
-                revenue_qd = parseNumber(cols[1]);
-                revenue_actual = cols.length > 3 ? parseNumber(cols[3]) : revenue_qd;
-                if (cols.length >= 10) {
-                    installment_revenue = parseNumber(cols[8]);
-                    installment_rate = parseNumber(cols[9]);
-                } else if (cols.length >= 7) {
-                    installment_revenue = parseNumber(cols[6]);
-                    installment_rate = cols.length > 7 ? parseNumber(cols[7]) : (revenue_actual > 0 ? Number(((installment_revenue / revenue_actual) * 100).toFixed(1)) : 0);
+                // Nhánh 2: Không có dòng tiêu đề -> Phân tích cấu trúc cột theo quy luật bảng BI
+                const pctIdx = cols.findIndex(c => typeof c === 'string' && c.includes('%'));
+                const is10ColFormat = pctIdx === 3 || (cols.length >= 9 && !cols[cols.length - 1].includes('%'));
+                const is9ColFormat = pctIdx === 2 || (cols.length === 8 && !cols[cols.length - 1].includes('%'));
+
+                if (is10ColFormat) {
+                    // Cấu trúc 10 cột mới (có cột "DT QĐ KHOẢN VAY"):
+                    // [SL, DT, KHOAN_VAY, %TI_TRONG, TB3T, %TT, DT_TRA_THANG, DT_TRA_GOP, DT_NHAP_TRA]
+                    quantity = parseNumber(cols[0]);
+                    const rev = parseNumber(cols[1]);
+                    const loan = parseNumber(cols[2]);
+                    const inst = parseNumber(cols[7]);
+                    const ret = cols.length > 8 ? parseNumber(cols[8]) : 0;
+
+                    if (isRealTable) {
+                        revenue_actual = rev;
+                        revenue_qd = rev;
+                        installment_revenue = inst;
+                        installment_rate = revenue_actual > 0
+                            ? Number(((installment_revenue / revenue_actual) * 100).toFixed(1))
+                            : 0;
+                        revenue_loan_qd = 0;
+                        revenue_return_qd = 0;
+                    } else {
+                        revenue_qd = rev;
+                        revenue_actual = rev;
+                        revenue_loan_qd = loan;
+                        installment_revenue = 0;
+                        installment_rate = 0;
+                        revenue_return_qd = ret;
+                    }
+                } else if (is9ColFormat) {
+                    // Cấu trúc 9 cột (không có cột Khoản vay):
+                    // [SL, DT, %TI_TRONG, TB3T, %TT, DT_TRA_THANG, DT_TRA_GOP, DT_NHAP_TRA]
+                    quantity = parseNumber(cols[0]);
+                    const rev = parseNumber(cols[1]);
+                    const inst = parseNumber(cols[6]);
+                    const ret = cols.length > 7 ? parseNumber(cols[7]) : 0;
+
+                    if (isRealTable) {
+                        revenue_actual = rev;
+                        revenue_qd = rev;
+                        installment_revenue = inst;
+                        installment_rate = revenue_actual > 0
+                            ? Number(((installment_revenue / revenue_actual) * 100).toFixed(1))
+                            : 0;
+                        revenue_loan_qd = 0;
+                        revenue_return_qd = 0;
+                    } else {
+                        revenue_qd = rev;
+                        revenue_actual = rev;
+                        revenue_loan_qd = 0;
+                        installment_revenue = 0;
+                        installment_rate = 0;
+                        revenue_return_qd = ret;
+                    }
+                } else {
+                    // Tương thích ngược: Bảng cũ 8 cột hoặc 10 cột legacy
+                    quantity = parseNumber(cols[0]);
+                    revenue_qd = parseNumber(cols[1]);
+                    revenue_actual = cols.length > 3 ? parseNumber(cols[3]) : revenue_qd;
+                    if (cols.length >= 10) {
+                        installment_revenue = parseNumber(cols[8]);
+                        installment_rate = parseNumber(cols[9]);
+                    } else if (cols.length >= 7) {
+                        installment_revenue = parseNumber(cols[6]);
+                        installment_rate = cols.length > 7
+                            ? parseNumber(cols[7])
+                            : (revenue_actual > 0 ? Number(((installment_revenue / revenue_actual) * 100).toFixed(1)) : 0);
+                    }
+
+                    if (!isRealTable) {
+                        if (detectedReturnColIdx >= 0 && cols[detectedReturnColIdx] !== undefined) {
+                            revenue_return_qd = parseNumber(cols[detectedReturnColIdx]);
+                        } else if (cols.length >= 3 && !cols[cols.length - 1].includes('%')) {
+                            revenue_return_qd = parseNumber(cols[cols.length - 1]);
+                        }
+                    }
+                }
+            }
+
+            // Fallback nếu chưa lấy được nhưng phát hiện được cột
+            if (!isRealTable && revenue_return_qd === 0) {
+                if (detectedReturnColIdx >= 0 && cols[detectedReturnColIdx] !== undefined) {
+                    revenue_return_qd = parseNumber(cols[detectedReturnColIdx]);
                 }
             }
 
@@ -301,7 +479,9 @@ export function parseSingleEmployeeRevenueTable(
                 revenue_qd,
                 revenue_actual,
                 installment_revenue,
-                installment_rate
+                installment_rate,
+                revenue_return_qd,
+                revenue_loan_qd
             });
         }
     }
@@ -337,7 +517,8 @@ export function mergeEmployeeRevenues(
     const merged: ParsedEmployeeRevenue[] = qdList.map(item => {
         const real = realMap.get(item.employee_id);
         if (real) {
-            const revActual = real.revenue_actual > 0 ? real.revenue_actual : item.revenue_qd;
+            // Khi có bảng Real, lấy chính xác DT thực (kể cả 0 hoặc số âm)
+            const revActual = typeof real.revenue_actual === 'number' ? real.revenue_actual : item.revenue_qd;
             // CHỈ lấy DT Trả góp từ bảng Doanh thu thực (real)
             const instRev = real.installment_revenue > 0 ? real.installment_revenue : 0;
             const instRate = revActual > 0 && instRev > 0
@@ -348,7 +529,9 @@ export function mergeEmployeeRevenues(
                 ...item,
                 revenue_actual: revActual,
                 installment_revenue: instRev,
-                installment_rate: instRate
+                installment_rate: instRate,
+                revenue_return_qd: item.revenue_return_qd || 0,
+                revenue_loan_qd: item.revenue_loan_qd || 0
             };
         }
         return item;
@@ -359,7 +542,9 @@ export function mergeEmployeeRevenues(
         if (!qdList.some(q => q.employee_id === real.employee_id)) {
             merged.push({
                 ...real,
-                revenue_qd: real.revenue_actual
+                revenue_qd: real.revenue_actual,
+                revenue_return_qd: real.revenue_return_qd || 0,
+                revenue_loan_qd: 0
             });
         }
     });

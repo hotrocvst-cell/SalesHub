@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Outlet, useLocation, Navigate, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import RolePermissionModal from '../../../features/store-management/components/RolePermissionModal';
@@ -18,9 +18,11 @@ import {
     FlaskConical,
     RotateCcw
 } from 'lucide-react';
+import GuestTrialNoticeBanner from './GuestTrialNoticeBanner';
 
 export default function MainLayout() {
     const navigate = useNavigate();
+    const mainContentRef = useRef<HTMLElement>(null);
     const {
         currentUser,
         isActualAdmin,
@@ -84,9 +86,13 @@ export default function MainLayout() {
         }
     }, [isCollapsed]);
 
-    // Đóng drawer mobile khi đổi trang
+    // Đóng drawer mobile và cuộn hiển thị về đầu trang khi đổi route
     useEffect(() => {
         setIsMobileOpen(false);
+        if (mainContentRef.current) {
+            mainContentRef.current.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+        }
+        window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
     }, [location.pathname]);
 
     // Ghi nhận lượt truy cập trang cho người dùng (lưu LocalStorage và sync Supabase)
@@ -354,6 +360,7 @@ export default function MainLayout() {
                     )}
                 </div>
             </header>
+            <GuestTrialNoticeBanner />
 
             {/* THANH CÔNG CỤ KIỂM THỬ PHÂN QUYỀN HỆ THỐNG DÀNH RIÊNG CHO ADMIN */}
             {isActualAdmin && (
@@ -414,7 +421,7 @@ export default function MainLayout() {
                 </aside>
 
                 {/* MAIN OUTLET: Nội dung các trang */}
-                <main className="flex-1 overflow-y-auto p-2 sm:p-4 min-w-0 transition-all duration-300">
+                <main ref={mainContentRef} className="flex-1 overflow-y-auto p-2 sm:p-4 min-w-0 transition-all duration-300">
                     <Outlet />
                 </main>
             </div>

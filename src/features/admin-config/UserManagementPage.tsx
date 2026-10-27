@@ -56,7 +56,8 @@ import {
     Building2,
     Database,
     Code,
-    CloudUpload
+    CloudUpload,
+    Sparkles
 } from 'lucide-react';
 
 export default function UserManagementPage() {
@@ -429,6 +430,15 @@ export default function UserManagementPage() {
                     >
                         <Building2 className="w-4 h-4 text-blue-600" />
                         <span className="hidden sm:inline">Phân Quyền Siêu Thị</span>
+                    </Link>
+
+                    <Link
+                        to="/quan-tri-he-thong/tai-khoan-trai-nghiem"
+                        className="px-3.5 py-2.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-bold transition flex items-center gap-1.5 border border-amber-200 cursor-pointer shadow-2xs"
+                        title="Quản lý tài khoản trải nghiệm quảng cáo cho khách & cấu hình hạn dùng theo ngày"
+                    >
+                        <Sparkles className="w-4 h-4 text-amber-600" />
+                        <span className="hidden sm:inline">Tài Khoản Trải Nghiệm</span>
                     </Link>
 
                     <button

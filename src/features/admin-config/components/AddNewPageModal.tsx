@@ -26,6 +26,7 @@ const DEFAULT_GROUPS = [
     'SỨC KHỎE NHÂN VIÊN',
     'DỮ LIỆU & PHIÊN LÀM VIỆC',
     'TIỆN ÍCH BÁN HÀNG',
+    'HỖ TRỢ CVST',
     'HỆ THỐNG & CẤU HÌNH'
 ];
 
@@ -36,11 +37,12 @@ export default function AddNewPageModal({ isOpen, onClose, existingPages, onAddP
     const [groupTitle, setGroupTitle] = useState(DEFAULT_GROUPS[0]);
     const [customGroup, setCustomGroup] = useState('');
     const [description, setDescription] = useState('');
-    const [allowedRoles, setAllowedRoles] = useState<UserRole[]>(['ADMIN', 'QUAN_LY']);
+    const [allowedRoles, setAllowedRoles] = useState<UserRole[]>(['ADMIN']);
     const [badgeEnabled, setBadgeEnabled] = useState(false);
     const [badgeIcon, setBadgeIcon] = useState('✨');
     const [badgeText, setBadgeText] = useState('Mới');
     const [badgeColor, setBadgeColor] = useState<BadgeColorTheme>('blue');
+    const [allowGuest, setAllowGuest] = useState(false);
     const [errorMsg, setErrorMsg] = useState('');
 
     if (!isOpen) return null;
@@ -107,6 +109,7 @@ export default function AddNewPageModal({ isOpen, onClose, existingPages, onAddP
             description: description.trim() || undefined,
             is_enabled: true,
             allowed_roles: allowedRoles.length > 0 ? allowedRoles : ['ADMIN'],
+            allow_guest: allowGuest,
             order_index: maxOrder + 1,
             badge_enabled: badgeEnabled,
             badge_icon: badgeEnabled ? badgeIcon : undefined,
@@ -266,6 +269,25 @@ export default function AddNewPageModal({ isOpen, onClose, existingPages, onAddP
                                 );
                             })}
                         </div>
+                    </div>
+
+                    {/* Phân quyền cho Tài khoản Trải nghiệm (Guest Trial) */}
+                    <div className="p-3 rounded-2xl bg-amber-50/70 border border-amber-200 flex items-center justify-between">
+                        <div>
+                            <span className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
+                                <span>🎁</span>
+                                <span>Mở cho Tài khoản Trải nghiệm xem</span>
+                            </span>
+                            <span className="text-[10px] text-amber-700 block mt-0.5">
+                                Cho phép khách hàng đăng nhập tài khoản trải nghiệm có thể xem trước trang này
+                            </span>
+                        </div>
+                        <input
+                            type="checkbox"
+                            checked={allowGuest}
+                            onChange={(e) => setAllowGuest(e.target.checked)}
+                            className="w-4 h-4 text-amber-600 rounded cursor-pointer"
+                        />
                     </div>
 
                     {/* Cấu hình Badge Sidebar */}

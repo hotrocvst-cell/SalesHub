@@ -1,7 +1,7 @@
 import type { EmployeeDataSession } from '../utils/sessionStorage';
 import { X, FileSpreadsheet, DownloadCloud } from 'lucide-react';
 import ExcelJS from 'exceljs';
-import { formatDateTime } from '../../../core/lib/formatters';
+import { formatDateTime, formatDate } from '../../../core/lib/formatters';
 
 interface Props {
     session: EmployeeDataSession;
@@ -97,10 +97,16 @@ export default function SessionDetailModal({ session, onClose, onRestore }: Prop
                 </div>
 
                 {/* Chi tiết Meta Info */}
-                <div className="px-6 py-3 bg-white border-b border-slate-100 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                <div className="px-6 py-3 bg-white border-b border-slate-100 grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
                     <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
                         <span className="text-slate-400 block text-[10px] font-bold uppercase">Siêu thị</span>
                         <strong className="text-slate-800 line-clamp-1">{session.store_name}</strong>
+                    </div>
+                    <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                        <span className="text-purple-600 block text-[10px] font-bold uppercase">Ngày chốt số liệu</span>
+                        <strong className="text-purple-700 font-mono">
+                            {session.report_date ? formatDate(session.report_date) : '—'}
+                        </strong>
                     </div>
                     <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
                         <span className="text-slate-400 block text-[10px] font-bold uppercase">Thời gian cập nhật</span>
@@ -112,7 +118,7 @@ export default function SessionDetailModal({ session, onClose, onRestore }: Prop
                         <span className="text-slate-400 block text-[10px] font-bold uppercase">Số lượng nhân sự</span>
                         <strong className="text-blue-700 font-mono">{session.employee_count} NV</strong>
                     </div>
-                    <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                    <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 col-span-2 sm:col-span-1">
                         <span className="text-slate-400 block text-[10px] font-bold uppercase">
                             {isRevenue ? 'Tổng Doanh Thu Thực' : 'Tổng Giờ Công'}
                         </span>

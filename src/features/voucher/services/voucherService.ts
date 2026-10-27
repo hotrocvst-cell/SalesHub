@@ -91,9 +91,13 @@ CREATE TABLE IF NOT EXISTS public.store_voucher_campaign_statuses (
     campaign_name TEXT NOT NULL,
     denomination NUMERIC DEFAULT 0,
     is_ended BOOLEAN DEFAULT false,
+    is_hidden BOOLEAN DEFAULT false,
     updated_by TEXT,
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Tự động bổ sung cột is_hidden nếu bảng đã được tạo trước đó
+ALTER TABLE public.store_voucher_campaign_statuses ADD COLUMN IF NOT EXISTS is_hidden BOOLEAN DEFAULT false;
 
 -- Kích hoạt RLS & chính sách truy cập toàn quyền cho bảng store_voucher_campaign_statuses
 ALTER TABLE public.store_voucher_campaign_statuses ENABLE ROW LEVEL SECURITY;
@@ -220,17 +224,98 @@ export function isCampaignOrDenomEnded(
     denomination?: number
 ): boolean {
     if (!statuses) return false;
-    const cleanCamp = campaignName.trim();
+    const cleanCamp = (campaignName || '').trim();
+    if (!cleanCamp) return false;
+    const lowerCamp = cleanCamp.toLowerCase();
+
+    // 1. Kiểm tra cấu hình cụ thể cho mệnh giá
     if (denomination && denomination > 0) {
         const specificKey = `${cleanCamp}:::${denomination}`;
         if (statuses[specificKey] && statuses[specificKey].is_ended) {
             return true;
         }
+        for (const [k, v] of Object.entries(statuses)) {
+            if (k.toLowerCase() === `${lowerCamp}:::${denomination}` && v.is_ended) {
+                return true;
+            }
+        }
     }
+
+    // 2. Kiểm tra cấu hình toàn chương trình (trực tiếp)
     if (statuses[cleanCamp] && statuses[cleanCamp].is_ended) {
         return true;
     }
+
+    // 3. Quét không phân biệt hoa thường ở cấp chương trình
+    for (const v of Object.values(statuses)) {
+        if (!v) continue;
+        if ((v.campaign_name || '').trim().toLowerCase() === lowerCamp) {
+            if ((!v.denomination || v.denomination === 0) && v.is_ended) {
+                return true;
+            }
+        }
+    }
+
     return false;
+}
+
+/**
+ * Kiểm tra xem chương trình hoặc mệnh giá có bị ẩn (lưu trữ) hay không
+ */
+export function isCampaignHidden(
+    statuses: Record<string, VoucherCampaignStatusConfig> | undefined,
+    campaignName: string,
+    denomination?: number
+): boolean {
+    if (!statuses) return false;
+    const cleanCamp = (campaignName || '').trim();
+    if (!cleanCamp) return false;
+    const lowerCamp = cleanCamp.toLowerCase();
+
+    // 1. Nếu có cấu hình riêng cho mệnh giá cụ thể
+    if (denomination && denomination > 0) {
+        const specificKey = `${cleanCamp}:::${denomination}`;
+        if (statuses[specificKey] && statuses[specificKey].is_hidden) {
+            return true;
+        }
+        for (const [k, v] of Object.entries(statuses)) {
+            if (k.toLowerCase() === `${lowerCamp}:::${denomination}` && v.is_hidden) {
+                return true;
+            }
+        }
+    }
+
+    // 2. Kiểm tra trực tiếp key chương trình
+    if (statuses[cleanCamp] && statuses[cleanCamp].is_hidden) {
+        return true;
+    }
+
+    // 3. Quét không phân biệt hoa thường trong toàn bộ map:
+    // Nếu có bất kỳ cấu hình nào ở cấp chương trình (denomination = 0 hoặc id == campaign_name) mang is_hidden = true
+    for (const v of Object.values(statuses)) {
+        if (!v) continue;
+        const vCamp = (v.campaign_name || '').trim().toLowerCase();
+        if (vCamp === lowerCamp) {
+            if ((!v.denomination || v.denomination === 0) && v.is_hidden) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+/**
+ * Kiểm tra xem chương trình hoặc mệnh giá đã kết thúc hoặc đã bị ẩn (lưu trữ) hay chưa
+ * Dùng để loại trừ triệt để khỏi các cảnh báo tồn kho quá hạn
+ */
+export function isCampaignEndedOrHidden(
+    statuses: Record<string, VoucherCampaignStatusConfig> | undefined,
+    campaignName: string,
+    denomination?: number
+): boolean {
+    return isCampaignHidden(statuses, campaignName, denomination) ||
+           isCampaignOrDenomEnded(statuses, campaignName, denomination);
 }
 
 /**
@@ -261,13 +346,26 @@ export async function fetchVoucherCampaignStatuses(): Promise<Record<string, Vou
         if (!error && Array.isArray(data)) {
             data.forEach((row: any) => {
                 const key = row.id || getCampaignStatusKey(row.campaign_name, row.denomination);
+                const localItem = statusMap[key];
+
+                // BẢO VỆ DỮ LIỆU: Chỉ ghi đè nếu Cloud trả về giá trị xác định (khác undefined và null)
+                // Tránh việc bảng Cloud chưa có cột is_hidden làm mất trạng thái ẩn đã lưu ở LocalStorage
+                const isHiddenVal = (row.is_hidden !== undefined && row.is_hidden !== null)
+                    ? Boolean(row.is_hidden)
+                    : Boolean(localItem?.is_hidden);
+
+                const isEndedVal = (row.is_ended !== undefined && row.is_ended !== null)
+                    ? Boolean(row.is_ended)
+                    : Boolean(localItem?.is_ended);
+
                 statusMap[key] = {
                     id: key,
                     campaign_name: row.campaign_name,
                     denomination: Number(row.denomination) || 0,
-                    is_ended: Boolean(row.is_ended),
-                    updated_by: row.updated_by,
-                    updated_at: row.updated_at
+                    is_ended: isEndedVal,
+                    is_hidden: isHiddenVal,
+                    updated_by: row.updated_by || localItem?.updated_by,
+                    updated_at: row.updated_at || localItem?.updated_at
                 };
             });
 
@@ -297,20 +395,31 @@ export async function saveVoucherCampaignStatus(
     updatedBy: string
 ): Promise<{ success: boolean; config?: VoucherCampaignStatusConfig; error?: string }> {
     const key = getCampaignStatusKey(campaignName, denomination);
+
+    let existingItem: VoucherCampaignStatusConfig | undefined;
+    let map: Record<string, VoucherCampaignStatusConfig> = {};
+    try {
+        const raw = localStorage.getItem(CAMPAIGN_STATUS_STORAGE_KEY);
+        if (raw) {
+            map = JSON.parse(raw);
+            existingItem = map[key];
+        }
+    } catch {
+        // ignore
+    }
+
     const item: VoucherCampaignStatusConfig = {
         id: key,
         campaign_name: campaignName.trim(),
         denomination: denomination || 0,
         is_ended: isEnded,
+        is_hidden: existingItem?.is_hidden ?? false,
         updated_by: updatedBy,
         updated_at: new Date().toISOString()
     };
 
     // 1. Cập nhật LocalStorage cache ngay lập tức
     try {
-        let map: Record<string, VoucherCampaignStatusConfig> = {};
-        const raw = localStorage.getItem(CAMPAIGN_STATUS_STORAGE_KEY);
-        if (raw) map = JSON.parse(raw);
         map[key] = item;
         localStorage.setItem(CAMPAIGN_STATUS_STORAGE_KEY, JSON.stringify(map));
     } catch (e) {
@@ -326,15 +435,118 @@ export async function saveVoucherCampaignStatus(
                 campaign_name: item.campaign_name,
                 denomination: item.denomination,
                 is_ended: item.is_ended,
+                is_hidden: item.is_hidden,
                 updated_by: item.updated_by,
                 updated_at: item.updated_at
             }], { onConflict: 'id' });
 
         if (error) {
             console.warn('Supabase store_voucher_campaign_statuses warning:', error.message);
+            // Fallback nếu schema cache chưa nhận diện cột is_hidden
+            if (error.message && error.message.includes('is_hidden')) {
+                await supabase
+                    .from('store_voucher_campaign_statuses')
+                    .upsert([{
+                        id: item.id,
+                        campaign_name: item.campaign_name,
+                        denomination: item.denomination,
+                        is_ended: item.is_ended,
+                        updated_by: item.updated_by,
+                        updated_at: item.updated_at
+                    }], { onConflict: 'id' });
+            }
         }
     } catch (e) {
         console.warn('Không thể kết nối Cloud để lưu campaign status:', e);
+    }
+
+    return { success: true, config: item };
+}
+
+/**
+ * Ẩn / Hiện chương trình áp dụng voucher (Cloud-first, sync LocalStorage cache)
+ * isHidden = true: Ẩn chương trình (Lưu trữ lịch sử, không xóa mã, loại trừ khỏi cảnh báo mã hết hạn)
+ * isHidden = false: Mở hiển thị lại chương trình
+ */
+export async function saveVoucherCampaignHiddenStatus(
+    campaignName: string,
+    isHidden: boolean,
+    updatedBy: string
+): Promise<{ success: boolean; config?: VoucherCampaignStatusConfig; error?: string }> {
+    const cleanCamp = campaignName.trim();
+    const key = cleanCamp;
+
+    let existingItem: VoucherCampaignStatusConfig | undefined;
+    let map: Record<string, VoucherCampaignStatusConfig> = {};
+    try {
+        const raw = localStorage.getItem(CAMPAIGN_STATUS_STORAGE_KEY);
+        if (raw) {
+            map = JSON.parse(raw);
+            existingItem = map[key];
+        }
+    } catch {
+        // ignore
+    }
+
+    const item: VoucherCampaignStatusConfig = {
+        id: key,
+        campaign_name: cleanCamp,
+        denomination: existingItem?.denomination || 0,
+        is_ended: existingItem?.is_ended ?? true, // Khi ẩn thường mặc định là chương trình đã kết thúc
+        is_hidden: isHidden,
+        updated_by: updatedBy,
+        updated_at: new Date().toISOString()
+    };
+
+    // 1. Cập nhật LocalStorage cache ngay lập tức (cho cả chương trình và các mệnh giá con của nó)
+    try {
+        map[key] = item;
+        Object.keys(map).forEach(k => {
+            const entry = map[k];
+            if (entry && (entry.campaign_name || '').trim().toLowerCase() === cleanCamp.toLowerCase()) {
+                entry.is_hidden = isHidden;
+                if (isHidden) {
+                    entry.is_ended = true;
+                }
+            }
+        });
+        localStorage.setItem(CAMPAIGN_STATUS_STORAGE_KEY, JSON.stringify(map));
+    } catch (e) {
+        console.warn('Lỗi ghi local campaign hidden status:', e);
+    }
+
+    // 2. Upsert lên Supabase Cloud
+    try {
+        const { error } = await supabase
+            .from('store_voucher_campaign_statuses')
+            .upsert([{
+                id: item.id,
+                campaign_name: item.campaign_name,
+                denomination: item.denomination,
+                is_ended: item.is_ended,
+                is_hidden: item.is_hidden,
+                updated_by: item.updated_by,
+                updated_at: item.updated_at
+            }], { onConflict: 'id' });
+
+        if (error) {
+            console.warn('Supabase store_voucher_campaign_statuses warning:', error.message);
+            // Fallback nếu schema cache chưa có cột is_hidden
+            if (error.message && error.message.includes('is_hidden')) {
+                await supabase
+                    .from('store_voucher_campaign_statuses')
+                    .upsert([{
+                        id: item.id,
+                        campaign_name: item.campaign_name,
+                        denomination: item.denomination,
+                        is_ended: item.is_ended,
+                        updated_by: item.updated_by,
+                        updated_at: item.updated_at
+                    }], { onConflict: 'id' });
+            }
+        }
+    } catch (e) {
+        console.warn('Không thể kết nối Cloud để lưu campaign hidden status:', e);
     }
 
     return { success: true, config: item };
@@ -1649,6 +1861,7 @@ export function getCampaignSummaries(
         const denomMap = map.get(cName)!;
         if (!denomMap.has(denom)) {
             const isEnded = isCampaignOrDenomEnded(campaignStatuses, cName, denom);
+            const isHidden = isCampaignHidden(campaignStatuses, cName, denom);
             denomMap.set(denom, {
                 denomination: denom,
                 total: 0,
@@ -1656,7 +1869,8 @@ export function getCampaignSummaries(
                 claimed: 0,
                 used: 0,
                 description: v.description,
-                is_ended: isEnded
+                is_ended: isEnded,
+                is_hidden: isHidden
             });
         }
 
@@ -1681,12 +1895,16 @@ export function getCampaignSummaries(
         const isEntireCampaignEnded = isCampaignOrDenomEnded(campaignStatuses, cName) ||
             (denominations.length > 0 && denominations.every(d => d.is_ended));
 
+        const isHidden = isCampaignHidden(campaignStatuses, cName) ||
+            (denominations.length > 0 && denominations.every(d => d.is_hidden));
+
         result.push({
             campaign_name: cName,
             total_available,
             total_vouchers,
             denominations,
-            is_ended: isEntireCampaignEnded
+            is_ended: isEntireCampaignEnded,
+            is_hidden: isHidden
         });
     });
 

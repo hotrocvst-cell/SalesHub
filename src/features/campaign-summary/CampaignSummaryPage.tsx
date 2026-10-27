@@ -41,24 +41,42 @@ import {
 import html2canvas from 'html2canvas';
 import ExcelJS from 'exceljs';
 import { calculate8KScale } from '../../shared/utils/exportImage';
+import { GUEST_DEMO_STORE } from '../../core/lib/guestDemoStoreService';
 
 export default function CampaignSummaryPage() {
     const navigate = useNavigate();
     const reportRef = useRef<HTMLDivElement>(null);
 
     const { currentUser, canConfigure } = useAuth();
-    const canManage = canConfigure || ['ADMIN', 'QUAN_LY', 'TRUONG_CA'].includes(currentUser?.role || '');
-    const [selectedMonth, setSelectedMonth] = useState<number>(() => new Date().getMonth() + 1);
-    const [selectedYear, setSelectedYear] = useState<number>(() => new Date().getFullYear());
+    const canManage = !currentUser?.is_guest && (canConfigure || ['ADMIN', 'QUAN_LY', 'TRUONG_CA'].includes(currentUser?.role || ''));
+    const [selectedMonth, setSelectedMonth] = useState<number>(() => {
+        if (currentUser?.is_guest) return 10;
+        return new Date().getMonth() + 1;
+    });
+    const [selectedYear, setSelectedYear] = useState<number>(() => {
+        if (currentUser?.is_guest) return 2026;
+        return new Date().getFullYear();
+    });
     const [stores, setStores] = useState<StoreItem[]>([]);
     const [employees, setEmployees] = useState<EmployeeItem[]>([]);
 
     const [selectedStore, setSelectedStore] = useState<string>(() => {
+        if (currentUser?.is_guest) {
+            return GUEST_DEMO_STORE;
+        }
         if (currentUser?.role === 'NHAN_VIEN' && currentUser.store_name) {
             return currentUser.store_name;
         }
         return 'all';
     });
+
+    useEffect(() => {
+        if (currentUser?.is_guest) {
+            setSelectedMonth(10);
+            setSelectedYear(2026);
+            setSelectedStore(GUEST_DEMO_STORE);
+        }
+    }, [currentUser?.is_guest]);
 
     // Phân quyền siêu thị theo tài khoản người dùng
     const { allowedStores, isLockedToSingleStore, canViewAllStores } = useUserStoreFilter(

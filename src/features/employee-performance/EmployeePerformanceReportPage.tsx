@@ -55,7 +55,7 @@ export default function EmployeePerformanceReportPage() {
     const navigate = useNavigate();
     const { currentUser, canConfigure } = useAuth();
     const { canExportExcel } = useExcelExportPermission('/bao-cao-hieu-qua-nhan-vien');
-    const canManage = canConfigure || ['ADMIN', 'QUAN_LY', 'TRUONG_CA'].includes(currentUser?.role);
+    const canManage = !currentUser?.is_guest && (canConfigure || ['ADMIN', 'QUAN_LY', 'TRUONG_CA'].includes(currentUser?.role));
     const reportRef = useRef<HTMLDivElement>(null);
 
     const [stores, setStores] = useState<StoreItem[]>([]);
@@ -847,7 +847,7 @@ export default function EmployeePerformanceReportPage() {
                                 value={selectedStore}
                                 onChange={e => setSelectedStore(e.target.value)}
                                 disabled={isLockedToSingleStore}
-                                title={isLockedToSingleStore ? 'Tài khoản nhân viên được cố định theo siêu thị đã đăng ký' : undefined}
+                                title={currentUser?.is_guest ? 'Tài khoản trải nghiệm sử dụng dữ liệu siêu thị 10335 - AAR_BRV_VTA - 290 Trương Công Định' : (isLockedToSingleStore ? 'Tài khoản nhân viên được cố định theo siêu thị đã đăng ký' : undefined)}
                                 className={`bg-transparent text-xs font-black outline-hidden min-w-[200px] sm:min-w-[260px] ${isLockedToSingleStore
                                     ? 'cursor-not-allowed text-amber-900'
                                     : 'cursor-pointer text-slate-900'
@@ -862,7 +862,7 @@ export default function EmployeePerformanceReportPage() {
                             </select>
                             {isLockedToSingleStore && (
                                 <span className="text-[10px] bg-amber-200/80 text-amber-800 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">
-                                    Đã khóa
+                                    {currentUser?.is_guest ? 'Trải nghiệm' : 'Đã khóa'}
                                 </span>
                             )}
                         </div>

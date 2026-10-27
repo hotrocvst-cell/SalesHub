@@ -17,9 +17,11 @@ import {
     Edit3,
     ChevronDown,
     ChevronUp,
-    FileSpreadsheet
+    FileSpreadsheet,
+    EyeOff
 } from 'lucide-react';
-import type { VoucherItem } from '../types';
+import type { VoucherItem, VoucherCampaignStatusConfig } from '../types';
+import { isCampaignHidden } from '../services/voucherService';
 import { formatDate, formatDateTime, getShortStoreName, isStoreMatch } from '../../../core/lib/formatters';
 import { getDenominationHotStyle, formatCurrency, parseConditionLines } from '../voucherFormatters';
 
@@ -70,6 +72,7 @@ interface Props {
     onFilterEmployee?: (empId: string) => void;
     onExportExcel?: () => void;
     isExportingExcel?: boolean;
+    campaignStatuses?: Record<string, VoucherCampaignStatusConfig>;
 }
 
 export default function VoucherListTable({
@@ -87,7 +90,8 @@ export default function VoucherListTable({
     onClearEmployeeFilter,
     onFilterEmployee,
     onExportExcel,
-    isExportingExcel
+    isExportingExcel,
+    campaignStatuses
 }: Props) {
     const [searchQuery, setSearchQuery] = useState<string>('');
     const [filterStatus, setFilterStatus] = useState<string>(prefilterStatus || 'ALL');
@@ -438,12 +442,17 @@ export default function VoucherListTable({
                         <select
                             value={filterCampaign}
                             onChange={(e) => setFilterCampaign(e.target.value)}
-                            className="bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 cursor-pointer max-w-[160px] truncate"
+                            className="bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 cursor-pointer max-w-[170px] truncate"
                         >
                             <option value="ALL">🎁 Tất cả CT</option>
-                            {campaignOptions.map(c => (
-                                <option key={c} value={c}>{c}</option>
-                            ))}
+                            {campaignOptions.map(c => {
+                                const isHidden = isCampaignHidden(campaignStatuses, c);
+                                return (
+                                    <option key={c} value={c}>
+                                        {isHidden ? `📦 [Đã ẩn] ${c}` : c}
+                                    </option>
+                                );
+                            })}
                         </select>
 
                         {/* Lọc Mệnh giá */}
@@ -793,9 +802,15 @@ export default function VoucherListTable({
                                         </td>
 
                                         {/* Chương trình & Điều kiện áp dụng */}
-                                        <td className="py-2 px-2 max-w-[160px]">
-                                            <div className="font-bold text-slate-800 truncate" title={item.campaign_name}>
-                                                {item.campaign_name}
+                                        <td className="py-2 px-2 max-w-[170px]">
+                                            <div className="font-bold text-slate-800 truncate flex items-center gap-1" title={item.campaign_name}>
+                                                <span className="truncate">{item.campaign_name}</span>
+                                                {isCampaignHidden(campaignStatuses, item.campaign_name) && (
+                                                    <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-slate-200 text-slate-700 border border-slate-300 inline-flex items-center gap-0.5 shrink-0" title="Chương trình này đã được ẩn">
+                                                        <EyeOff className="w-2.5 h-2.5 text-slate-500" />
+                                                        <span>Đã ẩn</span>
+                                                    </span>
+                                                )}
                                             </div>
                                             {item.description ? (
                                                 <div className="mt-0.5 space-y-0.5" title={item.description}>
