@@ -538,7 +538,7 @@ export async function deleteStoreById(id: string) {
     }
 }
 
-export async function fetchEmployees(storeName?: string) {
+export async function fetchEmployees(storeName?: string, options?: { includeDemo?: boolean }) {
     if (storeName && isGuestDemoStore(storeName)) {
         return { success: true, data: getGuestDemoEmployees() };
     }
@@ -557,7 +557,7 @@ export async function fetchEmployees(storeName?: string) {
         const { data, error } = await query;
         if (error) throw error;
         const list = (data as EmployeeItem[]) || [];
-        if (!storeName || storeName === 'all') {
+        if (options?.includeDemo && (!storeName || storeName === 'all')) {
             return { success: true, data: [...list, ...getGuestDemoEmployees()] };
         }
         return { success: true, data: list };

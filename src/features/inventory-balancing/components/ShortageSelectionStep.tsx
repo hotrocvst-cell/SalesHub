@@ -192,7 +192,7 @@ export default function ShortageSelectionStep({
 
             // Lọc chỉ mã có sức bán (> 0)
             if (filterOnlyHasSales && salesVelocityMap) {
-                const vel = getProductSalesVelocity(salesVelocityMap, item.product_code);
+                const vel = getProductSalesVelocity(salesVelocityMap, item.product_code, item.product_name);
                 if (!vel || vel.sales_qty <= 0) return false;
             }
 
@@ -624,7 +624,7 @@ export default function ShortageSelectionStep({
                                 </tr>
                             ) : (
                                 filteredItems.map((item, idx) => {
-                                    const vel = salesVelocityMap ? getProductSalesVelocity(salesVelocityMap, item.product_code) : null;
+                                    const vel = salesVelocityMap ? getProductSalesVelocity(salesVelocityMap, item.product_code, item.product_name) : null;
                                     return (
                                         <tr
                                             key={item.id}

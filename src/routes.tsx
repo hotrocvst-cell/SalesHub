@@ -24,6 +24,7 @@ const SystemAdminPage = lazy(() => import('./features/admin-config/SystemAdminPa
 const UserManagementPage = lazy(() => import('./features/admin-config/UserManagementPage'));
 const UserStorePermissionPage = lazy(() => import('./features/admin-config/UserStorePermissionPage'));
 const GuestAccountsPage = lazy(() => import('./features/admin-config/GuestAccountsPage'));
+const CampaignOffsetPage = lazy(() => import('./features/campaign-offset/CampaignOffsetPage'));
 const DataStatusPage = lazy(() => import('./features/data-status/DataStatusPage'));
 const EmployeeCumulativeRankingPage = lazy(() => import('./features/employee-cumulative-ranking/EmployeeCumulativeRankingPage'));
 const CampaignDirectoryPage = lazy(() => import('./features/campaign-directory/CampaignDirectoryPage'));
@@ -72,6 +73,7 @@ export function AppRoutes() {
                     <Route path="/tong-hop-thi-dua" element={<CampaignSummaryPage />} />
                     <Route path="/tien-do-thi-dua" element={<CampaignProgressPage />} />
                     <Route path="/tra-cuu-thi-dua" element={<CampaignDirectoryPage />} />
+                    <Route path="/can-tru-thi-dua" element={<CampaignOffsetPage />} />
 
                     {/* Phân hệ Cập nhật Dữ liệu */}
                     <Route path="/cap-nhat" element={<DataUpdatePage />} />

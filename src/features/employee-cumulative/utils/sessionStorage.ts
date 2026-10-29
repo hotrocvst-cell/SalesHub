@@ -88,15 +88,18 @@ export async function checkSupabaseSessionTable(): Promise<{ exists: boolean; co
     }
 }
 
-/**
- * Tải danh sách phiên từ Supabase Cloud (hỗ trợ lọc trực tiếp trên Cloud)
- */
-export async function fetchCloudEmployeeDataSessions(filters?: {
+export interface EmployeeSessionFilter {
     month?: number;
     year?: number;
     storeName?: string;
     sessionType?: string;
-}): Promise<{ success: boolean; data: EmployeeDataSession[]; error?: string }> {
+    includeDemo?: boolean;
+}
+
+/**
+ * Tải danh sách phiên từ Supabase Cloud (hỗ trợ lọc trực tiếp trên Cloud)
+ */
+export async function fetchCloudEmployeeDataSessions(filters?: EmployeeSessionFilter): Promise<{ success: boolean; data: EmployeeDataSession[]; error?: string }> {
     try {
         let query = supabase
             .from('employee_data_sessions')
@@ -136,8 +139,8 @@ export async function fetchCloudEmployeeDataSessions(filters?: {
                 if (!s.store_name) return false;
                 return isStoreMatch(s.store_name, targetStore);
             });
-        } else {
-            // Khi không lọc siêu thị hoặc lấy 'all', gộp demoSessions vào danh sách
+        } else if (filters?.includeDemo) {
+            // Khi không lọc siêu thị hoặc lấy 'all', chỉ gộp demoSessions nếu được yêu cầu rõ
             if (demoSessions.length > 0) {
                 list = [...list, ...demoSessions];
             }
@@ -177,12 +180,7 @@ export async function pullCloudSessionsToLocal(): Promise<{ success: boolean; co
 /**
  * Tải và lọc danh sách phiên dữ liệu (ưu tiên tuyệt đối Supabase Cloud)
  */
-export async function syncAndFetchEmployeeDataSessions(filters?: {
-    month?: number;
-    year?: number;
-    storeName?: string;
-    sessionType?: string;
-}): Promise<EmployeeDataSession[]> {
+export async function syncAndFetchEmployeeDataSessions(filters?: EmployeeSessionFilter): Promise<EmployeeDataSession[]> {
     try {
         const cloudRes = await fetchCloudEmployeeDataSessions(filters);
         if (cloudRes.success) {
@@ -264,12 +262,7 @@ export async function syncLocalSessionsToCloud(): Promise<{ success: boolean; sy
     }
 }
 
-export function fetchEmployeeDataSessions(filters?: {
-    month?: number;
-    year?: number;
-    storeName?: string;
-    sessionType?: string;
-}): EmployeeDataSession[] {
+export function fetchEmployeeDataSessions(filters?: EmployeeSessionFilter): EmployeeDataSession[] {
     try {
         const raw = localStorage.getItem(STORAGE_KEY);
         if (!raw) return [];
@@ -296,7 +289,7 @@ export function fetchEmployeeDataSessions(filters?: {
                     if (!s.store_name) return false;
                     return isStoreMatch(s.store_name, targetStore);
                 });
-            } else {
+            } else if (filters?.includeDemo) {
                 if (demoSessions.length > 0) {
                     list = [...list, ...demoSessions];
                 }

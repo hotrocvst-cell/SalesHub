@@ -19,6 +19,10 @@ import { resolveCanonicalCampaign, isEmployeeInStore, normalizeCampaignToken } f
 import { formatDate, getYesterdayDateString, isStoreMatch, calculateRemainingTarget } from '../../../core/lib/formatters';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { GUEST_DEMO_STORE } from '../../../core/lib/guestDemoStoreService';
+import {
+    fetchCampaignOffsets,
+    type CampaignOffsetItem
+} from '../../campaign-offset/services/campaignOffsetService';
 import type {
     CampaignProgressItem,
     EmployeeCampaignProgressDetail,
@@ -71,22 +75,25 @@ export function useCampaignProgressData() {
     const [quickFilter, setQuickFilter] = useState<QuickFilterMode>('ALL');
     const [searchQuery, setSearchQuery] = useState<string>('');
     const [sortMode, setSortMode] = useState<SortMode>('FORECAST_ASC');
+    const [campaignOffsets, setCampaignOffsets] = useState<CampaignOffsetItem[]>([]);
 
     // 1. Tải dữ liệu hệ thống
     const loadData = async () => {
         setLoading(true);
-        const [storesRes, dictRes, targetsRes, empsRes, bRecsRes] = await Promise.all([
+        const [storesRes, dictRes, targetsRes, empsRes, bRecsRes, offsetsRes] = await Promise.all([
             fetchStores(),
             fetchCampaignDictionary(),
             fetchEmployeeCampaignTargets(selectedMonth, selectedYear),
             fetchEmployees(),
-            fetchBusinessRecords(selectedMonth, selectedYear)
+            fetchBusinessRecords(selectedMonth, selectedYear),
+            fetchCampaignOffsets(selectedStore, selectedMonth, selectedYear)
         ]);
 
         if (storesRes.success && storesRes.data) setStores(storesRes.data);
         if (dictRes.success && dictRes.data) setCampaignDict(dictRes.data);
         if (empsRes.success && empsRes.data) setEmployees(empsRes.data);
         if (bRecsRes.success && bRecsRes.data) setBusinessRecords(bRecsRes.data);
+        if (offsetsRes.success && offsetsRes.data) setCampaignOffsets(offsetsRes.data);
 
         const tMap: Record<string, Record<string, number>> = {};
         if (targetsRes.success && targetsRes.data) {
@@ -118,7 +125,7 @@ export function useCampaignProgressData() {
 
     useEffect(() => {
         loadData();
-    }, [selectedMonth, selectedYear]);
+    }, [selectedMonth, selectedYear, selectedStore]);
 
     // Bản đồ nhân viên: empId -> Store Name & Full Name
     const empInfoMap = useMemo(() => {
@@ -345,13 +352,31 @@ export function useCampaignProgressData() {
                         }
                     }
 
+                    // Tính cấn trừ thi đua cuối tháng (1 đổi 1) nếu có
+                    let offsetIn = 0;
+                    let offsetOut = 0;
+                    campaignOffsets.forEach(o => {
+                        if (o.employee_id.trim() === empId) {
+                            const toKey = (o.to_campaign_key || '').trim();
+                            const fromKey = (o.from_campaign_key || '').trim();
+                            if (toKey === cKey || aliasKeys.includes(toKey)) {
+                                offsetIn += Number(o.offset_quantity) || 0;
+                            }
+                            if (fromKey === cKey || aliasKeys.includes(fromKey)) {
+                                offsetOut += Number(o.offset_quantity) || 0;
+                            }
+                        }
+                    });
+                    const offsetAdjustment = offsetIn - offsetOut;
+                    const finalActual = Math.max(0, empActual + offsetAdjustment);
+
                     // Còn lại chuẩn toàn project: hoàn thành thực tế (actual >= target) -> 0, chưa đạt -> target - actual (dương)
-                    const remaining = calculateRemainingTarget(empTarget, empActual, 1);
-                    const completionRate = Number(((empActual / empTarget) * 100).toFixed(1));
-                    const forecast = (empActual / passedDays) * operatingDays;
+                    const remaining = calculateRemainingTarget(empTarget, finalActual, 1);
+                    const completionRate = Number(((finalActual / empTarget) * 100).toFixed(1));
+                    const forecast = (finalActual / passedDays) * operatingDays;
                     const forecastRate = Math.round((forecast / empTarget) * 100);
                     const isAchieved = forecastRate >= 100;
-                    const isTargetMet = empActual >= empTarget;
+                    const isTargetMet = finalActual >= empTarget;
 
                     const fullName = (r.full_name || empInfoMap[empId]?.fullName || empId).trim();
                     const storeName = empInfoMap[empId]?.storeName || activeSession.store_name || '';
@@ -365,7 +390,9 @@ export function useCampaignProgressData() {
                         displayName,
                         storeName,
                         target: empTarget,
-                        actual: empActual,
+                        actual: finalActual,
+                        rawActual: empActual,
+                        offsetAdjustment,
                         remaining,
                         completionRate,
                         forecastRate,
@@ -482,7 +509,7 @@ export function useCampaignProgressData() {
 
         // Sắp xếp mặc định theo order_index trong từ điển thi đua
         return items.sort((a, b) => a.orderIndex - b.orderIndex || a.displayName.localeCompare(b.displayName));
-    }, [activeSession, targetsMap, campaignDict, selectedStore, empInfoMap, operatingConfig, stores, businessRecords]);
+    }, [activeSession, targetsMap, campaignDict, selectedStore, empInfoMap, operatingConfig, stores, businessRecords, campaignOffsets]);
 
     // Theo dõi thay đổi siêu thị để tự động chọn tất cả nhóm thi đua của siêu thị đó
     const prevStoreRef = useRef<string>(selectedStore);

@@ -29,6 +29,7 @@ import {
 } from '../../core/lib/storeCampaignScoreService';
 import { resolveCanonicalCampaign } from '../campaign-summary/utils/campaignSummaryStorage';
 import { getYesterdayDateString, isStoreMatch, getShortStoreName } from '../../core/lib/formatters';
+import { isGuestDemoStore, GUEST_DEMO_STORE } from '../../core/lib/guestDemoStoreService';
 import { useAuth } from '../../shared/contexts/AuthContext';
 import { useUserStoreFilter } from '../../shared/hooks/useUserStoreFilter';
 import { useExcelExportPermission } from '../../shared/hooks/useExcelExportPermission';
@@ -42,6 +43,17 @@ import {
     fetchEmployeeRankingAssessment,
     type EmployeeRankingAssessmentData
 } from './services/employeeRankingAssessmentService';
+import {
+    fetchEmployeeRescueConfig,
+    evaluateEmployeeRescue,
+    getDefaultRescueConfig,
+    type EmployeeRescueConfig
+} from './services/employeeRescueService';
+import {
+    fetchCampaignOffsets,
+    type CampaignOffsetItem
+} from '../campaign-offset/services/campaignOffsetService';
+import EmployeeRescueConfigModal from './components/EmployeeRescueConfigModal';
 import type { EmployeeRankingRow, EmployeeRankingSummary } from './types';
 import {
     Trophy,
@@ -63,7 +75,9 @@ import {
     MessageSquare,
     Edit3,
     Eye,
-    EyeOff
+    EyeOff,
+    ShieldCheck,
+    Shuffle
 } from 'lucide-react';
 import ExcelJS from 'exceljs';
 import html2canvas from 'html2canvas';
@@ -72,7 +86,9 @@ import { calculate8KScale } from '../../shared/utils/exportImage';
 export default function EmployeeRankingSummaryPage() {
     const navigate = useNavigate();
     const { currentUser, canConfigure } = useAuth();
-    const canManage = !currentUser?.is_guest && (canConfigure || ['ADMIN', 'QUAN_LY', 'TRUONG_CA'].includes(currentUser?.role || ''));
+    const isGuest = Boolean(currentUser?.is_guest);
+    const isAdmin = currentUser?.role === 'ADMIN';
+    const canManage = !isGuest && (canConfigure || ['ADMIN', 'QUAN_LY', 'TRUONG_CA'].includes(currentUser?.role || ''));
     const reportRef = useRef<HTMLDivElement>(null);
 
     // 1. STATE BỘ LỌC CƠ BẢN
@@ -92,7 +108,7 @@ export default function EmployeeRankingSummaryPage() {
     const [selectedMonth, setSelectedMonth] = useState<number>(() => new Date().getMonth() + 1);
     const [selectedYear, setSelectedYear] = useState<number>(() => new Date().getFullYear());
     const [searchQuery, setSearchQuery] = useState<string>('');
-    const [filterCategory, setFilterCategory] = useState<'ALL' | 'TOP_REV' | 'BOT_REV' | 'TOP_EMU' | 'BOT_EMU'>('ALL');
+    const [filterCategory, setFilterCategory] = useState<'ALL' | 'TOP_REV' | 'BOT_REV' | 'TOP_EMU' | 'BOT_EMU' | 'RESCUED' | 'BOT_WARNING'>('ALL');
     const [displayUnit, setDisplayUnit] = useState<'MILLION' | 'BILLION'>('MILLION');
 
     // MẶC ĐỊNH SẮP XẾP THEO XẾP HẠNG DOANH THU (REVENUE_RANK)
@@ -105,6 +121,7 @@ export default function EmployeeRankingSummaryPage() {
     const [campaignTargets, setCampaignTargets] = useState<Record<string, Record<string, number>>>({});
     const [campaignDict, setCampaignDict] = useState<CampaignDictItem[]>([]);
     const [latestSession, setLatestSession] = useState<EmployeeDataSession | null>(null);
+    const [validSessions, setValidSessions] = useState<EmployeeDataSession[]>([]);
 
     // Cấu hình TOP/BOT & Shop
     const [topBotConfig, setTopBotConfig] = useState<TopBotConfig>(() =>
@@ -113,6 +130,15 @@ export default function EmployeeRankingSummaryPage() {
     const [operatingConfig, setOperatingConfig] = useState(() =>
         getStoreOperatingConfig(selectedStore === 'all' ? 'ALL' : selectedStore, selectedMonth, selectedYear)
     );
+
+    // Cấu hình tiêu chí cứu & Chế độ đặc thù
+    const [rescueConfig, setRescueConfig] = useState<EmployeeRescueConfig>(() =>
+        getDefaultRescueConfig(selectedStore, selectedMonth, selectedYear)
+    );
+    const [isRescueModalOpen, setIsRescueModalOpen] = useState<boolean>(false);
+
+    // Cấn trừ thi đua cuối tháng
+    const [campaignOffsets, setCampaignOffsets] = useState<CampaignOffsetItem[]>([]);
 
     const [scoreConfigsVersion, setScoreConfigsVersion] = useState<number>(0);
 
@@ -157,18 +183,30 @@ export default function EmployeeRankingSummaryPage() {
         } catch { }
 
         try {
-            const [storesRes, empsRes, revTargetsRes, campTargetsRes, dictRes, allSessions] = await Promise.all([
+            const targetStoreParam = isGuest
+                ? GUEST_DEMO_STORE
+                : (selectedStore === 'all' ? undefined : selectedStore);
+
+            const [storesRes, empsRes, revTargetsRes, campTargetsRes, dictRes, allSessions, rescueCfg, offsetsRes] = await Promise.all([
                 fetchStores(),
-                fetchEmployees(),
+                fetchEmployees(targetStoreParam),
                 fetchEmployeeRevenueTargets(selectedMonth, selectedYear),
                 fetchEmployeeCampaignTargets(selectedMonth, selectedYear),
                 fetchCampaignDictionary(),
-                syncAndFetchEmployeeDataSessions({ month: selectedMonth, year: selectedYear })
+                syncAndFetchEmployeeDataSessions({
+                    month: selectedMonth,
+                    year: selectedYear,
+                    storeName: targetStoreParam
+                }),
+                fetchEmployeeRescueConfig(selectedStore, selectedMonth, selectedYear),
+                fetchCampaignOffsets(selectedStore, selectedMonth, selectedYear)
             ]);
 
             if (storesRes.success) setStores(storesRes.data);
             if (empsRes.success) setEmployees(empsRes.data);
             if (dictRes.success && dictRes.data) setCampaignDict(dictRes.data);
+            setRescueConfig(rescueCfg);
+            if (offsetsRes.success && offsetsRes.data) setCampaignOffsets(offsetsRes.data);
 
             // Chuyển đổi target doanh thu sang Map theo Mã NV (chuẩn hóa về triệu đồng)
             const rTargetMap: Record<string, number> = {};
@@ -204,11 +242,25 @@ export default function EmployeeRankingSummaryPage() {
             }
             setCampaignTargets(cTargetMap);
 
-            // Xác định phiên mới nhất REVENUE_CAMPAIGN hoặc FULL_SYNC
-            const revSessions = allSessions.filter(sess =>
-                (sess.session_type === 'REVENUE_CAMPAIGN' || sess.session_type === 'FULL_SYNC') &&
-                (selectedStore === 'all' || isStoreMatch(sess.store_name, selectedStore, storesRes.data || stores))
-            );
+            // Lọc các phiên hợp lệ theo đúng phân quyền và chế độ xem
+            const currentStoresList = storesRes.data || stores;
+            const revSessions = allSessions.filter(sess => {
+                if (sess.session_type !== 'REVENUE_CAMPAIGN' && sess.session_type !== 'FULL_SYNC') {
+                    return false;
+                }
+                const isDemo = isGuestDemoStore(sess.store_name);
+                if (isGuest) return isDemo;
+                if (isDemo) return false;
+
+                if (selectedStore === 'all') {
+                    if (isAdmin) return true;
+                    return allowedStores.some(s => isStoreMatch(s.name, sess.store_name, currentStoresList));
+                }
+                return isStoreMatch(sess.store_name, selectedStore, currentStoresList);
+            });
+
+            setValidSessions(revSessions);
+
             const newest = revSessions.slice().sort((a, b) =>
                 (b.report_date || '').localeCompare(a.report_date || '') ||
                 (b.created_at || '').localeCompare(a.created_at || '')
@@ -245,17 +297,25 @@ export default function EmployeeRankingSummaryPage() {
         return map;
     }, [employees]);
 
-    // Thu thập bản đồ số liệu doanh thu & thi đua của nhân viên từ phiên mới nhất
+    // Thu thập bản đồ số liệu doanh thu & thi đua của nhân viên từ các phiên hợp lệ mới nhất
     const sessionRecordsMap = useMemo(() => {
         const map: Record<string, any> = {};
-        if (latestSession && Array.isArray(latestSession.records)) {
-            latestSession.records.forEach(r => {
-                const k = (r.employee_id || '').trim();
-                if (k) map[k] = r;
-            });
-        }
+        const sorted = validSessions.slice().sort((a, b) =>
+            (b.report_date || '').localeCompare(a.report_date || '') ||
+            (b.created_at || '').localeCompare(a.created_at || '')
+        );
+        sorted.forEach(sess => {
+            if (Array.isArray(sess.records)) {
+                sess.records.forEach(r => {
+                    const k = (r.employee_id || '').trim();
+                    if (k && !map[k]) {
+                        map[k] = r;
+                    }
+                });
+            }
+        });
         return map;
-    }, [latestSession]);
+    }, [validSessions]);
 
     // 5. TÍNH TOÁN DỮ LIỆU XẾP HẠNG TẤT CẢ NHÂN VIÊN
     const rankingRows = useMemo<EmployeeRankingRow[]>(() => {
@@ -275,10 +335,26 @@ export default function EmployeeRankingSummaryPage() {
         const safePassed = Math.max(1, passedDays);
         const safeTotal = Math.max(1, operatingConfig.operatingDays);
 
-        // Danh sách nhân viên thuộc siêu thị được chọn
+        // Danh sách nhân viên thuộc siêu thị được chọn và thỏa mãn phân quyền
         const targetEmployees = employees.filter(emp => {
-            if (selectedStore === 'all') return true;
-            return isStoreMatch(emp.store_name, selectedStore, stores);
+            const empStore = empStoreMap[emp.employee_id?.trim()] || emp.store_name || '';
+            const isDemo = isGuestDemoStore(empStore) || emp.employee_id?.trim().startsWith('NV838');
+
+            // 1. Phân lập tài khoản trải nghiệm
+            if (isGuest) {
+                return isDemo;
+            }
+            if (isDemo) {
+                return false;
+            }
+
+            // 2. Lọc theo siêu thị được chọn & phân quyền người dùng
+            if (selectedStore === 'all') {
+                if (isAdmin) return true;
+                return allowedStores.some(s => isStoreMatch(s.name, empStore, stores));
+            }
+
+            return isStoreMatch(empStore, selectedStore, stores);
         });
 
         // 5.1. Thu thập dữ liệu thô từng nhân viên
@@ -309,6 +385,7 @@ export default function EmployeeRankingSummaryPage() {
 
             const empCampaignTargets = campaignTargets[empId] || {};
             const empCampaignActuals = sessRecord?.campaigns || {};
+            const empOffsets = campaignOffsets.filter(o => o.employee_id.trim() === empId);
 
             let achievedCount = 0;
             let totalCampaigns = 0;
@@ -323,7 +400,7 @@ export default function EmployeeRankingSummaryPage() {
                     const resolved = resolveCanonicalCampaign(rawKey, campaignDict);
                     const cKey = resolved.canonicalKey;
 
-                    // Lấy actual
+                    // Lấy actual thô
                     let actualVal = 0;
                     if (empCampaignActuals[rawKey] !== undefined) {
                         actualVal = Number(empCampaignActuals[rawKey]) || 0;
@@ -331,12 +408,27 @@ export default function EmployeeRankingSummaryPage() {
                         actualVal = Number(empCampaignActuals[cKey]) || 0;
                     }
 
+                    // Áp dụng cấn trừ 1 đổi 1 (nếu có trong kỳ)
+                    let offsetIn = 0;
+                    let offsetOut = 0;
+                    empOffsets.forEach(o => {
+                        const toKey = (o.to_campaign_key || '').trim();
+                        const fromKey = (o.from_campaign_key || '').trim();
+                        if (toKey === cKey || toKey === rawKey) {
+                            offsetIn += Number(o.offset_quantity) || 0;
+                        }
+                        if (fromKey === cKey || fromKey === rawKey) {
+                            offsetOut += Number(o.offset_quantity) || 0;
+                        }
+                    });
+                    const effectiveActual = Math.max(0, actualVal + offsetIn - offsetOut);
+
                     // Điểm số quy định cho nhóm thi đua này
                     const pts = getCampaignPoints(cKey, scoreCfg);
                     totalPoints += pts;
 
-                    // Tính %DKHT nhóm thi đua
-                    const forecastCampVal = (actualVal / safePassed) * safeTotal;
+                    // Tính %DKHT nhóm thi đua với số lượng thực tế sau cấn trừ
+                    const forecastCampVal = (effectiveActual / safePassed) * safeTotal;
                     const campForecastRate = (forecastCampVal / tVal) * 100;
 
                     if (campForecastRate >= 100) {
@@ -438,10 +530,24 @@ export default function EmployeeRankingSummaryPage() {
             emuMapWithRank.set(item.employee_id, { rank, status, label });
         });
 
-        // 5.4. Ghép nối kết quả hoàn chỉnh
+        // 5.4. Ghép nối kết quả hoàn chỉnh & Đánh giá Tiêu chí Cứu BOT
         return rawList.map(item => {
             const revMeta = revMapWithRank.get(item.employee_id) || { rank: 999, status: 'MID' as const, label: '' };
             const emuMeta = emuMapWithRank.get(item.employee_id) || { rank: 999, status: 'MID' as const, label: '' };
+
+            const rescueEval = evaluateEmployeeRescue(
+                {
+                    employee_id: item.employee_id,
+                    revenue_top_bot_status: revMeta.status,
+                    emulation_top_bot_status: emuMeta.status,
+                    forecast_completion_rate: item.forecast_completion_rate,
+                    points_achieved: item.points_achieved,
+                    campaigns_achieved: item.campaigns_achieved,
+                    scoring_mode: item.scoring_mode,
+                    emulation_display: item.emulation_display
+                },
+                rescueConfig
+            );
 
             return {
                 ...item,
@@ -450,7 +556,12 @@ export default function EmployeeRankingSummaryPage() {
                 revenue_top_bot_label: revMeta.label,
                 emulation_rank: emuMeta.rank,
                 emulation_top_bot_status: emuMeta.status,
-                emulation_top_bot_label: emuMeta.label
+                emulation_top_bot_label: emuMeta.label,
+                rescue_status: rescueEval.rescue_status,
+                rescue_label: rescueEval.rescue_label,
+                rescue_detail: rescueEval.rescue_detail,
+                rescue_reason: rescueEval.rescue_reason,
+                badge_variant: rescueEval.badge_variant
             };
         });
     }, [
@@ -465,7 +576,12 @@ export default function EmployeeRankingSummaryPage() {
         campaignDict,
         topBotConfig,
         empStoreMap,
-        scoreConfigsVersion
+        scoreConfigsVersion,
+        rescueConfig,
+        campaignOffsets,
+        isGuest,
+        isAdmin,
+        allowedStores
     ]);
 
     // 6. TÍNH CHỈ SỐ TỔNG QUAN (SUMMARY)
@@ -483,7 +599,10 @@ export default function EmployeeRankingSummaryPage() {
                 botRevenueCount: 0,
                 topEmulationCount: 0,
                 botEmulationCount: 0,
-                scoringModeLabel: 'Chưa có dữ liệu'
+                scoringModeLabel: 'Chưa có dữ liệu',
+                safeCount: 0,
+                rescuedCount: 0,
+                botWarningCount: 0
             };
         }
 
@@ -499,6 +618,10 @@ export default function EmployeeRankingSummaryPage() {
         const botRev = rankingRows.filter(r => r.revenue_top_bot_status === 'BOT').length;
         const topEmu = rankingRows.filter(r => r.emulation_top_bot_status === 'TOP').length;
         const botEmu = rankingRows.filter(r => r.emulation_top_bot_status === 'BOT').length;
+
+        const rescuedCount = rankingRows.filter(r => r.rescue_status === 'RESCUED').length;
+        const botWarningCount = rankingRows.filter(r => r.rescue_status === 'BOT_WARNING').length;
+        const safeCount = rankingRows.filter(r => r.rescue_status === 'SAFE').length;
 
         let modeLabel = 'Tùy biến từng shop';
         if (selectedStore !== 'all') {
@@ -521,7 +644,10 @@ export default function EmployeeRankingSummaryPage() {
             botRevenueCount: botRev,
             topEmulationCount: topEmu,
             botEmulationCount: botEmu,
-            scoringModeLabel: modeLabel
+            scoringModeLabel: modeLabel,
+            safeCount,
+            rescuedCount,
+            botWarningCount
         };
     }, [rankingRows]);
 
@@ -539,7 +665,7 @@ export default function EmployeeRankingSummaryPage() {
             );
         }
 
-        // Lọc theo nhóm TOP/BOT
+        // Lọc theo nhóm TOP/BOT / CỨU
         if (filterCategory === 'TOP_REV') {
             result = result.filter(r => r.revenue_top_bot_status === 'TOP');
         } else if (filterCategory === 'BOT_REV') {
@@ -548,6 +674,10 @@ export default function EmployeeRankingSummaryPage() {
             result = result.filter(r => r.emulation_top_bot_status === 'TOP');
         } else if (filterCategory === 'BOT_EMU') {
             result = result.filter(r => r.emulation_top_bot_status === 'BOT');
+        } else if (filterCategory === 'RESCUED') {
+            result = result.filter(r => r.rescue_status === 'RESCUED');
+        } else if (filterCategory === 'BOT_WARNING') {
+            result = result.filter(r => r.rescue_status === 'BOT_WARNING');
         }
 
         // Sắp xếp: Mặc định theo Xếp hạng DT (REVENUE_RANK tăng dần)
@@ -761,14 +891,34 @@ export default function EmployeeRankingSummaryPage() {
                     {/* HÀNG CÔNG CỤ NÚT BẤM */}
                     <div className="flex items-center gap-2 flex-wrap justify-end">
                         {canManage && (
-                            <button
-                                onClick={() => setIsConfigModalOpen(true)}
-                                className="px-3 py-2 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center gap-1.5 transition border border-slate-200 select-none shadow-2xs"
-                                title="Cấu hình tỷ lệ TOP / BOT và ngày giờ hoạt động (dùng chung cho cả hệ thống)"
-                            >
-                                <Settings className="w-3.5 h-3.5 text-slate-600" />
-                                <span>Cấu hình TOP/BOT</span>
-                            </button>
+                            <>
+                                <button
+                                    onClick={() => setIsRescueModalOpen(true)}
+                                    className="px-3 py-2 rounded-2xl bg-teal-50 hover:bg-teal-100 text-teal-800 font-bold text-xs flex items-center gap-1.5 transition border border-teal-200 select-none shadow-2xs"
+                                    title="Cấu hình tiêu chí cứu BOT & danh sách thai sản/chế độ"
+                                >
+                                    <ShieldCheck className="w-3.5 h-3.5 text-teal-600" />
+                                    <span>Tiêu Chí Cứu</span>
+                                </button>
+
+                                <button
+                                    onClick={() => navigate('/can-tru-thi-dua')}
+                                    className="px-3 py-2 rounded-2xl bg-purple-50 hover:bg-purple-100 text-purple-800 font-bold text-xs flex items-center gap-1.5 transition border border-purple-200 select-none shadow-2xs"
+                                    title="Quản lý cấn trừ thi đua cuối tháng giữa các ngành hàng"
+                                >
+                                    <Shuffle className="w-3.5 h-3.5 text-purple-600" />
+                                    <span>Cấn Trừ ({campaignOffsets.length})</span>
+                                </button>
+
+                                <button
+                                    onClick={() => setIsConfigModalOpen(true)}
+                                    className="px-3 py-2 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center gap-1.5 transition border border-slate-200 select-none shadow-2xs"
+                                    title="Cấu hình tỷ lệ TOP / BOT và ngày giờ hoạt động (dùng chung cho cả hệ thống)"
+                                >
+                                    <Settings className="w-3.5 h-3.5 text-slate-600" />
+                                    <span>Cấu hình TOP/BOT</span>
+                                </button>
+                            </>
                         )}
 
                         <ReportActionButtons
@@ -886,6 +1036,8 @@ export default function EmployeeRankingSummaryPage() {
                             <option value="BOT_REV">🚨 Bot DT ({summary.botRevenueCount})</option>
                             <option value="TOP_EMU">⭐ Top T.Đua ({summary.topEmulationCount})</option>
                             <option value="BOT_EMU">⚠️ Bot T.Đua ({summary.botEmulationCount})</option>
+                            <option value="RESCUED">🛟 Đã cứu BOT ({summary.rescuedCount ?? 0})</option>
+                            <option value="BOT_WARNING">🚨 BOT cảnh báo ({summary.botWarningCount ?? 0})</option>
                         </select>
                     </div>
                 </div>
@@ -1029,6 +1181,20 @@ export default function EmployeeRankingSummaryPage() {
                         <span>Hiển thị vào báo cáo</span>
                     </button>
                 </div>
+            )}
+
+            {/* MODAL CẤU HÌNH TIÊU CHÍ CỨU & THAI SẢN / CHẾ ĐỘ */}
+            {isRescueModalOpen && (
+                <EmployeeRescueConfigModal
+                    isOpen={isRescueModalOpen}
+                    onClose={() => setIsRescueModalOpen(false)}
+                    config={rescueConfig}
+                    employees={employees.filter(e => selectedStore === 'all' ? true : isStoreMatch(e.store_name, selectedStore, stores))}
+                    onSaved={(newCfg) => {
+                        setRescueConfig(newCfg);
+                        showToast('✅ Đã lưu cấu hình tiêu chí cứu & chế độ!');
+                    }}
+                />
             )}
 
             {/* MODAL CẤU HÌNH TOP / BOT CHUNG HỆ THỐNG */}

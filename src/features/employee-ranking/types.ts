@@ -29,6 +29,13 @@ export interface EmployeeRankingRow {
     emulation_rank: number;      // Thứ hạng Thi đua (#1, #2...)
     emulation_top_bot_status: 'TOP' | 'BOT' | 'MID';
     emulation_top_bot_label: string;
+
+    // Đánh giá sức khỏe & Xét cứu BOT
+    rescue_status?: 'SAFE' | 'RESCUED' | 'BOT_WARNING';
+    rescue_label?: string;
+    rescue_detail?: string;
+    rescue_reason?: string;
+    badge_variant?: 'safe' | 'rescued_rev' | 'rescued_emu' | 'thai_san' | 'warning';
 }
 
 export interface EmployeeRankingSummary {
@@ -43,4 +50,9 @@ export interface EmployeeRankingSummary {
     topEmulationCount: number;
     botEmulationCount: number;
     scoringModeLabel: string;
+
+    // Chỉ số sức khỏe & xét cứu
+    safeCount?: number;
+    rescuedCount?: number;
+    botWarningCount?: number;
 }

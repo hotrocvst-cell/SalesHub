@@ -145,7 +145,7 @@ export default function RebalanceSuggestionView({
         // Lọc theo sức bán nếu bật
         if (filterOnlyHasSales && salesVelocityMap) {
             list = list.filter(m => {
-                const vel = getProductSalesVelocity(salesVelocityMap, m.product_code);
+                const vel = getProductSalesVelocity(salesVelocityMap, m.product_code, m.product_name);
                 return vel && vel.sales_qty > 0;
             });
         }
@@ -197,7 +197,7 @@ export default function RebalanceSuggestionView({
                 // 3b. Lọc theo sức bán nếu người dùng bật
                 if (filterOnlyHasSales && salesVelocityMap) {
                     items = items.filter(item => {
-                        const vel = getProductSalesVelocity(salesVelocityMap, item.product_code);
+                        const vel = getProductSalesVelocity(salesVelocityMap, item.product_code, item.product_name);
                         return vel && vel.sales_qty > 0;
                     });
                 }
@@ -738,7 +738,7 @@ export default function RebalanceSuggestionView({
                             </div>
                         ) : (
                             displayedMatches.map((item, idx) => {
-                                const vel = salesVelocityMap ? getProductSalesVelocity(salesVelocityMap, item.product_code) : null;
+                                const vel = salesVelocityMap ? getProductSalesVelocity(salesVelocityMap, item.product_code, item.product_name) : null;
 
                                 // Tính số lượng và số siêu thị đã tạo lệnh xin cho sản phẩm này
                                 const orderedSources = item.source_stores.filter(source => {
@@ -1056,7 +1056,7 @@ export default function RebalanceSuggestionView({
                                                 const isItemOrdered = Boolean(orderedItemsMap?.[orderKey]?.is_ordered);
                                                 const orderedAt = orderedItemsMap?.[orderKey]?.ordered_at;
                                                 const isItemExcluded = Boolean(excludedStoreItemKeys[orderKey]);
-                                                const vel = salesVelocityMap ? getProductSalesVelocity(salesVelocityMap, item.product_code) : null;
+                                                const vel = salesVelocityMap ? getProductSalesVelocity(salesVelocityMap, item.product_code, item.product_name) : null;
 
                                                 const currentQty = storeCustomQtyMap[orderKey] !== undefined
                                                     ? storeCustomQtyMap[orderKey]

@@ -11,11 +11,13 @@ import {
     CheckCircle2,
     Calculator,
     Zap,
-    Lock
+    Lock,
+    ShieldCheck
 } from 'lucide-react';
 import { type ClusterStoreRow, type ClusterTargetConfigItem } from '../types';
 import { saveClusterTargetConfigs, fetchClusterTargetConfigPackage } from '../services/clusterTargetService';
 import { getCompactStoreName } from '../ClusterReportPage';
+import { useAuth } from '../../../shared/contexts/AuthContext';
 
 interface Props {
     isOpen: boolean;
@@ -45,6 +47,14 @@ export default function ClusterTargetConfigModal({
     initialGlobalPace = 100,
     onSaved
 }: Props) {
+    const { currentUser, isAdmin, canAccessStore } = useAuth();
+
+    // Kiểm tra xem user có quyền sửa target của siêu thị cụ thể không
+    const isStoreEditable = (storeName: string): boolean => {
+        if (isAdmin) return true;
+        return canAccessStore(storeName) || canAccessStore(getCompactStoreName(storeName));
+    };
+
     const [configMap, setConfigMap] = useState<Record<string, StoreItemState>>({});
     const [selectedPace, setSelectedPace] = useState<number>(initialGlobalPace || 100);
     const [customPaceInput, setCustomPaceInput] = useState<string>('');
@@ -137,22 +147,28 @@ export default function ClusterTargetConfigModal({
         };
     }, [configMap, rows, selectedPace]);
 
-    // Áp dụng nhịp Target chung cho toàn bộ siêu thị
+    // Áp dụng nhịp Target chung (chỉ áp dụng cho các siêu thị trong phạm vi phụ trách của user)
     const handleApplyPaceRateToAll = (pace: number) => {
         setSelectedPace(pace);
+        let updatedCount = 0;
         setConfigMap(prev => {
             const next: Record<string, StoreItemState> = {};
             Object.entries(prev).forEach(([storeName, item]) => {
-                const calculatedTargetOver = Number(((item.baseTarget * pace) / 100).toFixed(3));
-                next[storeName] = {
-                    ...item,
-                    targetRate: pace,
-                    targetOver: calculatedTargetOver
-                };
+                if (isAdmin || isStoreEditable(storeName)) {
+                    const calculatedTargetOver = Number(((item.baseTarget * pace) / 100).toFixed(3));
+                    next[storeName] = {
+                        ...item,
+                        targetRate: pace,
+                        targetOver: calculatedTargetOver
+                    };
+                    updatedCount++;
+                } else {
+                    next[storeName] = item;
+                }
             });
             return next;
         });
-        setToastMsg(`⚡ Đã áp dụng nhịp ${pace}% cho toàn bộ ${rows.length} siêu thị!`);
+        setToastMsg(`⚡ Đã áp dụng nhịp ${pace}% cho ${updatedCount} siêu thị${isAdmin ? '' : ' bạn phụ trách'}!`);
         setTimeout(() => setToastMsg(''), 2500);
     };
 
@@ -167,8 +183,10 @@ export default function ClusterTargetConfigModal({
         setCustomPaceInput('');
     };
 
-    // Tùy chỉnh riêng lẻ từng siêu thị
+    // Tùy chỉnh riêng lẻ từng siêu thị (chỉ cho phép nếu user có quyền phụ trách siêu thị này)
     const handleItemChange = (storeName: string, field: keyof StoreItemState, value: number) => {
+        if (!isAdmin && !isStoreEditable(storeName)) return;
+
         setConfigMap(prev => {
             const current = prev[storeName] || {
                 baseTarget: 0,
@@ -200,20 +218,22 @@ export default function ClusterTargetConfigModal({
         });
     };
 
-    // Lưu cấu hình lên Cloud
+    // Lưu cấu hình lên Cloud (chỉ lưu các siêu thị thuộc quyền phụ trách để merge an toàn)
     const handleSave = async () => {
         setIsSaving(true);
-        const configs: ClusterTargetConfigItem[] = Object.entries(configMap).map(([storeName, val]) => ({
-            storeName,
-            month,
-            year,
-            baseTarget: val.baseTarget,
-            targetRate: val.targetRate,
-            targetOver: val.targetOver,
-            avg3Months: val.avg3Months
-        }));
+        const configsToSave: ClusterTargetConfigItem[] = Object.entries(configMap)
+            .filter(([storeName]) => isAdmin || isStoreEditable(storeName))
+            .map(([storeName, val]) => ({
+                storeName,
+                month,
+                year,
+                baseTarget: val.baseTarget,
+                targetRate: val.targetRate,
+                targetOver: val.targetOver,
+                avg3Months: val.avg3Months
+            }));
 
-        const res = await saveClusterTargetConfigs(month, year, configs, selectedPace);
+        const res = await saveClusterTargetConfigs(month, year, configsToSave, selectedPace);
         setIsSaving(false);
 
         if (res.success) {
@@ -246,13 +266,25 @@ export default function ClusterTargetConfigModal({
                                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-300">
                                     Kỳ {month}/{year}
                                 </span>
+                                {isAdmin ? (
+                                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-800 border border-blue-200">
+                                        Toàn cụm ({rows.length} siêu thị)
+                                    </span>
+                                ) : (
+                                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 text-purple-800 border border-purple-200">
+                                        {currentUser?.role_title || (currentUser?.role === 'QUAN_LY' ? 'Quản lý' : 'Trưởng ca')}: {rows.filter(r => isStoreEditable(r.storeName)).length} siêu thị phụ trách
+                                    </span>
+                                )}
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                                     <Cloud className="w-3 h-3" />
                                     <span>Cloud Supabase</span>
                                 </span>
                             </div>
                             <p className="text-[11px] text-slate-500 mt-0.5">
-                                Tùy chỉnh Target Vượt Trội chung hoặc riêng lẻ từng siêu thị trong cụm.
+                                {isAdmin
+                                    ? 'Tùy chỉnh Target Vượt Trội chung hoặc riêng lẻ cho toàn bộ siêu thị trong cụm.'
+                                    : `Tùy chỉnh Target Vượt Trội cho các siêu thị trong phạm vi bạn phụ trách (${currentUser?.store_name || 'được phân quyền'}).`
+                                }
                             </p>
                         </div>
                     </div>
@@ -389,11 +421,12 @@ export default function ClusterTargetConfigModal({
                                         };
                                         const shortName = getCompactStoreName(row.storeName);
                                         const isCustomRate = item.targetRate !== selectedPace;
+                                        const canEdit = isAdmin || isStoreEditable(row.storeName);
 
                                         return (
                                             <tr
                                                 key={row.storeName}
-                                                className="hover:bg-amber-50/20 transition group"
+                                                className={`transition group ${!canEdit ? 'bg-slate-50/70 opacity-75' : 'hover:bg-amber-50/20'}`}
                                             >
                                                 {/* STT */}
                                                 <td className="py-2 px-2 text-center border-r border-slate-100">
@@ -404,8 +437,16 @@ export default function ClusterTargetConfigModal({
 
                                                 {/* SIÊU THỊ */}
                                                 <td className="py-2 px-3 border-r border-slate-100">
-                                                    <div className="font-black text-slate-900 text-xs truncate" title={row.storeName}>
-                                                        {shortName}
+                                                    <div className="flex items-center gap-1.5">
+                                                        <div className="font-black text-slate-900 text-xs truncate" title={row.storeName}>
+                                                            {shortName}
+                                                        </div>
+                                                        {!canEdit && (
+                                                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded bg-slate-100 text-slate-500 text-[9px] font-bold border border-slate-200 shrink-0" title="Chỉ đọc (Không thuộc siêu thị phụ trách của bạn)">
+                                                                <Lock className="w-2.5 h-2.5" />
+                                                                <span>Khóa</span>
+                                                            </span>
+                                                        )}
                                                     </div>
                                                     <div className="text-[10px] text-slate-400 truncate max-w-[220px]" title={row.storeName}>
                                                         {row.storeName}
@@ -428,13 +469,17 @@ export default function ClusterTargetConfigModal({
                                                         <input
                                                             type="number"
                                                             step="1"
+                                                            disabled={!canEdit}
                                                             value={item.targetRate || ''}
                                                             onChange={(e) => handleItemChange(row.storeName, 'targetRate', parseFloat(e.target.value) || 0)}
-                                                            className={`w-16 text-center px-1.5 py-1 bg-white border rounded-lg text-xs font-black outline-none ${isCustomRate
-                                                                ? 'border-amber-400 bg-amber-50 text-amber-900 ring-1 ring-amber-300'
-                                                                : 'border-slate-200 group-hover:border-amber-300 text-slate-800'
+                                                            className={`w-16 text-center px-1.5 py-1 rounded-lg text-xs font-black outline-none ${!canEdit
+                                                                ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed'
+                                                                : isCustomRate
+                                                                    ? 'border-amber-400 bg-amber-50 text-amber-900 ring-1 ring-amber-300'
+                                                                    : 'border-slate-200 group-hover:border-amber-300 text-slate-800 bg-white border'
                                                                 }`}
                                                             placeholder="100"
+                                                            title={!canEdit ? 'Chỉ quản lý phụ trách siêu thị này hoặc Admin mới có quyền điều chỉnh' : undefined}
                                                         />
                                                         <span className="text-[11px] font-bold text-slate-400">%</span>
                                                     </div>
@@ -445,10 +490,15 @@ export default function ClusterTargetConfigModal({
                                                     <input
                                                         type="number"
                                                         step="0.001"
+                                                        disabled={!canEdit}
                                                         value={item.targetOver || ''}
                                                         onChange={(e) => handleItemChange(row.storeName, 'targetOver', parseFloat(e.target.value) || 0)}
-                                                        className="w-full text-right px-2 py-1 bg-white border border-slate-200 group-hover:border-orange-300 focus:border-orange-500 rounded-lg text-xs font-black text-orange-900 outline-none"
+                                                        className={`w-full text-right px-2 py-1 rounded-lg text-xs font-black outline-none ${!canEdit
+                                                            ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed'
+                                                            : 'bg-white border border-slate-200 group-hover:border-orange-300 focus:border-orange-500 text-orange-900'
+                                                            }`}
                                                         placeholder="0.000"
+                                                        title={!canEdit ? 'Chỉ quản lý phụ trách siêu thị này hoặc Admin mới có quyền điều chỉnh' : undefined}
                                                     />
                                                 </td>
                                             </tr>

@@ -23,6 +23,10 @@ import {
 } from '../employee-performance/utils/performanceConfig';
 import { resolveCanonicalCampaign } from '../campaign-summary/utils/campaignSummaryStorage';
 import {
+    fetchCampaignOffsets,
+    type CampaignOffsetItem
+} from '../campaign-offset/services/campaignOffsetService';
+import {
     getStoreCampaignScoreConfig,
     getCampaignPoints,
     syncStoreCampaignScoresFromCloud
@@ -83,6 +87,8 @@ interface CampaignDetailRow {
     pointsWeight: number;        // Điểm chuẩn theo cấu hình
     target: number;             // Taget
     actual: number;             // L.Kế (Lũy kế)
+    rawActual?: number;         // L.Kế gốc trước cấn trừ
+    offsetAdjustment?: number;  // Số lượng cấn trừ (+ / -)
     remaining: number;          // C.LẠI (Còn lại)
     realCompletionRate: number; // %HT (Lũy kế thực tế / Target * 100)
     completionRate: number;     // %DK (Dự kiến hoàn thành %DKHT)
@@ -188,6 +194,7 @@ export default function EmployeeDetailReportPage() {
     const [revenueTargets, setRevenueTargets] = useState<Record<string, number>>({});
     const [campaignTargetsMap, setCampaignTargetsMap] = useState<Record<string, Record<string, number>>>({});
     const [sessions, setSessions] = useState<EmployeeDataSession[]>([]);
+    const [campaignOffsets, setCampaignOffsets] = useState<CampaignOffsetItem[]>([]);
 
     const [loading, setLoading] = useState<boolean>(true);
     const [isExporting, setIsExporting] = useState<boolean>(false);
@@ -245,19 +252,21 @@ export default function EmployeeDetailReportPage() {
     const loadAllData = async () => {
         setLoading(true);
         try {
-            const [storesRes, empsRes, dictRes, revTargetsRes, campTargetsRes, allSessions] = await Promise.all([
+            const [storesRes, empsRes, dictRes, revTargetsRes, campTargetsRes, allSessions, , offsetsRes] = await Promise.all([
                 fetchStores(),
                 fetchEmployees(),
                 fetchCampaignDictionary(),
                 fetchEmployeeRevenueTargets(selectedMonth, selectedYear),
                 fetchEmployeeCampaignTargets(selectedMonth, selectedYear),
                 syncAndFetchEmployeeDataSessions({ month: selectedMonth, year: selectedYear }),
-                syncStoreCampaignScoresFromCloud()
+                syncStoreCampaignScoresFromCloud(),
+                fetchCampaignOffsets(selectedStore, selectedMonth, selectedYear)
             ]);
 
             if (storesRes.success) setStores(storesRes.data);
             if (empsRes.success) setEmployees(empsRes.data);
             if (dictRes.success && dictRes.data) setCampaignDict(dictRes.data);
+            if (offsetsRes && offsetsRes.success && offsetsRes.data) setCampaignOffsets(offsetsRes.data);
 
             // Parse Revenue Targets
             const revMap: Record<string, number> = {};
@@ -701,20 +710,38 @@ export default function EmployeeDetailReportPage() {
                 }
             }
 
+            // Tính cấn trừ (1 đổi 1) nếu có trong kỳ
+            let offsetIn = 0;
+            let offsetOut = 0;
+            campaignOffsets.forEach(o => {
+                if (o.employee_id.trim() === empId) {
+                    const toKey = (o.to_campaign_key || '').trim();
+                    const fromKey = (o.from_campaign_key || '').trim();
+                    if (toKey === cKey || aliasKeys.includes(toKey)) {
+                        offsetIn += Number(o.offset_quantity) || 0;
+                    }
+                    if (fromKey === cKey || aliasKeys.includes(fromKey)) {
+                        offsetOut += Number(o.offset_quantity) || 0;
+                    }
+                }
+            });
+            const offsetAdjustment = offsetIn - offsetOut;
+            const finalActual = Math.max(0, actualVal + offsetAdjustment);
+
             // 3. %HT (Thực tế) và %DK (Dự kiến)
             let forecastRate = 0;
             let realRate = 0;
             if (targetVal > 0) {
-                const forecastVal = (actualVal / passed) * totalDays;
+                const forecastVal = (finalActual / passed) * totalDays;
                 forecastRate = Math.round((forecastVal / targetVal) * 100);
-                realRate = Math.round((actualVal / targetVal) * 100);
-            } else if (actualVal > 0) {
+                realRate = Math.round((finalActual / targetVal) * 100);
+            } else if (finalActual > 0) {
                 forecastRate = 100;
                 realRate = 100;
             }
 
-            // 4. C.LẠI: nếu thực tế đã hoàn thành mục tiêu (actualVal >= targetVal) -> 0, chưa đạt -> targetVal - actualVal (số dương)
-            const remaining = calculateRemainingTarget(targetVal, actualVal, 1);
+            // 4. C.LẠI: nếu thực tế đã hoàn thành mục tiêu (finalActual >= targetVal) -> 0, chưa đạt -> targetVal - finalActual (số dương)
+            const remaining = calculateRemainingTarget(targetVal, finalActual, 1);
 
             // 5. Điểm và +/-Điểm: Nếu %DK >= 100% -> Có trọn vẹn điểm, ngược lại 0 điểm
             const pointsWeight = getCampaignPoints(cKey, scoreConfig);
@@ -728,7 +755,9 @@ export default function EmployeeDetailReportPage() {
                 unit: group.unit,
                 pointsWeight: pointsWeight,
                 target: targetVal,
-                actual: actualVal,
+                actual: finalActual,
+                rawActual: actualVal,
+                offsetAdjustment: offsetAdjustment,
                 remaining: remaining,
                 realCompletionRate: realRate,
                 completionRate: forecastRate,
@@ -762,7 +791,7 @@ export default function EmployeeDetailReportPage() {
         });
 
         return rows;
-    }, [selectedEmployeeId, campaignTargetsMap, employeeLatestSessionRecord, effectivePassedDays, operatingConfig, campaignDict, scoreConfig]);
+    }, [selectedEmployeeId, campaignTargetsMap, employeeLatestSessionRecord, effectivePassedDays, operatingConfig, campaignDict, scoreConfig, campaignOffsets]);
 
     // 9. LỌC CÁC DÒNG THEO CHẾ ĐỘ & SẮP XẾP THEO CỘT (MẶC ĐỊNH %DK GIẢM DẦN)
     const filteredCampaignRows = useMemo(() => {
@@ -1920,7 +1949,25 @@ export default function EmployeeDetailReportPage() {
 
                                                     {/* 5. L.Kế */}
                                                     <td className="py-2.5 px-1 text-right font-mono font-black text-rose-600 text-[11.5px] border-r border-slate-100">
-                                                        {formatNumberVn(row.actual, 1)}
+                                                        <div className="flex items-center justify-end gap-1">
+                                                            <span>{formatNumberVn(row.actual, 1)}</span>
+                                                            {row.offsetAdjustment ? (
+                                                                <span
+                                                                    className={`text-[9.5px] px-1 py-0.2 rounded font-bold shrink-0 ${
+                                                                        row.offsetAdjustment > 0
+                                                                            ? 'bg-purple-100 text-purple-800 border border-purple-200'
+                                                                            : 'bg-amber-100 text-amber-800 border border-amber-200'
+                                                                    }`}
+                                                                    title={
+                                                                        row.offsetAdjustment > 0
+                                                                            ? `Gốc: ${row.rawActual ?? row.actual} • Cấn bù +${row.offsetAdjustment}`
+                                                                            : `Gốc: ${row.rawActual ?? row.actual} • Cấn trừ ${row.offsetAdjustment}`
+                                                                    }
+                                                                >
+                                                                    {row.offsetAdjustment > 0 ? `+${row.offsetAdjustment}` : row.offsetAdjustment}
+                                                                </span>
+                                                            ) : null}
+                                                        </div>
                                                     </td>
 
                                                     {/* 6. C.LẠI */}

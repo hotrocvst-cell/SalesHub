@@ -196,18 +196,35 @@ export default function CampaignSummaryTable({
                                     const val = row.campaign_rates[cat] ?? 0;
                                     const isAchieved = val >= 100;
                                     const isLow = val < 50;
+                                    const offsetQty = row.campaign_offsets?.[cat] || 0;
+                                    const tooltipText = offsetQty !== 0
+                                        ? `Dự kiến: ${val}% (Đã điều chỉnh cấn trừ: ${offsetQty > 0 ? `+${offsetQty}` : offsetQty} sp)`
+                                        : undefined;
 
                                     return (
                                         <td
                                             key={cat}
-                                            className={`py-2.5 px-2 text-center font-mono text-xs border-r border-slate-100 transition whitespace-nowrap ${isAchieved
+                                            title={tooltipText}
+                                            className={`py-2 px-1.5 text-center font-mono text-xs border-r border-slate-100 transition whitespace-nowrap ${isAchieved
                                                 ? 'bg-[#d1fae5] text-[#065f46] font-black'
                                                 : isLow
                                                     ? 'bg-[#ffe4e6] text-[#9f1239] font-black'
                                                     : 'bg-white text-slate-800 font-bold'
                                                 }`}
                                         >
-                                            {val}%
+                                            <div className="inline-flex items-center justify-center gap-1">
+                                                <span>{val}%</span>
+                                                {offsetQty > 0 && (
+                                                    <span className="text-[9px] px-1 py-0.2 rounded font-extrabold bg-purple-100 text-purple-800 border border-purple-200 leading-tight" title={`Được nhận cấn trừ +${offsetQty} sản phẩm`}>
+                                                        +{offsetQty}
+                                                    </span>
+                                                )}
+                                                {offsetQty < 0 && (
+                                                    <span className="text-[9px] px-1 py-0.2 rounded font-extrabold bg-amber-100 text-amber-800 border border-amber-200 leading-tight" title={`Đã cấn trừ sang ngành khác ${offsetQty} sản phẩm`}>
+                                                        {offsetQty}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </td>
                                     );
                                 })}

@@ -50,12 +50,15 @@ import ExcelJS from 'exceljs';
 import html2canvas from 'html2canvas';
 import { useExcelExportPermission } from '../../shared/hooks/useExcelExportPermission';
 import { calculate8KScale } from '../../shared/utils/exportImage';
+import { isGuestDemoStore, GUEST_DEMO_STORE } from '../../core/lib/guestDemoStoreService';
 
 export default function EmployeePerformanceReportPage() {
     const navigate = useNavigate();
     const { currentUser, canConfigure } = useAuth();
+    const isGuest = Boolean(currentUser?.is_guest);
+    const isAdmin = currentUser?.role === 'ADMIN';
     const { canExportExcel } = useExcelExportPermission('/bao-cao-hieu-qua-nhan-vien');
-    const canManage = !currentUser?.is_guest && (canConfigure || ['ADMIN', 'QUAN_LY', 'TRUONG_CA'].includes(currentUser?.role));
+    const canManage = !isGuest && (canConfigure || ['ADMIN', 'QUAN_LY', 'TRUONG_CA'].includes(currentUser?.role));
     const reportRef = useRef<HTMLDivElement>(null);
 
     const [stores, setStores] = useState<StoreItem[]>([]);
@@ -126,9 +129,13 @@ export default function EmployeePerformanceReportPage() {
             .then(() => refreshConfigs())
             .catch(() => { });
 
+        const targetStoreParam = isGuest
+            ? GUEST_DEMO_STORE
+            : (selectedStore === 'all' ? undefined : selectedStore);
+
         const [storesRes, empsRes, targetsRes] = await Promise.all([
             fetchStores(),
-            fetchEmployees(selectedStore === 'all' ? undefined : selectedStore),
+            fetchEmployees(targetStoreParam),
             fetchEmployeeRevenueTargets(selectedMonth, selectedYear)
         ]);
 
@@ -233,7 +240,21 @@ export default function EmployeePerformanceReportPage() {
         const passed = Math.max(1, operatingConfig.passedDays);
         const totalDays = Math.max(1, operatingConfig.operatingDays);
 
-        const rawList = employees.map(emp => {
+        const targetEmployees = employees.filter(emp => {
+            const empStore = emp.store_name || '';
+            const isDemo = isGuestDemoStore(empStore) || emp.employee_id?.trim().startsWith('NV838');
+
+            if (isGuest) return isDemo;
+            if (isDemo) return false;
+
+            if (selectedStore === 'all') {
+                if (isAdmin) return true;
+                return allowedStores.some(s => isStoreMatch(s.name, empStore, stores));
+            }
+            return isStoreMatch(empStore, selectedStore, stores);
+        });
+
+        const rawList = targetEmployees.map(emp => {
             const empId = (emp.employee_id || '').trim();
             const rev = revenueDataMap[empId] || revenueDataMap[emp.employee_id];
             const target = revenueTargets[empId] ?? revenueTargets[emp.employee_id] ?? 0;
@@ -332,7 +353,7 @@ export default function EmployeePerformanceReportPage() {
                 return b.forecast_completion_rate - a.forecast_completion_rate;
             });
         }
-    }, [employees, revenueDataMap, revenueTargets, workHoursMap, operatingConfig, topBotConfig, selectedStore]);
+    }, [employees, revenueDataMap, revenueTargets, workHoursMap, operatingConfig, topBotConfig, selectedStore, stores, isGuest, isAdmin, allowedStores]);
 
     // 3. TÍNH TỔNG KẾT BÁO CÁO (CHỈ TẬP TRUNG VINH DANH CHỈ SỐ CÁ NHÂN)
     const summary = useMemo<StorePerformanceSummary>(() => {

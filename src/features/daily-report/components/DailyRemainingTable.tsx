@@ -1,42 +1,80 @@
 import React from 'react';
 import { formatValue } from '../../../core/lib/formatters';
-import type { RemainingCampaignItem } from '../utils/dailyRemainingUtils';
+import type { RemainingCampaignItem, RemainingSortMode } from '../utils/dailyRemainingUtils';
 
 interface DailyRemainingTableProps {
     campaigns: RemainingCampaignItem[];
     showCompletedCampaigns: boolean;
     onToggleShowCompleted: (checked: boolean) => void;
     completedCount: number;
+    sortMode: RemainingSortMode;
+    onSortModeChange: (mode: RemainingSortMode) => void;
 }
 
 export default function DailyRemainingTable({
     campaigns,
     showCompletedCampaigns,
     onToggleShowCompleted,
-    completedCount
+    completedCount,
+    sortMode,
+    onSortModeChange
 }: DailyRemainingTableProps) {
     return (
         <div className="space-y-2.5">
             {/* Thanh tùy chọn & Chú giải màu sắc phân loại hiệu quả */}
             <div
-                className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-1 text-xs"
+                className="flex flex-col md:flex-row md:items-center justify-between gap-2.5 px-1 text-xs"
                 data-html2canvas-ignore="true"
                 data-export-ignore="true"
             >
-                <label className="inline-flex items-center gap-2 cursor-pointer select-none text-slate-700 font-medium">
-                    <input
-                        type="checkbox"
-                        checked={showCompletedCampaigns}
-                        onChange={(e) => onToggleShowCompleted(e.target.checked)}
-                        className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
-                    />
-                    <span>
-                        Hiện cả thi đua đã đạt tháng{' '}
-                        {completedCount > 0 && (
-                            <span className="font-bold text-emerald-700">({completedCount} mục)</span>
-                        )}
-                    </span>
-                </label>
+                <div className="flex flex-wrap items-center gap-2.5">
+                    {/* Toggle Sắp xếp 2 lựa chọn: Lũy kế vs Realtime */}
+                    <div className="inline-flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200 shadow-2xs">
+                        <span className="text-[11px] font-black text-slate-500 uppercase px-1.5 hidden sm:inline">
+                            Sắp xếp:
+                        </span>
+                        <button
+                            type="button"
+                            onClick={() => onSortModeChange('CUMULATIVE')}
+                            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs transition-all cursor-pointer ${
+                                sortMode === 'CUMULATIVE'
+                                    ? 'bg-amber-600 text-white shadow-xs font-black ring-1 ring-amber-700/50'
+                                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 font-bold'
+                            }`}
+                            title="Sắp xếp danh sách theo % Hoàn thành Lũy Kế Tháng giảm dần"
+                        >
+                            <span>📊 % HT Lũy kế</span>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => onSortModeChange('REALTIME')}
+                            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs transition-all cursor-pointer ${
+                                sortMode === 'REALTIME'
+                                    ? 'bg-blue-600 text-white shadow-xs font-black ring-1 ring-blue-700/50'
+                                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 font-bold'
+                            }`}
+                            title="Sắp xếp danh sách theo % Hoàn thành Realtime Ngày giảm dần"
+                        >
+                            <span>⚡ % HT Realtime</span>
+                        </button>
+                    </div>
+
+                    {/* Checkbox hiện cả thi đua đã đạt tháng */}
+                    <label className="inline-flex items-center gap-2 cursor-pointer select-none text-slate-700 font-medium">
+                        <input
+                            type="checkbox"
+                            checked={showCompletedCampaigns}
+                            onChange={(e) => onToggleShowCompleted(e.target.checked)}
+                            className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
+                        />
+                        <span className="text-xs">
+                            Hiện đã đạt tháng{' '}
+                            {completedCount > 0 && (
+                                <span className="font-bold text-emerald-700">({completedCount} mục)</span>
+                            )}
+                        </span>
+                    </label>
+                </div>
 
                 {/* Chú giải màu sắc trạng thái hiệu quả */}
                 <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-bold">
@@ -80,7 +118,11 @@ export default function DailyRemainingTable({
                                 colSpan={4}
                                 className="py-1.5 px-2 text-center bg-gradient-to-r from-amber-600 via-amber-700 to-amber-800 text-white font-black uppercase tracking-wider border-r border-amber-900/60 shadow-xs text-[11px]"
                             >
-                                📊 LŨY KẾ THÁNG
+                                📊 LŨY KẾ THÁNG {sortMode === 'CUMULATIVE' && (
+                                    <span className="ml-1 text-[9px] bg-amber-950/80 text-amber-200 px-1.5 py-0.5 rounded font-black tracking-normal">
+                                        ĐANG SẮP XẾP ↓
+                                    </span>
+                                )}
                             </th>
 
                             {/* Gom nhóm Realtime */}
@@ -88,7 +130,11 @@ export default function DailyRemainingTable({
                                 colSpan={4}
                                 className="py-1.5 px-2 text-center bg-gradient-to-r from-blue-700 via-indigo-700 to-blue-800 text-white font-black uppercase tracking-wider shadow-xs text-[11px]"
                             >
-                                ⚡ THỰC HIỆN REALTIME
+                                ⚡ THỰC HIỆN REALTIME {sortMode === 'REALTIME' && (
+                                    <span className="ml-1 text-[9px] bg-blue-950/80 text-blue-200 px-1.5 py-0.5 rounded font-black tracking-normal">
+                                        ĐANG SẮP XẾP ↓
+                                    </span>
+                                )}
                             </th>
                         </tr>
 
@@ -98,8 +144,12 @@ export default function DailyRemainingTable({
                             <th className="py-1.5 px-2 text-center bg-amber-100 text-amber-950 font-black">
                                 TARGET
                             </th>
-                            <th className="py-1.5 px-2 text-center bg-amber-100 text-amber-950 font-black">
-                                LŨY KẾ
+                            <th className={`py-1.5 px-2 text-center font-black ${
+                                sortMode === 'CUMULATIVE'
+                                    ? 'bg-amber-200 text-amber-950 ring-2 ring-inset ring-amber-600/60'
+                                    : 'bg-amber-100 text-amber-950'
+                            }`}>
+                                LŨY KẾ (% HT) {sortMode === 'CUMULATIVE' && '↓'}
                             </th>
                             <th className="py-1.5 px-2 text-center bg-amber-100 text-rose-800 font-black">
                                 CÒN LẠI
@@ -115,8 +165,12 @@ export default function DailyRemainingTable({
                             <th className="py-1.5 px-2 text-center bg-blue-100 text-blue-950 font-black">
                                 REALTIME
                             </th>
-                            <th className="py-1.5 px-2 text-center bg-blue-100 text-indigo-950 font-black w-20">
-                                % HT NGÀY
+                            <th className={`py-1.5 px-2 text-center font-black w-20 ${
+                                sortMode === 'REALTIME'
+                                    ? 'bg-blue-200 text-blue-950 ring-2 ring-inset ring-blue-600/60'
+                                    : 'bg-blue-100 text-indigo-950'
+                            }`}>
+                                % HT NGÀY {sortMode === 'REALTIME' && '↓'}
                             </th>
                             <th className="py-1.5 px-2 text-center bg-blue-100 text-rose-800 font-black">
                                 THIẾU
@@ -190,9 +244,22 @@ export default function DailyRemainingTable({
                                             {c.monthTarget > 0 ? formatValue(c.monthTarget) : '-'}
                                         </td>
 
-                                        {/* Lũy kế đã đạt (A) */}
-                                        <td className="p-2 text-center font-mono font-black text-slate-900">
-                                            {c.cumulativeActual > 0 ? formatValue(c.cumulativeActual) : '-'}
+                                        {/* Lũy kế đã đạt (A) kèm % HT Tháng */}
+                                        <td className={`p-2 text-center font-mono ${sortMode === 'CUMULATIVE' ? 'bg-amber-100/40' : ''}`}>
+                                            <div className="font-black text-slate-900">
+                                                {c.cumulativeActual > 0 ? formatValue(c.cumulativeActual) : '-'}
+                                            </div>
+                                            {c.monthTarget > 0 ? (
+                                                <div className={`text-[10px] font-black leading-tight mt-0.5 ${
+                                                    c.monthPctHT >= 100
+                                                        ? 'text-emerald-700 font-bold'
+                                                        : c.monthPctHT >= 80
+                                                            ? 'text-amber-700 font-bold'
+                                                            : 'text-slate-500 font-bold'
+                                                }`}>
+                                                    ({c.monthPctHT.toFixed(0)}%)
+                                                </div>
+                                            ) : null}
                                         </td>
 
                                         {/* Còn thiếu tháng (B) */}
@@ -220,7 +287,7 @@ export default function DailyRemainingTable({
                                         </td>
 
                                         {/* % HT Ngày */}
-                                        <td className="p-2 text-center font-mono">
+                                        <td className={`p-2 text-center font-mono ${sortMode === 'REALTIME' ? 'bg-blue-100/40' : ''}`}>
                                             <span
                                                 className={`px-2 py-0.5 rounded-md text-[11px] font-black inline-block shadow-2xs ${isPassed
                                                     ? 'bg-emerald-600 text-white ring-1 ring-emerald-700/40'

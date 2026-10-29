@@ -38,6 +38,8 @@ const CampaignDirectoryPage = lazy(() => import('./features/campaign-directory/C
 const InventoryBalancingPage = lazy(() => import('./features/inventory-balancing/InventoryBalancingPage'));
 const CashCounterPage = lazy(() => import('./features/cash-counter/CashCounterPage'));
 const GuestAccountsPage = lazy(() => import('./features/admin-config/GuestAccountsPage'));
+const CampaignOffsetPage = lazy(() => import('./features/campaign-offset/CampaignOffsetPage'));
+const SampleDataPage = lazy(() => import('./features/sample-data/SampleDataPage'));
 
 // Các trang Định danh, Đăng ký & Onboarding
 const LoginPage = lazy(() => import('./features/auth/LoginPage'));
@@ -157,6 +159,13 @@ export default function App() {
                                     </ProtectedRoute>
                                 } />
 
+                                {/* Quản Lý & Chốt Cấn Trừ Thi Đua Cuối Tháng */}
+                                <Route path="/can-tru-thi-dua" element={
+                                    <ProtectedRoute path="/can-tru-thi-dua">
+                                        <CampaignOffsetPage />
+                                    </ProtectedRoute>
+                                } />
+
                                 {/* Phân hệ Cập nhật & Quản lý */}
                                 <Route path="/trang-thai-du-lieu" element={
                                     <ProtectedRoute path="/trang-thai-du-lieu">
@@ -181,6 +190,11 @@ export default function App() {
                                 <Route path="/quan-ly-phien-nhan-vien" element={
                                     <ProtectedRoute path="/quan-ly-phien-nhan-vien">
                                         <EmployeeSessionManagerPage />
+                                    </ProtectedRoute>
+                                } />
+                                <Route path="/du-lieu-mau" element={
+                                    <ProtectedRoute path="/du-lieu-mau">
+                                        <SampleDataPage />
                                     </ProtectedRoute>
                                 } />
 

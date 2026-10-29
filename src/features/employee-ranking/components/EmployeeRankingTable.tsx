@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import type { EmployeeRankingRow, EmployeeRankingSummary } from '../types';
-import { ArrowUpDown, ArrowUp, ArrowDown, Trophy, Target, Award } from 'lucide-react';
+import { ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { cleanEmployeeName, getShortenedEmployeeName } from '../../../core/lib/formatters';
 
 export type SortField =
@@ -29,7 +29,7 @@ export default function EmployeeRankingTable({
     onSort,
     displayUnit
 }: Props) {
-    // Chiều rộng badge mã nhân viên tự động thích ứng theo mã dài nhất trong bảng để thẳng cột thẳng lề
+    // Chiều rộng badge mã nhân viên tự động thích ứng theo mã dài nhất trong bảng để đồng nhất cột
     const maxIdLength = useMemo(() => {
         if (!rows || rows.length === 0) return 6;
         return Math.max(6, ...rows.map(r => String(r.employee_id || '').trim().length));
@@ -88,13 +88,19 @@ export default function EmployeeRankingTable({
                             </th>
                             <th
                                 colSpan={2}
-                                className="py-2 px-2 bg-purple-700 text-white text-center"
+                                className="py-2 px-2 bg-purple-700 text-white text-center border-r border-purple-600"
                             >
                                 HIỆU QUẢ THI ĐUA
                             </th>
+                            <th
+                                colSpan={1}
+                                className="py-2 px-2 bg-emerald-700 text-white text-center"
+                            >
+                                SỨC KHỎE NV
+                            </th>
                         </tr>
 
-                        {/* Hàng 2: Chi tiết 6 cột con */}
+                        {/* Hàng 2: Chi tiết 7 cột con */}
                         <tr className="text-[9.5px] sm:text-[10px] font-black uppercase tracking-tight border-b border-slate-200">
                             {/* DTQĐ */}
                             <th
@@ -146,11 +152,19 @@ export default function EmployeeRankingTable({
                             {/* XẾP HẠNG THI ĐUA */}
                             <th
                                 onClick={() => onSort('EMULATION_RANK')}
-                                className="py-2 px-2 text-center bg-purple-100/80 text-purple-950 font-black w-24 cursor-pointer hover:bg-purple-200 transition select-none group"
+                                className="py-2 px-2 text-center bg-purple-100/80 text-purple-950 font-black border-r border-purple-200 w-24 cursor-pointer hover:bg-purple-200 transition select-none group"
                                 title="Thứ hạng và phân loại TOP / BOT theo tiến độ Thi đua"
                             >
                                 <span>XẾP HẠNG</span>
                                 {renderSortIcon('EMULATION_RANK')}
+                            </th>
+
+                            {/* XÉT CỨU / SỨC KHỎE */}
+                            <th
+                                className="py-2 px-2 text-center bg-emerald-50 text-emerald-950 font-black min-w-[125px] sm:w-36"
+                                title="Đánh giá sức khỏe nhân sự & kết quả xét cứu BOT"
+                            >
+                                <span>XÉT CỨU / SỨC KHỎE</span>
                             </th>
                         </tr>
                     </thead>
@@ -158,7 +172,7 @@ export default function EmployeeRankingTable({
                     <tbody className="divide-y divide-slate-100 font-bold text-slate-800 text-[11px] sm:text-xs">
                         {rows.length === 0 ? (
                             <tr>
-                                <td colSpan={8} className="py-8 text-center text-slate-400 italic font-medium">
+                                <td colSpan={9} className="py-8 text-center text-slate-400 italic font-medium">
                                     Chưa có dữ liệu xếp hạng nhân sự trong kỳ báo cáo này.
                                 </td>
                             </tr>
@@ -176,23 +190,24 @@ export default function EmployeeRankingTable({
                                             }`}
                                     >
                                         {/* STT */}
-                                        <td className="py-2 px-1.5 text-center border-r border-slate-100">
-                                            <span className="w-5 h-5 rounded-md bg-slate-100 text-slate-700 border border-slate-200 font-black text-[10px] inline-flex items-center justify-center shrink-0 shadow-2xs">
-                                                {idx + 1}
-                                            </span>
+                                        <td className="py-2 px-2 text-center text-slate-400 font-normal border-r border-slate-100">
+                                            {idx + 1}
                                         </td>
 
-                                        {/* TÊN NHÂN VIÊN */}
-                                        <td className="py-2.5 px-3 border-r border-slate-100 whitespace-nowrap">
-                                            <div className="flex items-center gap-2 whitespace-nowrap">
+                                        {/* NHÂN VIÊN (Gộp Mã NV badge + Tên rút gọn chuẩn Quy chuẩn 11) */}
+                                        <td className="py-2 px-2.5 border-r border-slate-100 text-left">
+                                            <div className="flex items-center gap-1.5 whitespace-nowrap">
                                                 <span
-                                                    style={{ minWidth: `${maxIdLength + 2.2}ch`, width: `${maxIdLength + 2.2}ch` }}
+                                                    style={{
+                                                        minWidth: `${maxIdLength + 2.2}ch`,
+                                                        width: `${maxIdLength + 2.2}ch`
+                                                    }}
                                                     className="font-mono font-bold text-xs px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-800 border border-blue-200 inline-block text-center leading-normal shrink-0"
                                                 >
                                                     {row.employee_id}
                                                 </span>
                                                 <span
-                                                    className="font-bold text-xs text-slate-900 group-hover:text-blue-700 transition"
+                                                    className="font-black text-slate-900 group-hover:text-blue-700 transition"
                                                     title={`Mã NV: ${row.employee_id} - ${cleanEmployeeName(row.full_name)}${row.job_title ? ` (${row.job_title})` : ''}`}
                                                 >
                                                     {getShortenedEmployeeName(row.full_name)}
@@ -257,7 +272,7 @@ export default function EmployeeRankingTable({
                                         </td>
 
                                         {/* XẾP HẠNG THI ĐUA (TOP / BOT) */}
-                                        <td className="py-2 px-2 text-center">
+                                        <td className="py-2 px-2 text-center border-r border-slate-100">
                                             <div className="flex items-center justify-center">
                                                 {isTopEmulation ? (
                                                     <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-purple-100 text-purple-900 border border-purple-300 shadow-2xs whitespace-nowrap">
@@ -270,6 +285,36 @@ export default function EmployeeRankingTable({
                                                 ) : (
                                                     <span className="font-black text-[11px] text-purple-950 font-mono">
                                                         #{row.emulation_rank}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </td>
+
+                                        {/* XÉT CỨU / SỨC KHỎE (CỘT CUỐI CÙNG) */}
+                                        <td className="py-2 px-2 text-center" title={row.rescue_detail || ''}>
+                                            <div className="flex items-center justify-center">
+                                                {row.badge_variant === 'safe' ? (
+                                                    <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-emerald-50 text-emerald-800 border border-emerald-200 whitespace-nowrap shadow-2xs">
+                                                        {row.rescue_label || 'An toàn'}
+                                                    </span>
+                                                ) : row.badge_variant === 'rescued_rev' ? (
+                                                    <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-teal-50 text-teal-800 border border-teal-300 whitespace-nowrap shadow-2xs flex items-center gap-1">
+                                                        <span>🛟</span>
+                                                        <span>{row.rescue_label || 'Cứu: DT'}</span>
+                                                    </span>
+                                                ) : row.badge_variant === 'rescued_emu' ? (
+                                                    <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-purple-50 text-purple-800 border border-purple-300 whitespace-nowrap shadow-2xs flex items-center gap-1">
+                                                        <span>🛟</span>
+                                                        <span>{row.rescue_label || 'Cứu: TĐ'}</span>
+                                                    </span>
+                                                ) : row.badge_variant === 'thai_san' ? (
+                                                    <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-pink-50 text-pink-700 border border-pink-300 whitespace-nowrap shadow-2xs flex items-center gap-1">
+                                                        <span>🤰</span>
+                                                        <span>{row.rescue_label || 'Thai sản'}</span>
+                                                    </span>
+                                                ) : (
+                                                    <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-rose-100 text-rose-800 border border-rose-300 whitespace-nowrap shadow-2xs">
+                                                        {row.rescue_label || '🚨 BOT'}
                                                     </span>
                                                 )}
                                             </div>
@@ -316,10 +361,17 @@ export default function EmployeeRankingTable({
                                 </td>
 
                                 {/* Phân loại Thi đua */}
-                                <td className="py-3 px-2 text-center text-slate-300 text-[10.5px]">
+                                <td className="py-3 px-2 text-center text-slate-300 border-r border-slate-800 text-[10.5px]">
                                     <span className="text-purple-300 font-bold">{summary.topEmulationCount} TOP</span>
                                     <span className="text-slate-500 mx-1">•</span>
                                     <span className="text-rose-400 font-bold">{summary.botEmulationCount} BOT</span>
+                                </td>
+
+                                {/* Tổng kết Xét cứu & Sức khỏe */}
+                                <td className="py-3 px-2 text-center text-slate-300 text-[10.5px]">
+                                    <span className="text-teal-300 font-bold">{summary.rescuedCount ?? 0} CỨU</span>
+                                    <span className="text-slate-500 mx-1">•</span>
+                                    <span className="text-rose-400 font-bold">{summary.botWarningCount ?? 0} BOT</span>
                                 </td>
                             </tr>
                         </tfoot>

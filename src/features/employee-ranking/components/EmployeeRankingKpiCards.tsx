@@ -1,5 +1,5 @@
 import type { EmployeeRankingSummary } from '../types';
-import { Coins, Target, Award, Users } from 'lucide-react';
+import { Coins, Target, Award, ShieldCheck } from 'lucide-react';
 
 interface Props {
     summary: EmployeeRankingSummary;
@@ -80,21 +80,25 @@ export default function EmployeeRankingKpiCards({ summary, displayUnit }: Props)
                 </div>
             </div>
 
-            {/* THẺ 4: QUAN SÁT TOP / BOT */}
+            {/* THẺ 4: SỨC KHỎE NHÂN SỰ & XÉT CỨU */}
             <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-emerald-100 shadow-2xs border-l-4 border-l-emerald-600 flex items-center justify-between">
                 <div className="min-w-0">
                     <div className="text-[10.5px] font-bold text-emerald-800 uppercase tracking-wider truncate">
-                        Tổng Nhân Sự
+                        Sức Khỏe & Cứu BOT
                     </div>
-                    <div className="text-lg sm:text-xl font-black text-slate-900 mt-0.5 tracking-tight font-avo">
-                        {summary.totalEmployees} <span className="text-xs font-bold text-slate-500">nhân sự</span>
+                    <div className="text-lg sm:text-xl font-black text-slate-900 mt-0.5 tracking-tight font-avo flex items-center gap-2">
+                        <span className="text-teal-600 font-black">{summary.rescuedCount ?? 0}</span>
+                        <span className="text-xs text-slate-400 font-medium">cứu</span>
+                        <span className="text-slate-300 font-normal">/</span>
+                        <span className="text-rose-600 font-black">{summary.botWarningCount ?? 0}</span>
+                        <span className="text-xs text-slate-400 font-medium">BOT</span>
                     </div>
                     <div className="text-[10.5px] text-slate-500 font-medium mt-0.5 truncate">
-                        Phân loại: <b className="text-emerald-700">{summary.topRevenueCount} TOP</b> • <b className="text-rose-600">{summary.botRevenueCount} BOT</b>
+                        An toàn: <b className="text-emerald-700 font-bold">{summary.safeCount ?? (summary.totalEmployees - (summary.botWarningCount ?? 0))} NV</b>
                     </div>
                 </div>
                 <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-700 shrink-0 shadow-2xs">
-                    <Users className="w-5 h-5 stroke-[2.2]" />
+                    <ShieldCheck className="w-5 h-5 stroke-[2.2]" />
                 </div>
             </div>
         </div>

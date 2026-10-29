@@ -6,6 +6,8 @@ export interface EmployeeCampaignProgressDetail {
     storeName: string;
     target: number;
     actual: number;
+    rawActual?: number;
+    offsetAdjustment?: number;
     remaining: number;
     completionRate: number; // %HT thực tế hiện tại
     forecastRate: number;   // %DKHT dự kiến hoàn thành

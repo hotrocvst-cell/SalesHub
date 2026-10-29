@@ -21,9 +21,16 @@ export function normalizeSearchStr(str: string): string {
 function getCellValueAsString(value: unknown): string {
     if (value === null || value === undefined) return '';
     if (typeof value === 'object') {
-        const obj = value as { text?: string; result?: string | number };
+        const obj = value as { 
+            text?: string; 
+            result?: string | number; 
+            richText?: Array<{ text: string }> 
+        };
         if (obj.text !== undefined) return String(obj.text).trim();
         if (obj.result !== undefined) return String(obj.result).trim();
+        if (Array.isArray(obj.richText)) {
+            return obj.richText.map(t => t.text).join('').trim();
+        }
     }
     return String(value).trim();
 }
@@ -35,10 +42,23 @@ function getCellValueAsNumber(value: unknown): number {
     if (value === null || value === undefined) return 0;
     if (typeof value === 'number') return isNaN(value) ? 0 : value;
     if (typeof value === 'object') {
-        const obj = value as { result?: number; text?: string };
+        const obj = value as { 
+            result?: number | string; 
+            text?: string;
+            richText?: Array<{ text: string }> 
+        };
         if (typeof obj.result === 'number') return isNaN(obj.result) ? 0 : obj.result;
+        if (obj.result !== undefined) {
+            const parsed = parseFloat(String(obj.result).replace(/,/g, ''));
+            if (!isNaN(parsed)) return parsed;
+        }
         if (obj.text) {
             const parsed = parseFloat(String(obj.text).replace(/,/g, ''));
+            return isNaN(parsed) ? 0 : parsed;
+        }
+        if (Array.isArray(obj.richText)) {
+            const combined = obj.richText.map(t => t.text).join('');
+            const parsed = parseFloat(combined.replace(/,/g, ''));
             return isNaN(parsed) ? 0 : parsed;
         }
     }
@@ -367,7 +387,7 @@ export async function exportRebalanceToExcel(
             ? m.source_stores.map(s => `${s.store_name} (${s.available_qty})`).join('; ')
             : 'Chưa tìm thấy nguồn có tồn >= 2';
 
-        const vel = hasSales ? getProductSalesVelocity(salesVelocityMap!, m.product_code) : null;
+        const vel = hasSales ? getProductSalesVelocity(salesVelocityMap!, m.product_code, m.product_name) : null;
         const row = ws1.getRow(rowIndex1++);
 
         if (hasSales) {
@@ -483,7 +503,7 @@ export async function exportRebalanceToExcel(
     let stt = 1;
     groupedByStore.forEach(g => {
         g.items.forEach(item => {
-            const vel = hasSales ? getProductSalesVelocity(salesVelocityMap!, item.product_code) : null;
+            const vel = hasSales ? getProductSalesVelocity(salesVelocityMap!, item.product_code, item.product_name) : null;
             const row = ws2.getRow(rowIndex2++);
             if (hasSales) {
                 row.values = [
@@ -679,35 +699,94 @@ export interface ParseSalesVelocityResult {
 }
 
 /**
- * Tìm kiếm thông tin sức bán của sản phẩm theo mã sản phẩm (hỗ trợ mã chuẩn và mã không/có số 0 đầu chuỗi)
+ * Tìm kiếm thông tin sức bán của sản phẩm theo mã sản phẩm hoặc tên sản phẩm
+ * Hỗ trợ đa dạng định dạng:
+ * - Mã gốc (đã trim khoảng trắng & bỏ đuôi thập phân .0)
+ * - Mã không có số 0 ở đầu (e.g. 131491005519)
+ * - Mã có 1 hoặc 2 số 0 ở đầu (e.g. 0131491005519)
+ * - Mã chuẩn 13 chữ số MWG (EAN-13 padding)
+ * - So khớp dự phòng theo tên sản phẩm chuẩn hóa nếu mã sp ở 2 file khác chuẩn
  */
 export function getProductSalesVelocity(
     salesMap: Record<string, ProductSalesVelocity> | undefined,
-    productCode: string
+    productCode: string,
+    productName?: string
 ): ProductSalesVelocity | null {
-    if (!salesMap || !productCode) return null;
-    const clean = String(productCode).trim();
-    if (salesMap[clean]) return salesMap[clean];
+    if (!salesMap || (!productCode && !productName)) return null;
 
-    // Đối chiếu không có số 0 ở đầu
-    const noLeadingZeros = clean.replace(/^0+/, '');
-    if (noLeadingZeros && salesMap[noLeadingZeros]) return salesMap[noLeadingZeros];
+    // 1. So khớp theo mã sản phẩm
+    const rawCode = String(productCode || '').replace(/\u00A0/g, ' ').trim();
+    const clean = rawCode.replace(/\.0+$/, '');
 
-    // Đối chiếu có 1 số 0 ở đầu
-    const withZero = '0' + noLeadingZeros;
-    if (salesMap[withZero]) return salesMap[withZero];
+    if (clean) {
+        // Direct match
+        if (salesMap[clean]) return salesMap[clean];
+
+        // Case-insensitive match
+        const lower = clean.toLowerCase();
+        if (salesMap[lower]) return salesMap[lower];
+
+        // Match không có số 0 ở đầu
+        const noZeros = clean.replace(/^0+/, '');
+        if (noZeros) {
+            if (salesMap[noZeros]) return salesMap[noZeros];
+            if (salesMap['0' + noZeros]) return salesMap['0' + noZeros];
+            if (salesMap['00' + noZeros]) return salesMap['00' + noZeros];
+            
+            // Chuẩn 13 ký tự EAN-13
+            if (noZeros.length <= 13) {
+                const padded13 = noZeros.padStart(13, '0');
+                if (salesMap[padded13]) return salesMap[padded13];
+            }
+
+            // Quét tìm trong keys nếu key loại bỏ số 0 trùng với noZeros
+            for (const key of Object.keys(salesMap)) {
+                if (key.startsWith('__')) continue;
+                const kNoZeros = key.replace(/^0+/, '').replace(/\.0+$/, '');
+                if (kNoZeros === noZeros) {
+                    return salesMap[key];
+                }
+            }
+        }
+    }
+
+    // 2. So khớp dự phòng theo tên sản phẩm chuẩn hóa nếu có
+    if (productName) {
+        const normTargetName = normalizeSearchStr(productName);
+        if (normTargetName) {
+            // Kiểm tra cache tra cứu theo tên nếu có
+            const byNameMap = (salesMap as Record<string, unknown>).__byNameMap as Record<string, ProductSalesVelocity> | undefined;
+            if (byNameMap && byNameMap[normTargetName]) {
+                return byNameMap[normTargetName];
+            }
+
+            for (const key of Object.keys(salesMap)) {
+                if (key.startsWith('__')) continue;
+                const item = salesMap[key];
+                if (item && item.product_name) {
+                    const normItemName = normalizeSearchStr(item.product_name);
+                    if (normItemName === normTargetName) {
+                        return item;
+                    }
+                }
+            }
+        }
+    }
 
     return null;
 }
 
 /**
  * Đọc file Excel phân tích sức bán sản phẩm
- * Quy tắc tính sức bán:
- * - Cột AF (col 32): Mã sản phẩm
- * - Cột AG (col 33): Tên sản phẩm
- * - Cột AJ (col 36): Số lượng (tính số tổng theo cột AJ)
- * - Cột N (col 14): 'Đã xuất'
- * - Cột AS (col 45): 'Chưa trả'
+ * Quy tắc bóc tách sức bán:
+ * - Mặc định chuẩn MWG ERP export:
+ *   + Cột N (col 14): 'Đã xuất' (Trạng thái xuất)
+ *   + Cột AF (col 32): Mã sản phẩm
+ *   + Cột AG (col 33): Tên sản phẩm
+ *   + Cột AJ (col 36): Số lượng (tính số tổng theo cột AJ)
+ *   + Cột AS (col 45): 'Chưa trả' (hoặc chưa nhập trả / rỗng)
+ * - Tự động quét 10 dòng đầu để nhận diện dòng tiêu đề và vị trí cột thông minh
+ * - Đảm bảo không bị ghi đè nhầm cột Số lượng hoặc Mã sản phẩm bởi các cột phụ
  */
 export async function parseSalesVelocityExcel(file: File): Promise<ParseSalesVelocityResult> {
     const arrayBuffer = await file.arrayBuffer();
@@ -725,7 +804,7 @@ export async function parseSalesVelocityExcel(file: File): Promise<ParseSalesVel
         throw new Error('File Excel rỗng hoặc không có dữ liệu!');
     }
 
-    // Tự động kiểm tra vị trí cột trong header (mặc định theo thứ tự chuẩn AF=32, AG=33, AJ=36, N=14, AS=45)
+    // Vị trí cột mặc định chuẩn MWG: AF=32, AG=33, AJ=36, N=14, AS=45
     let colExport = 14;   // Cột N: Trạng thái xuất
     let colCode = 32;     // Cột AF: Mã sản phẩm
     let colName = 33;     // Cột AG: Tên sản phẩm
@@ -733,34 +812,99 @@ export async function parseSalesVelocityExcel(file: File): Promise<ParseSalesVel
     let colReturn = 45;   // Cột AS: Tình trạng nhập trả
 
     let headerRow = 1;
-    // Quét 5 dòng đầu để xác định chính xác dòng tiêu đề nếu file có header lùi
-    for (let r = 1; r <= Math.min(5, worksheet.rowCount); r++) {
+    let bestScore = -1;
+
+    // Quét tối đa 10 dòng đầu để tìm dòng tiêu đề chính xác nhất
+    const maxScanRows = Math.min(10, worksheet.rowCount);
+    for (let r = 1; r <= maxScanRows; r++) {
         const row = worksheet.getRow(r);
-        let foundCode = false;
-        let foundExport = false;
+        let rowScore = 0;
+        let cExport = -1;
+        let cCode = -1;
+        let cName = -1;
+        let cQty = -1;
+        let cReturn = -1;
+
         row.eachCell((cell, colNumber) => {
-            const val = normalizeSearchStr(getCellValueAsString(cell.value));
-            if (val.includes('ma san pham') || val.includes('ma sp')) {
-                colCode = colNumber;
-                foundCode = true;
-            } else if (val.includes('ten san pham') || val.includes('ten sp')) {
-                colName = colNumber;
-            } else if (val === 'so luong' || val.includes('so luong')) {
-                colQty = colNumber;
-            } else if (val.includes('trang thai xuat')) {
-                colExport = colNumber;
-                foundExport = true;
-            } else if (val.includes('nhap tra') || val.includes('tinh trang nhap tra')) {
-                colReturn = colNumber;
+            const rawVal = getCellValueAsString(cell.value);
+            const norm = normalizeSearchStr(rawVal);
+            if (!norm) return;
+
+            // Mã sản phẩm: Ưu tiên tuyệt đối exact 'ma san pham' hoặc 'ma sp'
+            const isInvalidCodeCol = norm.includes('nhom') || norm.includes('nganh') || norm.includes('model') || 
+                                     norm.includes('cha') || norm.includes('thay the') || norm.includes('don hang') || 
+                                     norm.includes('kho') || norm.includes('sieu thi') || norm.includes('khach hang');
+
+            if (!isInvalidCodeCol) {
+                if (norm === 'ma san pham' || norm === 'ma sp' || norm === 'masp') {
+                    cCode = colNumber;
+                    rowScore += (colNumber === 32 ? 35 : 25);
+                } else if (norm.includes('ma san pham') || norm.includes('ma sp')) {
+                    if (cCode === -1) {
+                        cCode = colNumber;
+                        rowScore += 15;
+                    }
+                }
+            }
+
+            // Tên sản phẩm: Ưu tiên exact 'ten san pham' hoặc 'ten sp'
+            const isInvalidNameCol = norm.includes('nhom') || norm.includes('nganh') || norm.includes('cong ty') || 
+                                     norm.includes('sieu thi') || norm.includes('khach hang');
+            if (!isInvalidNameCol) {
+                if (norm === 'ten san pham' || norm === 'ten sp' || norm === 'tensp') {
+                    cName = colNumber;
+                    rowScore += (colNumber === 33 ? 30 : 20);
+                } else if (norm.includes('ten san pham') || norm.includes('ten sp')) {
+                    if (cName === -1) {
+                        cName = colNumber;
+                        rowScore += 10;
+                    }
+                }
+            }
+
+            // Số lượng: Ưu tiên exact 'so luong' hoặc 'sl' (tránh Số lượng trả, Số lượng tồn, Số lượng hủy)
+            const isInvalidQtyCol = norm.includes('tra') || norm.includes('doi') || norm.includes('ton') || 
+                                    norm.includes('huy') || norm.includes('loi') || norm.includes('qua') || norm.includes('khuyen mai');
+            if (!isInvalidQtyCol) {
+                if (norm === 'so luong' || norm === 'sl' || norm === 'soluong') {
+                    cQty = colNumber;
+                    rowScore += (colNumber === 36 ? 35 : 20);
+                } else if (norm.includes('so luong') || norm.includes('sl ban') || norm.includes('sl xuat')) {
+                    if (cQty === -1) {
+                        cQty = colNumber;
+                        rowScore += 10;
+                    }
+                }
+            }
+
+            // Trạng thái xuất
+            if (norm.includes('trang thai xuat') || norm.includes('tinh trang xuat') || norm.includes('hinh thuc xuat') || norm === 'trang thai') {
+                cExport = colNumber;
+                rowScore += 15;
+            }
+
+            // Tình trạng nhập trả
+            if (norm.includes('nhap tra') || norm.includes('tra hang') || norm.includes('tinh trang tra') || norm.includes('trang thai tra')) {
+                cReturn = colNumber;
+                rowScore += 15;
             }
         });
-        if (foundCode || foundExport) {
+
+        if (rowScore > bestScore) {
+            bestScore = rowScore;
             headerRow = r;
-            break;
+            if (cExport !== -1) colExport = cExport;
+            if (cCode !== -1) colCode = cCode;
+            if (cName !== -1) colName = cName;
+            if (cQty !== -1) colQty = cQty;
+            if (cReturn !== -1) colReturn = cReturn;
         }
     }
 
+    console.log(`[SalesHub] File Sức Bán: Header dòng ${headerRow} (score: ${bestScore}). Vị trí cột: Code=${colCode}, Name=${colName}, Qty=${colQty}, Export=${colExport}, Return=${colReturn}`);
+
     const salesMap: Record<string, ProductSalesVelocity> = {};
+    const byNameMap: Record<string, ProductSalesVelocity> = {};
     let totalRecords = 0;
     let matchedRecords = 0;
     let totalSalesQty = 0;
@@ -775,39 +919,76 @@ export async function parseSalesVelocityExcel(file: File): Promise<ParseSalesVel
         const qtyRaw = getCellValueAsNumber(row.getCell(colQty).value);
         const statusReturn = getCellValueAsString(row.getCell(colReturn).value);
 
-        if (!productCodeRaw) continue;
+        const cleanCode = String(productCodeRaw).replace(/\u00A0/g, ' ').trim().replace(/\.0+$/, '');
+        if (!cleanCode || cleanCode === 'Mã sản phẩm' || cleanCode === 'Mã SP') continue;
 
-        // Điều kiện: Cột N='Đã xuất' & Cột AS='Chưa trả'
+        // 1. Kiểm tra trạng thái xuất: Cột N='Đã xuất' (nếu có cột xuất)
         const normExport = normalizeSearchStr(statusExport);
-        const isExported = normExport === 'da xuat' || normExport.includes('da xuat');
+        const isExported = !normExport || 
+                           normExport === 'da xuat' || 
+                           normExport.includes('da xuat') || 
+                           normExport.includes('xuat ban') || 
+                           normExport.includes('xuat kho') || 
+                           normExport.includes('hoan tat') || 
+                           normExport.includes('da giao') ||
+                           normExport === '1';
 
+        // 2. Kiểm tra tình trạng nhập trả: Cột AS='Chưa trả' (loại trừ nếu đã trả/nhập trả)
         const normReturn = normalizeSearchStr(statusReturn);
-        const isNotReturned = normReturn === 'chua tra' || normReturn.includes('chua tra');
+        const isReturned = normReturn.includes('da tra') || 
+                           normReturn.includes('da nhap tra') || 
+                           normReturn.includes('tra hang');
+        const isNotReturned = !isReturned;
 
         if (isExported && isNotReturned) {
             matchedRecords++;
             const qty = Math.max(0, qtyRaw);
             totalSalesQty += qty;
 
-            const cleanCode = productCodeRaw.trim();
-            if (!salesMap[cleanCode]) {
-                salesMap[cleanCode] = {
+            let targetItem = salesMap[cleanCode];
+            if (!targetItem) {
+                targetItem = {
                     product_code: cleanCode,
                     product_name: productName || '',
                     sales_qty: qty,
                     order_count: 1
                 };
+                salesMap[cleanCode] = targetItem;
             } else {
-                salesMap[cleanCode].sales_qty += qty;
-                salesMap[cleanCode].order_count = (salesMap[cleanCode].order_count || 1) + 1;
-                if (!salesMap[cleanCode].product_name && productName) {
-                    salesMap[cleanCode].product_name = productName;
+                targetItem.sales_qty += qty;
+                targetItem.order_count = (targetItem.order_count || 1) + 1;
+                if (!targetItem.product_name && productName) {
+                    targetItem.product_name = productName;
+                }
+            }
+
+            // Đồng thời tạo các alias key để tra cứu O(1) tức thì:
+            const noZeros = cleanCode.replace(/^0+/, '');
+            if (noZeros && noZeros !== cleanCode && !salesMap[noZeros]) {
+                salesMap[noZeros] = targetItem;
+            }
+            if (noZeros && noZeros.length <= 13) {
+                const p13 = noZeros.padStart(13, '0');
+                if (!salesMap[p13]) salesMap[p13] = targetItem;
+            }
+
+            // Cache tra cứu theo tên sản phẩm chuẩn hóa
+            const cleanName = (productName || targetItem.product_name || '').trim();
+            if (cleanName) {
+                const normName = normalizeSearchStr(cleanName);
+                if (normName && !byNameMap[normName]) {
+                    byNameMap[normName] = targetItem;
                 }
             }
         }
     }
 
-    const uniqueProductsCount = Object.keys(salesMap).length;
+    // Đính kèm từ điển tra cứu theo tên vào salesMap
+    (salesMap as unknown as { __byNameMap?: Record<string, ProductSalesVelocity> }).__byNameMap = byNameMap;
+
+    const uniqueProductsCount = Object.values(salesMap).filter(v => typeof v === 'object' && v && 'product_code' in v).length;
+
+    console.log(`[SalesHub] Đã đọc ${totalRecords} dòng, khớp ${matchedRecords} dòng. Tổng sức bán: ${totalSalesQty} máy cho ${uniqueProductsCount} mã SP.`);
 
     return {
         salesMap,

@@ -20,11 +20,16 @@ import {
     formatValue,
     isStoreMatch
 } from '../../../core/lib/formatters';
-import { isEmployeeInStore } from '../../campaign-summary/utils/campaignSummaryStorage';
+import {
+    isEmployeeInStore,
+    resolveCanonicalCampaign,
+    normalizeCampaignToken
+} from '../../campaign-summary/utils/campaignSummaryStorage';
 import type { CampaignItem, RevenueItem } from '../utils/dailyReportParsers';
 import {
     getCampaignTokens,
-    type RemainingCampaignItem
+    type RemainingCampaignItem,
+    type RemainingSortMode
 } from '../utils/dailyRemainingUtils';
 import type { AssessmentTemplate } from '../../../shared/components/report/ReportAssessmentModal';
 
@@ -66,6 +71,22 @@ export function useDailyRemainingData({
     }, [totalDaysInMonth, initialCurrentDay]);
 
     const [showCompletedCampaigns, setShowCompletedCampaigns] = useState<boolean>(false);
+    const [sortMode, setSortMode] = useState<RemainingSortMode>(() => {
+        try {
+            return (localStorage.getItem('saleshub_remaining_sort_mode') as RemainingSortMode) || 'REALTIME';
+        } catch {
+            return 'REALTIME';
+        }
+    });
+
+    const handleSetSortMode = (mode: RemainingSortMode) => {
+        setSortMode(mode);
+        try {
+            localStorage.setItem('saleshub_remaining_sort_mode', mode);
+        } catch {
+            // ignore
+        }
+    };
     const [stores, setStores] = useState<StoreItem[]>([]);
     const [employees, setEmployees] = useState<EmployeeItem[]>([]);
     const [sessions, setSessions] = useState<EmployeeDataSession[]>([]);
@@ -203,6 +224,16 @@ export function useDailyRemainingData({
         };
     }, [matchedBusinessRecords, activeSessions, selectedMonth, selectedYear, selectedStore]);
 
+    // Helper trích xuất canonicalKey chuẩn cho từng hạng mục thi đua
+    const getCanonicalId = (rawKey: string): string => {
+        if (!rawKey) return '';
+        const resolved = resolveCanonicalCampaign(rawKey, campaignsDict);
+        if (resolved?.canonicalKey) return resolved.canonicalKey;
+        const label = getCampaignLabel(rawKey, campaignsDict);
+        if (label) return label;
+        return rawKey.trim();
+    };
+
     // Tổng hợp [canonicalKey] -> { monthTarget, cumulativeActual }
     const storeCumulativeMap = useMemo(() => {
         const canonicalBuckets = new Map<string, {
@@ -222,17 +253,22 @@ export function useDailyRemainingData({
                     const aVal = Number(emu?.actual) || 0;
                     if (tVal <= 0 && aVal <= 0) return;
 
+                    const canonicalId = getCanonicalId(rawKey);
                     const tokens = getCampaignTokens(rawKey, campaignsDict);
                     let matchedKey: string | null = null;
-                    for (const [bKey, b] of canonicalBuckets.entries()) {
-                        if (tokens.some(t => b.allTokens.has(t))) {
-                            matchedKey = bKey;
-                            break;
+                    if (canonicalBuckets.has(canonicalId)) {
+                        matchedKey = canonicalId;
+                    } else {
+                        for (const [bKey, b] of canonicalBuckets.entries()) {
+                            if (tokens.some(t => b.allTokens.has(t))) {
+                                matchedKey = bKey;
+                                break;
+                            }
                         }
                     }
 
                     if (!matchedKey) {
-                        matchedKey = getCampaignLabel(rawKey, campaignsDict) || rawKey;
+                        matchedKey = canonicalId;
                         canonicalBuckets.set(matchedKey, {
                             monthTarget: 0,
                             cumulativeActual: 0,
@@ -243,6 +279,7 @@ export function useDailyRemainingData({
 
                     const b = canonicalBuckets.get(matchedKey)!;
                     tokens.forEach(t => b.allTokens.add(t));
+                    b.allTokens.add(normalizeCampaignToken(matchedKey));
                     b.monthTarget += tVal;
                     b.cumulativeActual += aVal;
                     b.source = 'BUSINESS_RECORD';
@@ -258,12 +295,17 @@ export function useDailyRemainingData({
                     const valNum = Number(val) || 0;
                     if (valNum <= 0) return;
 
+                    const canonicalId = getCanonicalId(rawKey);
                     const tokens = getCampaignTokens(rawKey, campaignsDict);
                     let matchedKey: string | null = null;
-                    for (const [bKey, b] of canonicalBuckets.entries()) {
-                        if (tokens.some(t => b.allTokens.has(t))) {
-                            matchedKey = bKey;
-                            break;
+                    if (canonicalBuckets.has(canonicalId)) {
+                        matchedKey = canonicalId;
+                    } else {
+                        for (const [bKey, b] of canonicalBuckets.entries()) {
+                            if (tokens.some(t => b.allTokens.has(t))) {
+                                matchedKey = bKey;
+                                break;
+                            }
                         }
                     }
 
@@ -272,7 +314,7 @@ export function useDailyRemainingData({
                     }
 
                     if (!matchedKey) {
-                        matchedKey = getCampaignLabel(rawKey, campaignsDict) || rawKey;
+                        matchedKey = canonicalId;
                         canonicalBuckets.set(matchedKey, {
                             monthTarget: 0,
                             cumulativeActual: 0,
@@ -283,6 +325,7 @@ export function useDailyRemainingData({
 
                     const b = canonicalBuckets.get(matchedKey)!;
                     tokens.forEach(t => b.allTokens.add(t));
+                    b.allTokens.add(normalizeCampaignToken(matchedKey));
                     b.cumulativeActual += valNum;
                 });
             });
@@ -301,12 +344,17 @@ export function useDailyRemainingData({
                     const tVal = Number(targetVal) || 0;
                     if (tVal <= 0) return;
 
+                    const canonicalId = getCanonicalId(rawKey);
                     const tokens = getCampaignTokens(rawKey, campaignsDict);
                     let matchedKey: string | null = null;
-                    for (const [bKey, b] of canonicalBuckets.entries()) {
-                        if (tokens.some(t => b.allTokens.has(t))) {
-                            matchedKey = bKey;
-                            break;
+                    if (canonicalBuckets.has(canonicalId)) {
+                        matchedKey = canonicalId;
+                    } else {
+                        for (const [bKey, b] of canonicalBuckets.entries()) {
+                            if (tokens.some(t => b.allTokens.has(t))) {
+                                matchedKey = bKey;
+                                break;
+                            }
                         }
                     }
 
@@ -315,7 +363,7 @@ export function useDailyRemainingData({
                     }
 
                     if (!matchedKey) {
-                        matchedKey = getCampaignLabel(rawKey, campaignsDict) || rawKey;
+                        matchedKey = canonicalId;
                         canonicalBuckets.set(matchedKey, {
                             monthTarget: 0,
                             cumulativeActual: 0,
@@ -326,18 +374,23 @@ export function useDailyRemainingData({
 
                     const b = canonicalBuckets.get(matchedKey)!;
                     tokens.forEach(t => b.allTokens.add(t));
+                    b.allTokens.add(normalizeCampaignToken(matchedKey));
                     b.monthTarget += tVal;
                 });
             }
         });
 
         // Token lookup map
-        const tokenMap = new Map<string, { monthTarget: number; cumulativeActual: number }>();
-        for (const bucket of canonicalBuckets.values()) {
+        const tokenMap = new Map<string, { monthTarget: number; cumulativeActual: number; canonicalKey: string }>();
+        for (const [bKey, bucket] of canonicalBuckets.entries()) {
             const data = {
                 monthTarget: Number(bucket.monthTarget.toFixed(2)),
-                cumulativeActual: Number(bucket.cumulativeActual.toFixed(2))
+                cumulativeActual: Number(bucket.cumulativeActual.toFixed(2)),
+                canonicalKey: bKey
             };
+            tokenMap.set(bKey, data);
+            const normKey = normalizeCampaignToken(bKey);
+            if (normKey) tokenMap.set(normKey, data);
             for (const t of bucket.allTokens) {
                 tokenMap.set(t, data);
             }
@@ -348,7 +401,7 @@ export function useDailyRemainingData({
 
     // Ghép nối dữ liệu Realtime và tính toán Target Ngày theo 3 quy tắc
     const processedCampaigns = useMemo<RemainingCampaignItem[]>(() => {
-        const { tokenMap } = storeCumulativeMap;
+        const { tokenMap, canonicalBuckets } = storeCumulativeMap;
 
         const filtered = allData.filter(d => {
             if (selectedStore === 'Tổng') return d.shortName === 'Tổng';
@@ -359,31 +412,32 @@ export function useDailyRemainingData({
         });
 
         return filtered.map(camp => {
-            const searchTokens = new Set<string>();
-            getCampaignTokens(camp.label, campaignsDict).forEach(t => searchTokens.add(t));
-            if (camp.rawHeader) {
-                getCampaignTokens(camp.rawHeader, campaignsDict).forEach(t => searchTokens.add(t));
-            }
-
             let cumData: { monthTarget: number; cumulativeActual: number } | undefined;
-            for (const t of searchTokens) {
-                if (tokenMap.has(t)) {
-                    cumData = tokenMap.get(t);
-                    break;
-                }
+
+            // 1. Kiểm tra trực tiếp theo canonical key trong canonicalBuckets
+            const campCanonical = getCanonicalId(camp.rawHeader || '') || getCanonicalId(camp.label) || camp.label;
+            if (canonicalBuckets.has(campCanonical)) {
+                const b = canonicalBuckets.get(campCanonical)!;
+                cumData = { monthTarget: b.monthTarget, cumulativeActual: b.cumulativeActual };
             }
 
+            // 2. Tìm theo các token chính xác trong tokenMap (không dùng fuzzy substring includes)
             if (!cumData) {
+                const searchTokens = new Set<string>();
+                if (campCanonical) {
+                    const norm = normalizeCampaignToken(campCanonical);
+                    if (norm) searchTokens.add(norm);
+                }
+                getCampaignTokens(camp.label, campaignsDict).forEach(t => searchTokens.add(t));
+                if (camp.rawHeader) {
+                    getCampaignTokens(camp.rawHeader, campaignsDict).forEach(t => searchTokens.add(t));
+                }
+
                 for (const t of searchTokens) {
-                    if (t.length >= 3) {
-                        for (const [kToken, val] of tokenMap.entries()) {
-                            if (kToken.includes(t) || t.includes(kToken)) {
-                                cumData = val;
-                                break;
-                            }
-                        }
+                    if (tokenMap.has(t)) {
+                        cumData = tokenMap.get(t);
+                        break;
                     }
-                    if (cumData) break;
                 }
             }
 
@@ -421,11 +475,13 @@ export function useDailyRemainingData({
             const safeTarget = Math.max(1, appliedDailyTarget);
             const appliedPctHT = Number(((actual / safeTarget) * 100).toFixed(1));
             const appliedShortage = Math.max(0, safeTarget - actual);
+            const monthPctHT = monthTarget > 0 ? Number(((cumulativeActual / monthTarget) * 100).toFixed(1)) : 0;
 
             return {
                 ...camp,
                 monthTarget,
                 cumulativeActual,
+                monthPctHT,
                 remainingTarget,
                 isMonthCompleted,
                 requiredDailyAverage,
@@ -437,13 +493,38 @@ export function useDailyRemainingData({
         });
     }, [allData, selectedStore, stores, storeCumulativeMap, campaignsDict, remainingDays]);
 
-    // Danh sách hiển thị: Lọc thi đua đạt tháng & sắp xếp theo %HT Ngày giảm dần
+    // Danh sách hiển thị: Lọc thi đua đạt tháng & sắp xếp theo toggle (Lũy kế vs Realtime)
     const displayedCampaigns = useMemo(() => {
         const list = showCompletedCampaigns
             ? [...processedCampaigns]
             : processedCampaigns.filter(c => !c.isMonthCompleted);
-        return list.sort((a, b) => b.appliedPctHT - a.appliedPctHT || b.actual - a.actual);
-    }, [processedCampaigns, showCompletedCampaigns]);
+
+        return list.sort((a, b) => {
+            if (sortMode === 'CUMULATIVE') {
+                // 1. SẮP XẾP THEO % HOÀN THÀNH LŨY KẾ THÁNG GIẢM DẦN
+                if (b.monthPctHT !== a.monthPctHT) {
+                    return b.monthPctHT - a.monthPctHT;
+                }
+                // Tie-breaker: Lũy kế thực tế lớn hơn
+                if (b.cumulativeActual !== a.cumulativeActual) {
+                    return b.cumulativeActual - a.cumulativeActual;
+                }
+                // Tie-breaker 2: % HT Realtime
+                return b.appliedPctHT - a.appliedPctHT;
+            } else {
+                // 2. SẮP XẾP THEO % HOÀN THÀNH REALTIME NGÀY GIẢM DẦN
+                if (b.appliedPctHT !== a.appliedPctHT) {
+                    return b.appliedPctHT - a.appliedPctHT;
+                }
+                // Tie-breaker: Realtime thực tế lớn hơn
+                if (b.actual !== a.actual) {
+                    return b.actual - a.actual;
+                }
+                // Tie-breaker 2: % HT Lũy kế
+                return b.monthPctHT - a.monthPctHT;
+            }
+        });
+    }, [processedCampaigns, showCompletedCampaigns, sortMode]);
 
     const completedCount = useMemo(() => {
         return processedCampaigns.filter(c => c.isMonthCompleted).length;
@@ -601,6 +682,8 @@ export function useDailyRemainingData({
         setRemainingDays,
         showCompletedCampaigns,
         setShowCompletedCampaigns,
+        sortMode,
+        setSortMode: handleSetSortMode,
         stores,
         isLoadingSystem,
         sessionSummaryInfo,

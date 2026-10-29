@@ -38,6 +38,7 @@ export const GUEST_RESTRICTED_CONFIG_PATHS = [
     '/quan-ly-du-lieu',
     '/cap-nhat-luy-ke-nhan-vien',
     '/quan-ly-phien-nhan-vien',
+    '/du-lieu-mau',
     '/quan-ly-tai-khoan',
     '/phan-quyen-sieu-thi',
     '/quan-tri-he-thong',
@@ -242,6 +243,20 @@ const RAW_DEFAULT_PAGE_PERMISSIONS: SystemPagePermission[] = [
         badge_color: 'blue'
     },
     {
+        page_key: 'can_tru_thi_dua',
+        page_name: 'Cấn trừ thi đua',
+        path: '/can-tru-thi-dua',
+        group_title: 'SỨC KHỎE NHÂN VIÊN',
+        description: 'Quản lý, phê duyệt và chốt cấn trừ chỉ tiêu thi đua 1 đổi 1 giữa các ngành hàng',
+        is_enabled: true,
+        allowed_roles: ['ADMIN'],
+        order_index: 9,
+        badge_enabled: true,
+        badge_icon: '🔀',
+        badge_text: 'Mới',
+        badge_color: 'purple'
+    },
+    {
         page_key: 'nhip_doanh_thu',
         page_name: 'Nhịp Doanh Thu',
         path: '/nhip-doanh-thu',
@@ -325,6 +340,22 @@ const RAW_DEFAULT_PAGE_PERMISSIONS: SystemPagePermission[] = [
         badge_icon: '',
         badge_text: '',
         badge_color: 'emerald'
+    },
+    {
+        page_key: 'du_lieu_mau',
+        page_name: 'Dữ liệu mẫu',
+        path: '/du-lieu-mau',
+        group_title: 'DỮ LIỆU & PHIÊN LÀM VIỆC',
+        description: 'Kho lưu trữ dữ liệu mẫu tham chiếu phục vụ kiểm thử và cập nhật tính năng',
+        is_enabled: true,
+        allowed_roles: ['ADMIN'], // MẶC ĐỊNH CHỈ DUY NHẤT ADMIN
+        order_index: 9.5,
+        badge_enabled: true,
+        badge_icon: '⚡',
+        badge_text: 'Admin',
+        badge_color: 'amber',
+        allow_excel_export: false,
+        allowed_excel_roles: ['ADMIN']
     },
     // TIỆN ÍCH BÁN HÀNG
     {

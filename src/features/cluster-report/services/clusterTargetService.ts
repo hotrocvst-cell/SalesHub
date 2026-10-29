@@ -130,6 +130,8 @@ export async function fetchClusterTargetConfigPackage(month: number, year: numbe
 
 /**
  * Lưu danh sách Target Cụm lên Supabase Cloud & Local Cache (đồng bộ đa thiết bị)
+ * Hỗ trợ MERGE an toàn khi Quản lý/Trưởng ca chỉ cấu hình riêng cho các siêu thị mình phụ trách,
+ * đảm bảo không ghi đè hay làm mất cấu hình của các siêu thị khác trong cụm.
  */
 export async function saveClusterTargetConfigs(
     month: number,
@@ -137,17 +139,71 @@ export async function saveClusterTargetConfigs(
     configs: ClusterTargetConfigItem[],
     globalPaceRate: number = 100
 ): Promise<{ success: boolean; fromSupabase: boolean; error?: string }> {
-    // 1. Lưu LocalStorage tức thì
+    const configKey = `cluster_targets_${month}_${year}`;
+    let mergedItems: ClusterTargetConfigItem[] = [...configs];
+    let effectivePace = globalPaceRate;
+
+    // 1. Đọc cấu hình hiện có trên Cloud để MERGE an toàn
     try {
-        localStorage.setItem(`${STORAGE_KEY_TARGETS}_${month}_${year}`, JSON.stringify(configs));
-        localStorage.setItem(`${STORAGE_KEY_TARGETS}_pace_${month}_${year}`, String(globalPaceRate));
+        const { data: existingData } = await supabase
+            .from('system_performance_configs')
+            .select('config_data')
+            .eq('config_key', configKey)
+            .maybeSingle();
+
+        if (existingData?.config_data) {
+            const oldItems: ClusterTargetConfigItem[] = Array.isArray(existingData.config_data)
+                ? existingData.config_data
+                : (existingData.config_data.items || []);
+
+            if (oldItems.length > 0) {
+                // Tạo Map các cấu hình mới gửi lên
+                const newMap = new Map<string, ClusterTargetConfigItem>();
+                configs.forEach(c => {
+                    if (c.storeName) newMap.set(c.storeName.trim().toLowerCase(), c);
+                });
+
+                // Khởi tạo mergedMap từ các cấu hình cũ
+                const mergedMap = new Map<string, ClusterTargetConfigItem>();
+                oldItems.forEach(old => {
+                    const key = (old.storeName || '').trim().toLowerCase();
+                    if (!key) return;
+                    if (newMap.has(key)) {
+                        mergedMap.set(key, newMap.get(key)!);
+                    } else {
+                        mergedMap.set(key, old);
+                    }
+                });
+
+                // Thêm các cấu hình mới chưa có trong danh sách cũ
+                configs.forEach(c => {
+                    const key = (c.storeName || '').trim().toLowerCase();
+                    if (key && !mergedMap.has(key)) {
+                        mergedMap.set(key, c);
+                    }
+                });
+
+                mergedItems = Array.from(mergedMap.values());
+            }
+
+            if (existingData.config_data.globalPaceRate && (!globalPaceRate || globalPaceRate === 100)) {
+                effectivePace = Number(existingData.config_data.globalPaceRate) || 100;
+            }
+        }
+    } catch (err) {
+        console.warn('Lỗi kiểm tra cấu hình cũ khi merge target cụm:', err);
+    }
+
+    // 2. Lưu LocalStorage tức thì
+    try {
+        localStorage.setItem(`${STORAGE_KEY_TARGETS}_${month}_${year}`, JSON.stringify(mergedItems));
+        localStorage.setItem(`${STORAGE_KEY_TARGETS}_pace_${month}_${year}`, String(effectivePace));
     } catch { }
 
-    const configKey = `cluster_targets_${month}_${year}`;
     let isCloudSaved = false;
     let cloudError: string | undefined;
 
-    // 2. Đồng bộ lên Cloud: Bảng system_performance_configs (Đảm bảo 100% hoạt động ngay)
+    // 3. Đồng bộ lên Cloud: Bảng system_performance_configs (Đảm bảo 100% hoạt động ngay)
     try {
         const { error: errPerf } = await supabase
             .from('system_performance_configs')
@@ -156,8 +212,8 @@ export async function saveClusterTargetConfigs(
                 config_data: {
                     month,
                     year,
-                    globalPaceRate,
-                    items: configs,
+                    globalPaceRate: effectivePace,
+                    items: mergedItems,
                     updated_at: new Date().toISOString()
                 },
                 updated_at: new Date().toISOString()

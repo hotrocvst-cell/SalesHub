@@ -320,15 +320,15 @@ export function updateCampaignDictCache(dictList: { raw_key: string; display_nam
 // Danh sách cấu hình mặc định (fallback)
 export const DEFAULT_CAMPAIGN_CONFIG = [
     { key: /Bảo hiểm tổng/i, label: 'BẢO_HIỂM_TỔNG' },
-    { key: /Bảo hiểm Thợ ĐMX/i, label: 'BẢO_HIỂM_ĐMX' },
-    { key: /Bảo hiểm/i, label: 'BẢO_HIỂM' },
+    { key: /Bảo hiểm Thợ ĐMX|BẢO_HIỂM_ĐMX|BẢO HIỂM ĐMX|BẢO HIỂM DMX|THỢ ĐMX|THO DMX/i, label: 'BẢO_HIỂM_ĐMX' },
+    { key: /^BẢO_HIỂM$|^Bảo hiểm$|Bảo hiểm(?!.*(ĐMX|DMX|thợ|tho|tổng|tong))/i, label: 'BẢO_HIỂM' },
     { key: /SIM MOBIFONE\/VINAPHONE\/SIM DMX/i, label: 'SIM_MOBI_VINA_ĐMX' },
     { key: /Sim Vinaphone & Sim ĐMX/i, label: 'SIM_VINA_ĐMX' },
     { key: /Sim Tổng/i, label: 'SIM_TỔNG' },
     { key: /OTT MANGO\+, ICALLME/i, label: 'MANGO_iCALLME' },
     { key: /VAS/i, label: 'VAS' },
-    { key: /ĐIỆN THOẠI & TABLET ANDROID/i, label: 'ICT_ANDROID' },
-    { key: /TABLET ANDROID/i, label: 'TABLET_ANDROID' },
+    { key: /ĐIỆN THOẠI & TABLET ANDROID|DIEN THOAI & TABLET ANDROID|ĐT & TABLET ANDROID|DT & TABLET ANDROID|ICT_ANDROID|ICT ANDROID/i, label: 'ICT_ANDROID' },
+    { key: /^TABLET_ANDROID$|^TABLET ANDROID$|TABLET ANDROID(?!.*(ĐIỆN THOẠI|DIEN THOAI|ICT|ĐT|DT))/i, label: 'TABLET_ANDROID' },
     { key: /Điện thoại realme/i, label: 'REALME' },
     { key: /Điện thoại Vivo/i, label: 'VIVO' },
     { key: /Điện thoại Flagship Samsung Galaxy S/i, label: 'GALAXY_S.Z' },
@@ -365,18 +365,50 @@ export function getCampaignLabel(raw: string, dict?: { raw_key: string; display_
         const activeItems = dict.filter(d => (d as any).is_active !== false);
         const searchList = activeItems.length > 0 ? [...activeItems, ...dict.filter(d => (d as any).is_active === false)] : dict;
 
-        const found = searchList.find(
-            d => d.raw_key.toUpperCase() === trimmed.toUpperCase() ||
-                d.display_name.toUpperCase() === trimmed.toUpperCase() ||
-                trimmed.toUpperCase().includes(d.raw_key.toUpperCase()) ||
-                trimmed.toUpperCase().includes(d.display_name.toUpperCase())
+        // BƯỚC 1: Khớp TUYỆT ĐỐI (100% Exact match) theo raw_key hoặc display_name
+        const exact = searchList.find(
+            d => d.raw_key.trim().toUpperCase() === trimmed.toUpperCase() ||
+                d.display_name.trim().toUpperCase() === trimmed.toUpperCase()
         );
-        if (found) return found.display_name || found.raw_key;
+        if (exact) return exact.display_name || exact.raw_key;
+
+        // BƯỚC 2: Khớp TUYỆT ĐỐI theo token chuẩn hóa
+        const rawToken = trimmed.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/^t\d{1,2}\s*-\s*(t\d{1,2}\s*)?/i, '').replace(/[^a-z0-9]/g, '');
+        if (rawToken) {
+            const tokenMatch = searchList.find(d => {
+                const dRawToken = (d.raw_key || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/^t\d{1,2}\s*-\s*(t\d{1,2}\s*)?/i, '').replace(/[^a-z0-9]/g, '');
+                const dDispToken = (d.display_name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/^t\d{1,2}\s*-\s*(t\d{1,2}\s*)?/i, '').replace(/[^a-z0-9]/g, '');
+                return dRawToken === rawToken || dDispToken === rawToken;
+            });
+            if (tokenMatch) return tokenMatch.display_name || tokenMatch.raw_key;
+        }
     }
 
     // 2. Tra cứu theo cấu hình mẫu mặc định (Regex)
     for (const cfg of DEFAULT_CAMPAIGN_CONFIG) {
         if (cfg.key.test(trimmed)) return cfg.label;
+    }
+
+    // 3. Fallback: Nếu vẫn chưa khớp, tìm chuỗi con với ưu tiên độ dài lớn nhất (Longest match first)
+    if (dict && dict.length > 0) {
+        const activeItems = dict.filter(d => (d as any).is_active !== false);
+        const searchList = activeItems.length > 0 ? [...activeItems, ...dict.filter(d => (d as any).is_active === false)] : dict;
+        const upper = trimmed.toUpperCase();
+
+        const sortedByLength = [...searchList].sort((a, b) => {
+            const lenA = Math.max((a.display_name || '').length, (a.raw_key || '').length);
+            const lenB = Math.max((b.display_name || '').length, (b.raw_key || '').length);
+            return lenB - lenA;
+        });
+
+        const sub = sortedByLength.find(d => {
+            const dRawUpper = (d.raw_key || '').trim().toUpperCase();
+            const dDispUpper = (d.display_name || '').trim().toUpperCase();
+            if (dRawUpper.length >= 4 && upper.includes(dRawUpper)) return true;
+            if (dDispUpper.length >= 4 && upper.includes(dDispUpper)) return true;
+            return false;
+        });
+        if (sub) return sub.display_name || sub.raw_key;
     }
 
     return trimmed;

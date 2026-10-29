@@ -42,6 +42,8 @@ import html2canvas from 'html2canvas';
 import ExcelJS from 'exceljs';
 import { calculate8KScale } from '../../shared/utils/exportImage';
 import { GUEST_DEMO_STORE } from '../../core/lib/guestDemoStoreService';
+import { fetchCampaignOffsets, type CampaignOffsetItem } from '../campaign-offset/services/campaignOffsetService';
+import { useExcelExportPermission } from '../../shared/hooks/useExcelExportPermission';
 
 export default function CampaignSummaryPage() {
     const navigate = useNavigate();
@@ -85,10 +87,14 @@ export default function CampaignSummaryPage() {
         setSelectedStore
     );
 
+    const { canExportExcel } = useExcelExportPermission('/tong-hop-thi-dua');
+
     const [sessions, setSessions] = useState<EmployeeDataSession[]>([]);
     const [selectedSessionId, setSelectedSessionId] = useState<string>('');
     const [targetsMap, setTargetsMap] = useState<Record<string, Record<string, number>>>({});
     const [campaignDict, setCampaignDict] = useState<CampaignDictItem[]>([]);
+    const [offsets, setOffsets] = useState<CampaignOffsetItem[]>([]);
+    const [applyOffsets, setApplyOffsets] = useState<boolean>(true);
 
     const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('ALL');
     const [searchQuery, setSearchQuery] = useState<string>('');
@@ -107,16 +113,19 @@ export default function CampaignSummaryPage() {
     const loadSystemData = async () => {
         setLoading(true);
 
-        const [storesRes, dictRes, targetsRes, empsRes] = await Promise.all([
+        const [storesRes, dictRes, targetsRes, empsRes, offsetsRes] = await Promise.all([
             fetchStores(),
             fetchCampaignDictionary(),
             fetchEmployeeCampaignTargets(selectedMonth, selectedYear),
-            fetchEmployees()
+            fetchEmployees(),
+            fetchCampaignOffsets(selectedStore, selectedMonth, selectedYear)
         ]);
 
         if (storesRes.success) setStores(storesRes.data);
         if (dictRes.success && dictRes.data) setCampaignDict(dictRes.data);
         if (empsRes.success) setEmployees(empsRes.data);
+        if (offsetsRes.success && offsetsRes.data) setOffsets(offsetsRes.data);
+        else setOffsets([]);
 
         // Chuyển đổi chỉ tiêu thi đua sang bản đồ [empId][rawKey] = target
         const tMap: Record<string, Record<string, number>> = {};
@@ -152,6 +161,21 @@ export default function CampaignSummaryPage() {
     useEffect(() => {
         loadSystemData();
     }, [selectedMonth, selectedYear]);
+
+    // Tự động tải lại danh sách cấn trừ khi đổi siêu thị
+    useEffect(() => {
+        let isMounted = true;
+        fetchCampaignOffsets(selectedStore, selectedMonth, selectedYear).then(res => {
+            if (isMounted) {
+                if (res.success && res.data) {
+                    setOffsets(res.data);
+                } else {
+                    setOffsets([]);
+                }
+            }
+        });
+        return () => { isMounted = false; };
+    }, [selectedStore, selectedMonth, selectedYear]);
 
     // Bản đồ nhân viên -> siêu thị
     const empStoreMap = useMemo(() => {
@@ -302,10 +326,12 @@ export default function CampaignSummaryPage() {
             {
                 selectedStore,
                 empStoreMap,
-                storesList: stores
+                storesList: stores,
+                offsets,
+                applyOffsets
             }
         );
-    }, [activeSession, targetsMap, campaignDict, operatingConfig, selectedStore, empStoreMap, stores]);
+    }, [activeSession, targetsMap, campaignDict, operatingConfig, selectedStore, empStoreMap, stores, offsets, applyOffsets]);
 
     // Lọc theo tìm kiếm nhân viên
     const filteredRows = useMemo(() => {
@@ -792,8 +818,34 @@ export default function CampaignSummaryPage() {
                         <ArrowUpRight className="w-4 h-4" />
                     </button>
 
-                    {/* Nút Xuất Excel */}
-                    {campaignData && (
+                    {/* BẬT / TẮT ÁP DỤNG CẤN TRỪ THI ĐUA */}
+                    {offsets.length > 0 && (
+                        <button
+                            type="button"
+                            onClick={() => setApplyOffsets(prev => !prev)}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition cursor-pointer border ${applyOffsets
+                                ? 'bg-purple-600 text-white border-purple-700 shadow-2xs hover:bg-purple-700'
+                                : 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200'
+                                }`}
+                            title={applyOffsets ? 'Đang áp dụng cấn trừ. Nhấp để xem số liệu gốc chưa cấn trừ' : 'Đang xem số liệu gốc. Nhấp để áp dụng cấn trừ thi đua'}
+                        >
+                            <span>{applyOffsets ? `🟣 Sau cấn trừ (${offsets.length})` : `⚪ Số liệu gốc (${offsets.length} cấn)`}</span>
+                        </button>
+                    )}
+
+                    {/* Nút Điều Hướng Sang Trang Quản Lý Cấn Trừ */}
+                    <button
+                        type="button"
+                        onClick={() => navigate('/can-tru-thi-dua')}
+                        className="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200 rounded-xl text-xs font-bold flex items-center gap-1 transition cursor-pointer shadow-2xs"
+                        title="Đi đến trang Quản lý Cấn trừ thi đua"
+                    >
+                        <span>Cấn Trừ ({offsets.length})</span>
+                        <ArrowUpRight className="w-3.5 h-3.5" />
+                    </button>
+
+                    {/* Nút Xuất Excel (Tuân thủ Quy chuẩn 9: Phân quyền xuất Excel) */}
+                    {campaignData && canExportExcel && (
                         <button
                             type="button"
                             onClick={handleExportExcel}
@@ -895,12 +947,17 @@ export default function CampaignSummaryPage() {
                             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black text-[#fde047] tracking-wider uppercase drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]">
                                 TỔNG HỢP THI ĐUA
                             </h1>
-                            <p className="text-xs sm:text-sm font-bold text-amber-200/95 tracking-wide flex items-center justify-center md:justify-start gap-1.5">
+                            <div className="text-xs sm:text-sm font-bold text-amber-200/95 tracking-wide flex flex-wrap items-center justify-center md:justify-start gap-1.5">
                                 <span>✨ Luỹ kế dự kiến đến ngày:</span>
                                 <span className="font-mono text-white font-extrabold">{formatDate(campaignData.date_display)}</span>
                                 <span className="text-amber-400">||</span>
                                 <span className="text-[#fde047] font-black">{campaignData.mode_label || 'DỰ KIẾN'}</span>
-                            </p>
+                                {campaignData.offsets_applied && (campaignData.offset_count ?? 0) > 0 && (
+                                    <span className="ml-1 px-2 py-0.5 rounded-full bg-purple-500/90 text-white text-[10px] font-black tracking-wide border border-purple-300 shadow-2xs">
+                                        🔀 ĐÃ CẤN TRỪ ({campaignData.offset_count} LƯỢT)
+                                    </span>
+                                )}
+                            </div>
                         </div>
 
                         {/* Các Nút Tác Vụ Góc Phải (Khớp 100% Ảnh) */}

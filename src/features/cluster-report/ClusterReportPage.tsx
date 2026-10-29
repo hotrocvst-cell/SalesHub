@@ -121,6 +121,7 @@ export default function ClusterReportPage() {
     const { currentUser, isAdmin, canAccessStore } = useAuth();
     const isGuest = Boolean(currentUser?.is_guest);
     const isStaff = currentUser?.role === 'NHAN_VIEN';
+    const canConfigureTarget = !isGuest && (isAdmin || ['ADMIN', 'QUAN_LY', 'TRUONG_CA'].includes(currentUser?.role || ''));
 
     const today = new Date();
     const [selectedMonth, setSelectedMonth] = useState<number>(() => isGuest ? 10 : today.getMonth() + 1);
@@ -265,8 +266,8 @@ export default function ClusterReportPage() {
         return availableDates[0] || getYesterdayDateString();
     }, [selectedDate, availableDates]);
 
-    // 3. Tính toán và chuyển đổi dữ liệu cho từng siêu thị trong cụm (đã lọc theo phạm vi phụ trách)
-    const clusterRows = useMemo<ClusterStoreRow[]>(() => {
+    // 3a. Tính toán và chuyển đổi dữ liệu cho tất cả siêu thị trong cụm mà user có quyền truy cập
+    const allAccessibleClusterRows = useMemo<ClusterStoreRow[]>(() => {
         if (records.length === 0) return [];
 
         // Xác định số ngày trong tháng và số ngày đã trôi qua
@@ -313,12 +314,6 @@ export default function ClusterReportPage() {
 
         storeMap.forEach((rec, storeName) => {
             const shortName = getCompactStoreName(storeName);
-            // Lọc theo selectedStore nếu đang xem 1 siêu thị riêng biệt
-            if (selectedStore !== 'all') {
-                if (shortName !== selectedStore && !isStoreMatch(storeName, selectedStore)) {
-                    return;
-                }
-            }
             const cfg = targetConfigs.find(c => c.storeName === storeName);
 
             // Số ngày
@@ -461,7 +456,16 @@ export default function ClusterReportPage() {
         rows.forEach((r, idx) => { r.orderIndex = idx + 1; });
 
         return rows;
-    }, [records, effectiveDate, targetConfigs, globalPaceRate, selectedMonth, selectedYear, isGuest, isAdmin, canAccessStore, selectedStore]);
+    }, [records, effectiveDate, targetConfigs, globalPaceRate, selectedMonth, selectedYear, isGuest, isAdmin, canAccessStore]);
+
+    // 3b. Bảng dữ liệu hiển thị trên giao diện (đã lọc theo selectedStore nếu user chọn xem 1 siêu thị riêng biệt)
+    const clusterRows = useMemo<ClusterStoreRow[]>(() => {
+        if (selectedStore === 'all') return allAccessibleClusterRows;
+        return allAccessibleClusterRows.filter(r => {
+            const shortName = getCompactStoreName(r.storeName);
+            return shortName === selectedStore || isStoreMatch(r.storeName, selectedStore);
+        });
+    }, [allAccessibleClusterRows, selectedStore]);
 
     // 4. Tổng kết toàn cụm (TỔNG CỤM)
     const clusterSummary = useMemo<ClusterSummaryData>(() => {
@@ -743,13 +747,13 @@ export default function ClusterReportPage() {
 
                 {/* Các nút hành động chính */}
                 <div className="flex items-center gap-2 flex-wrap self-end md:self-auto">
-                    {/* Nút Cấu hình Target */}
-                    {(isAdmin || currentUser?.role === 'QUAN_LY') && !isGuest && (
+                    {/* Nút Cấu hình Target: Mở cho ADMIN, QUẢN LÝ (QL) và TRƯỞNG CA (TC) */}
+                    {canConfigureTarget && (
                         <button
                             type="button"
                             onClick={() => setIsTargetModalOpen(true)}
                             className="px-3.5 py-2 rounded-2xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300/80 text-xs font-black flex items-center gap-1.5 shadow-2xs transition cursor-pointer"
-                            title="Tùy biến Target Vượt Trội & Doanh thu TB 3 tháng cho từng siêu thị"
+                            title="Tùy biến Target Vượt Trội & Doanh thu TB 3 tháng cho từng siêu thị phụ trách"
                         >
                             <Target className="w-4 h-4 text-amber-600" />
                             <span>CẤU HÌNH TARGET</span>
@@ -1630,7 +1634,7 @@ export default function ClusterReportPage() {
             <ClusterTargetConfigModal
                 isOpen={isTargetModalOpen}
                 onClose={() => setIsTargetModalOpen(false)}
-                rows={clusterRows}
+                rows={allAccessibleClusterRows}
                 month={selectedMonth}
                 year={selectedYear}
                 currentConfigs={targetConfigs}

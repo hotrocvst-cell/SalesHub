@@ -350,7 +350,25 @@ export default function CampaignProgressCard({ item, reportDateDisplay, storeNam
 
                                         {/* LUỸ KẾ */}
                                         <td className="text-right font-black text-rose-600 py-2.5 px-3 font-mono">
-                                            {formatVnComma(emp.actual, hasDecimals)}
+                                            <div className="flex items-center justify-end gap-1">
+                                                <span>{formatVnComma(emp.actual, hasDecimals)}</span>
+                                                {emp.offsetAdjustment ? (
+                                                    <span
+                                                        className={`text-[9.5px] px-1 py-0.2 rounded font-bold shrink-0 ${
+                                                            emp.offsetAdjustment > 0
+                                                                ? 'bg-purple-100 text-purple-800 border border-purple-200'
+                                                                : 'bg-amber-100 text-amber-800 border border-amber-200'
+                                                        }`}
+                                                        title={
+                                                            emp.offsetAdjustment > 0
+                                                                ? `Gốc: ${emp.rawActual ?? emp.actual} • Được cấn bù +${emp.offsetAdjustment} từ ngành khác`
+                                                                : `Gốc: ${emp.rawActual ?? emp.actual} • Đã chuyển bớt ${emp.offsetAdjustment} sang ngành khác`
+                                                        }
+                                                    >
+                                                        {emp.offsetAdjustment > 0 ? `+${emp.offsetAdjustment}` : emp.offsetAdjustment}
+                                                    </span>
+                                                ) : null}
+                                            </div>
                                         </td>
 
                                         {/* %HT (DK) */}

@@ -672,6 +672,8 @@ export default function DailyReportPage() {
                         showCompletedCampaigns={remainingData.showCompletedCampaigns}
                         onToggleShowCompleted={remainingData.setShowCompletedCampaigns}
                         completedCount={remainingData.completedCount}
+                        sortMode={remainingData.sortMode}
+                        onSortModeChange={remainingData.setSortMode}
                     />
                 )}
             </div>

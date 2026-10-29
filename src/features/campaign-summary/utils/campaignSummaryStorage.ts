@@ -4,6 +4,7 @@ import { getCampaignLabel, formatDate, isStoreMatch } from '../../../core/lib/fo
 import { getShortenedEmployeeName } from '../../employee-performance/utils/performanceConfig';
 import type { CampaignDictItem } from '../../../core/lib/storage';
 import { getStoreCampaignScoreConfig, getCampaignPoints } from '../../../core/lib/storeCampaignScoreService';
+import type { CampaignOffsetItem } from '../../campaign-offset/services/campaignOffsetService';
 
 /**
  * Chuẩn hóa chuỗi định danh thi đua để đối chiếu linh hoạt:
@@ -133,11 +134,15 @@ export function buildCampaignSummaryFromSession(
         selectedStore?: string;
         empStoreMap?: Record<string, string>;
         storesList?: Array<{ code?: string; name: string; id?: string }>;
+        offsets?: CampaignOffsetItem[];
+        applyOffsets?: boolean;
     }
 ): CampaignSummaryData {
     const rawRecords = session.records || [];
     const selectedStore = options?.selectedStore || 'all';
     const empStoreMap = options?.empStoreMap || {};
+    const allOffsets = options?.offsets || [];
+    const applyOffsets = (options?.applyOffsets ?? true) && allOffsets.length > 0;
 
     // 1. Lọc kết quả nhân viên:
     // (a) Theo siêu thị (nếu có chọn siêu thị cụ thể)
@@ -231,6 +236,9 @@ export function buildCampaignSummaryFromSession(
             ? getStoreCampaignScoreConfig(empStore)
             : baseScoreConfig;
 
+        const empOffsets = allOffsets.filter(o => o.employee_id === empId && o.is_approved !== false);
+        const campaignOffsets: Record<string, number> = {};
+
         let achievedCount = 0;
         let achievedPoints = 0;
         let totalPoints = 0;
@@ -278,10 +286,32 @@ export function buildCampaignSummaryFromSession(
                 }
             }
 
+            // 3. Tính toán số lượng cấn trừ (nếu áp dụng cấn trừ)
+            let netOffset = 0;
+            if (applyOffsets && empOffsets.length > 0) {
+                empOffsets.forEach(o => {
+                    const fromCanonical = resolveCanonicalCampaign(o.from_campaign_key, campaignDict).canonicalKey;
+                    const toCanonical = resolveCanonicalCampaign(o.to_campaign_key, campaignDict).canonicalKey;
+                    const qty = Number(o.offset_quantity) || 0;
+                    if (toCanonical === cat) {
+                        netOffset += qty;
+                    }
+                    if (fromCanonical === cat) {
+                        netOffset -= qty;
+                    }
+                });
+            }
+
+            if (netOffset !== 0) {
+                campaignOffsets[cat] = netOffset;
+            }
+
+            const effectiveActualVal = Math.max(0, actualVal + netOffset);
+
             let rate = 0;
             if (targetVal > 0) {
                 // Công thức dự báo chuẩn: (Lũy kế thực tế / passedDays * totalDays) / Target * 100
-                const forecastVal = (actualVal / safePassed) * safeTotalDays;
+                const forecastVal = (effectiveActualVal / safePassed) * safeTotalDays;
                 rate = Math.round((forecastVal / targetVal) * 100);
             } else {
                 rate = 0;
@@ -315,6 +345,7 @@ export function buildCampaignSummaryFromSession(
             total_points: Number(totalPoints.toFixed(1)),
             achievement_rate: achievementRate,
             campaign_rates: campaignRates,
+            campaign_offsets: campaignOffsets,
             scoring_mode: isPointsMode ? 'POINTS' : 'COUNT'
         };
     });
@@ -343,14 +374,17 @@ export function buildCampaignSummaryFromSession(
     return {
         report_date: session.report_date,
         date_display: dateDisplay,
-        mode_label: 'DỰ KIẾN',
+        mode_label: applyOffsets ? 'DỰ KIẾN (ĐÃ CẤN TRỪ)' : 'DỰ KIẾN',
         store_name: effectiveStoreName,
         scoring_mode: isPointsMode ? 'POINTS' : 'COUNT',
         total_categories: totalCategories,
         categories,
         rows,
         created_at: session.created_at,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
+        has_offsets: allOffsets.length > 0,
+        offsets_applied: applyOffsets,
+        offset_count: allOffsets.length
     };
 }
 

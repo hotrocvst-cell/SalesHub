@@ -315,6 +315,14 @@ export default function InventoryBalancingPage() {
                 });
             }
 
+            // Nạp lại dữ liệu sức bán đã lưu
+            if (config.sales_velocity_map && Object.keys(config.sales_velocity_map).length > 0) {
+                setSalesVelocityMap(config.sales_velocity_map);
+            }
+            if (config.sales_velocity_file_name) {
+                setSalesVelocityFileName(config.sales_velocity_file_name);
+            }
+
             // Nếu chưa có file Excel tồn kho mới, tự động kích hoạt chế độ xem phiên đã lưu gần nhất
             if (rawRecords.length === 0 && (config.snapshot_products?.length || config.selected_product_codes?.length)) {
                 setRestoredSession(config);
@@ -901,12 +909,19 @@ export default function InventoryBalancingPage() {
             const result = await parseSalesVelocityExcel(file);
             setSalesVelocityMap(result.salesMap);
             setSalesVelocityFileName(file.name);
-            alert(
-                `Phân tích sức bán thành công từ file "${file.name}"!\n` +
-                `• Tổng số dòng đọc được: ${result.totalRecords.toLocaleString('vi-VN')} dòng\n` +
-                `• Số dòng thỏa điều kiện (N='Đã xuất' & AS='Chưa trả'): ${result.matchedRecords.toLocaleString('vi-VN')} dòng\n` +
-                `• Phát hiện ${result.uniqueProductsCount.toLocaleString('vi-VN')} mã sản phẩm có sức bán với tổng số lượng: ${result.totalSalesQty.toLocaleString('vi-VN')} máy.`
-            );
+            if (result.matchedRecords === 0) {
+                alert(
+                    `⚠️ Đã đọc file "${file.name}" (${result.totalRecords.toLocaleString('vi-VN')} dòng) nhưng chưa phát hiện dòng dữ liệu bán hàng nào thỏa điều kiện!\n` +
+                    `• Vui lòng kiểm tra lại file có chứa cột Mã sản phẩm và Số lượng bán.`
+                );
+            } else {
+                alert(
+                    `Phân tích sức bán thành công từ file "${file.name}"!\n` +
+                    `• Tổng số dòng đọc được: ${result.totalRecords.toLocaleString('vi-VN')} dòng\n` +
+                    `• Số dòng bán hàng ghi nhận: ${result.matchedRecords.toLocaleString('vi-VN')} dòng\n` +
+                    `• Phát hiện ${result.uniqueProductsCount.toLocaleString('vi-VN')} mã sản phẩm có sức bán với tổng số lượng: ${result.totalSalesQty.toLocaleString('vi-VN')} máy.`
+                );
+            }
         } catch (err: unknown) {
             console.error('Lỗi phân tích file sức bán:', err);
             const msg = err instanceof Error ? err.message : String(err);

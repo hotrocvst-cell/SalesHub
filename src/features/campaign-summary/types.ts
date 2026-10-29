@@ -10,6 +10,7 @@ export interface CampaignSummaryRow {
     total_points?: number;    // Tổng điểm tối đa của các ngành hàng có target
     achievement_rate: number; // Tỷ lệ % đạt (15/39 = 38.5% hoặc điểm đạt / tổng điểm)
     campaign_rates: Record<string, number>; // { [categoryName]: percentageNumber (e.g. 76, 145, 0) }
+    campaign_offsets?: Record<string, number>; // { [categoryName]: netOffsetQuantity (+X hoặc -Y) }
     scoring_mode?: 'POINTS' | 'COUNT';
 }
 
@@ -25,6 +26,9 @@ export interface CampaignSummaryData {
     created_at?: string;
     updated_at?: string;
     notes?: string;
+    has_offsets?: boolean;
+    offsets_applied?: boolean;
+    offset_count?: number;
 }
 
 export interface SmartRemarkAnalysis {

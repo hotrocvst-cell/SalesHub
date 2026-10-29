@@ -34,7 +34,9 @@ import {
     MessageSquareText,
     Boxes,
     Banknote,
-    Coins
+    Coins,
+    Shuffle,
+    FileSpreadsheet
 } from 'lucide-react';
 
 export interface NavItem {
@@ -143,6 +145,12 @@ export const NAVIGATION_GROUPS: NavGroup[] = [
                 badge: '✨ Mới'
             },
             {
+                name: 'Cấn trừ thi đua',
+                path: '/can-tru-thi-dua',
+                icon: Shuffle,
+                badge: '✨ Mới'
+            },
+            {
                 name: 'Chi tiết nhân viên',
                 path: '/chi-tiet-nhan-vien',
                 icon: UserCheck,
@@ -182,6 +190,12 @@ export const NAVIGATION_GROUPS: NavGroup[] = [
                 name: 'Quản lý bản ghi ST',
                 path: '/quan-ly-du-lieu',
                 icon: Database
+            },
+            {
+                name: 'Dữ liệu mẫu',
+                path: '/du-lieu-mau',
+                icon: FileSpreadsheet,
+                badge: '⚡ Admin'
             }
         ]
     },
