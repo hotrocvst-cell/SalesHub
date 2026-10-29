@@ -403,7 +403,7 @@ export default function SystemAdminPage() {
             } else if (res.error && res.error.includes('badge')) {
                 showToast('⚠️ Đã lưu cấu hình an toàn trên máy này. Supabase chưa có cột Badge, hãy chạy 4 dòng SQL để đồng bộ Cloud!');
             } else {
-                showToast('⚠️ Đã lưu cấu hình tạm vào máy này (Chưa tạo bảng trên Cloud). Bấm "Mã SQL Supabase" để khởi tạo.');
+                showToast(`⚠️ Đã lưu cấu hình tạm vào máy này (${res.error ? `Lỗi Cloud: ${res.error}` : 'Chưa kết nối Cloud'}). Bấm "Mã SQL Supabase" để kiểm tra.`);
             }
         } else {
             showToast('⚠️ Lỗi khi lưu cấu hình: ' + (res.error || 'Vui lòng thử lại!'));
@@ -477,7 +477,7 @@ export default function SystemAdminPage() {
                                 </span>
                             </h1>
                             <p className="text-xs text-slate-500 mt-0.5">
-                                Kiểm soát trạng thái hiển thị (Bật / Tạm ẩn) và phân quyền truy cập từng trang theo vai trò người dùng.
+                                Bật / Tạm ẩn và phân quyền truy cập từng trang.
                             </p>
                         </div>
                     </div>
@@ -589,7 +589,7 @@ export default function SystemAdminPage() {
                             <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
                         </span>
                         <span>
-                            <b>Cloud Realtime:</b> Cấu hình phân quyền đã đồng bộ trực tuyến. Mọi thay đổi bạn lưu sẽ tự động cập nhật ngay lập tức đến thiết bị của mọi nhân sự mà không cần tải lại trang.
+                            <b>Cloud Realtime:</b> Dữ liệu được đồng bộ trực tuyến. Mọi thay đổi được lưu sẽ tự động cập nhật đến toàn bộ người dùng.
                         </span>
                     </div>
                 </div>
@@ -664,8 +664,8 @@ export default function SystemAdminPage() {
 
             {/* Khối Kiểm Soát Tính Toàn Vẹn Tuyến Đường (Route Audit & Registry Monitor) */}
             <div className={`rounded-2xl p-4 border transition-all ${routeAudit.isFullyAudited
-                    ? 'bg-emerald-50/70 border-emerald-200 text-emerald-900 shadow-2xs'
-                    : 'bg-amber-50/90 border-amber-300 text-amber-950 shadow-sm'
+                ? 'bg-emerald-50/70 border-emerald-200 text-emerald-900 shadow-2xs'
+                : 'bg-amber-50/90 border-amber-300 text-amber-950 shadow-sm'
                 }`}>
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
                     <div className="flex items-start gap-3">
@@ -676,11 +676,11 @@ export default function SystemAdminPage() {
                         <div>
                             <div className="flex items-center gap-2 flex-wrap">
                                 <span className="font-extrabold text-xs uppercase tracking-wider text-slate-500">
-                                    Kiểm Soát Tính Toàn Vẹn Tuyến Đường (Route Audit)
+                                    Kiểm Soát Tính Toàn Vẹn URL
                                 </span>
                                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${routeAudit.isFullyAudited
-                                        ? 'bg-emerald-600 text-white'
-                                        : 'bg-amber-500 text-white animate-pulse'
+                                    ? 'bg-emerald-600 text-white'
+                                    : 'bg-amber-500 text-white animate-pulse'
                                     }`}>
                                     {routeAudit.isFullyAudited
                                         ? '✓ 100% HOÀN TOÀN ĐỒNG BỘ'
@@ -689,7 +689,7 @@ export default function SystemAdminPage() {
                             </div>
                             <p className="text-xs mt-0.5 text-slate-700">
                                 Hệ thống có <b>{routeAudit.totalAppRoutes}</b> trang thực tế. Đã đăng ký quản trị:{' '}
-                                <b>{routeAudit.managedRoutesCount}/{routeAudit.totalAppRoutes}</b> ({routeAudit.coveragePercent}% độ phủ).
+                                <b>{routeAudit.managedRoutesCount}/{routeAudit.totalAppRoutes}</b> ({routeAudit.coveragePercent}%).
                             </p>
                         </div>
                     </div>
@@ -733,7 +733,7 @@ export default function SystemAdminPage() {
                             {pageList.length}/{routeAudit.totalAppRoutes} phân hệ
                         </div>
                         <div className={`text-[10px] font-bold ${routeAudit.isFullyAudited ? 'text-emerald-600' : 'text-amber-600'}`}>
-                            {routeAudit.coveragePercent}% độ phủ
+                            {routeAudit.coveragePercent}%
                         </div>
                     </div>
                     <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600">
@@ -1277,8 +1277,8 @@ export default function SystemAdminPage() {
                                 type="button"
                                 onClick={() => setSqlTab('PERMISSIONS')}
                                 className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${sqlTab === 'PERMISSIONS'
-                                        ? 'bg-indigo-600 text-white shadow-xs'
-                                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                    ? 'bg-indigo-600 text-white shadow-xs'
+                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                                     }`}
                             >
                                 1. Phân Quyền Trang (system_page_permissions)
@@ -1287,8 +1287,8 @@ export default function SystemAdminPage() {
                                 type="button"
                                 onClick={() => setSqlTab('BADGE')}
                                 className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${sqlTab === 'BADGE'
-                                        ? 'bg-amber-600 text-white shadow-xs'
-                                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                    ? 'bg-amber-600 text-white shadow-xs'
+                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                                     }`}
                             >
                                 🏷️ Cột Badge Sidebar (ALTER TABLE)
@@ -1297,8 +1297,8 @@ export default function SystemAdminPage() {
                                 type="button"
                                 onClick={() => setSqlTab('AUTH')}
                                 className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${sqlTab === 'AUTH'
-                                        ? 'bg-indigo-600 text-white shadow-xs'
-                                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                    ? 'bg-indigo-600 text-white shadow-xs'
+                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                                     }`}
                             >
                                 2. Tài Khoản &amp; Xét Duyệt (user_profiles)
@@ -1307,8 +1307,8 @@ export default function SystemAdminPage() {
                                 type="button"
                                 onClick={() => setSqlTab('SESSIONS')}
                                 className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${sqlTab === 'SESSIONS'
-                                        ? 'bg-indigo-600 text-white shadow-xs'
-                                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                    ? 'bg-indigo-600 text-white shadow-xs'
+                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                                     }`}
                             >
                                 3. Phiên Dữ Liệu Nhân Sự (employee_data_sessions)
@@ -1317,8 +1317,8 @@ export default function SystemAdminPage() {
                                 type="button"
                                 onClick={() => setSqlTab('CLUSTER')}
                                 className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${sqlTab === 'CLUSTER'
-                                        ? 'bg-amber-600 text-white shadow-xs'
-                                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                    ? 'bg-amber-600 text-white shadow-xs'
+                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                                     }`}
                             >
                                 4. Target &amp; Nhận Xét Cụm (cluster_target_configs)
@@ -1327,8 +1327,8 @@ export default function SystemAdminPage() {
                                 type="button"
                                 onClick={() => setSqlTab('ALL')}
                                 className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${sqlTab === 'ALL'
-                                        ? 'bg-blue-600 text-white shadow-xs'
-                                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                    ? 'bg-blue-600 text-white shadow-xs'
+                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                                     }`}
                             >
                                 ⚡ Tất Cả Bảng (Trọn Bộ)

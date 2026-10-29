@@ -349,7 +349,7 @@ const RAW_DEFAULT_PAGE_PERMISSIONS: SystemPagePermission[] = [
         description: 'Kho lưu trữ dữ liệu mẫu tham chiếu phục vụ kiểm thử và cập nhật tính năng',
         is_enabled: true,
         allowed_roles: ['ADMIN'], // MẶC ĐỊNH CHỈ DUY NHẤT ADMIN
-        order_index: 9.5,
+        order_index: 10,
         badge_enabled: true,
         badge_icon: '⚡',
         badge_text: 'Admin',
@@ -860,7 +860,7 @@ export async function saveSystemPagePermissions(permissions: SystemPagePermissio
             is_enabled: Boolean(p.is_enabled),
             allowed_roles: p.allowed_roles,
             allowed_stores: (p.allowed_stores && p.allowed_stores.length > 0) ? p.allowed_stores : null,
-            order_index: p.order_index,
+            order_index: Math.round(Number(p.order_index) || 1),
             badge_enabled: p.badge_enabled !== undefined ? Boolean(p.badge_enabled) : true,
             badge_text: p.badge_text ? p.badge_text.trim() : null,
             badge_icon: p.badge_icon ? p.badge_icon.trim() : null,
@@ -937,6 +937,7 @@ function getLocalPermissions(): SystemPagePermission[] {
 
                     return {
                         ...item,
+                        order_index: Math.round(Number(item.order_index) || 1),
                         badge_enabled: cached ? (cached.badge_enabled !== false) : (item.badge_enabled ?? true),
                         badge_text: cached ? (cached.badge_text ?? item.badge_text) : (item.badge_text || ''),
                         badge_icon: cached ? (cached.badge_icon ?? item.badge_icon) : (item.badge_icon || ''),

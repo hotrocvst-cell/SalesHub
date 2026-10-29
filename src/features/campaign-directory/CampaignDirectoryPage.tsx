@@ -202,7 +202,7 @@ export default function CampaignDirectoryPage() {
                 const matchRules = item.rules.toLowerCase().includes(q);
                 const matchOpp = (item.opportunity || '').toLowerCase().includes(q);
                 const matchGroup = item.group_name.toLowerCase().includes(q);
-                const matchStatus = item.product_status.toLowerCase().includes(q);
+                const matchStatus = (item.product_status || '').toLowerCase().includes(q);
                 if (!matchName && !matchShort && !matchMapped && !matchRules && !matchOpp && !matchGroup && !matchStatus) {
                     return false;
                 }

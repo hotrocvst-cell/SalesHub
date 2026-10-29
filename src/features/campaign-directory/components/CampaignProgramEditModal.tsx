@@ -1,10 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Save, Sparkles, AlertCircle, Tag, Eye, ChevronDown } from 'lucide-react';
-import type { CampaignProgramItem, CampaignOrientation, CampaignCalculationMethod, ProductStatusType } from '../types';
+import { X, Save, Sparkles, AlertCircle, Tag, Eye, ChevronDown, Boxes } from 'lucide-react';
+import type { CampaignProgramItem, CampaignOrientation, CampaignCalculationMethod } from '../types';
+import {
+    CAMPAIGN_PRODUCT_STATUS_OPTIONS,
+    parseProductStatusToCheckboxes,
+    formatSelectedProductStatuses
+} from '../types';
 import type { CampaignDictItem } from '../../../core/lib/storage';
 import TextFormatHelperToolbar from './TextFormatHelperToolbar';
 import FormattedCampaignText from './FormattedCampaignText';
 import { matchCampaignDictionary } from '../utils/campaignExcelHelper';
+import { beautifyCampaignText } from '../utils/campaignTextBeautifier';
 
 interface Props {
     isOpen: boolean;
@@ -17,7 +23,6 @@ interface Props {
 
 const COMMON_ORIENTATIONS: CampaignOrientation[] = ['Chính', 'Bán kèm', 'Phụ', 'Trọng tâm'];
 const COMMON_CALCS: CampaignCalculationMethod[] = ['Doanh thu', 'DTQĐ', 'Số lượng', 'SLQĐ'];
-const COMMON_STATUSES: ProductStatusType[] = ['Tất cả (All)', 'Mới', 'Cũ', 'Đổi trả'];
 
 export default function CampaignProgramEditModal({
     isOpen,
@@ -38,7 +43,7 @@ export default function CampaignProgramEditModal({
     const [orientation, setOrientation] = useState<CampaignOrientation>('Chính');
     const [calcMethod, setCalcMethod] = useState<CampaignCalculationMethod>('Doanh thu');
     const [rules, setRules] = useState('');
-    const [productStatus, setProductStatus] = useState<ProductStatusType>('Tất cả (All)');
+    const [selectedStatuses, setSelectedStatuses] = useState<string[]>([...CAMPAIGN_PRODUCT_STATUS_OPTIONS]);
     const [opportunity, setOpportunity] = useState('');
     const [targetPeriod, setTargetPeriod] = useState('');
     const [isActive, setIsActive] = useState(true);
@@ -47,6 +52,27 @@ export default function CampaignProgramEditModal({
 
     // Toggle xem trước trực tiếp
     const [showPreview, setShowPreview] = useState(false);
+
+    // Tính trạng thái chọn tất cả (All trạng thái)
+    const isAllSelected = selectedStatuses.length === CAMPAIGN_PRODUCT_STATUS_OPTIONS.length;
+
+    const handleToggleAllStatuses = () => {
+        if (isAllSelected) {
+            setSelectedStatuses([]);
+        } else {
+            setSelectedStatuses([...CAMPAIGN_PRODUCT_STATUS_OPTIONS]);
+        }
+    };
+
+    const handleToggleSingleStatus = (status: string) => {
+        setSelectedStatuses(prev => {
+            if (prev.includes(status)) {
+                return prev.filter(s => s !== status);
+            } else {
+                return [...prev, status];
+            }
+        });
+    };
 
     useEffect(() => {
         if (editingItem) {
@@ -58,7 +84,7 @@ export default function CampaignProgramEditModal({
             setOrientation(editingItem.orientation || 'Chính');
             setCalcMethod(editingItem.calculation_method || 'Doanh thu');
             setRules(editingItem.rules || '');
-            setProductStatus(editingItem.product_status || 'Tất cả (All)');
+            setSelectedStatuses(parseProductStatusToCheckboxes(editingItem.product_status));
             setOpportunity(editingItem.opportunity || '');
             setTargetPeriod(editingItem.target_period || '');
             setIsActive(editingItem.is_active !== false);
@@ -71,7 +97,7 @@ export default function CampaignProgramEditModal({
             setOrientation('Chính');
             setCalcMethod('Doanh thu');
             setRules('');
-            setProductStatus('Tất cả (All)');
+            setSelectedStatuses([...CAMPAIGN_PRODUCT_STATUS_OPTIONS]);
             setOpportunity('');
             setTargetPeriod('Tháng 10/2026');
             setIsActive(true);
@@ -158,6 +184,12 @@ export default function CampaignProgramEditModal({
             setErrorMsg('Vui lòng nhập tên chương trình thi đua');
             return;
         }
+        if (selectedStatuses.length === 0) {
+            setErrorMsg('Vui lòng chọn ít nhất một trạng thái sản phẩm áp dụng (hoặc chọn "All trạng thái")');
+            return;
+        }
+
+        const finalProductStatus = formatSelectedProductStatuses(selectedStatuses);
 
         setIsSaving(true);
         try {
@@ -170,7 +202,7 @@ export default function CampaignProgramEditModal({
                 orientation,
                 calculation_method: calcMethod,
                 rules: rules.trim(),
-                product_status: productStatus,
+                product_status: finalProductStatus,
                 opportunity: opportunity.trim(),
                 target_period: targetPeriod.trim(),
                 is_active: isActive
@@ -342,8 +374,8 @@ export default function CampaignProgramEditModal({
                         </p>
                     </div>
 
-                    {/* Hàng 3: Cách tính & Trạng thái sản phẩm & Kỳ áp dụng */}
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {/* Hàng 3A: Cách tính & Kỳ áp dụng */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div className="space-y-1">
                             <label className="text-xs font-black text-slate-800 uppercase tracking-wide">
                                 Cách tính
@@ -351,25 +383,10 @@ export default function CampaignProgramEditModal({
                             <select
                                 value={calcMethod}
                                 onChange={e => setCalcMethod(e.target.value as CampaignCalculationMethod)}
-                                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer"
                             >
                                 {COMMON_CALCS.map(c => (
                                     <option key={c} value={c}>{c}</option>
-                                ))}
-                            </select>
-                        </div>
-
-                        <div className="space-y-1">
-                            <label className="text-xs font-black text-slate-800 uppercase tracking-wide">
-                                Trạng thái sản phẩm
-                            </label>
-                            <select
-                                value={productStatus}
-                                onChange={e => setProductStatus(e.target.value as ProductStatusType)}
-                                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500"
-                            >
-                                {COMMON_STATUSES.map(s => (
-                                    <option key={s} value={s}>{s}</option>
                                 ))}
                             </select>
                         </div>
@@ -385,6 +402,118 @@ export default function CampaignProgramEditModal({
                                 onChange={e => setTargetPeriod(e.target.value)}
                                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                             />
+                        </div>
+                    </div>
+
+                    {/* Hàng 3B: Cài đặt trạng thái sản phẩm theo checkbox (Nhiều lựa chọn) */}
+                    <div className="space-y-1.5">
+                        <div className="flex items-center justify-between flex-wrap gap-1">
+                            <label className="text-xs font-black text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
+                                <Boxes className="w-3.5 h-3.5 text-blue-600" />
+                                <span>Trạng thái sản phẩm áp dụng <span className="text-rose-500">*</span></span>
+                            </label>
+                            <span className={`text-[10.5px] font-bold px-2 py-0.5 rounded-md border ${
+                                isAllSelected
+                                    ? 'bg-blue-50 text-blue-800 border-blue-200'
+                                    : selectedStatuses.length > 0
+                                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                    : 'bg-rose-50 text-rose-700 border-rose-200'
+                            }`}>
+                                {isAllSelected
+                                    ? '✓ All trạng thái (Tất cả)'
+                                    : selectedStatuses.length > 0
+                                    ? `Đã chọn ${selectedStatuses.length}/4 trạng thái`
+                                    : '⚠️ Chưa chọn trạng thái nào'}
+                            </span>
+                        </div>
+
+                        <div className="p-2.5 sm:p-3 bg-slate-50/80 border border-slate-200 rounded-2xl">
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
+                                {/* 1. Checkbox: All trạng thái */}
+                                <label
+                                    className={`flex items-center gap-2 p-2 sm:p-2.5 rounded-xl border cursor-pointer select-none transition ${
+                                        isAllSelected
+                                            ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                                            : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100 hover:border-slate-300'
+                                    }`}
+                                >
+                                    <input
+                                        type="checkbox"
+                                        checked={isAllSelected}
+                                        onChange={handleToggleAllStatuses}
+                                        className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300 cursor-pointer shrink-0"
+                                    />
+                                    <span className="text-xs font-black leading-tight">All trạng thái</span>
+                                </label>
+
+                                {/* 2. Checkbox: Mới */}
+                                <label
+                                    className={`flex items-center gap-2 p-2 sm:p-2.5 rounded-xl border cursor-pointer select-none transition ${
+                                        selectedStatuses.includes('Mới')
+                                            ? 'bg-emerald-50 text-emerald-900 border-emerald-300 font-bold shadow-2xs'
+                                            : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                                    }`}
+                                >
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedStatuses.includes('Mới')}
+                                        onChange={() => handleToggleSingleStatus('Mới')}
+                                        className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300 cursor-pointer shrink-0"
+                                    />
+                                    <span className="text-xs font-bold leading-tight">Mới</span>
+                                </label>
+
+                                {/* 3. Checkbox: Mới (Giảm giá) */}
+                                <label
+                                    className={`flex items-center gap-2 p-2 sm:p-2.5 rounded-xl border cursor-pointer select-none transition ${
+                                        selectedStatuses.includes('Mới (Giảm giá)')
+                                            ? 'bg-sky-50 text-sky-900 border-sky-300 font-bold shadow-2xs'
+                                            : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                                    }`}
+                                >
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedStatuses.includes('Mới (Giảm giá)')}
+                                        onChange={() => handleToggleSingleStatus('Mới (Giảm giá)')}
+                                        className="w-4 h-4 rounded text-sky-600 focus:ring-sky-500 border-slate-300 cursor-pointer shrink-0"
+                                    />
+                                    <span className="text-xs font-bold leading-tight">Mới (Giảm giá)</span>
+                                </label>
+
+                                {/* 4. Checkbox: Đã sử dụng */}
+                                <label
+                                    className={`flex items-center gap-2 p-2 sm:p-2.5 rounded-xl border cursor-pointer select-none transition ${
+                                        selectedStatuses.includes('Đã sử dụng')
+                                            ? 'bg-amber-50 text-amber-900 border-amber-300 font-bold shadow-2xs'
+                                            : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                                    }`}
+                                >
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedStatuses.includes('Đã sử dụng')}
+                                        onChange={() => handleToggleSingleStatus('Đã sử dụng')}
+                                        className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 border-slate-300 cursor-pointer shrink-0"
+                                    />
+                                    <span className="text-xs font-bold leading-tight">Đã sử dụng</span>
+                                </label>
+
+                                {/* 5. Checkbox: Trưng Bày (Bỏ mẫu) */}
+                                <label
+                                    className={`flex items-center gap-2 p-2 sm:p-2.5 rounded-xl border cursor-pointer select-none transition ${
+                                        selectedStatuses.includes('Trưng Bày (Bỏ mẫu)')
+                                            ? 'bg-purple-50 text-purple-900 border-purple-300 font-bold shadow-2xs'
+                                            : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                                    }`}
+                                >
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedStatuses.includes('Trưng Bày (Bỏ mẫu)')}
+                                        onChange={() => handleToggleSingleStatus('Trưng Bày (Bỏ mẫu)')}
+                                        className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 border-slate-300 cursor-pointer shrink-0"
+                                    />
+                                    <span className="text-xs font-bold leading-tight">Trưng Bày (Bỏ mẫu)</span>
+                                </label>
+                            </div>
                         </div>
                     </div>
 
@@ -407,6 +536,7 @@ export default function CampaignProgramEditModal({
                         {/* Toolbar chèn định dạng */}
                         <TextFormatHelperToolbar
                             onInsertTag={(pre, suf) => insertTagToTextarea('rules', pre, suf)}
+                            onAutoBeautify={() => setRules(prev => beautifyCampaignText(prev))}
                         />
 
                         <textarea
@@ -438,6 +568,7 @@ export default function CampaignProgramEditModal({
                         {/* Toolbar chèn định dạng cho CTKM */}
                         <TextFormatHelperToolbar
                             onInsertTag={(pre, suf) => insertTagToTextarea('opportunity', pre, suf)}
+                            onAutoBeautify={() => setOpportunity(prev => beautifyCampaignText(prev))}
                         />
 
                         <textarea

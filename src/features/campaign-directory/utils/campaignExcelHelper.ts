@@ -6,6 +6,10 @@ import type {
     ProductStatusType,
     CampaignGroup
 } from '../types';
+import {
+    parseProductStatusToCheckboxes,
+    formatSelectedProductStatuses
+} from '../types';
 import type { CampaignDictItem } from '../../../core/lib/storage';
 
 /**
@@ -224,29 +228,32 @@ export async function exportCampaignProgramTemplate(
         });
     });
 
-    // SHEET 2: DANH MỤC TỪ ĐIỂN THI ĐUA CỦA ADMIN ĐỂ TRA CỨU MAPPING
+    // SHEET 2: BẢNG TỔNG HỢP CÁC THẺ & CÚ PHÁP ĐỊNH DẠNG TEXT (SALESHUB ANALYTICS)
+    buildFormatGuideSheet(workbook);
+
+    // SHEET 3: DANH MỤC TỪ ĐIỂN THI ĐUA CỦA ADMIN ĐỂ TRA CỨU MAPPING
     if (campaignDict && campaignDict.length > 0) {
-        const sheet2 = workbook.addWorksheet('Tu_Dien_Mapping', {
+        const sheet3 = workbook.addWorksheet('Tu_Dien_Mapping', {
             views: [{ state: 'frozen', ySplit: 1 }]
         });
 
-        sheet2.columns = [
+        sheet3.columns = [
             { header: 'Tên viết tắt (display_name)', key: 'display_name', width: 28 },
             { header: 'Tên theo dữ liệu nhập (raw_key)', key: 'raw_key', width: 32 },
             { header: 'Đơn vị tính', key: 'unit', width: 16 },
             { header: 'Trạng thái', key: 'is_active', width: 16 }
         ];
 
-        const s2Header = sheet2.getRow(1);
-        s2Header.height = 28;
-        s2Header.eachCell(c => {
+        const s3Header = sheet3.getRow(1);
+        s3Header.height = 28;
+        s3Header.eachCell(c => {
             c.font = { name: 'Arial', size: 10.5, bold: true, color: { argb: 'FFFFFFFF' } };
             c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF334155' } };
             c.alignment = { vertical: 'middle', horizontal: 'center' };
         });
 
         campaignDict.forEach(dict => {
-            const r = sheet2.addRow({
+            const r = sheet3.addRow({
                 display_name: dict.display_name,
                 raw_key: dict.raw_key,
                 unit: dict.unit || 'Cái',
@@ -364,11 +371,7 @@ export async function parseCampaignExcelFile(
         else if (normCalc.includes('so luong') || normCalc.includes('sl')) calculation_method = 'Số lượng';
 
         // Chuẩn hóa trạng thái sản phẩm
-        let product_status: ProductStatusType = 'Tất cả (All)';
-        const normStatus = normalizeSearchStr(rawStatus);
-        if (normStatus.includes('moi') || normStatus.includes('new')) product_status = 'Mới';
-        else if (normStatus.includes('cu') || normStatus.includes('old')) product_status = 'Cũ';
-        else if (normStatus.includes('doi tra')) product_status = 'Đổi trả';
+        const product_status: ProductStatusType = parseProductStatus(rawStatus);
 
         // Tự động mapping với từ điển thi đua nếu chưa có short_name
         let mapped_key = '';
@@ -649,11 +652,8 @@ function parseCalculationMethod(raw: string): CampaignCalculationMethod {
 }
 
 function parseProductStatus(raw: string): ProductStatusType {
-    const norm = normalizeSearchStr(raw);
-    if (norm.includes('moi') || norm.includes('new')) return 'Mới';
-    if (norm.includes('cu') || norm.includes('old')) return 'Cũ';
-    if (norm.includes('doi tra')) return 'Đổi trả';
-    return 'Tất cả (All)';
+    const statuses = parseProductStatusToCheckboxes(raw);
+    return formatSelectedProductStatuses(statuses);
 }
 
 function getCellValueAsString(val: any): string {
@@ -665,4 +665,359 @@ function getCellValueAsString(val: any): string {
         return String(val.text || '');
     }
     return String(val).trim();
+}
+
+/**
+ * TẠO SHEET HƯỚNG DẪN CÁC THẺ & CÁCH DÙNG ĐỂ ĐỊNH DẠNG TEXT (SALESHUB ANALYTICS)
+ */
+function buildFormatGuideSheet(workbook: ExcelJS.Workbook): void {
+    const sheet = workbook.addWorksheet('Huong_Dan_Dinh_Dang', {
+        views: [{ state: 'frozen', ySplit: 3 }]
+    });
+
+    sheet.columns = [
+        { key: 'stt', width: 7 },
+        { key: 'category', width: 22 },
+        { key: 'syntax', width: 28 },
+        { key: 'description', width: 36 },
+        { key: 'example', width: 44 },
+        { key: 'preview', width: 40 },
+        { key: 'notes', width: 28 }
+    ];
+
+    // Dòng 1: Banner Tiêu Đề
+    sheet.addRow(['BẢNG TỔNG HỢP CÁC THẺ & CÚ PHÁP ĐỊNH DẠNG TEXT (SALESHUB ANALYTICS)']);
+    sheet.mergeCells('A1:G1');
+    const titleCell = sheet.getCell('A1');
+    titleCell.font = { name: 'Arial', size: 12.5, bold: true, color: { argb: 'FFFFFFFF' } };
+    titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
+    titleCell.alignment = { vertical: 'middle', horizontal: 'center' };
+    sheet.getRow(1).height = 36;
+
+    // Dòng 2: Phụ đề & Hướng dẫn
+    sheet.addRow([
+        'Áp dụng cho cột [Thể lệ & Thưởng] và [Cơ hội (CTKM)]. Khi nhập vào Excel và tải lên SalesHub, hệ thống sẽ tự động hiển thị trực quan trên Web và hình ảnh báo cáo gửi Zalo.'
+    ]);
+    sheet.mergeCells('A2:G2');
+    const subCell = sheet.getCell('A2');
+    subCell.font = { name: 'Arial', size: 9.5, italic: true, color: { argb: 'FF1E293B' } };
+    subCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } };
+    subCell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
+    sheet.getRow(2).height = 24;
+
+    // Dòng 3: Header của Bảng
+    sheet.addRow([
+        'STT',
+        'Nhóm định dạng',
+        'Thẻ / Cú pháp gõ',
+        'Mô tả & Công dụng',
+        'Ví dụ gõ vào ô Excel',
+        'Hiển thị mẫu trên SalesHub',
+        'Phím tắt / Ghi chú nhanh'
+    ]);
+    const headerRow = sheet.getRow(3);
+    headerRow.height = 30;
+    headerRow.eachCell(cell => {
+        cell.font = { name: 'Arial', size: 10.5, bold: true, color: { argb: 'FFFFFFFF' } };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } };
+        cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+        cell.border = {
+            top: { style: 'thin', color: { argb: 'FF94A3B8' } },
+            bottom: { style: 'medium', color: { argb: 'FF334155' } },
+            left: { style: 'thin', color: { argb: 'FF94A3B8' } },
+            right: { style: 'thin', color: { argb: 'FF94A3B8' } }
+        };
+    });
+
+    // Danh sách các mục hướng dẫn định dạng chi tiết
+    const guideItems = [
+        {
+            stt: 1,
+            category: 'Xuống dòng trong ô',
+            syntax: 'Alt + Enter (hoặc <br>)',
+            description: 'Ngắt đoạn văn thành các dòng riêng biệt trong cùng 1 ô Excel.',
+            example: 'Dòng 1: Thể lệ chính\nDòng 2: Điều kiện phụ',
+            preview: {
+                richText: [
+                    { text: 'Dòng 1: Thể lệ chính\nDòng 2: Điều kiện phụ', font: { name: 'Arial', size: 10 } }
+                ]
+            },
+            notes: 'Nhấn giữ phím Alt rồi bấm Enter'
+        },
+        {
+            stt: 2,
+            category: 'Chữ in đậm (Bold)',
+            syntax: '**nội dung** hoặc <b>...</b>',
+            description: 'Làm đậm chữ để nhấn mạnh số tiền thưởng, mốc target, model trọng tâm.',
+            example: '**Thưởng 150.000đ/máy** khi đạt 100% target',
+            preview: {
+                richText: [
+                    { text: 'Thưởng 150.000đ/máy', font: { name: 'Arial', size: 10, bold: true, color: { argb: 'FF0F172A' } } },
+                    { text: ' khi đạt 100% target', font: { name: 'Arial', size: 10 } }
+                ]
+            },
+            notes: 'Kẹp 2 dấu sao ** ở đầu và cuối'
+        },
+        {
+            stt: 3,
+            category: 'Chữ in nghiêng (Italic)',
+            syntax: '*nội dung* hoặc <i>...</i>',
+            description: 'In nghiêng cho các chú thích phụ, thời gian áp dụng, điều kiện xét duyệt.',
+            example: '*Áp dụng ca trực sáng từ 8h00 - 15h00*',
+            preview: {
+                richText: [
+                    { text: 'Áp dụng ca trực sáng từ 8h00 - 15h00', font: { name: 'Arial', size: 10, italic: true, color: { argb: 'FF475569' } } }
+                ]
+            },
+            notes: 'Kẹp 1 dấu sao * ở đầu và cuối'
+        },
+        {
+            stt: 4,
+            category: 'Đậm & Nghiêng kết hợp',
+            syntax: '***nội dung***',
+            description: 'Vừa in đậm vừa in nghiêng cho lưu ý hoặc cảnh báo đặc biệt.',
+            example: '***Lưu ý: Chỉ áp dụng máy xuất kho trong ngày***',
+            preview: {
+                richText: [
+                    { text: 'Lưu ý: Chỉ áp dụng máy xuất kho trong ngày', font: { name: 'Arial', size: 10, bold: true, italic: true, color: { argb: 'FF0F172A' } } }
+                ]
+            },
+            notes: 'Kẹp 3 dấu sao *** ở hai đầu'
+        },
+        {
+            stt: 5,
+            category: 'Chữ màu Đỏ (Red)',
+            syntax: '[red]nội dung[/red] hoặc [do]',
+            description: 'Nổi bật cảnh báo, nhân đôi thưởng, điều kiện loại trừ.',
+            example: '[red]Nhân đôi điểm thi đua[/red] cho ca bán trên 3 máy',
+            preview: {
+                richText: [
+                    { text: 'Nhân đôi điểm thi đua', font: { name: 'Arial', size: 10, bold: true, color: { argb: 'FFE11D48' } } },
+                    { text: ' cho ca bán trên 3 máy', font: { name: 'Arial', size: 10 } }
+                ]
+            },
+            notes: 'Có thể dùng [red] hoặc [do]'
+        },
+        {
+            stt: 6,
+            category: 'Chữ màu Xanh (Blue)',
+            syntax: '[blue]nội dung[/blue] hoặc [xanh]',
+            description: 'Cổng thanh toán, ngân hàng tài trợ, mã chương trình, tên hãng.',
+            example: 'Giảm 2.500.000đ qua [blue]VNPAY / MoMo[/blue]',
+            preview: {
+                richText: [
+                    { text: 'Giảm 2.500.000đ qua ', font: { name: 'Arial', size: 10 } },
+                    { text: 'VNPAY / MoMo', font: { name: 'Arial', size: 10, bold: true, color: { argb: 'FF2563EB' } } }
+                ]
+            },
+            notes: 'Có thể dùng [blue] hoặc [xanh]'
+        },
+        {
+            stt: 7,
+            category: 'Chữ màu Xanh Lá (Green)',
+            syntax: '[green]nội dung[/green] hoặc [luc]',
+            description: 'Mức trợ giá, quà tặng kèm, các chỉ số đạt target xuất sắc.',
+            example: 'Trợ giá thu cũ đổi mới [green]lên đến 2.000.000đ[/green]',
+            preview: {
+                richText: [
+                    { text: 'Trợ giá thu cũ đổi mới ', font: { name: 'Arial', size: 10 } },
+                    { text: 'lên đến 2.000.000đ', font: { name: 'Arial', size: 10, bold: true, color: { argb: 'FF059669' } } }
+                ]
+            },
+            notes: 'Có thể dùng [green] hoặc [luc]'
+        },
+        {
+            stt: 8,
+            category: 'Chữ màu Vàng Cam (Amber)',
+            syntax: '[amber]nội dung[/amber] hoặc [gold]',
+            description: 'Giải thưởng lớn, huy hiệu thi đua, quà tặng giá trị cao.',
+            example: 'Thưởng nóng [amber]30.000đ/combo[/amber] thành công',
+            preview: {
+                richText: [
+                    { text: 'Thưởng nóng ', font: { name: 'Arial', size: 10 } },
+                    { text: '30.000đ/combo', font: { name: 'Arial', size: 10, bold: true, color: { argb: 'FFD97706' } } },
+                    { text: ' thành công', font: { name: 'Arial', size: 10 } }
+                ]
+            },
+            notes: 'Có thể dùng [amber], [gold], [vang]'
+        },
+        {
+            stt: 9,
+            category: 'Chữ màu Cam (Orange)',
+            syntax: '[orange]nội dung[/orange]',
+            description: 'Ưu đãi sốc, phụ kiện kèm máy, quà tặng đắt giá.',
+            example: 'Tặng Loa Soundbar Sony [orange]trị giá 3.500.000đ[/orange]',
+            preview: {
+                richText: [
+                    { text: 'Tặng Loa Soundbar Sony ', font: { name: 'Arial', size: 10 } },
+                    { text: 'trị giá 3.500.000đ', font: { name: 'Arial', size: 10, bold: true, color: { argb: 'FFEA580C' } } }
+                ]
+            },
+            notes: 'Nhấn mạnh giá trị quà tặng'
+        },
+        {
+            stt: 10,
+            category: 'Chữ màu Tím (Purple)',
+            syntax: '[purple]nội dung[/purple] hoặc [tim]',
+            description: 'Dịch vụ bảo hành, rơi vỡ, SIM số đẹp, tiện ích bán lẻ.',
+            example: 'Tặng gói Bảo hiểm rơi vỡ [purple]thời hạn 12 tháng[/purple]',
+            preview: {
+                richText: [
+                    { text: 'Tặng gói Bảo hiểm rơi vỡ ', font: { name: 'Arial', size: 10 } },
+                    { text: 'thời hạn 12 tháng', font: { name: 'Arial', size: 10, bold: true, color: { argb: 'FF9333EA' } } }
+                ]
+            },
+            notes: 'Có thể dùng [purple] hoặc [tim]'
+        },
+        {
+            stt: 11,
+            category: 'Chữ màu Xanh Ngọc (Cyan)',
+            syntax: '[cyan]nội dung[/cyan]',
+            description: 'Gói cước data 4G/5G, tài khoản VIP, tiện ích kỹ thuật số.',
+            example: 'Gói cước SIM Data [cyan]6GB tốc độ cao/ngày[/cyan]',
+            preview: {
+                richText: [
+                    { text: 'Gói cước SIM Data ', font: { name: 'Arial', size: 10 } },
+                    { text: '6GB tốc độ cao/ngày', font: { name: 'Arial', size: 10, bold: true, color: { argb: 'FF0E7490' } } }
+                ]
+            },
+            notes: 'Màu xanh ngọc dịu mắt'
+        },
+        {
+            stt: 12,
+            category: 'Màu tùy chỉnh theo mã HEX',
+            syntax: '[color=#HEX]nội dung[/color]',
+            description: 'Dùng mã màu thương hiệu theo chuẩn HEX bất kỳ.',
+            example: 'Ưu đãi độc quyền [color=#E11D48]Galaxy AI Series[/color]',
+            preview: {
+                richText: [
+                    { text: 'Ưu đãi độc quyền ', font: { name: 'Arial', size: 10 } },
+                    { text: 'Galaxy AI Series', font: { name: 'Arial', size: 10, bold: true, color: { argb: 'FFE11D48' } } }
+                ]
+            },
+            notes: 'Định dạng: [color=#MÃ_HEX]...[/color]'
+        },
+        {
+            stt: 13,
+            category: 'Tô nền Highlight vàng',
+            syntax: '[hl]nội dung[/hl] hoặc [highlight]',
+            description: 'Đổ nền vàng bo tròn làm nổi bật số tiền thưởng hoặc danh hiệu.',
+            example: 'Đạt mốc 100 máy thưởng thêm [hl]500.000đ[/hl]',
+            preview: {
+                richText: [
+                    { text: 'Đạt mốc 100 máy thưởng thêm ', font: { name: 'Arial', size: 10 } },
+                    { text: '500.000đ', font: { name: 'Arial', size: 10, bold: true, color: { argb: 'FF78350F' } } }
+                ]
+            },
+            notes: 'Nền vàng dạ quang nổi bật'
+        },
+        {
+            stt: 14,
+            category: 'Thẻ Huy Hiệu (Badge)',
+            syntax: '[badge]nội dung[/badge]',
+            description: 'Tạo thẻ chip nhỏ gọn nền xanh dương viền bo tròn chữ in hoa.',
+            example: 'Chương trình [badge]HOT[/badge] - Ưu tiên tư vấn',
+            preview: {
+                richText: [
+                    { text: 'Chương trình ', font: { name: 'Arial', size: 10 } },
+                    { text: '[ HOT ]', font: { name: 'Arial', size: 10, bold: true, color: { argb: 'FF1E40AF' } } },
+                    { text: ' - Ưu tiên tư vấn', font: { name: 'Arial', size: 10 } }
+                ]
+            },
+            notes: 'Dành cho nhãn HOT, VIP, MỚI'
+        },
+        {
+            stt: 15,
+            category: 'Gạch đầu dòng danh sách',
+            syntax: '- nội dung hoặc • nội dung',
+            description: 'Tự động thụt đầu dòng và chuyển thành dấu chấm tròn bullet xanh dương.',
+            example: '- Đạt target tối thiểu 80%\n- Bán tối thiểu 2 combo/máy',
+            preview: {
+                richText: [
+                    { text: '• Đạt target tối thiểu 80%\n• Bán tối thiểu 2 combo/máy', font: { name: 'Arial', size: 10 } }
+                ]
+            },
+            notes: 'Gõ dấu gạch ngang (-) kèm dấu cách ở đầu dòng'
+        },
+        {
+            stt: 16,
+            category: 'Đánh số thứ tự tuần tự',
+            syntax: '1. nội dung, 2. nội dung',
+            description: 'Đánh số thứ tự các bước tư vấn hoặc các mốc bậc thang xét thưởng.',
+            example: '1. Bước 1: Tư vấn model máy\n2. Bước 2: Đính kèm gói bảo hành',
+            preview: {
+                richText: [
+                    { text: '1. Bước 1: Tư vấn model máy\n2. Bước 2: Đính kèm gói bảo hành', font: { name: 'Arial', size: 10 } }
+                ]
+            },
+            notes: 'Gõ số kèm dấu chấm (.) và dấu cách'
+        },
+        {
+            stt: 17,
+            category: 'Phối hợp đa định dạng',
+            syntax: '**[red]Nội dung[/red]**',
+            description: 'Lồng ghép in đậm, màu sắc và highlight cùng lúc để tạo thẻ chuyên nghiệp.',
+            example: '**Thưởng nóng [red]200.000đ[/red]** khi đạt [hl]Top 1 Siêu Thị[/hl]',
+            preview: {
+                richText: [
+                    { text: 'Thưởng nóng ', font: { name: 'Arial', size: 10, bold: true } },
+                    { text: '200.000đ', font: { name: 'Arial', size: 10, bold: true, color: { argb: 'FFE11D48' } } },
+                    { text: ' khi đạt ', font: { name: 'Arial', size: 10 } },
+                    { text: 'Top 1 Siêu Thị', font: { name: 'Arial', size: 10, bold: true, color: { argb: 'FFD97706' } } }
+                ]
+            },
+            notes: 'Đóng đúng cặp thẻ lồng nhau'
+        }
+    ];
+
+    guideItems.forEach((item, index) => {
+        const row = sheet.addRow({
+            stt: item.stt,
+            category: item.category,
+            syntax: item.syntax,
+            description: item.description,
+            example: item.example,
+            notes: item.notes
+        });
+
+        row.height = 34;
+
+        // Gán richText cho cột 6 (Hiển thị mẫu)
+        const cell6 = row.getCell(6);
+        cell6.value = item.preview;
+
+        const isEven = index % 2 === 0;
+        const rowBg = isEven ? 'FFFFFFFF' : 'FFF8FAFC';
+
+        row.eachCell((cell, colNumber) => {
+            cell.alignment = {
+                vertical: 'middle',
+                horizontal: colNumber === 1 ? 'center' : 'left',
+                wrapText: true
+            };
+            cell.border = {
+                top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+                bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+                left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+                right: { style: 'thin', color: { argb: 'FFE2E8F0' } }
+            };
+
+            if (colNumber === 1) {
+                cell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FF475569' } };
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+            } else if (colNumber === 2) {
+                cell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FF1E293B' } };
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: rowBg } };
+            } else if (colNumber === 3) {
+                cell.font = { name: 'Consolas', size: 9.5, bold: true, color: { argb: 'FF1D4ED8' } };
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEFF6FF' } };
+            } else if (colNumber === 5) {
+                cell.font = { name: 'Consolas', size: 9.5, color: { argb: 'FF334155' } };
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: rowBg } };
+            } else {
+                cell.font = { name: 'Arial', size: 10, color: { argb: 'FF334155' } };
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: rowBg } };
+            }
+        });
+    });
 }

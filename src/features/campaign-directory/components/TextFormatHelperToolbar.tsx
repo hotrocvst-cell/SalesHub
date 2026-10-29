@@ -3,11 +3,13 @@ import { HelpCircle, ChevronDown, ChevronUp, Palette, Sparkles } from 'lucide-re
 
 interface Props {
     onInsertTag?: (prefix: string, suffix: string) => void;
+    onAutoBeautify?: () => void;
     showHelpDefault?: boolean;
 }
 
 export default function TextFormatHelperToolbar({
     onInsertTag,
+    onAutoBeautify,
     showHelpDefault = false
 }: Props) {
     const [isHelpOpen, setIsHelpOpen] = useState(showHelpDefault);
@@ -107,6 +109,18 @@ export default function TextFormatHelperToolbar({
                     >
                         • Gạch đầu dòng
                     </button>
+
+                    {onAutoBeautify && (
+                        <button
+                            type="button"
+                            onClick={onAutoBeautify}
+                            className="px-2 py-0.5 rounded-md bg-gradient-to-r from-purple-100 to-indigo-100 hover:from-purple-200 hover:to-indigo-200 text-purple-900 font-black text-[10.5px] border border-purple-300 transition cursor-pointer flex items-center gap-1 shadow-2xs active:scale-95"
+                            title="Tự động nhận diện số tiền, mốc target, quà tặng, ngân hàng và gắn thẻ định dạng chuẩn"
+                        >
+                            <Sparkles className="w-3 h-3 text-purple-600" />
+                            <span>⚡ Tự động làm đẹp</span>
+                        </button>
+                    )}
                 </div>
 
                 {/* Nút bấm xem hướng dẫn chi tiết */}

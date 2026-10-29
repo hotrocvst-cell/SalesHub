@@ -12,7 +12,8 @@ import {
     Check,
     Tag,
     Info,
-    HelpCircle
+    HelpCircle,
+    Sliders
 } from 'lucide-react';
 import type { CampaignProgramItem } from '../types';
 import type { CampaignDictItem } from '../../../core/lib/storage';
@@ -21,7 +22,9 @@ import {
     parseCampaignExcelFile,
     parseCampaignTsvOrCsv
 } from '../utils/campaignExcelHelper';
+import { beautifyCampaignProgramItem } from '../utils/campaignTextBeautifier';
 import FormattedCampaignText from './FormattedCampaignText';
+import BeautifierConfigGuideModal from './BeautifierConfigGuideModal';
 
 interface Props {
     isOpen: boolean;
@@ -56,16 +59,22 @@ export default function CampaignProgramPasteModal({
     const [errorMsg, setErrorMsg] = useState<string>('');
     const [successNote, setSuccessNote] = useState<string>('');
 
+    // Tự động định dạng văn bản thông minh (Smart Auto-Beautifier)
+    const [autoBeautify, setAutoBeautify] = useState<boolean>(true);
+    const [isGuideOpen, setIsGuideOpen] = useState<boolean>(false);
+
     // Bóc tách dữ liệu từ text dán qua state-machine parser
     const pasteParsedItems = useMemo(() => {
         if (!rawText.trim()) return [];
         return parseCampaignTsvOrCsv(rawText, campaignDict);
     }, [rawText, campaignDict]);
 
-    // Danh sách hiển thị preview dựa trên tab hiện tại
+    // Danh sách hiển thị preview dựa trên tab hiện tại và tùy chọn tự động làm đẹp
     const activeParsedItems = useMemo(() => {
-        return importMode === 'excel' ? excelParsedItems : pasteParsedItems;
-    }, [importMode, excelParsedItems, pasteParsedItems]);
+        const base = importMode === 'excel' ? excelParsedItems : pasteParsedItems;
+        if (!autoBeautify) return base;
+        return base.map(beautifyCampaignProgramItem);
+    }, [importMode, excelParsedItems, pasteParsedItems, autoBeautify]);
 
     if (!isOpen) return null;
 
@@ -222,7 +231,7 @@ export default function CampaignProgramPasteModal({
                                         <span>File Excel Mẫu Chuẩn SalesHub (.xlsx)</span>
                                     </div>
                                     <p className="text-[11px] text-purple-800 leading-relaxed max-w-xl">
-                                        File mẫu đã được dàn sẵn 9 cột chuẩn, có sẵn dữ liệu mẫu, hướng dẫn xuống hàng (Alt+Enter), cú pháp chữ đậm/màu sắc và kèm Sheet từ điển thi đua cấu hình admin để tra cứu mapping.
+                                        File mẫu gồm Sheet dữ liệu chuẩn 9 cột, Sheet tổng hợp toàn bộ các thẻ &amp; cách dùng định dạng text (chữ đậm, màu sắc, highlight, bullet gạch đầu dòng...), và Sheet từ điển thi đua cấu hình admin để tra cứu mapping.
                                     </p>
                                 </div>
 
@@ -329,6 +338,43 @@ export default function CampaignProgramPasteModal({
                             <span>{successNote}</span>
                         </div>
                     )}
+
+                    {/* KHỐI CÔNG CỤ TỰ ĐỘNG ĐỊNH DẠNG THÔNG MINH & HƯỚNG DẪN CẤU HÌNH */}
+                    <div className="bg-gradient-to-r from-purple-50 via-indigo-50/50 to-blue-50/60 border border-purple-200/90 rounded-2xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                        <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                            <input
+                                type="checkbox"
+                                checked={autoBeautify}
+                                onChange={e => setAutoBeautify(e.target.checked)}
+                                className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 border-purple-300 cursor-pointer shrink-0"
+                            />
+                            <div className="space-y-0.5">
+                                <div className="text-xs font-black text-purple-950 flex items-center gap-1.5 flex-wrap">
+                                    <Sparkles className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                                    <span>Tự động định dạng văn bản thông minh (Auto Beautify)</span>
+                                    <span className={`text-[10px] font-black px-1.5 py-0.2 rounded-md ${
+                                        autoBeautify ? 'bg-emerald-600 text-white' : 'bg-slate-300 text-slate-700'
+                                    }`}>
+                                        {autoBeautify ? 'ĐANG BẬT' : 'ĐÃ TẮT'}
+                                    </span>
+                                </div>
+                                <p className="text-[10.5px] text-purple-800 leading-tight">
+                                    Tự động in đậm số tiền/target, gắn thẻ màu [red], [blue], [green] và gạch đầu dòng bullet cho văn bản thô.
+                                </p>
+                            </div>
+                        </label>
+
+                        {/* NÚT HƯỚNG DẪN CÁCH TỰ THAY ĐỔI & CẬP NHẬT CƠ CHẾ NHẬN DIỆN */}
+                        <button
+                            type="button"
+                            onClick={() => setIsGuideOpen(true)}
+                            className="px-3 py-1.5 bg-white hover:bg-purple-100/60 text-purple-900 border border-purple-300 hover:border-purple-400 rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs shrink-0 active:scale-95"
+                            title="Mở hướng dẫn vị trí file mã nguồn và cách cập nhật thêm từ khóa nhận diện"
+                        >
+                            <Sliders className="w-3.5 h-3.5 text-purple-600" />
+                            <span>Hướng dẫn cập nhật cơ chế nhận diện</span>
+                        </button>
+                    </div>
 
                     {/* BẢNG XEM TRƯỚC KẾT QUẢ BÓC TÁCH */}
                     {activeParsedItems.length > 0 && (
@@ -439,6 +485,12 @@ export default function CampaignProgramPasteModal({
                     </div>
                 </div>
             </div>
+
+            {/* Modal Hướng dẫn cách tự thay đổi & cập nhật cơ chế nhận diện */}
+            <BeautifierConfigGuideModal
+                isOpen={isGuideOpen}
+                onClose={() => setIsGuideOpen(false)}
+            />
         </div>
     );
 }

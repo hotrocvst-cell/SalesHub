@@ -147,8 +147,8 @@ export default function CampaignProgramTable({
                                      </td>
 
                                      {/* Trạng thái sản phẩm */}
-                                     <td className="py-2.5 px-2 text-center border-r border-slate-100 whitespace-nowrap">
-                                         <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-50 text-slate-700 border border-slate-200">
+                                     <td className="py-2.5 px-2 text-center border-r border-slate-100 min-w-[90px] max-w-[150px]">
+                                         <span className="inline-block px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-50 text-slate-700 border border-slate-200 leading-tight">
                                              {item.product_status}
                                          </span>
                                      </td>
