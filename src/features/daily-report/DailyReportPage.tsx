@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { useAuth } from '../../shared/contexts/AuthContext';
 import {
     generateStandardReportCanvas,
     downloadReportCanvas,
@@ -12,15 +13,18 @@ import {
     isStoreMatch
 } from '../../core/lib/formatters';
 import {
+    fetchStores,
     fetchCampaignDictionary,
-    type CampaignDictItem
+    type CampaignDictItem,
+    type StoreItem
 } from '../../core/lib/storage';
 import {
     Zap,
     Target,
     Calendar,
     Store,
-    Info
+    Info,
+    Edit3
 } from 'lucide-react';
 import ReportActionButtons from '../../shared/components/report/ReportActionButtons';
 import CloudDataSyncStatusBanner from '../../shared/components/report/CloudDataSyncStatusBanner';
@@ -34,12 +38,22 @@ import {
     type RevenueItem
 } from './utils/dailyReportParsers';
 
+import {
+    fetchRealtimeStoreSessions,
+    convertSessionsToDailyReportState,
+    type RealtimeStoreSessionRecord,
+    type RealtimeSessionSummary
+} from './services/realtimeSessionService';
+import RealtimeSessionBanner from './components/RealtimeSessionBanner';
+import RealtimeDataUpdateModal from './components/RealtimeDataUpdateModal';
+
 import DailyRealtimeTable from './components/DailyRealtimeTable';
 import DailyRemainingTable from './components/DailyRemainingTable';
 import DailyReportInputSection from './components/DailyReportInputSection';
 import { useDailyRemainingData } from './hooks/useDailyRemainingData';
 
 export default function DailyReportPage() {
+    const { isAdmin, currentUser } = useAuth();
     const exportRef = useRef<HTMLDivElement | null>(null);
     const [searchParams, setSearchParams] = useSearchParams();
 
@@ -48,6 +62,15 @@ export default function DailyReportPage() {
     const handleTabChange = (tab: 'realtime' | 'remaining') => {
         setSearchParams(tab === 'remaining' ? { tab: 'remaining' } : {});
     };
+
+    // Quản lý phiên dữ liệu Realtime từ Supabase Cloud
+    const [realtimeSessions, setRealtimeSessions] = useState<RealtimeStoreSessionRecord[]>([]);
+    const [sessionSummary, setSessionSummary] = useState<RealtimeSessionSummary | null>(null);
+    const [isLoadingSessions, setIsLoadingSessions] = useState<boolean>(false);
+    const [isTableMissing, setIsTableMissing] = useState<boolean>(false);
+    const [isUpdateModalOpen, setIsUpdateModalOpen] = useState<boolean>(false);
+    const [availableStores, setAvailableStores] = useState<StoreItem[]>([]);
+    const [showLegacyPasteInput, setShowLegacyPasteInput] = useState<boolean>(false);
 
     // Input states đồng bộ LocalStorage toàn hệ thống
     const [emulationText, setEmulationText] = useState<string>(() => {
@@ -97,46 +120,89 @@ export default function DailyReportPage() {
         try {
             if (emulationText) localStorage.setItem(DAILY_REPORT_STORAGE_KEYS.EMULATION, emulationText);
             else localStorage.removeItem(DAILY_REPORT_STORAGE_KEYS.EMULATION);
-        } catch {}
+        } catch { }
     }, [emulationText]);
 
     useEffect(() => {
         try {
             if (revenueText) localStorage.setItem(DAILY_REPORT_STORAGE_KEYS.REVENUE, revenueText);
             else localStorage.removeItem(DAILY_REPORT_STORAGE_KEYS.REVENUE);
-        } catch {}
+        } catch { }
     }, [revenueText]);
 
     useEffect(() => {
         try {
             if (realRevenueText) localStorage.setItem(DAILY_REPORT_STORAGE_KEYS.REAL_REVENUE, realRevenueText);
             else localStorage.removeItem(DAILY_REPORT_STORAGE_KEYS.REAL_REVENUE);
-        } catch {}
+        } catch { }
     }, [realRevenueText]);
 
     useEffect(() => {
         try {
             if (selectedStore) localStorage.setItem(DAILY_REPORT_STORAGE_KEYS.SELECTED_STORE, selectedStore);
-        } catch {}
+        } catch { }
     }, [selectedStore]);
 
-    // Tải từ điển và tự động bóc tách nếu đã có cache
+    // Tải phiên Realtime từ Supabase Cloud
+    const loadRealtimeSessions = async (currentDict: CampaignDictItem[] = campaignsDict) => {
+        setIsLoadingSessions(true);
+        const res = await fetchRealtimeStoreSessions();
+        setIsTableMissing(Boolean(res.isTableMissing));
+
+        if (res.data && res.data.length > 0) {
+            setRealtimeSessions(res.data);
+            const parsed = convertSessionsToDailyReportState(res.data, currentDict);
+            if (parsed.allData.length > 0 || Object.keys(parsed.revenueData).length > 0) {
+                setAllData(parsed.allData);
+                setRevenueData(parsed.revenueData);
+                setRevenueStores(parsed.revenueStores);
+                setSessionSummary(parsed.sessionSummary);
+                setIsLoadingSessions(false);
+                return;
+            }
+        }
+
+        // Dự phòng: Nếu trên Cloud chưa có dữ liệu, nhưng có text cũ trong localStorage thì bóc tách
+        if (emulationText.trim() || revenueText.trim()) {
+            const emuParsed = parseEmulationData(emulationText, currentDict);
+            const { revMap, revList } = parseRevenueData(revenueText, realRevenueText);
+            if (emuParsed.length > 0 || Object.keys(revMap).length > 0) {
+                setAllData(emuParsed);
+                setRevenueData(revMap);
+                setRevenueStores(revList);
+            }
+        }
+        setIsLoadingSessions(false);
+    };
+
+    // Tải từ điển, danh sách siêu thị và phiên Realtime Cloud khi khởi tạo
     useEffect(() => {
+        let loadedDict: CampaignDictItem[] = [];
         fetchCampaignDictionary().then(res => {
             if (res.success && res.data) {
                 setCampaignsDict(res.data);
-                if (emulationText.trim() || revenueText.trim()) {
-                    const emuParsed = parseEmulationData(emulationText, res.data);
-                    const { revMap, revList } = parseRevenueData(revenueText, realRevenueText);
-                    if (emuParsed.length > 0 || Object.keys(revMap).length > 0) {
-                        setAllData(emuParsed);
-                        setRevenueData(revMap);
-                        setRevenueStores(revList);
-                    }
-                }
+                loadedDict = res.data;
+            }
+            loadRealtimeSessions(loadedDict);
+        });
+
+        fetchStores().then(res => {
+            if (res.success && res.data) {
+                setAvailableStores(res.data);
             }
         });
     }, []);
+
+    // Callback khi nạp và lưu thành công từ Modal OCR / Nhập tay
+    const handleSavedSuccessfully = (savedSessions: RealtimeStoreSessionRecord[]) => {
+        setRealtimeSessions(savedSessions);
+        const parsed = convertSessionsToDailyReportState(savedSessions, campaignsDict);
+        setAllData(parsed.allData);
+        setRevenueData(parsed.revenueData);
+        setRevenueStores(parsed.revenueStores);
+        setSessionSummary(parsed.sessionSummary);
+        showToast(`🎉 Đã cập nhật phiên Realtime mới cho ${savedSessions.length} siêu thị từ Cloud!`);
+    };
 
     // Xử lý nút bóc tách
     const handleProcessData = () => {
@@ -167,7 +233,7 @@ export default function DailyReportPage() {
             localStorage.removeItem(DAILY_REPORT_STORAGE_KEYS.EMULATION);
             localStorage.removeItem(DAILY_REPORT_STORAGE_KEYS.REVENUE);
             localStorage.removeItem(DAILY_REPORT_STORAGE_KEYS.REAL_REVENUE);
-        } catch {}
+        } catch { }
         showToast('Đã làm mới vùng dán số liệu!');
     };
 
@@ -423,25 +489,35 @@ export default function DailyReportPage() {
             <div data-html2canvas-ignore="true" data-export-ignore="true">
                 <CloudDataSyncStatusBanner
                     storageType="cloud"
-                    syncStatus={remainingData.isLoadingSystem ? 'syncing' : remainingData.sessionSummaryInfo.isReady ? 'synced' : 'unsynced'}
-                    tableReady={true}
-                    tableName="daily_business_records & employee_data_sessions"
-                    customMessage={activeTab === 'remaining'
-                        ? `${remainingData.sessionSummaryInfo.title}: ${remainingData.sessionSummaryInfo.detail}`
-                        : 'Đang kết nối cơ sở dữ liệu Supabase Cloud & bộ nhớ đệm Realtime'
+                    syncStatus={isLoadingSessions ? 'syncing' : (sessionSummary?.isCloud ? 'synced' : 'unsynced')}
+                    tableReady={!isTableMissing}
+                    tableName="realtime_store_sessions"
+                    customMessage={sessionSummary
+                        ? `Phiên Realtime Cloud: ${sessionSummary.screenshotTimeStr || (sessionSummary.sessionTime ? new Date(sessionSummary.sessionTime).toLocaleTimeString('vi-VN') : '')} (${sessionSummary.storeCount} siêu thị)`
+                        : 'Bảng realtime_store_sessions (Mỗi siêu thị lưu 1 phiên duy nhất)'
                     }
                     compact={true}
                 />
             </div>
 
+            {/* BANNER THỜI GIAN PHIÊN DỮ LIỆU REALTIME TỪ CLOUD (QUY CHUẨN REALTIME SESSION) */}
+            <RealtimeSessionBanner
+                sessionSummary={sessionSummary}
+                selectedStore={selectedStore}
+                isLoading={isLoadingSessions}
+                isTableMissing={isTableMissing}
+                isAdmin={isAdmin}
+                onRefresh={() => loadRealtimeSessions()}
+                onOpenUpdateModal={() => setIsUpdateModalOpen(true)}
+            />
+
             {/* HEADER CÔNG CỤ & TAB SEGMENTED SWITCHER */}
             <div className="bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-xl text-white flex items-center justify-center font-bold shadow-xs shrink-0 ${
-                        activeTab === 'remaining'
-                            ? 'bg-gradient-to-br from-amber-500 to-orange-600'
-                            : 'bg-blue-600'
-                    }`}>
+                    <div className={`w-10 h-10 rounded-xl text-white flex items-center justify-center font-bold shadow-xs shrink-0 ${activeTab === 'remaining'
+                        ? 'bg-gradient-to-br from-amber-500 to-orange-600'
+                        : 'bg-blue-600'
+                        }`}>
                         {activeTab === 'remaining' ? <Target className="w-5 h-5 text-white" /> : <Zap className="w-5 h-5 text-white" />}
                     </div>
                     <div>
@@ -452,11 +528,10 @@ export default function DailyReportPage() {
                                     : 'Báo Cáo Doanh Thu & Thi Đua Realtime'
                                 }
                             </h1>
-                            <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border ${
-                                activeTab === 'remaining'
-                                    ? 'bg-amber-100 text-amber-800 border-amber-200'
-                                    : 'bg-blue-100 text-blue-800 border-blue-200'
-                            }`}>
+                            <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border ${activeTab === 'remaining'
+                                ? 'bg-amber-100 text-amber-800 border-amber-200'
+                                : 'bg-blue-100 text-blue-800 border-blue-200'
+                                }`}>
                                 {activeTab === 'remaining' ? 'Nâng Cao' : 'Tiêu Chuẩn'}
                             </span>
                         </div>
@@ -473,22 +548,20 @@ export default function DailyReportPage() {
                 <div className="flex items-center p-1 bg-slate-100/90 rounded-xl border border-slate-200/80 w-full md:w-auto shadow-inner">
                     <button
                         onClick={() => handleTabChange('realtime')}
-                        className={`flex-1 md:flex-initial flex items-center justify-center gap-1.5 py-2 px-3.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                            activeTab === 'realtime'
-                                ? 'bg-white text-blue-700 shadow-xs'
-                                : 'text-slate-600 hover:text-slate-900'
-                        }`}
+                        className={`flex-1 md:flex-initial flex items-center justify-center gap-1.5 py-2 px-3.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${activeTab === 'realtime'
+                            ? 'bg-white text-blue-700 shadow-xs'
+                            : 'text-slate-600 hover:text-slate-900'
+                            }`}
                     >
                         <Zap className="w-3.5 h-3.5" />
                         <span>⚡ Chuẩn Realtime</span>
                     </button>
                     <button
                         onClick={() => handleTabChange('remaining')}
-                        className={`flex-1 md:flex-initial flex items-center justify-center gap-1.5 py-2 px-3.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                            activeTab === 'remaining'
-                                ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-xs'
-                                : 'text-slate-600 hover:text-slate-900'
-                        }`}
+                        className={`flex-1 md:flex-initial flex items-center justify-center gap-1.5 py-2 px-3.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${activeTab === 'remaining'
+                            ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-xs'
+                            : 'text-slate-600 hover:text-slate-900'
+                            }`}
                     >
                         <Target className="w-3.5 h-3.5" />
                         <span>🎯 Mục Tiêu Còn Lại</span>
@@ -496,20 +569,36 @@ export default function DailyReportPage() {
                 </div>
             </div>
 
-            {/* VÙNG NHẬP SỐ LIỆU TỰ ĐỘNG BÓC TÁCH */}
-            <DailyReportInputSection
-                emulationText={emulationText}
-                setEmulationText={setEmulationText}
-                revenueText={revenueText}
-                setRevenueText={setRevenueText}
-                realRevenueText={realRevenueText}
-                setRealRevenueText={setRealRevenueText}
-                onProcessData={handleProcessData}
-                onClearData={handleClearData}
-                isCollapsed={isInputCollapsed}
-                onToggleCollapse={() => setIsInputCollapsed(!isInputCollapsed)}
-                hasData={allData.length > 0 || Object.keys(revenueData).length > 0}
-            />
+            {/* TÙY CHỌN DỰ PHÒNG: VÙNG DÁN VĂN BẢN CŨ (TẠM ẨN THEO YÊU CẦU) */}
+            <div className="flex items-center justify-between px-1" data-html2canvas-ignore="true" data-export-ignore="true">
+                <span className="text-[11px] text-slate-500 font-medium">
+                    Phương thức nạp số liệu chính: <strong className="text-blue-700">OCR Hình Ảnh & Nhập Trực Quan</strong>
+                </span>
+                <button
+                    type="button"
+                    onClick={() => setShowLegacyPasteInput(!showLegacyPasteInput)}
+                    className="text-[11px] text-slate-400 hover:text-blue-600 font-semibold transition cursor-pointer flex items-center gap-1"
+                >
+                    <Edit3 className="w-3 h-3" />
+                    <span>{showLegacyPasteInput ? '▲ Ẩn vùng dán text dự phòng' : '▼ Mở vùng dán text dự phòng'}</span>
+                </button>
+            </div>
+
+            {showLegacyPasteInput && (
+                <DailyReportInputSection
+                    emulationText={emulationText}
+                    setEmulationText={setEmulationText}
+                    revenueText={revenueText}
+                    setRevenueText={setRevenueText}
+                    realRevenueText={realRevenueText}
+                    setRealRevenueText={setRealRevenueText}
+                    onProcessData={handleProcessData}
+                    onClearData={handleClearData}
+                    isCollapsed={isInputCollapsed}
+                    onToggleCollapse={() => setIsInputCollapsed(!isInputCollapsed)}
+                    hasData={allData.length > 0 || Object.keys(revenueData).length > 0}
+                />
+            )}
 
             {/* THANH ĐIỀU KHIỂN & BỘ LỌC (QUY CHUẨN 10: SIÊU THỊ NẰM HÀNG ĐẦU TIÊN) */}
             <div className="bg-slate-50/90 border border-slate-200/90 rounded-2xl p-3.5 sm:p-4 space-y-3">
@@ -614,9 +703,7 @@ export default function DailyReportPage() {
                         <span className="text-base sm:text-lg font-black text-slate-800 font-mono">
                             {formatValue(currentRevenue ? currentRevenue.rev : 0)}
                         </span>
-                        <span className="text-[10px] text-slate-500 font-bold block mt-0.5">
-                            Target: {formatValue(currentRevenue ? currentRevenue.target : 0)}
-                        </span>
+
                     </div>
 
                     {hasInstallmentData && (
@@ -644,7 +731,7 @@ export default function DailyReportPage() {
                                 {realtimeStats.passed} / {realtimeStats.total}
                             </span>
                             <span className="text-[10px] text-slate-500 font-bold block mt-0.5">
-                                Đạt {realtimeStats.passRate}% mục
+                                %HT: {realtimeStats.passRate}%
                             </span>
                         </div>
                     ) : (
@@ -695,11 +782,10 @@ export default function DailyReportPage() {
                                         key={tpl.id}
                                         type="button"
                                         onClick={() => setSummaryMode(idx)}
-                                        className={`px-2.5 py-1 rounded-md transition cursor-pointer ${
-                                            (summaryMode >= currentAssessmentTemplates.length ? 0 : summaryMode) === idx
-                                                ? 'bg-white text-blue-700 shadow-xs'
-                                                : 'text-slate-600 hover:text-slate-900'
-                                        }`}
+                                        className={`px-2.5 py-1 rounded-md transition cursor-pointer ${(summaryMode >= currentAssessmentTemplates.length ? 0 : summaryMode) === idx
+                                            ? 'bg-white text-blue-700 shadow-xs'
+                                            : 'text-slate-600 hover:text-slate-900'
+                                            }`}
                                     >
                                         {tpl.title.split(':')[0]}
                                     </button>
@@ -729,6 +815,17 @@ export default function DailyReportPage() {
                     </pre>
                 </div>
             )}
+
+            {/* MODAL NẠP DỮ LIỆU REALTIME MỚI (OCR & NHẬP TRỰC QUAN) */}
+            <RealtimeDataUpdateModal
+                isOpen={isUpdateModalOpen}
+                onClose={() => setIsUpdateModalOpen(false)}
+                onSavedSuccessfully={handleSavedSuccessfully}
+                availableStores={availableStores}
+                campaignDict={campaignsDict}
+                isAdmin={isAdmin}
+                currentUserName={currentUser?.full_name || currentUser?.employee_id || 'ADMIN'}
+            />
         </div>
     );
 }

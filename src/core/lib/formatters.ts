@@ -428,6 +428,48 @@ export function formatCapitalizeWords(str: string): string {
 }
 
 /**
+ * Chuẩn hóa số từ kết quả OCR ứng dụng BI:
+ * - Trên ảnh BI: dấu phẩy ',' là dấu phân cách hàng nghìn: "3,123" -> 3123
+ * - "4,237" -> 4237
+ * - "14,352.92" -> 14352.92
+ * - Nếu AI nhầm dấu phẩy thành dấu chấm: ví dụ 3.123 (khi phần nguyên < 100 và có đúng 3 chữ số thập phân) -> 3123
+ */
+export function cleanBiNumber(val: any): number {
+    if (val === null || val === undefined || val === '') return 0;
+
+    if (typeof val === 'number') {
+        if (isNaN(val)) return 0;
+        const str = val.toString();
+        const match = str.match(/^(\d+)\.(\d{3})$/);
+        if (match && Number(match[1]) < 100) {
+            return Number(match[1] + match[2]);
+        }
+        return val;
+    }
+
+    if (typeof val === 'string') {
+        let clean = val.trim();
+        if (!clean) return 0;
+
+        if (clean.includes(',') && clean.includes('.')) {
+            clean = clean.replace(/,/g, '');
+        } else if (clean.includes(',')) {
+            clean = clean.replace(/,/g, '');
+        } else if (clean.includes('.')) {
+            const match = clean.match(/^(\d+)\.(\d{3})$/);
+            if (match && Number(match[1]) < 100) {
+                clean = match[1] + match[2];
+            }
+        }
+
+        const num = parseFloat(clean);
+        return isNaN(num) ? 0 : num;
+    }
+
+    return 0;
+}
+
+/**
  * Chuẩn hóa số liệu doanh thu / target về đơn vị Triệu đồng (rút gọn phần triệu)
  * - Nếu số >= 100,000 (ví dụ: 100,000,000 VNĐ) -> chia 1,000,000 = 100
  * - Nếu số < 100,000 (ví dụ: 100, 15.5) -> giữ nguyên 100, 15.5

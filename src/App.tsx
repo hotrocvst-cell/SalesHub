@@ -14,11 +14,13 @@ const DailyReportPage = lazy(() => import('./features/daily-report/DailyReportPa
 const DailyEmployeeRevenueReportPage = lazy(() => import('./features/daily-report/DailyEmployeeRevenueReportPage'));
 const RevenueTrendPage = lazy(() => import('./features/revenue-trend/RevenueTrendPage'));
 const DataUpdatePage = lazy(() => import('./features/data-update/DataUpdatePage'));
+const DataExtractOcrPage = lazy(() => import('./features/data-update/DataExtractOcrPage'));
 const DataManagerPage = lazy(() => import('./features/data-management/DataManagerPage'));
 const EmployeeTargetUnifiedPage = lazy(() => import('./features/employee-health/EmployeeTargetUnifiedPage'));
 const CampaignConfigPage = lazy(() => import('./features/admin-config/CampaignConfigPage'));
 const StoreEmployeeConfigPage = lazy(() => import('./features/store-management/StoreEmployeeConfigPage'));
 const EmployeeCumulativePage = lazy(() => import('./features/employee-cumulative/EmployeeCumulativePage'));
+const EmployeeExtractOcrPage = lazy(() => import('./features/data-update/EmployeeExtractOcrPage'));
 const EmployeeRankingSummaryPage = lazy(() => import('./features/employee-ranking/EmployeeRankingSummaryPage'));
 const EmployeePerformanceReportPage = lazy(() => import('./features/employee-performance/EmployeePerformanceReportPage'));
 const EmployeeDetailReportPage = lazy(() => import('./features/employee-detail/EmployeeDetailReportPage'));
@@ -177,9 +179,19 @@ export default function App() {
                                         <DataUpdatePage />
                                     </ProtectedRoute>
                                 } />
+                                <Route path="/cap-nhat-ocr" element={
+                                    <ProtectedRoute path="/cap-nhat-ocr">
+                                        <DataExtractOcrPage />
+                                    </ProtectedRoute>
+                                } />
                                 <Route path="/cap-nhat-luy-ke-nhan-vien" element={
                                     <ProtectedRoute path="/cap-nhat-luy-ke-nhan-vien">
                                         <EmployeeCumulativePage />
+                                    </ProtectedRoute>
+                                } />
+                                <Route path="/cap-nhat-nhan-vien-ocr" element={
+                                    <ProtectedRoute path="/cap-nhat-nhan-vien-ocr">
+                                        <EmployeeExtractOcrPage />
                                     </ProtectedRoute>
                                 } />
                                 <Route path="/quan-ly-du-lieu" element={

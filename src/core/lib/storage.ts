@@ -429,6 +429,33 @@ export async function deleteBusinessRecord(storeName: string, reportDate: string
 // 3. PHÂN HỆ QUẢN LÝ BẢN NHÁP (LOCAL DRAFT)
 // ==========================================
 
+// 7. Kiểm tra sự tồn tại của số liệu ngày kinh doanh trên Supabase Cloud
+export async function checkDailyBusinessRecordsExistence(reportDate: string): Promise<{
+    exists: boolean;
+    count: number;
+    stores: string[];
+    error?: string;
+}> {
+    if (!reportDate) return { exists: false, count: 0, stores: [] };
+    try {
+        const { data, error } = await supabase
+            .from('daily_business_records')
+            .select('store_name')
+            .eq('report_date', reportDate.trim());
+
+        if (error) throw error;
+        const stores = (data || []).map(r => r.store_name).filter(Boolean);
+        return {
+            exists: stores.length > 0,
+            count: stores.length,
+            stores
+        };
+    } catch (err: any) {
+        console.warn('Lỗi checkDailyBusinessRecordsExistence:', err);
+        return { exists: false, count: 0, stores: [], error: err.message || String(err) };
+    }
+}
+
 const DRAFT_STORAGE_KEY = 'sales_hub_report_draft';
 
 export function getLocalDraft<T = any>(key: string = DRAFT_STORAGE_KEY): T | null {

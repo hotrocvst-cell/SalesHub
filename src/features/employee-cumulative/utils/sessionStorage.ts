@@ -308,8 +308,17 @@ export function fetchEmployeeDataSessions(filters?: EmployeeSessionFilter): Empl
 }
 
 export async function saveEmployeeDataSession(
-    data: Omit<EmployeeDataSession, 'id' | 'created_at'>
+    data: Omit<EmployeeDataSession, 'id' | 'created_at'>,
+    options?: { overwriteSessionId?: string }
 ): Promise<{ success: boolean; session: EmployeeDataSession; error?: string }> {
+    // Nếu có yêu cầu ghi đè lên phiên đã tồn tại
+    if (options?.overwriteSessionId) {
+        const updateRes = await updateEmployeeDataSession(options.overwriteSessionId, data);
+        if (updateRes.success && updateRes.session) {
+            return { success: true, session: updateRes.session, error: updateRes.error };
+        }
+    }
+
     const existing = fetchEmployeeDataSessions();
     const newSession: EmployeeDataSession = {
         ...data,
@@ -368,27 +377,91 @@ export async function saveEmployeeDataSession(
 }
 
 /**
+ * Kiểm tra xem đã tồn tại phiên dữ liệu của Siêu thị và Ngày chốt phiên trên Cloud/Local chưa
+ */
+export async function findExistingEmployeeSession(
+    storeName: string,
+    reportDate: string,
+    sessionType: 'REVENUE_CAMPAIGN' | 'WORK_HOURS' | 'FULL_SYNC' = 'REVENUE_CAMPAIGN'
+): Promise<EmployeeDataSession | null> {
+    if (!storeName || !reportDate) return null;
+
+    try {
+        const { data, error } = await supabase
+            .from('employee_data_sessions')
+            .select('*')
+            .eq('report_date', reportDate)
+            .eq('session_type', sessionType)
+            .order('created_at', { ascending: false });
+
+        if (!error && data && data.length > 0) {
+            const matched = (data as EmployeeDataSession[]).find(s =>
+                isStoreMatch(s.store_name, storeName)
+            );
+            if (matched) return matched;
+        }
+    } catch (e) {
+        console.warn('Lỗi kiểm tra phiên trùng trên Cloud:', e);
+    }
+
+    // Dự phòng tìm trong cache local
+    const local = fetchEmployeeDataSessions();
+    const matchedLocal = local.find(
+        s => s.report_date === reportDate &&
+             s.session_type === sessionType &&
+             isStoreMatch(s.store_name, storeName)
+    );
+    return matchedLocal || null;
+}
+
+/**
  * Cập nhật trực tiếp dữ liệu vào một phiên đã tồn tại (giữ nguyên ID phiên)
  */
 export async function updateEmployeeDataSession(
     sessionId: string,
-    data: Partial<Omit<EmployeeDataSession, 'id' | 'created_at'>>
+    data: Partial<Omit<EmployeeDataSession, 'id'>>
 ): Promise<{ success: boolean; session?: EmployeeDataSession; error?: string }> {
     const existing = fetchEmployeeDataSessions();
     const index = existing.findIndex(s => s.id === sessionId);
-    if (index === -1) {
+
+    let baseSession: EmployeeDataSession | null = null;
+    if (index !== -1) {
+        baseSession = existing[index];
+    } else {
+        // Nếu không có trong cache local, tìm trực tiếp trên Supabase Cloud
+        try {
+            const { data: cloudRow, error: cloudErr } = await supabase
+                .from('employee_data_sessions')
+                .select('*')
+                .eq('id', sessionId)
+                .single();
+            if (!cloudErr && cloudRow) {
+                baseSession = cloudRow as EmployeeDataSession;
+            }
+        } catch (e) {
+            console.warn('Lỗi tìm session trên Cloud để update:', e);
+        }
+    }
+
+    if (!baseSession) {
         return { success: false, error: 'Không tìm thấy phiên cần cập nhật!' };
     }
 
     const updatedSession: EmployeeDataSession = {
-        ...existing[index],
+        ...baseSession,
         ...data,
-        id: sessionId
+        id: sessionId,
+        created_at: new Date().toISOString() // Cập nhật mốc thời gian chốt mới nhất
     };
 
-    existing[index] = updatedSession;
+    if (index !== -1) {
+        existing[index] = updatedSession;
+    } else {
+        existing.unshift(updatedSession);
+    }
+
     try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(existing));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(existing.slice(0, 300)));
     } catch (e) {
         console.warn('Lỗi updateEmployeeDataSession local:', e);
     }

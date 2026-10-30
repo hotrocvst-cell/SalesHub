@@ -36,7 +36,8 @@ import {
     Banknote,
     Coins,
     Shuffle,
-    FileSpreadsheet
+    FileSpreadsheet,
+    Camera
 } from 'lucide-react';
 
 export interface NavItem {
@@ -176,10 +177,22 @@ export const NAVIGATION_GROUPS: NavGroup[] = [
                 icon: UploadCloud
             },
             {
+                name: 'Cập nhật qua OCR',
+                path: '/cap-nhat-ocr',
+                icon: Camera,
+                badge: '✨ AI'
+            },
+            {
                 name: 'Cập nhật số liệu NV',
                 path: '/cap-nhat-luy-ke-nhan-vien',
                 icon: UserCheck,
                 badge: '⚡ Mới'
+            },
+            {
+                name: 'Cập nhật NV qua OCR',
+                path: '/cap-nhat-nhan-vien-ocr',
+                icon: Camera,
+                badge: '✨ AI'
             },
             {
                 name: 'Phiên dữ liệu NV',

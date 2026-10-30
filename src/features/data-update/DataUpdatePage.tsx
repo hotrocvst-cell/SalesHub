@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../shared/contexts/AuthContext';
 import {
     getLocalDraft,
@@ -11,7 +11,7 @@ import {
 } from '../../core/lib/storage';
 import { getYesterdayDateString, getShortStoreName, getCampaignLabel, formatDate, formatDateTime, normalizeToMillion, isStoreMatch } from '../../core/lib/formatters';
 import CloudDataSyncStatusBanner from '../../shared/components/report/CloudDataSyncStatusBanner';
-import { Save, Trash2, Calendar, RefreshCw, CheckCircle2, ArrowRight, CloudUpload, Store, RotateCcw, AlertCircle, AlertTriangle, X } from 'lucide-react';
+import { Save, Trash2, Calendar, RefreshCw, CheckCircle2, ArrowRight, CloudUpload, Store, RotateCcw, AlertCircle, AlertTriangle, X, Camera } from 'lucide-react';
 
 const DAILY_BUSINESS_RECORDS_SQL = `-- Bảng lưu trữ số liệu kinh doanh lũy kế theo siêu thị
 CREATE TABLE IF NOT EXISTS public.daily_business_records (
@@ -550,6 +550,31 @@ export default function DataUpdatePage() {
                         <span>Lưu gần nhất: {savedTime}</span>
                     </div>
                 )}
+            </div>
+
+            {/* BANNER THÔNG BÁO TÍNH NĂNG OCR & TỰ NHẬP LIỆU MỚI */}
+            <div className="bg-gradient-to-r from-indigo-50 via-blue-50 to-indigo-50 border border-indigo-200 rounded-2xl p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-indigo-900 shadow-xs mb-4">
+                <div className="flex items-center gap-3">
+                    <div className="p-2.5 rounded-xl bg-indigo-100 text-indigo-700 shrink-0">
+                        <Camera className="w-5 h-5 text-indigo-600" />
+                    </div>
+                    <div>
+                        <h3 className="font-extrabold text-xs uppercase tracking-wider text-indigo-900 flex items-center gap-2">
+                            <span>📸 Tính Năng Mới: Trích Xuất Ảnh OCR & Tự Nhập Liệu</span>
+                            <span className="bg-indigo-600 text-white text-[9px] px-1.5 py-0.5 rounded-full font-bold">Mới</span>
+                        </h3>
+                        <p className="text-xs text-indigo-700 mt-0.5">
+                            Nếu app BI bị khóa copy text, bạn hãy sử dụng công cụ OCR quét tự động từ ảnh chụp màn hình hoặc tự gõ số liệu trực tiếp.
+                        </p>
+                    </div>
+                </div>
+                <Link
+                    to="/cap-nhat-ocr"
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shrink-0 transition-all shadow-sm w-fit"
+                >
+                    <span>Mở Cập Nhật OCR</span>
+                    <ArrowRight className="w-4 h-4" />
+                </Link>
             </div>
 
             {/* BANNER BÁO CÁO TRẠNG THÁI LƯU TRỮ DỮ LIỆU CLOUD (RULE 8) */}

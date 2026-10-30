@@ -35,6 +35,8 @@ export const GUEST_RESTRICTED_CONFIG_PATHS = [
     '/muc-tieu-nhan-vien',
     '/quan-ly-voucher',
     '/cap-nhat',
+    '/cap-nhat-ocr',
+    '/cap-nhat-nhan-vien-ocr',
     '/quan-ly-du-lieu',
     '/cap-nhat-luy-ke-nhan-vien',
     '/quan-ly-phien-nhan-vien',
@@ -300,6 +302,20 @@ const RAW_DEFAULT_PAGE_PERMISSIONS: SystemPagePermission[] = [
         badge_color: 'emerald'
     },
     {
+        page_key: 'cap_nhat_ocr',
+        page_name: 'Cập nhật qua OCR',
+        path: '/cap-nhat-ocr',
+        group_title: 'DỮ LIỆU & PHIÊN LÀM VIỆC',
+        description: 'Trích xuất số liệu từ ảnh chụp BI và nhập liệu trực tiếp',
+        is_enabled: true,
+        allowed_roles: ['ADMIN'],
+        order_index: 7,
+        badge_enabled: true,
+        badge_icon: '✨',
+        badge_text: 'AI',
+        badge_color: 'indigo'
+    },
+    {
         page_key: 'cap_nhat_luy_ke_nv',
         page_name: 'Cập nhật số liệu NV',
         path: '/cap-nhat-luy-ke-nhan-vien',
@@ -312,6 +328,20 @@ const RAW_DEFAULT_PAGE_PERMISSIONS: SystemPagePermission[] = [
         badge_icon: '⚡',
         badge_text: 'Mới',
         badge_color: 'emerald'
+    },
+    {
+        page_key: 'cap_nhat_nhan_vien_ocr',
+        page_name: 'Cập nhật NV qua OCR',
+        path: '/cap-nhat-nhan-vien-ocr',
+        group_title: 'DỮ LIỆU & PHIÊN LÀM VIỆC',
+        description: 'Trích xuất số liệu nhân viên từ ảnh chụp BI (DTQĐ, DT Thực, Thi đua) và lưu phiên lũy kế',
+        is_enabled: true,
+        allowed_roles: ['ADMIN'],
+        order_index: 7,
+        badge_enabled: true,
+        badge_icon: '✨',
+        badge_text: 'AI',
+        badge_color: 'indigo'
     },
     {
         page_key: 'quan_ly_phien_nv',
