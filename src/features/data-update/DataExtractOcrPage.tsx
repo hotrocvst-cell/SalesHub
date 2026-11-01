@@ -5,6 +5,7 @@ import {
     fetchCampaignDictionary,
     syncBatchDailyRecordsToSupabase,
     checkDailyBusinessRecordsExistence,
+    fetchBusinessRecordsByDate,
     type StoreItem,
     type CampaignDictItem,
     type BusinessDayRecord
@@ -73,6 +74,53 @@ ALTER TABLE public.daily_business_records ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Allow public read access" ON public.daily_business_records FOR SELECT USING (true);
 CREATE POLICY "Allow public insert/update/delete access" ON public.daily_business_records FOR ALL USING (true);
 `;
+
+// Chuyển đổi BusinessDayRecord từ Supabase Cloud sang StoreReportingData phục vụ rà soát & chỉnh sửa
+function convertBusinessRecordsToStoreReportingData(records: BusinessDayRecord[]): StoreReportingData[] {
+    return records.map(r => {
+        const realInfo = (r.emulationSummary as any)?.['__real_revenue'];
+        const emus: Record<string, EmulationOcrItem> = {};
+
+        Object.entries(r.emulationSummary || {}).forEach(([progName, item]: [string, any]) => {
+            if (progName === '__real_revenue') return;
+            emus[progName] = {
+                programName: item.rawHeader || progName,
+                unit: item.unit || 'DOANH THU',
+                actual: Number(item.actual) || 0,
+                target: Number(item.target) || 0,
+                completionRate: item.pctHT !== undefined ? Number(item.pctHT) : undefined,
+                forecastRate: item.pctDK !== undefined ? Number(item.pctDK) : undefined
+            };
+        });
+
+        const revReal = realInfo ? (Number(realInfo.revenueReal) || 0) : 0;
+        const tgReal = realInfo ? (Number(realInfo.targetReal) || 0) : 0;
+        const qReal = realInfo ? (Number(realInfo.quantityReal) || 0) : 0;
+        const instReal = realInfo?.installmentReal !== undefined
+            ? Number(realInfo.installmentReal)
+            : (Number(r.revenueInstallment) || 0);
+        const instRateReal = realInfo?.installmentRateReal !== undefined
+            ? Number(realInfo.installmentRateReal)
+            : (Number(r.installmentRate) || (revReal > 0 ? Number(((instReal / revReal) * 100).toFixed(2)) : 0));
+        const avg3MReal = realInfo ? (Number(realInfo.avg3MonthsReal) || 0) : 0;
+
+        return {
+            storeCode: '',
+            storeRawName: r.storeName,
+            storeShortName: getShortStoreName(r.storeName),
+            revenueQd: Number(r.revenueActual) || 0,
+            targetQd: Number(r.revenueTarget) || 0,
+            quantityQd: qReal || 0,
+            revenueReal: revReal,
+            targetReal: tgReal,
+            quantityReal: qReal,
+            installmentReal: instReal,
+            installmentRateReal: instRateReal,
+            avg3MonthsReal: avg3MReal,
+            emulations: emus
+        };
+    });
+}
 
 export default function DataExtractOcrPage() {
     const { isAdmin, canAccessStore } = useAuth();
@@ -171,6 +219,30 @@ export default function DataExtractOcrPage() {
     const [isCheckingCloudRecords, setIsCheckingCloudRecords] = useState<boolean>(false);
     const [isQuickEmulationModalOpen, setIsQuickEmulationModalOpen] = useState<boolean>(false);
     const [quickModalSelectedStore, setQuickModalSelectedStore] = useState<string>('');
+    const [isLoadingExisting, setIsLoadingExisting] = useState<boolean>(false);
+
+    // Nạp số liệu ngày chốt từ Supabase Cloud vào bảng rà soát để kiểm tra hoặc hiệu chỉnh
+    const handleLoadExistingRecords = async () => {
+        if (!reportDate) return;
+        setIsLoadingExisting(true);
+        try {
+            const res = await fetchBusinessRecordsByDate(reportDate);
+            if (res.success && res.data && res.data.length > 0) {
+                const mapped = convertBusinessRecordsToStoreReportingData(res.data);
+                setStoresData(mapped);
+                setIsSaved(true);
+                showToast(`✅ Đã nạp thành công số liệu ${mapped.length} siêu thị từ Cloud vào bảng rà soát!`);
+                setActiveTab('manual');
+            } else {
+                showToast(`ℹ️ Chưa có bản ghi nào trên Supabase cho ngày ${formatDate(reportDate)}`);
+            }
+        } catch (err: any) {
+            console.error('Lỗi khi nạp bản ghi từ Cloud:', err);
+            showToast(`❌ Lỗi nạp dữ liệu: ${err?.message || 'Không thể kết nối'}`);
+        } finally {
+            setIsLoadingExisting(false);
+        }
+    };
 
     // Tự động kiểm tra số lượng bản ghi đã tồn tại cho ngày chốt này trên Supabase Cloud
     useEffect(() => {
@@ -332,15 +404,19 @@ export default function DataExtractOcrPage() {
                     };
                 });
 
-                // Lưu kèm dữ liệu Doanh thu thực vào emulationSummary.__real_revenue nếu có
-                if (st.revenueReal > 0 || st.targetReal > 0) {
+                // Luôn lưu kèm dữ liệu Doanh thu thực vào emulationSummary.__real_revenue nếu có
+                const primaryInstallment = st.installmentReal || 0;
+                const primaryInstallmentRate = st.installmentRateReal || (st.revenueReal > 0 ? Number(((primaryInstallment / st.revenueReal) * 100).toFixed(2)) : 0);
+
+                if (st.revenueReal > 0 || st.targetReal > 0 || primaryInstallment > 0) {
                     emulationSummary['__real_revenue'] = {
                         storeName: st.storeRawName,
-                        revenueReal: st.revenueReal,
-                        targetReal: st.targetReal,
-                        quantityReal: st.quantityReal,
-                        installmentReal: st.installmentReal,
-                        installmentRateReal: st.installmentRateReal
+                        revenueReal: st.revenueReal || 0,
+                        targetReal: st.targetReal || 0,
+                        quantityReal: st.quantityReal || 0,
+                        installmentReal: primaryInstallment,
+                        installmentRateReal: primaryInstallmentRate,
+                        avg3MonthsReal: st.avg3MonthsReal || 0
                     };
                 }
 
@@ -348,8 +424,12 @@ export default function DataExtractOcrPage() {
                     ? ((st.revenueQd / passedDays * totalDays) / st.targetQd) * 100
                     : 0;
 
-                const primaryInstallment = st.installmentReal || 0;
-                const primaryInstallmentRate = st.installmentRateReal || 0;
+                // Chuỗi raw_revenue chuẩn kết hợp cả DTQĐ và DT Thực (có định dạng phân cách rõ ràng để ClusterReport bóc tách)
+                const qdPart = `${st.storeRawName}\nDTQĐ: ${st.revenueQd} | Target: ${st.targetQd} | Số lượng: ${st.quantityQd}`;
+                const realPart = (st.revenueReal > 0 || st.targetReal > 0 || primaryInstallment > 0)
+                    ? `\n\n=== BẢNG DOANH THU THỰC ===\n${st.storeRawName}\nDT Thực: ${st.revenueReal} | Target: ${st.targetReal} | Trả góp: ${primaryInstallment} | % Trả góp: ${primaryInstallmentRate}% | TB 3 Tháng: ${st.avg3MonthsReal || 0}`
+                    : '';
+                const combinedRawRevenue = qdPart + realPart;
 
                 return {
                     storeName: st.storeRawName || st.storeShortName,
@@ -365,8 +445,8 @@ export default function DataExtractOcrPage() {
                     forecastCompletionRate: Number(rawForecastRate.toFixed(2)),
                     emulationSummary,
                     rawEmulation: JSON.stringify(st.emulations),
-                    rawRevenue: `DTQĐ: ${st.revenueQd} | Target: ${st.targetQd} | Số lượng: ${st.quantityQd}`,
-                    rawRealRevenue: `DT Thực: ${st.revenueReal} | Target: ${st.targetReal} | Trả góp: ${st.installmentReal}`,
+                    rawRevenue: combinedRawRevenue,
+                    rawRealRevenue: `DT Thực: ${st.revenueReal} | Target: ${st.targetReal} | Trả góp: ${primaryInstallment}`,
                     dataType: 'Lũy kế tháng'
                 };
             });
@@ -652,16 +732,28 @@ export default function DataExtractOcrPage() {
                                 <span>Đang kiểm tra số liệu ngày {formatDate(reportDate)} trên Cloud...</span>
                             </div>
                         ) : existingRecordCount > 0 ? (
-                            <div className="flex items-center gap-2 text-xs text-amber-900 bg-amber-50/80 border border-amber-200 px-3 py-2 rounded-xl">
-                                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                                <div>
-                                    <span className="font-bold">
-                                        Ngày {formatDate(reportDate)} đã có số liệu của {existingRecordCount} siêu thị trên Supabase Cloud.
-                                    </span>
-                                    <span className="text-[11px] text-amber-700 block mt-0.5">
-                                        Khi bấm Lưu, hệ thống sẽ tự động <strong>GHI ĐÈ & CẬP NHẬT</strong> mới nhất cho các siêu thị trong phiên mà không làm mất số liệu của các siêu thị khác.
-                                    </span>
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-900 bg-amber-50/80 border border-amber-200 px-3 py-2 rounded-xl">
+                                <div className="flex items-center gap-2">
+                                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                                    <div>
+                                        <span className="font-bold">
+                                            Ngày {formatDate(reportDate)} đã có số liệu của {existingRecordCount} siêu thị trên Supabase Cloud.
+                                        </span>
+                                        <span className="text-[11px] text-amber-700 block mt-0.5">
+                                            Khi bấm Lưu, hệ thống sẽ tự động <strong>GHI ĐÈ & CẬP NHẬT</strong> mới nhất cho các siêu thị trong phiên mà không làm mất số liệu của các siêu thị khác.
+                                        </span>
+                                    </div>
                                 </div>
+                                <button
+                                    type="button"
+                                    onClick={handleLoadExistingRecords}
+                                    disabled={isLoadingExisting}
+                                    className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold text-xs flex items-center gap-1.5 shadow-2xs transition shrink-0 cursor-pointer disabled:opacity-50 self-start sm:self-auto"
+                                    title="Tải số liệu của ngày này từ Cloud vào bảng rà soát để xem hoặc hiệu chỉnh"
+                                >
+                                    <RefreshCw className={`w-3.5 h-3.5 ${isLoadingExisting ? 'animate-spin' : ''}`} />
+                                    <span>Nạp Số Liệu Cloud Vào Bảng</span>
+                                </button>
                             </div>
                         ) : (
                             <div className="flex items-center gap-2 text-xs text-emerald-700 bg-emerald-50/70 border border-emerald-200 px-3 py-1.5 rounded-xl font-medium">
@@ -751,6 +843,8 @@ export default function DataExtractOcrPage() {
                         onSaveToSupabase={handleSaveToSupabase}
                         isSaving={isSaving}
                         existingRecordCount={existingRecordCount}
+                        onLoadFromCloud={handleLoadExistingRecords}
+                        isLoadingExisting={isLoadingExisting}
                         onOpenQuickEmulationModal={(st) => {
                             setQuickModalSelectedStore(st || storesData[0]?.storeRawName || availableStores[0]?.name || '');
                             setIsQuickEmulationModalOpen(true);

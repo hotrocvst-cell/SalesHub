@@ -154,7 +154,7 @@ export async function extractRevenueQdImage(
 ): Promise<{ reportDate?: string; reportTime?: string; stores: Partial<StoreReportingData>[] }> {
     const base64 = await fileToBase64(file);
     const prompt = `Bạn là chuyên gia phân tích dữ liệu kinh doanh của hệ thống bán lẻ. 
-Nhiệm vụ: Trích xuất chính xác các số liệu DOANH THU QUY ĐỔI (DTQĐ) từ ảnh chụp màn hình ứng dụng BI.
+Nhiệm vụ: Trích xuất chính xác các số liệu DOANH THU QUY ĐỔI (DTQĐ) và DOANH THU THỰC TẾ (nếu có trên ảnh) từ ảnh chụp màn hình ứng dụng BI.
 
 LƯU Ý NGHIỆP VỤ BẮT BUỘC:
 1. BỎ QUA HOÀN TOÀN các watermark chữ mờ ("26479 - Đào Bá Linh",...).
@@ -164,9 +164,13 @@ LƯU Ý NGHIỆP VỤ BẮT BUỘC:
 5. Đối với mỗi siêu thị, lấy các chỉ số sau:
    - storeRawName: Tên đầy đủ của siêu thị trên thẻ
    - revenueQd: Giá trị của "DOANH THU QĐ" (loại bỏ dấu phẩy phân cách hàng nghìn, ví dụ: trên ảnh "20,688" thì kết quả là 20688, "3,123" -> 3123)
-   - targetQd: Giá trị của "TARGET" (ví dụ 13919)
+   - targetQd: Giá trị của "TARGET" (nếu là cột Target của bảng DTQĐ)
    - quantityQd: Giá trị của "SỐ LƯỢNG" (ví dụ 1934)
    - dtTraGopQd: Giá trị của "DT TRẢ GÓP QĐ" (ví dụ 9093)
+   - revenueReal: Nếu trên ảnh có thêm cột "DOANH THU" (Doanh thu thực tế), trích xuất giá trị này (ví dụ 15964)
+   - targetReal: Giá trị của "TARGET" thực nếu có
+   - installmentReal: Giá trị của "DT TRẢ GÓP" thực nếu có (ví dụ 6685)
+   - avg3MonthsReal: Giá trị của "TB 3 THÁNG" nếu có
 
 Định dạng JSON trả về:
 {
@@ -178,7 +182,11 @@ LƯU Ý NGHIỆP VỤ BẮT BUỘC:
       "revenueQd": 20688,
       "targetQd": 13919,
       "quantityQd": 1934,
-      "dtTraGopQd": 9093
+      "dtTraGopQd": 9093,
+      "revenueReal": 15964,
+      "targetReal": 10889,
+      "installmentReal": 6685,
+      "avg3MonthsReal": 6738
     }
   ]
 }`;
@@ -201,7 +209,7 @@ export async function extractRevenueRealImage(
 ): Promise<{ reportDate?: string; reportTime?: string; stores: Partial<StoreReportingData>[] }> {
     const base64 = await fileToBase64(file);
     const prompt = `Bạn là chuyên gia phân tích dữ liệu kinh doanh của hệ thống bán lẻ. 
-Nhiệm vụ: Trích xuất chính xác các số liệu DOANH THU THỰC TẾ từ ảnh chụp màn hình ứng dụng BI.
+Nhiệm vụ: Trích xuất chính xác các số liệu DOANH THU THỰC TẾ và DOANH THU QUY ĐỔI (nếu có trên ảnh) từ ảnh chụp màn hình ứng dụng BI.
 
 LƯU Ý NGHIỆP VỤ BẮT BUỘC:
 1. BỎ QUA HOÀN TOÀN các watermark chữ mờ ("26479 - Đào Bá Linh",...).
@@ -210,11 +218,13 @@ LƯU Ý NGHIỆP VỤ BẮT BUỘC:
 4. Đọc ngày giờ cập nhật ở góc trên bên phải ảnh.
 5. Đối với mỗi siêu thị, lấy các chỉ số sau:
    - storeRawName: Tên siêu thị
-   - revenueReal: Giá trị của "DOANH THU" (ví dụ 15964)
+   - revenueReal: Giá trị của "DOANH THU" (Doanh thu thực tế, ví dụ 15964)
    - targetReal: Giá trị của "TARGET" (ví dụ 10889)
    - installmentReal: Giá trị của "DT TRẢ GÓP" (ví dụ 6685)
    - quantityReal: Giá trị của "SỐ LƯỢNG" (ví dụ 1934)
    - avg3MonthsReal: Giá trị của "TB 3 THÁNG" (ví dụ 6738)
+   - revenueQd: Nếu trên ảnh có thêm cột "DOANH THU QĐ", trích xuất giá trị này (ví dụ 20688)
+   - targetQd: Giá trị của "TARGET" quy đổi nếu có
 
 Định dạng JSON trả về:
 {
@@ -227,7 +237,9 @@ LƯU Ý NGHIỆP VỤ BẮT BUỘC:
       "targetReal": 10889,
       "installmentReal": 6685,
       "quantityReal": 1934,
-      "avg3MonthsReal": 6738
+      "avg3MonthsReal": 6738,
+      "revenueQd": 20688,
+      "targetQd": 13919
     }
   ]
 }`;
@@ -485,23 +497,38 @@ export async function extractAndMergeAllImages(
 
     function getOrCreateStore(rawName: string, code?: string): StoreReportingData {
         const short = getShortStoreName(rawName);
-        if (!storeMap[short]) {
-            storeMap[short] = {
-                storeCode: code,
-                storeRawName: rawName,
-                storeShortName: short,
-                revenueQd: 0,
-                targetQd: 0,
-                quantityQd: 0,
-                revenueReal: 0,
-                targetReal: 0,
-                quantityReal: 0,
-                installmentReal: 0,
-                installmentRateReal: 0,
-                emulations: {}
-            };
+        const codeMatch = rawName.match(/^(\d{3,6})/);
+        const storeCode = code || (codeMatch ? codeMatch[1] : undefined);
+
+        // Khớp siêu thị thông minh: ưu tiên mã số siêu thị (10335, 111...), sau đó đến tên rút gọn
+        const existingKey = Object.keys(storeMap).find(k => {
+            if (storeCode && storeMap[k].storeCode && storeMap[k].storeCode === storeCode) return true;
+            return k === short;
+        });
+
+        if (existingKey) {
+            if (storeCode && !storeMap[existingKey].storeCode) {
+                storeMap[existingKey].storeCode = storeCode;
+            }
+            return storeMap[existingKey];
         }
-        return storeMap[short];
+
+        const newStore: StoreReportingData = {
+            storeCode,
+            storeRawName: rawName,
+            storeShortName: short,
+            revenueQd: 0,
+            targetQd: 0,
+            quantityQd: 0,
+            revenueReal: 0,
+            targetReal: 0,
+            quantityReal: 0,
+            installmentReal: 0,
+            installmentRateReal: 0,
+            emulations: {}
+        };
+        storeMap[short] = newStore;
+        return newStore;
     }
 
     // Bước 1: Trích xuất ảnh Doanh thu quy đổi
@@ -515,9 +542,26 @@ export async function extractAndMergeAllImages(
             qdRes.stores.forEach(st => {
                 if (!st.storeRawName) return;
                 const store = getOrCreateStore(st.storeRawName);
-                store.revenueQd = cleanBiNumber(st.revenueQd);
-                store.targetQd = cleanBiNumber(st.targetQd);
-                store.quantityQd = cleanBiNumber(st.quantityQd);
+                if (st.revenueQd !== undefined) store.revenueQd = cleanBiNumber(st.revenueQd);
+                if (st.targetQd !== undefined) store.targetQd = cleanBiNumber(st.targetQd);
+                if (st.quantityQd !== undefined) store.quantityQd = cleanBiNumber(st.quantityQd);
+
+                // Nếu ảnh DT-QĐ cũng có cả cột Doanh thu thực
+                if (st.revenueReal !== undefined && cleanBiNumber(st.revenueReal) > 0) {
+                    store.revenueReal = cleanBiNumber(st.revenueReal);
+                }
+                if (st.targetReal !== undefined && cleanBiNumber(st.targetReal) > 0) {
+                    store.targetReal = cleanBiNumber(st.targetReal);
+                }
+                if (st.installmentReal !== undefined && cleanBiNumber(st.installmentReal) > 0) {
+                    store.installmentReal = cleanBiNumber(st.installmentReal);
+                }
+                if (st.avg3MonthsReal !== undefined && cleanBiNumber(st.avg3MonthsReal) > 0) {
+                    store.avg3MonthsReal = cleanBiNumber(st.avg3MonthsReal);
+                }
+                if (store.revenueReal > 0 && store.installmentReal > 0) {
+                    store.installmentRateReal = Number(((store.installmentReal / store.revenueReal) * 100).toFixed(2));
+                }
             });
         } catch (err: any) {
             if (err?.isQuotaExceeded || err instanceof GeminiQuotaExceededError) throw err;
@@ -536,11 +580,19 @@ export async function extractAndMergeAllImages(
             realRes.stores.forEach(st => {
                 if (!st.storeRawName) return;
                 const store = getOrCreateStore(st.storeRawName);
-                store.revenueReal = cleanBiNumber(st.revenueReal);
-                store.targetReal = cleanBiNumber(st.targetReal);
-                store.quantityReal = cleanBiNumber(st.quantityReal);
-                store.installmentReal = cleanBiNumber(st.installmentReal);
-                store.avg3MonthsReal = cleanBiNumber(st.avg3MonthsReal);
+                if (st.revenueReal !== undefined) store.revenueReal = cleanBiNumber(st.revenueReal);
+                if (st.targetReal !== undefined) store.targetReal = cleanBiNumber(st.targetReal);
+                if (st.quantityReal !== undefined) store.quantityReal = cleanBiNumber(st.quantityReal);
+                if (st.installmentReal !== undefined) store.installmentReal = cleanBiNumber(st.installmentReal);
+                if (st.avg3MonthsReal !== undefined) store.avg3MonthsReal = cleanBiNumber(st.avg3MonthsReal);
+
+                // Nếu ảnh DT Thực có cột DT-QĐ mà trước đó chưa có
+                if (st.revenueQd !== undefined && cleanBiNumber(st.revenueQd) > 0 && store.revenueQd === 0) {
+                    store.revenueQd = cleanBiNumber(st.revenueQd);
+                }
+                if (st.targetQd !== undefined && cleanBiNumber(st.targetQd) > 0 && store.targetQd === 0) {
+                    store.targetQd = cleanBiNumber(st.targetQd);
+                }
 
                 if (store.revenueReal > 0 && store.installmentReal > 0) {
                     store.installmentRateReal = Number(((store.installmentReal / store.revenueReal) * 100).toFixed(2));

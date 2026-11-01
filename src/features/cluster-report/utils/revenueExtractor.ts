@@ -33,6 +33,34 @@ export function extractStoreRevenueDetails(
 
     const lines = rawRevenue.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
 
+    // Xử lý chuỗi riêng lẻ 1 siêu thị (được tạo bởi hệ thống OCR hoặc nhập liệu ngắn)
+    if (lines.length <= 6 && (rawRevenue.includes('DTQĐ:') || rawRevenue.includes('DT Thực:') || rawRevenue.includes('DT Thuc:'))) {
+        const qdMatch = rawRevenue.match(/DTQĐ:\s*([\d,.]+)/i);
+        const realMatch = rawRevenue.match(/DT\s*Th[ựu]c:\s*([\d,.]+)/i);
+        const tgMatch = rawRevenue.match(/Target:\s*([\d,.]+)/i);
+        const instMatch = rawRevenue.match(/Tr[ảa]\s*g[óo]p:\s*([\d,.]+)/i);
+        const instRateMatch = rawRevenue.match(/(?:%|Tỷ lệ)\s*Tr[ảa]\s*g[óo]p:\s*([\d,.]+)%?/i);
+        const avg3Match = rawRevenue.match(/TB\s*3\s*Th[áa]ng:\s*([\d,.]+)/i);
+
+        const qdVal = qdMatch ? parseFloat(qdMatch[1].replace(/,/g, '')) || 0 : 0;
+        const realVal = realMatch ? parseFloat(realMatch[1].replace(/,/g, '')) || 0 : 0;
+        const tgVal = tgMatch ? parseFloat(tgMatch[1].replace(/,/g, '')) || undefined : undefined;
+        const instVal = instMatch ? parseFloat(instMatch[1].replace(/,/g, '')) || undefined : undefined;
+        const instRateVal = instRateMatch ? parseFloat(instRateMatch[1].replace(/,/g, '')) || undefined : undefined;
+        const avg3Val = avg3Match ? parseFloat(avg3Match[1].replace(/,/g, '')) || undefined : undefined;
+
+        if (qdVal > 0 || realVal > 0) {
+            return {
+                revenueQd: qdVal || realVal,
+                revenueActual: realVal || qdVal,
+                revenueTarget: tgVal,
+                avg3Months: avg3Val,
+                installmentRevenue: instVal,
+                installmentRate: instRateVal
+            };
+        }
+    }
+
     // 1. Trích xuất mã số siêu thị từ storeName (ví dụ: '111', '10335', ...)
     const storeIdMatch = storeName.match(/^(\d{3,6})/);
     const targetStoreId = storeIdMatch ? storeIdMatch[1] : '';
@@ -89,6 +117,40 @@ export function extractStoreRevenueDetails(
         }
 
         if (isMatch) {
+            // Kiểm tra xem dòng hiện tại hoặc dòng kế tiếp có chứa chuỗi định dạng DTQĐ hoặc DT Thực
+            const candidateLines = [line];
+            if (i + 1 < lines.length) candidateLines.push(lines[i + 1]);
+            if (i + 2 < lines.length) candidateLines.push(lines[i + 2]);
+
+            for (const cLine of candidateLines) {
+                if (cLine.includes('DTQĐ:') || cLine.includes('DT Thực:') || cLine.includes('DT Thuc:')) {
+                    const qdMatch = cLine.match(/DTQĐ:\s*([\d,.]+)/i);
+                    const realMatch = cLine.match(/DT\s*Th[ựu]c:\s*([\d,.]+)/i);
+                    const tgMatch = cLine.match(/Target:\s*([\d,.]+)/i);
+                    const instMatch = cLine.match(/Tr[ảa]\s*g[óo]p:\s*([\d,.]+)/i);
+                    const instRateMatch = cLine.match(/(?:%|Tỷ lệ)\s*Tr[ảa]\s*g[óo]p:\s*([\d,.]+)%?/i);
+                    const avg3Match = cLine.match(/TB\s*3\s*Th[áa]ng:\s*([\d,.]+)/i);
+
+                    const qdVal = qdMatch ? parseFloat(qdMatch[1].replace(/,/g, '')) || 0 : 0;
+                    const realVal = realMatch ? parseFloat(realMatch[1].replace(/,/g, '')) || 0 : 0;
+                    const tgVal = tgMatch ? parseFloat(tgMatch[1].replace(/,/g, '')) || undefined : undefined;
+                    const instVal = instMatch ? parseFloat(instMatch[1].replace(/,/g, '')) || undefined : undefined;
+                    const instRateVal = instRateMatch ? parseFloat(instRateMatch[1].replace(/,/g, '')) || undefined : undefined;
+                    const avg3Val = avg3Match ? parseFloat(avg3Match[1].replace(/,/g, '')) || undefined : undefined;
+
+                    if (qdVal > 0 || realVal > 0) {
+                        return {
+                            revenueQd: qdVal || realVal,
+                            revenueActual: realVal || qdVal,
+                            revenueTarget: tgVal,
+                            avg3Months: avg3Val,
+                            installmentRevenue: instVal,
+                            installmentRate: instRateVal
+                        };
+                    }
+                }
+            }
+
             // Xác định dòng chứa số liệu: có thể nằm cùng dòng (inline) hoặc ở dòng kế tiếp
             let parts = line.split(/\t|\s{2,}/).map(x => x.trim()).filter(Boolean);
             if (parts.length < 5 && i + 1 < lines.length) {

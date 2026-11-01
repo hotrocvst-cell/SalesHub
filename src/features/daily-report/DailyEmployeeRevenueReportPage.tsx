@@ -48,12 +48,25 @@ import {
     UserCheck,
     Table as TableIcon,
     LayoutGrid,
-    Lock
+    Lock,
+    Camera,
+    Sparkles,
+    Database,
+    X,
+    Check,
+    Cloud
 } from 'lucide-react';
 import { useAuth } from '../../shared/contexts/AuthContext';
 import { useUserStoreFilter } from '../../shared/hooks/useUserStoreFilter';
 import ReportActionButtons, { type AssessmentTemplate } from '../../shared/components/report/ReportActionButtons';
 import { calculate8KScale } from '../../shared/utils/exportImage';
+import CloudDataSyncStatusBanner from '../../shared/components/report/CloudDataSyncStatusBanner';
+import DailyEmployeeRevenueOcrModal from './components/DailyEmployeeRevenueOcrModal';
+import {
+    DAILY_EMPLOYEE_REVENUE_SESSIONS_SQL,
+    fetchDailyEmployeeSession,
+    type DailyEmployeeRevenueSessionRecord
+} from './services/dailyEmployeeRevenueSessionService';
 
 const DRAFT_STORE_KEY = 'saleshub_daily_emp_revenue_store_v1';
 const DRAFT_DATE_KEY = 'saleshub_daily_emp_revenue_date_v1';
@@ -61,6 +74,7 @@ const DRAFT_DATE_KEY = 'saleshub_daily_emp_revenue_date_v1';
 export default function DailyEmployeeRevenueReportPage() {
     const reportRef = useRef<HTMLDivElement>(null);
     const { currentUser } = useAuth();
+    const isAdmin = currentUser?.role === 'ADMIN';
 
     // 1. DỮ LIỆU DANH BẠ HỆ THỐNG
     const [stores, setStores] = useState<StoreItem[]>([]);
@@ -72,6 +86,15 @@ export default function DailyEmployeeRevenueReportPage() {
             return 'all';
         }
     });
+
+    // Trạng thái Cloud & OCR
+    const [customRecords, setCustomRecords] = useState<ParsedEmployeeRevenue[] | null>(null);
+    const [cloudSession, setCloudSession] = useState<DailyEmployeeRevenueSessionRecord | null>(null);
+    const [isLoadingCloud, setIsLoadingCloud] = useState<boolean>(false);
+    const [isTableMissing, setIsTableMissing] = useState<boolean>(false);
+    const [isOcrModalOpen, setIsOcrModalOpen] = useState<boolean>(false);
+    const [showSqlModal, setShowSqlModal] = useState<boolean>(false);
+    const [isCopiedSql, setIsCopiedSql] = useState<boolean>(false);
 
     // Phân quyền phạm vi siêu thị theo vai trò người dùng (Nhân viên bị khóa shop, Quản lý đa shop, Admin toàn quyền)
     const { allowedStores, isLockedToSingleStore, canViewAllStores } = useUserStoreFilter(
@@ -137,11 +160,47 @@ export default function DailyEmployeeRevenueReportPage() {
         return map;
     }, [employees]);
 
-    // Phân tích cú pháp văn bản dán (hỗ trợ cả 2 bảng tách rời DTQĐ và DT Thực)
+    // Phân tích cú pháp văn bản dán hoặc dùng dữ liệu từ OCR/Cloud
     const parsedRawList = useMemo<ParsedEmployeeRevenue[]>(() => {
+        if (customRecords && customRecords.length > 0) return customRecords;
         if (!rawText.trim() && !rawRealText.trim()) return [];
         return parseEmployeeRevenueText(rawText, rawRealText);
-    }, [rawText, rawRealText]);
+    }, [customRecords, rawText, rawRealText]);
+
+    // Tự động tải phiên dữ liệu nhân viên từ Supabase Cloud khi thay đổi siêu thị hoặc ngày
+    useEffect(() => {
+        let isMounted = true;
+        const loadCloudSession = async () => {
+            if (!selectedStore) {
+                setCloudSession(null);
+                return;
+            }
+            setIsLoadingCloud(true);
+            const res = await fetchDailyEmployeeSession(selectedStore, reportDate);
+            if (!isMounted) return;
+            setIsLoadingCloud(false);
+            if (res.isTableMissing) {
+                setIsTableMissing(true);
+            } else {
+                setIsTableMissing(false);
+            }
+            if (res.success && res.data) {
+                setCloudSession(res.data);
+                // Nếu chưa dán dữ liệu thủ công, nạp bản ghi từ Cloud
+                if (!rawText.trim() && !rawRealText.trim()) {
+                    setCustomRecords(res.data.records);
+                }
+            } else {
+                setCloudSession(null);
+                // Nếu không có trên cloud và cũng không dán thủ công
+                if (!rawText.trim() && !rawRealText.trim()) {
+                    setCustomRecords(null);
+                }
+            }
+        };
+        loadCloudSession();
+        return () => { isMounted = false; };
+    }, [selectedStore, reportDate, rawText, rawRealText]);
 
     // Tự động nhận diện siêu thị từ văn bản dán và khớp với dropdown
     useEffect(() => {
@@ -245,11 +304,40 @@ export default function DailyEmployeeRevenueReportPage() {
         summary
     } = processedData;
 
-    // Kiểm tra xem phiên dữ liệu có thông tin trả góp hợp lệ (từ bảng Doanh thu thực) hay không
+    // Kiểm tra các cột dữ liệu có phát sinh số liệu thực tế hay không (Quy chuẩn: Ẩn cột thiếu tự động)
+    const hasQdData = useMemo(() => {
+        if (rawText.trim()) return true;
+        return allShiftEmployees.some(e => (e.revenue_qd || 0) !== 0);
+    }, [rawText, allShiftEmployees]);
+
+    const hasActualData = useMemo(() => {
+        if (rawRealText.trim()) return true;
+        return allShiftEmployees.some(e => (e.revenue_actual || 0) !== 0);
+    }, [rawRealText, allShiftEmployees]);
+
+    const hasQuantityData = useMemo(() => {
+        return allShiftEmployees.some(e => (e.quantity || 0) > 0);
+    }, [allShiftEmployees]);
+
     const hasInstallmentData = useMemo(() => {
         if (rawRealText.trim()) return true;
         return allShiftEmployees.some(e => (e.installment_revenue || 0) > 0 || (e.installment_rate || 0) > 0);
     }, [rawRealText, allShiftEmployees]);
+
+    const hasReturnQdData = useMemo(() => {
+        return allShiftEmployees.some(e => (e.revenue_return_qd || 0) !== 0);
+    }, [allShiftEmployees]);
+
+    // Tự động tính toán bề rộng tối thiểu cho bảng co gọn tối đa trên di động
+    const tableMinWidth = useMemo(() => {
+        let width = 218; // STT (34) + Đ.GIÁ (54) + NHÂN VIÊN (130)
+        if (hasQuantityData) width += 36;
+        if (hasActualData) width += 64;
+        if (hasQdData) width += 116; // DTQĐ (72) + % ST (44)
+        if (hasInstallmentData) width += 108; // T.Góp (64) + % TG (44)
+        if (hasReturnQdData) width += 68;
+        return `${width}px`;
+    }, [hasQuantityData, hasActualData, hasQdData, hasInstallmentData, hasReturnQdData]);
 
     // Chiều rộng badge mã nhân viên tự động thích ứng theo mã dài nhất trong bảng để thẳng cột thẳng lề
     const maxIdLength = useMemo(() => {
@@ -365,10 +453,12 @@ export default function DailyEmployeeRevenueReportPage() {
         showToast(`🎯 Đã đặt lại mặc định: ${newChecked.size} nhân sự có DTQĐ khác 0`);
     };
 
-    // Xóa trắng dữ liệu dán
+    // Xóa trắng dữ liệu báo cáo
     const handleClearData = () => {
         setRawText('');
         setRawRealText('');
+        setCustomRecords(null);
+        setCloudSession(null);
         setDetectedStoreName('');
         setManualShiftEmpIds(new Set());
         showToast('🗑️ Đã xóa trắng dữ liệu báo cáo!');
@@ -672,6 +762,23 @@ export default function DailyEmployeeRevenueReportPage() {
                 </div>
             )}
 
+            {/* Banner trạng thái lưu trữ Supabase Cloud (Rule 8) */}
+            <div data-html2canvas-ignore="true" data-export-ignore="true">
+                <CloudDataSyncStatusBanner
+                    storageType={cloudSession ? 'cloud' : 'local'}
+                    syncStatus={cloudSession ? 'synced' : 'unsynced'}
+                    tableReady={!isTableMissing}
+                    tableName="daily_employee_revenue_sessions"
+                    sqlDdl={isAdmin ? DAILY_EMPLOYEE_REVENUE_SESSIONS_SQL : undefined}
+                    lastSyncTime={cloudSession?.updated_at || cloudSession?.session_time}
+                    customMessage={
+                        cloudSession
+                            ? `Phiên lưu siêu thị: ${cloudSession.store_name} • Ngày: ${formatDate(cloudSession.report_date)} • Cập nhật: ${new Date(cloudSession.updated_at || cloudSession.session_time || '').toLocaleTimeString('vi-VN')}`
+                            : undefined
+                    }
+                />
+            </div>
+
             {/* ========================================================= */}
             {/* 1. KHU VỰC ĐIỀU KHIỂN & BỘ LỌC SIÊU THỊ                   */}
             {/* ========================================================= */}
@@ -765,6 +872,17 @@ export default function DailyEmployeeRevenueReportPage() {
 
                     {/* Bộ công cụ xuất ảnh & tác vụ */}
                     <div className="flex flex-wrap items-center gap-2.5">
+                        {/* 0. Nút Quét OCR Báo Cáo BI */}
+                        <button
+                            type="button"
+                            onClick={() => setIsOcrModalOpen(true)}
+                            className="px-3.5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 shadow-xs active:scale-95"
+                            title="Quét ảnh chụp màn hình BI Mobile bằng AI Gemini Vision (Hỗ trợ phím Ctrl+V và chọn nhiều ảnh)"
+                        >
+                            <Sparkles className="w-4 h-4 text-amber-300 animate-pulse shrink-0" />
+                            <span>📸 Quét OCR BI (Ctrl+V)</span>
+                        </button>
+
                         {/* 1. Nút Mở Ô Dán Báo Cáo */}
                         <button
                             type="button"
@@ -998,7 +1116,7 @@ export default function DailyEmployeeRevenueReportPage() {
             {/* ========================================================= */}
             {/* 3. TRƯỜNG HỢP CHƯA CÓ DỮ LIỆU BÁO CÁO                     */}
             {/* ========================================================= */}
-            {(!rawText.trim() && !rawRealText.trim()) || allShiftEmployees.length === 0 ? (
+            {(!rawText.trim() && !rawRealText.trim() && (!customRecords || customRecords.length === 0)) || allShiftEmployees.length === 0 ? (
                 <div className="bg-white rounded-3xl border border-dashed border-slate-300 p-8 sm:p-12 text-center shadow-xs space-y-5 max-w-2xl mx-auto my-6 animate-in fade-in duration-300">
                     <div className="w-16 h-16 rounded-3xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center mx-auto shadow-inner">
                         <AlertCircle className="w-8 h-8" />
@@ -1012,8 +1130,29 @@ export default function DailyEmployeeRevenueReportPage() {
                             Chưa Có Dữ Liệu Cần Xử Lý
                         </h3>
                         <p className="text-xs sm:text-sm text-slate-500 max-w-lg mx-auto leading-relaxed">
-                            Vui lòng sao chép dữ liệu và dán vào ô bên dưới. <br /> Hệ thống sẽ tự động xử lý dữ liệu hợp lệ.
+                            Quét trực tiếp ảnh chụp màn hình BI Mobile bằng AI Vision hoặc dán văn bản báo cáo vào ô bên dưới.
                         </p>
+                    </div>
+
+                    {/* Nút Quét OCR Nổi Bật (Ưu tiên số 1) */}
+                    <div className="max-w-xl mx-auto pt-1 space-y-2">
+                        <button
+                            type="button"
+                            onClick={() => setIsOcrModalOpen(true)}
+                            className="w-full py-4 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-700 hover:to-teal-800 text-white rounded-2xl text-sm font-black transition cursor-pointer flex items-center justify-center gap-2.5 shadow-lg shadow-emerald-900/15 active:scale-[0.99]"
+                        >
+                            <Sparkles className="w-5 h-5 text-amber-300 animate-pulse shrink-0" />
+                            <span>📸 Quét OCR Báo Cáo BI Mobile (Ctrl+V / Nhiều Ảnh)</span>
+                        </button>
+                        <p className="text-[11px] text-slate-400">
+                            Tự động nhận diện ảnh DTQĐ & DT Thực, tự bù trừ tiêu đề bị cuộn mất, đối chiếu danh bạ nhân sự chuẩn mực.
+                        </p>
+                    </div>
+
+                    <div className="relative flex py-1 items-center max-w-xl mx-auto">
+                        <div className="flex-grow border-t border-slate-200"></div>
+                        <span className="flex-shrink mx-4 text-xs font-bold text-slate-400 uppercase">Hoặc dán văn bản thủ công</span>
+                        <div className="flex-grow border-t border-slate-200"></div>
                     </div>
 
                     {/* Vùng dán trực tiếp nhanh (2 ô DTQĐ và DT Thực) */}
@@ -1095,15 +1234,23 @@ export default function DailyEmployeeRevenueReportPage() {
                             </div>
 
                             {/* Thống kê nhanh trên banner */}
-                            <div className={`relative z-10 grid ${hasInstallmentData ? 'grid-cols-3' : 'grid-cols-2'} gap-2 text-center w-full sm:w-auto shrink-0`}>
+                            <div className="relative z-10 flex items-center justify-center sm:justify-end gap-2 flex-wrap text-center w-full sm:w-auto shrink-0">
                                 <div className="bg-white/10 backdrop-blur-xs border border-white/20 rounded-xl p-2 min-w-[70px]">
                                     <div className="text-[9.5px] text-amber-200 font-bold uppercase">Nhân sự</div>
                                     <div className="text-base sm:text-lg font-black text-white">{summary.totalEmployees} <span className="text-[9px] font-medium text-amber-200">NV</span></div>
                                 </div>
-                                <div className="bg-white/10 backdrop-blur-xs border border-white/20 rounded-xl p-2 min-w-[80px]">
-                                    <div className="text-[9.5px] text-amber-200 font-bold uppercase">Tổng DTQĐ</div>
-                                    <div className="text-base sm:text-lg font-black text-[#fde047]">{formatValue(summary.totalRevenueQd)} <span className="text-[9px] font-medium text-amber-200">tr</span></div>
-                                </div>
+                                {hasQdData && (
+                                    <div className="bg-white/10 backdrop-blur-xs border border-white/20 rounded-xl p-2 min-w-[80px]">
+                                        <div className="text-[9.5px] text-amber-200 font-bold uppercase">Tổng DTQĐ</div>
+                                        <div className="text-base sm:text-lg font-black text-[#fde047]">{formatValue(summary.totalRevenueQd)} <span className="text-[9px] font-medium text-amber-200">tr</span></div>
+                                    </div>
+                                )}
+                                {hasActualData && !hasQdData && (
+                                    <div className="bg-white/10 backdrop-blur-xs border border-white/20 rounded-xl p-2 min-w-[80px]">
+                                        <div className="text-[9.5px] text-amber-200 font-bold uppercase">Tổng DT Thực</div>
+                                        <div className="text-base sm:text-lg font-black text-emerald-300">{formatValue(summary.totalActualRevenue)} <span className="text-[9px] font-medium text-emerald-200">tr</span></div>
+                                    </div>
+                                )}
                                 {hasInstallmentData && (
                                     <div className="bg-white/10 backdrop-blur-xs border border-white/20 rounded-xl p-2 min-w-[65px]">
                                         <div className="text-[9.5px] text-amber-200 font-bold uppercase">% Trả góp</div>
@@ -1114,36 +1261,40 @@ export default function DailyEmployeeRevenueReportPage() {
                         </div>
 
                         {/* B. CHỈ SỐ KPI TỔNG THỂ */}
-                        <div data-section="kpis" className={`grid grid-cols-1 ${hasInstallmentData ? 'sm:grid-cols-3' : 'sm:grid-cols-2'} gap-2.5`}>
-                            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 flex items-center gap-2.5">
-                                <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
-                                    <Coins className="w-4 h-4" />
-                                </div>
-                                <div className="min-w-0">
-                                    <div className="text-[10px] font-bold text-slate-500 uppercase truncate">Doanh Thu Thực</div>
-                                    <div className="text-sm sm:text-base font-black text-slate-900 leading-tight">
-                                        {formatValue(summary.totalActualRevenue)} <span className="text-[10px] font-semibold text-slate-500">tr</span>
+                        <div data-section="kpis" className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+                            {hasActualData && (
+                                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 flex items-center gap-2.5">
+                                    <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
+                                        <Coins className="w-4 h-4" />
                                     </div>
-                                    <div className="text-[10px] text-slate-500 font-semibold truncate">
-                                        ~{formatValue(summary.avgActualRevenue)} tr/NV
+                                    <div className="min-w-0">
+                                        <div className="text-[10px] font-bold text-slate-500 uppercase truncate">Doanh Thu Thực</div>
+                                        <div className="text-sm sm:text-base font-black text-slate-900 leading-tight">
+                                            {formatValue(summary.totalActualRevenue)} <span className="text-[10px] font-semibold text-slate-500">tr</span>
+                                        </div>
+                                        <div className="text-[10px] text-slate-500 font-semibold truncate">
+                                            ~{formatValue(summary.avgActualRevenue)} tr/NV
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
+                            )}
 
-                            <div className="bg-emerald-50/70 border border-emerald-200 rounded-2xl p-3 flex items-center gap-2.5">
-                                <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
-                                    <TrendingUp className="w-4 h-4" />
-                                </div>
-                                <div className="min-w-0">
-                                    <div className="text-[10px] font-extrabold text-emerald-800 uppercase truncate">Doanh Thu Quy Đổi</div>
-                                    <div className="text-sm sm:text-base font-black text-emerald-700 leading-tight">
-                                        {formatValue(summary.totalRevenueQd)} <span className="text-[10px] font-semibold text-emerald-600">tr</span>
+                            {hasQdData && (
+                                <div className="bg-emerald-50/70 border border-emerald-200 rounded-2xl p-3 flex items-center gap-2.5">
+                                    <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                                        <TrendingUp className="w-4 h-4" />
                                     </div>
-                                    <div className="text-[10px] text-emerald-700 font-semibold truncate">
-                                        ~{formatValue(summary.avgRevenueQd)} tr/NV
+                                    <div className="min-w-0">
+                                        <div className="text-[10px] font-extrabold text-emerald-800 uppercase truncate">Doanh Thu Quy Đổi</div>
+                                        <div className="text-sm sm:text-base font-black text-emerald-700 leading-tight">
+                                            {formatValue(summary.totalRevenueQd)} <span className="text-[10px] font-semibold text-emerald-600">tr</span>
+                                        </div>
+                                        <div className="text-[10px] text-emerald-700 font-semibold truncate">
+                                            ~{formatValue(summary.avgRevenueQd)} tr/NV
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
+                            )}
 
                             {hasInstallmentData && (
                                 <div className="bg-purple-50/70 border border-purple-200 rounded-2xl p-3 flex items-center gap-2.5">
@@ -1223,28 +1374,34 @@ export default function DailyEmployeeRevenueReportPage() {
                                                         </div>
                                                     </div>
 
-                                                    <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-800 text-[9.5px] font-black rounded shrink-0">
-                                                        {emp.contribution_rate}% ST
-                                                    </span>
+                                                    {hasQdData && (
+                                                        <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-800 text-[9.5px] font-black rounded shrink-0">
+                                                            {emp.contribution_rate}% ST
+                                                        </span>
+                                                    )}
                                                 </div>
 
                                                 {/* Thông số chính */}
                                                 <div className="py-2 space-y-1.5">
                                                     {/* Doanh thu QĐ - Nổi bật nhất */}
-                                                    <div className="flex items-baseline justify-between">
-                                                        <span className="text-[10px] font-extrabold text-slate-600">DTQĐ:</span>
-                                                        <span className="text-sm font-black text-emerald-700 tracking-tight">
-                                                            {formatValue(emp.revenue_qd)} <span className="text-[10px] font-bold text-emerald-600">tr</span>
-                                                        </span>
-                                                    </div>
+                                                    {hasQdData && (
+                                                        <div className="flex items-baseline justify-between">
+                                                            <span className="text-[10px] font-extrabold text-slate-600">DTQĐ:</span>
+                                                            <span className="text-sm font-black text-emerald-700 tracking-tight">
+                                                                {formatValue(emp.revenue_qd)} <span className="text-[10px] font-bold text-emerald-600">tr</span>
+                                                            </span>
+                                                        </div>
+                                                    )}
 
                                                     {/* Doanh thu Thực */}
-                                                    <div className="flex items-baseline justify-between text-[11px]">
-                                                        <span className="text-slate-500 font-semibold">DT Thực:</span>
-                                                        <span className="font-extrabold text-emerald-600">
-                                                            {formatValue(emp.revenue_actual)} tr
-                                                        </span>
-                                                    </div>
+                                                    {hasActualData && (
+                                                        <div className="flex items-baseline justify-between text-[11px]">
+                                                            <span className="text-slate-500 font-semibold">DT Thực:</span>
+                                                            <span className="font-extrabold text-emerald-600">
+                                                                {formatValue(emp.revenue_actual)} tr
+                                                            </span>
+                                                        </div>
+                                                    )}
 
                                                     {/* DT Trả góp & Tỷ lệ */}
                                                     {hasInstallmentData && (
@@ -1257,12 +1414,14 @@ export default function DailyEmployeeRevenueReportPage() {
                                                     )}
 
                                                     {/* Số lượng sản phẩm */}
-                                                    <div className="flex items-baseline justify-between text-[11px]">
-                                                        <span className="text-slate-500 font-semibold">Số lượng:</span>
-                                                        <span className="font-bold text-slate-700">
-                                                            {emp.quantity} SP
-                                                        </span>
-                                                    </div>
+                                                    {hasQuantityData && (
+                                                        <div className="flex items-baseline justify-between text-[11px]">
+                                                            <span className="text-slate-500 font-semibold">Số lượng:</span>
+                                                            <span className="font-bold text-slate-700">
+                                                                {emp.quantity} SP
+                                                            </span>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
                                         );
@@ -1309,58 +1468,66 @@ export default function DailyEmployeeRevenueReportPage() {
 
                             {/* HIỂN THỊ DẠNG THẺ CHIP CÂN ĐỐI (FLEX-WRAP CHIPS) */}
                             {reminderViewMode === 'CARDS' ? (
-                                <div className={`grid grid-cols-1 ${hasInstallmentData ? (zeroOrNegativeEmployees.length > 0 ? 'sm:grid-cols-3' : 'sm:grid-cols-2') : (zeroOrNegativeEmployees.length > 0 ? 'sm:grid-cols-2' : 'sm:grid-cols-1')} gap-2.5 items-stretch`}>
+                                <div className={`grid grid-cols-1 ${
+                                    (hasQdData ? 1 : 0) + (zeroOrNegativeEmployees.length > 0 ? 1 : 0) + (hasInstallmentData ? 1 : 0) >= 3
+                                        ? 'sm:grid-cols-3'
+                                        : (hasQdData ? 1 : 0) + (zeroOrNegativeEmployees.length > 0 ? 1 : 0) + (hasInstallmentData ? 1 : 0) === 2
+                                            ? 'sm:grid-cols-2'
+                                            : 'sm:grid-cols-1'
+                                } gap-2.5 items-stretch`}>
                                     {/* CỘT 1: DTQĐ DƯỚI TRUNG BÌNH */}
-                                    <div className="bg-gradient-to-b from-amber-50/70 to-white border border-amber-200 rounded-2xl p-3 flex flex-col justify-between shadow-2xs space-y-2.5 min-h-[150px]">
-                                        <div className="space-y-0.5">
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-1.5 text-xs font-black text-amber-950 uppercase">
-                                                    <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                                                    <span>Dưới Trung Bình</span>
+                                    {hasQdData && (
+                                        <div className="bg-gradient-to-b from-amber-50/70 to-white border border-amber-200 rounded-2xl p-3 flex flex-col justify-between shadow-2xs space-y-2.5 min-h-[150px]">
+                                            <div className="space-y-0.5">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-1.5 text-xs font-black text-amber-950 uppercase">
+                                                        <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                                        <span>Dưới Trung Bình</span>
+                                                    </div>
+                                                    <span className="px-1.5 py-0.5 bg-amber-200 text-amber-900 text-[9.5px] font-black rounded shrink-0">
+                                                        {belowAvgEmployees.length} bạn
+                                                    </span>
                                                 </div>
-                                                <span className="px-1.5 py-0.5 bg-amber-200 text-amber-900 text-[9.5px] font-black rounded shrink-0">
-                                                    {belowAvgEmployees.length} bạn
-                                                </span>
+                                                <div className="text-[10.5px] text-amber-800 leading-snug">
+                                                    Mức TB: <b className="text-amber-950 font-black">{formatValue(summary.avgRevenueQd)} tr</b>
+                                                </div>
                                             </div>
-                                            <div className="text-[10.5px] text-amber-800 leading-snug">
-                                                Mức TB: <b className="text-amber-950 font-black">{formatValue(summary.avgRevenueQd)} tr</b>
-                                            </div>
-                                        </div>
 
-                                        {/* Danh sách dạng chip gọn gàng */}
-                                        <div className="flex-1 py-1">
-                                            {belowAvgEmployees.length === 0 ? (
-                                                <div className="h-full flex items-center justify-center py-3 px-2 text-center text-[11px] font-bold text-emerald-700 bg-white/80 rounded-xl border border-emerald-200">
-                                                    {summary.totalEmployees === 0 || summary.activeCount === 0
-                                                        ? 'Chưa có nhân sự phát sinh số'
-                                                        : (summary.zeroOrNegCount > 0 || zeroOrNegativeEmployees.length > 0)
-                                                            ? '✨ NV có số đều đạt mức TB!'
-                                                            : '✨ 100% nhân sự đều vượt mức TB!'}
-                                                </div>
-                                            ) : (
-                                                <div className="flex flex-wrap gap-1 content-start">
-                                                    {belowAvgEmployees.map(emp => {
-                                                        const diff = summary.avgRevenueQd - emp.revenue_qd;
-                                                        return (
-                                                            <div
-                                                                key={emp.employee_id}
-                                                                className="inline-flex items-center gap-1 px-2 py-1 bg-white border border-amber-200 rounded-lg shadow-2xs text-[11px] hover:border-amber-300 transition"
-                                                                title={`${emp.full_name}: Hiện có ${formatValue(emp.revenue_qd)} tr, còn thiếu ${formatValue(diff)} tr`}
-                                                            >
-                                                                <span className="font-bold text-slate-800">{emp.short_name}</span>
-                                                                <span className="px-1 py-0.2 bg-amber-100 text-amber-900 rounded font-black text-[10px]">
-                                                                    {formatValue(emp.revenue_qd)}
-                                                                </span>
-                                                                <span className="text-[9.5px] text-amber-700 font-semibold">
-                                                                    (-{formatValue(diff)})
-                                                                </span>
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                            )}
+                                            {/* Danh sách dạng chip gọn gàng */}
+                                            <div className="flex-1 py-1">
+                                                {belowAvgEmployees.length === 0 ? (
+                                                    <div className="h-full flex items-center justify-center py-3 px-2 text-center text-[11px] font-bold text-emerald-700 bg-white/80 rounded-xl border border-emerald-200">
+                                                        {summary.totalEmployees === 0 || summary.activeCount === 0
+                                                            ? 'Chưa có nhân sự phát sinh số'
+                                                            : (summary.zeroOrNegCount > 0 || zeroOrNegativeEmployees.length > 0)
+                                                                ? '✨ NV có số đều đạt mức TB!'
+                                                                : '✨ 100% nhân sự đều vượt mức TB!'}
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex flex-wrap gap-1 content-start">
+                                                        {belowAvgEmployees.map(emp => {
+                                                            const diff = summary.avgRevenueQd - emp.revenue_qd;
+                                                            return (
+                                                                <div
+                                                                    key={emp.employee_id}
+                                                                    className="inline-flex items-center gap-1 px-2 py-1 bg-white border border-amber-200 rounded-lg shadow-2xs text-[11px] hover:border-amber-300 transition"
+                                                                    title={`${emp.full_name}: Hiện có ${formatValue(emp.revenue_qd)} tr, còn thiếu ${formatValue(diff)} tr`}
+                                                                >
+                                                                    <span className="font-bold text-slate-800">{emp.short_name}</span>
+                                                                    <span className="px-1 py-0.2 bg-amber-100 text-amber-900 rounded font-black text-[10px]">
+                                                                        {formatValue(emp.revenue_qd)}
+                                                                    </span>
+                                                                    <span className="text-[9.5px] text-amber-700 font-semibold">
+                                                                        (-{formatValue(diff)})
+                                                                    </span>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
-                                    </div>
+                                    )}
 
                                     {/* CỘT 2: DTQĐ <= 0 (CHƯA CÓ SỐ / ÂM) - CHỈ HIỂN THỊ KHI CÓ NHÂN SỰ CHƯA CÓ DOANH THU HOẶC ÂM SỐ */}
                                     {zeroOrNegativeEmployees.length > 0 && (
@@ -1553,26 +1720,30 @@ export default function DailyEmployeeRevenueReportPage() {
                                         >
                                             Có số ({analyzedEmployees.length})
                                         </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setFilterCategory('TOP_30')}
-                                            className={`px-2 py-0.5 rounded-lg transition cursor-pointer ${filterCategory === 'TOP_30'
-                                                ? 'bg-white text-amber-700 shadow-2xs font-extrabold'
-                                                : 'text-slate-500 hover:text-slate-800'
-                                                }`}
-                                        >
-                                            Top 30%
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setFilterCategory('BELOW_AVG')}
-                                            className={`px-2 py-0.5 rounded-lg transition cursor-pointer ${filterCategory === 'BELOW_AVG'
-                                                ? 'bg-white text-orange-700 shadow-2xs font-extrabold'
-                                                : 'text-slate-500 hover:text-slate-800'
-                                                }`}
-                                        >
-                                            Dưới TB
-                                        </button>
+                                        {hasQdData && (
+                                            <>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setFilterCategory('TOP_30')}
+                                                    className={`px-2 py-0.5 rounded-lg transition cursor-pointer ${filterCategory === 'TOP_30'
+                                                        ? 'bg-white text-amber-700 shadow-2xs font-extrabold'
+                                                        : 'text-slate-500 hover:text-slate-800'
+                                                        }`}
+                                                >
+                                                    Top 30%
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setFilterCategory('BELOW_AVG')}
+                                                    className={`px-2 py-0.5 rounded-lg transition cursor-pointer ${filterCategory === 'BELOW_AVG'
+                                                        ? 'bg-white text-orange-700 shadow-2xs font-extrabold'
+                                                        : 'text-slate-500 hover:text-slate-800'
+                                                        }`}
+                                                >
+                                                    Dưới TB
+                                                </button>
+                                            </>
+                                        )}
                                         <button
                                             type="button"
                                             onClick={() => setFilterCategory('ZERO_OR_NEG')}
@@ -1614,22 +1785,26 @@ export default function DailyEmployeeRevenueReportPage() {
                             {/* Bảng dữ liệu chính - Tinh gọn cho Smartphone */}
                             <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
                                 <div className="overflow-x-auto max-h-[600px] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300">
-                                    <table className="w-full text-left text-xs border-collapse" style={{ tableLayout: 'fixed', minWidth: hasInstallmentData ? '650px' : '530px' }}>
+                                    <table className="w-full text-left text-xs border-collapse" style={{ tableLayout: 'fixed', minWidth: tableMinWidth }}>
                                         <colgroup>
                                             <col style={{ width: '34px' }} />
                                             <col style={{ width: '54px' }} />
                                             <col style={{ minWidth: '130px' }} />
-                                            <col style={{ width: '36px' }} />
-                                            <col style={{ width: '64px' }} />
-                                            <col style={{ width: '72px' }} />
-                                            <col style={{ width: '44px' }} />
+                                            {hasQuantityData && <col style={{ width: '36px' }} />}
+                                            {hasActualData && <col style={{ width: '64px' }} />}
+                                            {hasQdData && (
+                                                <>
+                                                    <col style={{ width: '72px' }} />
+                                                    <col style={{ width: '44px' }} />
+                                                </>
+                                            )}
                                             {hasInstallmentData && (
                                                 <>
                                                     <col style={{ width: '64px' }} />
                                                     <col style={{ width: '44px' }} />
                                                 </>
                                             )}
-                                            <col style={{ width: '68px' }} />
+                                            {hasReturnQdData && <col style={{ width: '68px' }} />}
                                         </colgroup>
                                         <thead className="sticky top-0 z-20 shadow-2xs select-none">
                                             <tr className="bg-slate-900 text-white text-[10.5px] font-black uppercase h-9 tracking-wider">
@@ -1662,48 +1837,55 @@ export default function DailyEmployeeRevenueReportPage() {
                                                     </div>
                                                 </th>
 
-                                                {/* Số Lượng */}
-                                                <th
-                                                    onClick={() => handleSort('qty')}
-                                                    className="py-1.5 px-1 text-right cursor-pointer hover:bg-slate-800 border-r border-slate-800 transition"
-                                                    title="Số lượng sản phẩm"
-                                                >
-                                                    <div className="flex items-center justify-end gap-0.5">
-                                                        <span>SL</span>
-                                                        <ArrowUpDown className="w-2.5 h-2.5 opacity-60" />
-                                                    </div>
-                                                </th>
+                                                {/* Số Lượng (Nếu có) */}
+                                                {hasQuantityData && (
+                                                    <th
+                                                        onClick={() => handleSort('qty')}
+                                                        className="py-1.5 px-1 text-right cursor-pointer hover:bg-slate-800 border-r border-slate-800 transition"
+                                                        title="Số lượng sản phẩm"
+                                                    >
+                                                        <div className="flex items-center justify-end gap-0.5">
+                                                            <span>SL</span>
+                                                            <ArrowUpDown className="w-2.5 h-2.5 opacity-60" />
+                                                        </div>
+                                                    </th>
+                                                )}
 
-                                                {/* Doanh Thu Thực */}
-                                                <th
-                                                    onClick={() => handleSort('actual')}
-                                                    className="py-1.5 px-1.5 text-right cursor-pointer hover:bg-slate-800 border-r border-slate-800 transition"
-                                                    title="Doanh thu thực tế (triệu đồng)"
-                                                >
-                                                    <div className="flex items-center justify-end gap-0.5">
-                                                        <span>DT Thực</span>
-                                                        <ArrowUpDown className="w-2.5 h-2.5 opacity-60" />
-                                                    </div>
-                                                </th>
+                                                {/* Doanh Thu Thực (Nếu có) */}
+                                                {hasActualData && (
+                                                    <th
+                                                        onClick={() => handleSort('actual')}
+                                                        className="py-1.5 px-1.5 text-right cursor-pointer hover:bg-slate-800 border-r border-slate-800 transition"
+                                                        title="Doanh thu thực tế (triệu đồng)"
+                                                    >
+                                                        <div className="flex items-center justify-end gap-0.5">
+                                                            <span>DT Thực</span>
+                                                            <ArrowUpDown className="w-2.5 h-2.5 opacity-60" />
+                                                        </div>
+                                                    </th>
+                                                )}
 
-                                                {/* DTQĐ (Màu Vàng Nổi Bật) */}
-                                                <th
-                                                    onClick={() => handleSort('qd')}
-                                                    className="py-1.5 px-1.5 text-right bg-[#005a43] text-[#fde047] cursor-pointer hover:bg-[#004735] border-r border-[#004735] transition"
-                                                    title="Doanh thu quy đổi (triệu đồng)"
-                                                >
-                                                    <div className="flex items-center justify-end gap-0.5">
-                                                        <span>DTQĐ</span>
-                                                        <ArrowUpDown className="w-2.5 h-2.5 opacity-80" />
-                                                    </div>
-                                                </th>
+                                                {/* DTQĐ & % ST (Nếu có) */}
+                                                {hasQdData && (
+                                                    <>
+                                                        <th
+                                                            onClick={() => handleSort('qd')}
+                                                            className="py-1.5 px-1.5 text-right bg-[#005a43] text-[#fde047] cursor-pointer hover:bg-[#004735] border-r border-[#004735] transition"
+                                                            title="Doanh thu quy đổi (triệu đồng)"
+                                                        >
+                                                            <div className="flex items-center justify-end gap-0.5">
+                                                                <span>DTQĐ</span>
+                                                                <ArrowUpDown className="w-2.5 h-2.5 opacity-80" />
+                                                            </div>
+                                                        </th>
 
-                                                {/* Tỷ trọng ST */}
-                                                <th className="py-1.5 px-1 text-right border-r border-slate-800" title="Tỷ trọng đóng góp vào doanh thu siêu thị">
-                                                    % ST
-                                                </th>
+                                                        <th className="py-1.5 px-1 text-right border-r border-slate-800" title="Tỷ trọng đóng góp vào doanh thu siêu thị">
+                                                            % ST
+                                                        </th>
+                                                    </>
+                                                )}
 
-                                                {/* DT Trả Góp & % Trả Góp */}
+                                                {/* DT Trả Góp & % Trả Góp (Nếu có) */}
                                                 {hasInstallmentData && (
                                                     <>
                                                         <th
@@ -1723,20 +1905,22 @@ export default function DailyEmployeeRevenueReportPage() {
                                                     </>
                                                 )}
 
-                                                {/* DTQĐ Nhập trả */}
-                                                <th
-                                                    onClick={() => handleSort('return_qd')}
-                                                    className="py-1.5 px-1 text-right cursor-pointer hover:bg-slate-800 transition"
-                                                    title="Doanh thu quy đổi nhập trả (triệu đồng)"
-                                                >
-                                                    <div className="flex items-center justify-end gap-0.5">
-                                                        <span className="leading-tight text-right">
-                                                            <span className="block sm:inline">DTQĐ </span>
-                                                            <span>N.trả</span>
-                                                        </span>
-                                                        <ArrowUpDown className="w-2.5 h-2.5 opacity-60 shrink-0" />
-                                                    </div>
-                                                </th>
+                                                {/* DTQĐ Nhập trả (Nếu có) */}
+                                                {hasReturnQdData && (
+                                                    <th
+                                                        onClick={() => handleSort('return_qd')}
+                                                        className="py-1.5 px-1 text-right cursor-pointer hover:bg-slate-800 transition"
+                                                        title="Doanh thu quy đổi nhập trả (triệu đồng)"
+                                                    >
+                                                        <div className="flex items-center justify-end gap-0.5">
+                                                            <span className="leading-tight text-right">
+                                                                <span className="block sm:inline">DTQĐ </span>
+                                                                <span>N.trả</span>
+                                                            </span>
+                                                            <ArrowUpDown className="w-2.5 h-2.5 opacity-60 shrink-0" />
+                                                        </div>
+                                                    </th>
+                                                )}
                                             </tr>
                                         </thead>
 
@@ -1809,27 +1993,33 @@ export default function DailyEmployeeRevenueReportPage() {
                                                             </div>
                                                         </td>
 
-                                                        {/* 4. Số lượng */}
-                                                        <td className="py-1.5 px-1 text-right font-bold text-slate-700 text-[11px] border-r border-slate-100">
-                                                            {row.quantity}
-                                                        </td>
+                                                        {/* 4. Số lượng (Nếu có) */}
+                                                        {hasQuantityData && (
+                                                            <td className="py-1.5 px-1 text-right font-bold text-slate-700 text-[11px] border-r border-slate-100">
+                                                                {row.quantity}
+                                                            </td>
+                                                        )}
 
-                                                        {/* 5. Doanh thu thực (tr) - Màu xanh lá */}
-                                                        <td className="py-1.5 px-1.5 text-right font-bold text-slate-800 text-[11.5px] border-r border-slate-100">
-                                                            {formatValue(row.revenue_actual)}
-                                                        </td>
+                                                        {/* 5. Doanh thu thực (tr) (Nếu có) */}
+                                                        {hasActualData && (
+                                                            <td className="py-1.5 px-1.5 text-right font-bold text-slate-800 text-[11.5px] border-r border-slate-100">
+                                                                {formatValue(row.revenue_actual)}
+                                                            </td>
+                                                        )}
 
-                                                        {/* 6. DTQĐ (tr) - Định dạng XANH LÁ IN ĐẬM */}
-                                                        <td className="py-1.5 px-1.5 text-right bg-emerald-50/70 font-black text-emerald-800 text-xs border-r border-emerald-100">
-                                                            {formatValue(row.revenue_qd)}
-                                                        </td>
+                                                        {/* 6. DTQĐ & % ST (Nếu có) */}
+                                                        {hasQdData && (
+                                                            <>
+                                                                <td className="py-1.5 px-1.5 text-right bg-emerald-50/70 font-black text-emerald-800 text-xs border-r border-emerald-100">
+                                                                    {formatValue(row.revenue_qd)}
+                                                                </td>
+                                                                <td className="py-1.5 px-1 text-right font-bold text-slate-600 text-[11px] border-r border-slate-100">
+                                                                    {row.contribution_rate}%
+                                                                </td>
+                                                            </>
+                                                        )}
 
-                                                        {/* 7. Tỷ trọng (%) */}
-                                                        <td className="py-1.5 px-1 text-right font-bold text-slate-600 text-[11px] border-r border-slate-100">
-                                                            {row.contribution_rate}%
-                                                        </td>
-
-                                                        {/* 8. DT Trả Góp & 9. % TG */}
+                                                        {/* 8. DT Trả Góp & 9. % TG (Nếu có) */}
                                                         {hasInstallmentData && (
                                                             <>
                                                                 <td className="py-1.5 px-1.5 text-right font-extrabold text-slate-800 text-[11.5px] border-r border-slate-100">
@@ -1852,16 +2042,18 @@ export default function DailyEmployeeRevenueReportPage() {
                                                             </>
                                                         )}
 
-                                                        {/* 6b. DTQĐ Nhập trả (tr) - Cột cuối */}
-                                                        <td className="py-1.5 px-1.5 text-right font-bold text-slate-800 text-[11.5px]">
-                                                            {row.revenue_return_qd && row.revenue_return_qd !== 0 ? (
-                                                                <span className={row.revenue_return_qd > 0 ? "text-rose-600" : "text-amber-700"}>
-                                                                    {formatValue(row.revenue_return_qd)}
-                                                                </span>
-                                                            ) : (
-                                                                <span className="text-slate-300 font-medium">0</span>
-                                                            )}
-                                                        </td>
+                                                        {/* 6b. DTQĐ Nhập trả (tr) (Nếu có) */}
+                                                        {hasReturnQdData && (
+                                                            <td className="py-1.5 px-1.5 text-right font-bold text-slate-800 text-[11.5px]">
+                                                                {row.revenue_return_qd && row.revenue_return_qd !== 0 ? (
+                                                                    <span className={row.revenue_return_qd > 0 ? "text-rose-600" : "text-amber-700"}>
+                                                                        {formatValue(row.revenue_return_qd)}
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="text-slate-300 font-medium">0</span>
+                                                                )}
+                                                            </td>
+                                                        )}
                                                     </tr>
                                                 );
                                             })}
@@ -1873,18 +2065,26 @@ export default function DailyEmployeeRevenueReportPage() {
                                                 <td colSpan={3} className="py-1.5 px-2 text-center uppercase tracking-wider border-r border-slate-800 text-[10.5px]">
                                                     TỔNG ({displayTableRows.length} NV)
                                                 </td>
-                                                <td className="py-1.5 px-1 text-right border-r border-slate-800 text-[11px]">
-                                                    {summary.totalQuantity}
-                                                </td>
-                                                <td className="py-1.5 px-1.5 text-right text-emerald-400 border-r border-slate-800 text-[11.5px]">
-                                                    {formatValue(summary.totalActualRevenue)}
-                                                </td>
-                                                <td className="py-1.5 px-1.5 text-right bg-[#005a43] text-[#fde047] text-xs border-r border-[#004735]">
-                                                    {formatValue(summary.totalRevenueQd)}
-                                                </td>
-                                                <td className="py-1.5 px-1 text-right border-r border-slate-800 text-[11px]">
-                                                    100%
-                                                </td>
+                                                {hasQuantityData && (
+                                                    <td className="py-1.5 px-1 text-right border-r border-slate-800 text-[11px]">
+                                                        {summary.totalQuantity}
+                                                    </td>
+                                                )}
+                                                {hasActualData && (
+                                                    <td className="py-1.5 px-1.5 text-right text-emerald-400 border-r border-slate-800 text-[11.5px]">
+                                                        {formatValue(summary.totalActualRevenue)}
+                                                    </td>
+                                                )}
+                                                {hasQdData && (
+                                                    <>
+                                                        <td className="py-1.5 px-1.5 text-right bg-[#005a43] text-[#fde047] text-xs border-r border-[#004735]">
+                                                            {formatValue(summary.totalRevenueQd)}
+                                                        </td>
+                                                        <td className="py-1.5 px-1 text-right border-r border-slate-800 text-[11px]">
+                                                            100%
+                                                        </td>
+                                                    </>
+                                                )}
                                                 {hasInstallmentData && (
                                                     <>
                                                         <td className="py-1.5 px-1.5 text-right text-purple-300 border-r border-slate-800 text-[11.5px]">
@@ -1896,13 +2096,105 @@ export default function DailyEmployeeRevenueReportPage() {
                                                     </>
                                                 )}
                                                 {/* TỔNG DTQĐ NHẬP TRẢ */}
-                                                <td className="py-1.5 px-1.5 text-right font-black text-[11.5px] text-rose-300">
-                                                    {formatValue(summary.totalRevenueReturnQd)}
-                                                </td>
+                                                {hasReturnQdData && (
+                                                    <td className="py-1.5 px-1.5 text-right font-black text-[11.5px] text-rose-300">
+                                                        {formatValue(summary.totalRevenueReturnQd)}
+                                                    </td>
+                                                )}
                                             </tr>
                                         </tfoot>
                                     </table>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal Quét OCR Báo Cáo BI Mobile */}
+            <DailyEmployeeRevenueOcrModal
+                isOpen={isOcrModalOpen}
+                onClose={() => setIsOcrModalOpen(false)}
+                availableStores={stores}
+                employeesDirectory={employees}
+                defaultSelectedStore={selectedStore}
+                defaultReportDate={reportDate}
+                currentUserName={currentUser?.full_name || currentUser?.employee_id || 'Admin'}
+                isAdmin={isAdmin}
+                onApplyToReport={(records, appliedStore, appliedDate) => {
+                    setCustomRecords(records);
+                    if (appliedStore && appliedStore !== selectedStore) {
+                        setSelectedStore(appliedStore);
+                    }
+                    if (appliedDate && appliedDate !== reportDate) {
+                        setReportDate(appliedDate);
+                    }
+                    showToast(`🎉 Đã áp dụng ${records.length} nhân sự từ kết quả OCR vào báo cáo!`);
+                }}
+                onSaveToCloudSuccess={(session) => {
+                    setCloudSession(session);
+                    setCustomRecords(session.records);
+                    if (session.store_name && session.store_name !== selectedStore) {
+                        setSelectedStore(session.store_name);
+                    }
+                    if (session.report_date && session.report_date !== reportDate) {
+                        setReportDate(session.report_date);
+                    }
+                    showToast('💾 Đã lưu dữ liệu báo cáo nhân sự lên Cloud thành công!');
+                }}
+            />
+
+            {/* Modal xem / sao chép SQL DDL (Chỉ dành cho Admin - Rule 12) */}
+            {showSqlModal && isAdmin && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200" data-export-ignore="true">
+                    <div className="bg-white rounded-3xl max-w-2xl w-full p-5 sm:p-6 shadow-2xl border border-slate-200 space-y-4">
+                        <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                            <div className="flex items-center gap-2">
+                                <div className="p-2 bg-emerald-50 rounded-xl text-emerald-600">
+                                    <Database className="w-5 h-5" />
+                                </div>
+                                <div>
+                                    <h3 className="text-base font-black text-slate-900">Mã Lệnh SQL Khởi Tạo Bảng Supabase</h3>
+                                    <p className="text-xs text-slate-500">Chạy câu lệnh này trong Supabase SQL Editor để kích hoạt lưu trữ Cloud</p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setShowSqlModal(false)}
+                                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        <div className="relative">
+                            <pre className="bg-slate-900 text-emerald-400 font-mono text-xs p-4 rounded-2xl overflow-x-auto max-h-80 scrollbar-thin">
+                                {DAILY_EMPLOYEE_REVENUE_SESSIONS_SQL}
+                            </pre>
+                        </div>
+
+                        <div className="flex items-center justify-between pt-2">
+                            <span className="text-xs text-slate-500">Dành riêng cho Quản trị viên (Admin)</span>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        navigator.clipboard.writeText(DAILY_EMPLOYEE_REVENUE_SESSIONS_SQL);
+                                        setIsCopiedSql(true);
+                                        setTimeout(() => setIsCopiedSql(false), 2000);
+                                    }}
+                                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5"
+                                >
+                                    {isCopiedSql ? <Check className="w-4 h-4 text-emerald-200" /> : <Copy className="w-4 h-4" />}
+                                    <span>{isCopiedSql ? 'Đã sao chép!' : 'Sao chép mã SQL'}</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowSqlModal(false)}
+                                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition"
+                                >
+                                    Đóng
+                                </button>
                             </div>
                         </div>
                     </div>

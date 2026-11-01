@@ -304,7 +304,7 @@ export default function ClusterReportPage() {
             }
 
             const existing = storeMap.get(r.storeName);
-            if (!existing || (Number(r.revenueActual) || 0) > (Number(existing.revenueActual) || 0)) {
+            if (!existing || (r.reportDate && existing.reportDate && r.reportDate > existing.reportDate) || (Number(r.revenueActual) || 0) > (Number(existing.revenueActual) || 0)) {
                 storeMap.set(r.storeName, r);
             }
         });
@@ -321,24 +321,29 @@ export default function ClusterReportPage() {
             const totalDays = (rec.totalDays && rec.totalDays > 0) ? rec.totalDays : daysInMonth;
             const remainingDays = Math.max(1, totalDays - passedDays);
 
-            // Bóc tách chi tiết Doanh thu Quy đổi (DTQĐ) và Doanh thu Thực (DT Thực) từ rawRevenue
+            // Bóc tách chi tiết Doanh thu Quy đổi (DTQĐ) và Doanh thu Thực (DT Thực) từ rawRevenue & emulationSummary
             const extracted = extractStoreRevenueDetailsWithReal(rec.rawRevenue, storeName);
+            const realInfo = (rec.emulationSummary as any)?.['__real_revenue'];
+            const rRealFromSummary = Number(realInfo?.revenueReal || realInfo?.revenueActual || 0);
 
             // DT Thực (L. KẾ) & DTQĐ (L. KẾ)
             let revActual = 0;
             let revQd = 0;
 
-            if (extracted && extracted.revenueQd > 0 && extracted.revenueActual > 0) {
-                revQd = extracted.revenueQd;
+            const storedVal = Number(rec.revenueActual) || 0;
+            revQd = (extracted && extracted.revenueQd > 0) ? extracted.revenueQd : storedVal;
+
+            if (rRealFromSummary > 0) {
+                // Ưu tiên 1: Lấy trực tiếp từ __real_revenue đã lưu trong emulationSummary
+                revActual = rRealFromSummary;
+            } else if (extracted && extracted.revenueActual > 0 && extracted.revenueActual !== extracted.revenueQd) {
+                // Ưu tiên 2: Bóc tách từ bảng Doanh thu thực riêng biệt
                 revActual = extracted.revenueActual;
-            } else if (extracted && extracted.revenueQd > 0) {
-                revQd = extracted.revenueQd;
-                revActual = extracted.revenueActual || revQd;
+            } else if (extracted && extracted.revenueActual > 0) {
+                revActual = extracted.revenueActual;
             } else {
-                // Fallback nếu không bóc tách được từ rawRevenue
-                const storedVal = Number(rec.revenueActual) || 0;
-                revQd = storedVal;
-                revActual = storedVal;
+                // Fallback nếu hoàn toàn không có dữ liệu DT Thực
+                revActual = revQd;
             }
 
             // Target Gốc (Base Target): Ưu tiên cấu hình -> parsed Target -> rec.revenueTarget -> revQd
@@ -349,31 +354,40 @@ export default function ClusterReportPage() {
                     : (rec.revenueTarget > 0 ? rec.revenueTarget : revQd));
 
             // DT Trả góp & Tỷ lệ trả góp (%TG = DT Trả góp / DT Thực)
-            const revInstallment = (extracted?.installmentRevenue !== undefined && extracted.installmentRevenue > 0)
-                ? extracted.installmentRevenue
-                : (Number(rec.revenueInstallment) || 0);
-
-            // Kiểm tra xem siêu thị này có % Trả góp hay không
+            let revInstallment = 0;
             let installmentRate = 0;
             let hasInstallmentRate = false;
 
-            if (extracted?.installmentRate !== undefined) {
-                // Ưu tiên 1: Lấy từ extracted (đã tính theo DT thực nếu có 2 bảng, hoặc từ cột 9 mẫu cũ)
-                installmentRate = extracted.installmentRate;
-                hasInstallmentRate = true;
-            } else if ((rec.emulationSummary as any)?.['__real_revenue']) {
-                // Ưu tiên 2: Lấy từ __real_revenue đã lưu trong emulationSummary
-                const realInfo = (rec.emulationSummary as any)['__real_revenue'];
-                const rReal = realInfo.revenueReal || realInfo.revenueActual || 0;
-                const rInst = realInfo.installmentReal !== undefined ? realInfo.installmentReal : realInfo.installmentRevenue;
-                if (rReal > 0 && rInst !== undefined) {
-                    installmentRate = Number(((rInst / rReal) * 100).toFixed(2));
+            if (realInfo && (realInfo.installmentReal !== undefined || realInfo.installmentRevenue !== undefined)) {
+                // Ưu tiên 1: Lấy từ __real_revenue đã lưu trong emulationSummary
+                revInstallment = Number(realInfo.installmentReal ?? realInfo.installmentRevenue) || 0;
+                if (realInfo.installmentRateReal !== undefined && realInfo.installmentRateReal !== null) {
+                    installmentRate = Number(realInfo.installmentRateReal);
+                    hasInstallmentRate = true;
+                } else if (revActual > 0) {
+                    installmentRate = Number(((revInstallment / revActual) * 100).toFixed(2));
                     hasInstallmentRate = true;
                 }
-            } else if (!rec.rawRevenue && Number(rec.installmentRate) > 0) {
-                // Ưu tiên 3: Phiên lưu trước đây không lưu rawRevenue nhưng có installmentRate
-                installmentRate = Number(rec.installmentRate);
-                hasInstallmentRate = true;
+            } else if (extracted?.installmentRevenue !== undefined && extracted.installmentRevenue > 0) {
+                // Ưu tiên 2: Lấy từ extracted
+                revInstallment = extracted.installmentRevenue;
+                if (extracted.installmentRate !== undefined) {
+                    installmentRate = extracted.installmentRate;
+                    hasInstallmentRate = true;
+                } else if (revActual > 0) {
+                    installmentRate = Number(((revInstallment / revActual) * 100).toFixed(2));
+                    hasInstallmentRate = true;
+                }
+            } else if (Number(rec.revenueInstallment) > 0) {
+                // Ưu tiên 3: Lấy từ bản ghi cột DB
+                revInstallment = Number(rec.revenueInstallment);
+                if (Number(rec.installmentRate) > 0) {
+                    installmentRate = Number(rec.installmentRate);
+                    hasInstallmentRate = true;
+                } else if (revActual > 0) {
+                    installmentRate = Number(((revInstallment / revActual) * 100).toFixed(2));
+                    hasInstallmentRate = true;
+                }
             }
 
             // === BẢNG 1: DỮ LIỆU CHUẨN CỦA HỆ THỐNG ===

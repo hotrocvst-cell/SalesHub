@@ -34,6 +34,8 @@ interface Props {
     isSaving: boolean;
     existingRecordCount?: number;
     onOpenQuickEmulationModal?: (storeName?: string) => void;
+    onLoadFromCloud?: () => void;
+    isLoadingExisting?: boolean;
 }
 
 export default function ManualDataEntryModule({
@@ -47,7 +49,9 @@ export default function ManualDataEntryModule({
     onSaveToSupabase,
     isSaving,
     existingRecordCount = 0,
-    onOpenQuickEmulationModal
+    onOpenQuickEmulationModal,
+    onLoadFromCloud,
+    isLoadingExisting = false
 }: Props) {
     const [selectedStoreIndex, setSelectedStoreIndex] = useState<number>(0);
     const [newProgramName, setNewProgramName] = useState('');
@@ -209,7 +213,7 @@ export default function ManualDataEntryModule({
 
     // Tính toán các tỷ lệ tự động cho siêu thị đang chọn
     const activeStats = useMemo(() => {
-        if (!activeStore) return { htQd: 0, dkQd: 0, htReal: 0, dkReal: 0 };
+        if (!activeStore) return { htQd: 0, dkQd: 0, htReal: 0, dkReal: 0, pctQd: 0 };
 
         const htQd = activeStore.targetQd > 0
             ? Number(((activeStore.revenueQd / activeStore.targetQd) * 100).toFixed(1))
@@ -225,7 +229,11 @@ export default function ManualDataEntryModule({
             ? Number((((activeStore.revenueReal / passedDays) * totalDays / activeStore.targetReal) * 100).toFixed(1))
             : 0;
 
-        return { htQd, dkQd, htReal, dkReal };
+        const pctQd = activeStore.revenueReal > 0
+            ? Number((((activeStore.revenueQd - activeStore.revenueReal) / activeStore.revenueReal) * 100).toFixed(1))
+            : 0;
+
+        return { htQd, dkQd, htReal, dkReal, pctQd };
     }, [activeStore, passedDays, totalDays]);
 
     return (
@@ -249,6 +257,19 @@ export default function ManualDataEntryModule({
                 </div>
 
                 <div className="flex items-center gap-2">
+                    {onLoadFromCloud && existingRecordCount > 0 && (
+                        <button
+                            type="button"
+                            onClick={onLoadFromCloud}
+                            disabled={isLoadingExisting || isSaving}
+                            className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1 disabled:opacity-50"
+                            title={`Nạp lại số liệu ngày ${formatDate(reportDate)} từ Supabase Cloud`}
+                        >
+                            <RefreshCw className={`w-3.5 h-3.5 ${isLoadingExisting ? 'animate-spin' : ''}`} />
+                            <span>Nạp lại từ Cloud</span>
+                        </button>
+                    )}
+
                     <button
                         type="button"
                         onClick={handleCopySummaryText}
@@ -336,6 +357,28 @@ export default function ManualDataEntryModule({
                 </select>
             </div>
 
+            {/* TRẠNG THÁI TRỐNG: CHƯA CÓ SIÊU THỊ NÀO */}
+            {storesData.length === 0 && (
+                <div className="p-6 bg-amber-50/80 border border-amber-200 rounded-2xl text-center space-y-3">
+                    <AlertCircle className="w-8 h-8 text-amber-600 mx-auto" />
+                    <p className="text-xs font-bold text-amber-900">
+                        Chưa có siêu thị nào trong bảng rà soát tạm thời.
+                        {existingRecordCount > 0 ? ` Ngày ${formatDate(reportDate)} đã có số liệu của ${existingRecordCount} siêu thị trên Supabase Cloud.` : ' Vui lòng quét ảnh ở Tab 1 hoặc thêm siêu thị bằng nút bên trên.'}
+                    </p>
+                    {onLoadFromCloud && existingRecordCount > 0 && (
+                        <button
+                            type="button"
+                            onClick={onLoadFromCloud}
+                            disabled={isLoadingExisting}
+                            className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black inline-flex items-center gap-1.5 shadow-sm transition cursor-pointer"
+                        >
+                            <RefreshCw className={`w-4 h-4 ${isLoadingExisting ? 'animate-spin' : ''}`} />
+                            <span>Nạp {existingRecordCount} Siêu Thị Từ Cloud Vào Bảng</span>
+                        </button>
+                    )}
+                </div>
+            )}
+
             {activeStore && (
                 <div className="space-y-4 pt-1">
                     {/* TÊN ĐẦY ĐỦ SIÊU THỊ */}
@@ -413,7 +456,7 @@ export default function ManualDataEntryModule({
                                     <span>Doanh Thu Thực &amp; Trả Góp</span>
                                 </span>
                                 <span className="text-[10.5px] font-black text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-md">
-                                    %TG: {activeStore.installmentRateReal || 0}%
+                                    %TG: {activeStore.installmentRateReal || 0}%{activeStore.revenueReal > 0 ? ` • %QĐ: ${activeStats.pctQd >= 0 ? '+' : ''}${activeStats.pctQd}%` : ''}
                                 </span>
                             </div>
 
