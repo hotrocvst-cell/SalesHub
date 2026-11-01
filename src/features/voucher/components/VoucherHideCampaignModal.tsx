@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { X, Eye, EyeOff, Search, Ban, CheckCircle2, AlertTriangle, ShieldCheck, Sparkles, Layers, Trash2 } from 'lucide-react';
+import { X, Eye, EyeOff, Search, Ban, CheckCircle2, AlertTriangle, ShieldCheck, Sparkles, Layers, Trash2, Edit3 } from 'lucide-react';
 import type { VoucherItem, VoucherCampaignStatusConfig } from '../types';
 import { isCampaignHidden, isCampaignOrDenomEnded } from '../services/voucherService';
 
@@ -12,6 +12,7 @@ interface Props {
     onBulkHideEndedCampaigns?: (campaignNames: string[]) => Promise<void>;
     onOpenDeleteCampaignModal?: () => void;
     onDeleteCampaign?: (campaignName: string) => Promise<void>;
+    onOpenRenameCampaignModal?: (campaignName: string) => void;
 }
 
 export default function VoucherHideCampaignModal({
@@ -22,7 +23,8 @@ export default function VoucherHideCampaignModal({
     onToggleHideCampaign,
     onBulkHideEndedCampaigns,
     onOpenDeleteCampaignModal,
-    onDeleteCampaign
+    onDeleteCampaign,
+    onOpenRenameCampaignModal
 }: Props) {
     const [searchQuery, setSearchQuery] = useState<string>('');
     const [filterTab, setFilterTab] = useState<'ALL' | 'ACTIVE' | 'HIDDEN' | 'EXPIRED_HAS'>('ALL');
@@ -346,6 +348,20 @@ export default function VoucherHideCampaignModal({
                                             >
                                                 <EyeOff className="w-3.5 h-3.5 text-slate-600" />
                                                 <span>{isProcessing ? 'Đang lưu...' : 'Ẩn Chương Trình'}</span>
+                                            </button>
+                                        )}
+
+                                        {onOpenRenameCampaignModal && (
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    onClose();
+                                                    onOpenRenameCampaignModal(c.campaign_name);
+                                                }}
+                                                className="p-1.5 rounded-xl bg-white hover:bg-indigo-50 text-slate-600 hover:text-indigo-600 border border-slate-200 hover:border-indigo-300 transition cursor-pointer shadow-2xs active:scale-95"
+                                                title={`Đổi / Chỉnh sửa tên chương trình "${c.campaign_name}"`}
+                                            >
+                                                <Edit3 className="w-3.5 h-3.5" />
                                             </button>
                                         )}
 

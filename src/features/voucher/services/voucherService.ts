@@ -1518,6 +1518,161 @@ export async function deleteCampaignVouchers(
 }
 
 /**
+ * Đổi tên / Chỉnh sửa tên chương trình voucher trên toàn hệ thống (Local + Supabase Cloud)
+ * - Cập nhật campaign_name của toàn bộ mã voucher thuộc chương trình này
+ * - Di chuyển cấu hình trạng thái chương trình (kết thúc/ẩn) sang tên mới trong store_voucher_campaign_statuses
+ */
+export async function renameVoucherCampaign(
+    oldCampaignName: string,
+    newCampaignName: string,
+    clusterContext?: {
+        userStoreName?: string;
+        accessibleStores?: string[];
+        currentUserDisplayName?: string;
+        isAdmin?: boolean;
+    }
+): Promise<{
+    success: boolean;
+    updatedVoucherCount: number;
+    error?: string;
+}> {
+    try {
+        const cleanOld = (oldCampaignName || '').trim();
+        const cleanNew = (newCampaignName || '').trim();
+
+        if (!cleanOld) {
+            return { success: false, updatedVoucherCount: 0, error: 'Tên chương trình cũ không hợp lệ!' };
+        }
+        if (!cleanNew) {
+            return { success: false, updatedVoucherCount: 0, error: 'Vui lòng nhập tên chương trình mới!' };
+        }
+        if (cleanOld.toLowerCase() === cleanNew.toLowerCase()) {
+            return { success: false, updatedVoucherCount: 0, error: 'Tên chương trình mới không được trùng với tên cũ!' };
+        }
+
+        const oldNameLower = cleanOld.toLowerCase();
+
+        // 1. Quét voucher trong LocalStorage
+        const allVouchers = getLocalVouchers();
+        let targets = allVouchers.filter(v => (v.campaign_name || '').trim().toLowerCase() === oldNameLower);
+
+        // Lọc theo cụm nếu không phải Admin
+        if (clusterContext && !clusterContext.isAdmin) {
+            targets = targets.filter(t =>
+                isVoucherInUserCluster(
+                    t,
+                    clusterContext.userStoreName,
+                    clusterContext.accessibleStores,
+                    clusterContext.currentUserDisplayName,
+                    false
+                )
+            );
+        }
+
+        const targetIdSet = new Set(targets.map(t => t.id));
+
+        // Cập nhật tên chương trình trong LocalStorage
+        const updatedVouchers: VoucherItem[] = [];
+        for (let i = 0; i < allVouchers.length; i++) {
+            if (targetIdSet.has(allVouchers[i].id)) {
+                allVouchers[i] = {
+                    ...allVouchers[i],
+                    campaign_name: cleanNew
+                };
+                updatedVouchers.push(allVouchers[i]);
+            }
+        }
+        setLocalVouchers(allVouchers);
+
+        // 2. Cập nhật trên Supabase Cloud theo chunk
+        if (updatedVouchers.length > 0) {
+            const dbPayloads = updatedVouchers.map(item => ({
+                ...item,
+                claimed_at: item.claimed_at ?? null,
+                claimed_by_id: item.claimed_by_id ?? null,
+                claimed_by_name: item.claimed_by_name ?? null,
+                claimed_by_store: item.claimed_by_store ?? null,
+                order_id: item.order_id ?? null,
+                used_at: item.used_at ?? null
+            }));
+
+            const CHUNK_SIZE = 100;
+            for (let i = 0; i < dbPayloads.length; i += CHUNK_SIZE) {
+                const chunk = dbPayloads.slice(i, i + CHUNK_SIZE);
+                try {
+                    await supabase.from('store_vouchers').upsert(chunk, { onConflict: 'id' });
+                } catch (err) {
+                    console.warn('Lỗi upsert voucher khi rename:', err);
+                }
+            }
+        }
+
+        // 3. Di chuyển trạng thái chương trình trong store_voucher_campaign_statuses (Local + Supabase)
+        const migratedStatuses: VoucherCampaignStatusConfig[] = [];
+        try {
+            const rawStatus = localStorage.getItem(CAMPAIGN_STATUS_STORAGE_KEY);
+            if (rawStatus) {
+                const statusMap: Record<string, VoucherCampaignStatusConfig> = JSON.parse(rawStatus);
+                let changed = false;
+
+                Object.keys(statusMap).forEach(key => {
+                    const item = statusMap[key];
+                    if (item && (item.campaign_name || '').trim().toLowerCase() === oldNameLower) {
+                        const newKey = getCampaignStatusKey(cleanNew, item.denomination);
+                        const newItem: VoucherCampaignStatusConfig = {
+                            ...item,
+                            id: newKey,
+                            campaign_name: cleanNew,
+                            updated_at: new Date().toISOString(),
+                            updated_by: clusterContext?.currentUserDisplayName || 'Quản lý'
+                        };
+                        migratedStatuses.push(newItem);
+                        statusMap[newKey] = newItem;
+                        delete statusMap[key];
+                        changed = true;
+                    }
+                });
+
+                if (changed) {
+                    localStorage.setItem(CAMPAIGN_STATUS_STORAGE_KEY, JSON.stringify(statusMap));
+                }
+            }
+        } catch (e) {
+            console.warn('Lỗi di chuyển local campaign status khi rename:', e);
+        }
+
+        // Cập nhật trạng thái trên Supabase Cloud
+        try {
+            if (migratedStatuses.length > 0) {
+                // Xóa trạng thái cũ
+                await supabase
+                    .from('store_voucher_campaign_statuses')
+                    .delete()
+                    .ilike('campaign_name', cleanOld);
+
+                // Thêm trạng thái mới
+                await supabase
+                    .from('store_voucher_campaign_statuses')
+                    .upsert(migratedStatuses, { onConflict: 'id' });
+            }
+        } catch (err) {
+            console.warn('Lỗi di chuyển campaign status trên Supabase:', err);
+        }
+
+        return {
+            success: true,
+            updatedVoucherCount: targets.length
+        };
+    } catch (e: any) {
+        return {
+            success: false,
+            updatedVoucherCount: 0,
+            error: e.message || 'Lỗi khi đổi tên chương trình voucher'
+        };
+    }
+}
+
+/**
  * Trích xuất danh sách siêu thị được gắn trong tag [CỤM: ...] từ ghi chú voucher
  */
 export function extractClusterStoresFromNote(note?: string | null): string[] {

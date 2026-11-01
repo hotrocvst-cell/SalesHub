@@ -19,7 +19,8 @@ import {
     Search,
     Eye,
     EyeOff,
-    Trash2
+    Trash2,
+    Edit3
 } from 'lucide-react';
 import type { VoucherItem, VoucherStockForecast, VoucherCampaignStatusConfig } from '../types';
 import { calculateStockForecasts, getDenominationHotStyle, formatCurrency, parseConditionLines } from '../voucherFormatters';
@@ -32,6 +33,7 @@ interface Props {
     onToggleCampaignHiddenStatus?: (campaignName: string, currentIsHidden: boolean) => void;
     onOpenDeleteCampaignModal?: () => void;
     onDeleteCampaign?: (campaignName: string) => Promise<void>;
+    onOpenRenameCampaignModal?: (campaignName: string) => void;
     defaultExpanded?: boolean;
 }
 
@@ -43,6 +45,7 @@ export default function VoucherStockSummaryTable({
     onToggleCampaignHiddenStatus,
     onOpenDeleteCampaignModal,
     onDeleteCampaign,
+    onOpenRenameCampaignModal,
     defaultExpanded = false
 }: Props) {
     // Mặc định hiển thị thu gọn theo yêu cầu
@@ -423,6 +426,16 @@ export default function VoucherStockSummaryTable({
                                                 <td className="py-2.5 px-3">
                                                     <div className="font-black text-slate-900 text-xs line-clamp-1 flex items-center gap-1.5 flex-wrap">
                                                         <span>{item.campaign_name}</span>
+                                                        {onOpenRenameCampaignModal && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => onOpenRenameCampaignModal(item.campaign_name)}
+                                                                className="p-0.5 rounded text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition cursor-pointer"
+                                                                title={`Đổi / Chỉnh sửa tên chương trình "${item.campaign_name}"`}
+                                                            >
+                                                                <Edit3 className="w-3 h-3" />
+                                                            </button>
+                                                        )}
                                                         {item.is_hidden && (
                                                             <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-slate-200 text-slate-700 border border-slate-300 inline-flex items-center gap-0.5" title="Chương trình này đã được ẩn khỏi danh sách lấy mã">
                                                                 <EyeOff className="w-2.5 h-2.5 text-slate-500" />
@@ -612,6 +625,18 @@ export default function VoucherStockSummaryTable({
                                                                     <span>Ẩn CT</span>
                                                                 </button>
                                                             )
+                                                        )}
+
+                                                        {onOpenRenameCampaignModal && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => onOpenRenameCampaignModal(item.campaign_name)}
+                                                                className="px-2 py-1 rounded-xl text-[10.5px] font-bold transition cursor-pointer inline-flex items-center gap-1 shadow-2xs active:scale-[0.98] bg-slate-100 hover:bg-indigo-50 text-slate-700 hover:text-indigo-700 border border-slate-200 hover:border-indigo-300"
+                                                                title={`Đổi / Chỉnh sửa tên chương trình "${item.campaign_name}"`}
+                                                            >
+                                                                <Edit3 className="w-3 h-3 text-indigo-500" />
+                                                                <span>Sửa Tên</span>
+                                                            </button>
                                                         )}
 
                                                         {onDeleteCampaign && (isEnded || item.alertLevel === 'ENDED' || item.available === 0) && (

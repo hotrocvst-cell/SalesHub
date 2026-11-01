@@ -22,7 +22,8 @@ import {
     Zap,
     FileSpreadsheet,
     Eye,
-    EyeOff
+    EyeOff,
+    Edit3
 } from 'lucide-react';
 import { useAuth } from '../../shared/contexts/AuthContext';
 import { useExcelExportPermission } from '../../shared/hooks/useExcelExportPermission';
@@ -39,6 +40,7 @@ import {
     deleteVouchersBatch,
     deleteCampaignVouchers,
     deleteCampaignsBatch,
+    renameVoucherCampaign,
     checkSupabaseVoucherTable,
     syncLocalVouchersToCloud,
     type SupabaseStorageStatus,
@@ -66,6 +68,7 @@ import VoucherBatchEditModal from './components/VoucherBatchEditModal';
 import VoucherRuleConfigModal from './components/VoucherRuleConfigModal';
 import VoucherHideCampaignModal from './components/VoucherHideCampaignModal';
 import VoucherDeleteCampaignModal from './components/VoucherDeleteCampaignModal';
+import VoucherRenameCampaignModal from './components/VoucherRenameCampaignModal';
 
 export default function VoucherAdminPage() {
     const { currentUser, isAdmin, canConfigure } = useAuth();
@@ -94,6 +97,8 @@ export default function VoucherAdminPage() {
     const [isCleanModalOpen, setIsCleanModalOpen] = useState<boolean>(false);
     const [isHideCampaignModalOpen, setIsHideCampaignModalOpen] = useState<boolean>(false);
     const [isDeleteCampaignModalOpen, setIsDeleteCampaignModalOpen] = useState<boolean>(false);
+    const [isRenameCampaignModalOpen, setIsRenameCampaignModalOpen] = useState<boolean>(false);
+    const [renameTargetCampaign, setRenameTargetCampaign] = useState<string>('');
     const [qrModalVouchers, setQrModalVouchers] = useState<VoucherItem[]>([]);
     const [filterEmployeeId, setFilterEmployeeId] = useState<string>('');
     const [filterStatusFromStats, setFilterStatusFromStats] = useState<string>('ALL');
@@ -349,6 +354,11 @@ export default function VoucherAdminPage() {
         await loadData();
     };
 
+    const handleRenameCampaignSuccess = async (updatedCount: number, message: string) => {
+        showToast(message);
+        await loadData();
+    };
+
     // Thống kê mã quá hạn phục vụ cảnh báo tồn kho
     const todayStr = new Date().toISOString().slice(0, 10);
     const allExpiredVouchers = useMemo(() => {
@@ -581,6 +591,19 @@ export default function VoucherAdminPage() {
                                 {endedCampaignsCount}
                             </span>
                         )}
+                    </button>
+
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setRenameTargetCampaign('');
+                            setIsRenameCampaignModalOpen(true);
+                        }}
+                        className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-indigo-50 hover:text-indigo-900 border border-slate-300 hover:border-indigo-300 text-slate-800 text-xs font-black transition cursor-pointer shadow-xs flex items-center gap-1.5"
+                        title="Đổi tên / Chỉnh sửa tên chương trình voucher trên toàn kho"
+                    >
+                        <Edit3 className="w-4 h-4 text-indigo-600" />
+                        <span>Sửa Tên CT</span>
                     </button>
 
                     <button
@@ -836,6 +859,10 @@ export default function VoucherAdminPage() {
                 onToggleCampaignHiddenStatus={handleToggleCampaignHiddenStatus}
                 onOpenDeleteCampaignModal={() => setIsDeleteCampaignModalOpen(true)}
                 onDeleteCampaign={handleDeleteSingleCampaign}
+                onOpenRenameCampaignModal={(cName) => {
+                    setRenameTargetCampaign(cName);
+                    setIsRenameCampaignModalOpen(true);
+                }}
                 defaultExpanded={false}
                 onOpenImportModalWithPreset={(cName, denom, desc) => {
                     setImportPreset({
@@ -1106,6 +1133,10 @@ export default function VoucherAdminPage() {
                     setIsDeleteCampaignModalOpen(true);
                 }}
                 onDeleteCampaign={handleDeleteSingleCampaign}
+                onOpenRenameCampaignModal={(cName) => {
+                    setRenameTargetCampaign(cName);
+                    setIsRenameCampaignModalOpen(true);
+                }}
             />
 
             {/* MODAL LỰA CHỌN XÓA CHƯƠNG TRÌNH PMH ĐÃ KẾT THÚC / HẾT HẠN */}
@@ -1119,6 +1150,20 @@ export default function VoucherAdminPage() {
                 currentUserDisplayName={currentUser.full_name || currentUser.employee_id}
                 isAdmin={isAdmin}
                 onSuccess={handleDeleteCampaignsSuccess}
+            />
+
+            {/* MODAL ĐỔI TÊN / CHỈNH SỬA TÊN CHƯƠNG TRÌNH PMH */}
+            <VoucherRenameCampaignModal
+                isOpen={isRenameCampaignModalOpen}
+                onClose={() => setIsRenameCampaignModalOpen(false)}
+                initialCampaignName={renameTargetCampaign}
+                vouchers={vouchers}
+                campaignStatuses={campaignStatuses}
+                currentStoreName={selectedStore}
+                accessibleStores={accessible}
+                currentUserDisplayName={currentUser.full_name || currentUser.employee_id}
+                isAdmin={isAdmin}
+                onSuccess={handleRenameCampaignSuccess}
             />
         </div>
     );
