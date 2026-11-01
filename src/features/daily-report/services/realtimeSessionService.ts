@@ -1,7 +1,7 @@
 import { supabase } from '../../../core/lib/supabase';
 import type { CampaignDictItem } from '../../../core/lib/storage';
-import { getCampaignLabel, getShortStoreName, formatDate } from '../../../core/lib/formatters';
-import type { StoreReportingData, EmulationOcrItem } from '../../data-update/types/ocrTypes';
+import { getCampaignLabel, getShortStoreName, formatDate, cleanBiNumber } from '../../../core/lib/formatters';
+import type { StoreReportingData, EmulationOcrItem, StoreMobileEmulationCardItem } from '../../data-update/types/ocrTypes';
 import type { CampaignItem, RevenueItem } from '../utils/dailyReportParsers';
 
 export const REALTIME_STORE_SESSIONS_SQL = `-- Bảng lưu trữ phiên dữ liệu Realtime độc lập (mỗi cụm / siêu thị chỉ lưu 1 phiên duy nhất)
@@ -159,6 +159,148 @@ export async function saveRealtimeStoreSessions(
         return { success: true };
     } catch (err: any) {
         return { success: false, error: err?.message || 'Lỗi khi lưu Supabase' };
+    }
+}
+
+/**
+ * Chuyển đổi danh sách Thẻ Mobile thành CampaignItem[]
+ */
+export function convertMobileCardsToCampaignItems(
+    cards: StoreMobileEmulationCardItem[],
+    storeName: string,
+    campaignDict: CampaignDictItem[] = []
+): CampaignItem[] {
+    const shortName = getShortStoreName(storeName);
+    return cards.map(c => {
+        const progName = c.programName.trim();
+        const label = getCampaignLabel(progName, campaignDict);
+        const act = cleanBiNumber(c.actual);
+        const tg = cleanBiNumber(c.target);
+        let pct = cleanBiNumber(c.completionRate);
+        if (!pct && tg > 0) {
+            pct = Number(((act / tg) * 100).toFixed(1));
+        }
+
+        return {
+            label,
+            rawHeader: progName,
+            store: storeName,
+            shortName,
+            target: tg,
+            actual: act,
+            pctHT: pct,
+            pctDK: cleanBiNumber(c.forecastRate || 0)
+        };
+    });
+}
+
+/**
+ * Lưu chỉ tiêu thi đua cho 1 siêu thị độc lập (từ Thẻ Mobile hoặc nhập nhanh)
+ * BẢO LƯU TOÀN VẸN số liệu Doanh thu (DTQĐ, DT Thực, Trả góp) nếu siêu thị này đã có phiên trước đó.
+ */
+export async function saveSingleStoreEmulationSession(
+    storeName: string,
+    emulationList: CampaignItem[],
+    userName: string = 'ADMIN',
+    screenshotTimeStr?: string
+): Promise<{
+    success: boolean;
+    isTableMissing?: boolean;
+    error?: string;
+    updatedSessions?: RealtimeStoreSessionRecord[];
+}> {
+    if (!storeName) {
+        return { success: false, error: 'Chưa chọn siêu thị cần lưu thi đua.' };
+    }
+
+    try {
+        // 1. Tải phiên hiện có từ Supabase hoặc Cache để bảo lưu doanh thu
+        let existingRecord: RealtimeStoreSessionRecord | null = null;
+        const cached = getCachedRealtimeSessions();
+        const cachedMatch = cached.find(c => c.store_name === storeName || getShortStoreName(c.store_name) === getShortStoreName(storeName));
+        if (cachedMatch) existingRecord = cachedMatch;
+
+        const { data: dbData, error: fetchErr } = await supabase
+            .from('realtime_store_sessions')
+            .select('*')
+            .eq('store_name', storeName)
+            .maybeSingle();
+
+        if (!fetchErr && dbData) {
+            existingRecord = dbData as RealtimeStoreSessionRecord;
+        }
+
+        const nowIso = new Date().toISOString();
+        const defaultTimeStr = `${new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} ${formatDate(new Date())}`;
+
+        const revenueData = existingRecord?.revenue_data && Object.keys(existingRecord.revenue_data).length > 0
+            ? existingRecord.revenue_data
+            : {
+                store: storeName,
+                shortName: getShortStoreName(storeName),
+                sl: 0,
+                rev: 0,
+                rawRev: 0,
+                target: 0,
+                pct: 0,
+                pctTraGop: 0,
+                dtTraGop: 0,
+                isNewFormat: true
+            };
+
+        const updatedRecord: RealtimeStoreSessionRecord = {
+            store_name: existingRecord?.store_name || storeName,
+            session_time: nowIso,
+            screenshot_time_str: screenshotTimeStr || existingRecord?.screenshot_time_str || defaultTimeStr,
+            revenue_data: revenueData,
+            emulation_data: emulationList,
+            raw_ocr_info: {
+                ...(existingRecord?.raw_ocr_info || {}),
+                mode: 'MOBILE_CARDS_SINGLE_STORE',
+                card_count: emulationList.length,
+                updated_at: nowIso
+            },
+            updated_at: nowIso,
+            updated_by: userName
+        };
+
+        // 2. Cập nhật cache local trước
+        const updatedCache = [...cached];
+        const existIdx = updatedCache.findIndex(c => c.store_name === updatedRecord.store_name || getShortStoreName(c.store_name) === getShortStoreName(updatedRecord.store_name));
+        if (existIdx >= 0) {
+            updatedCache[existIdx] = updatedRecord;
+        } else {
+            updatedCache.push(updatedRecord);
+        }
+        try {
+            localStorage.setItem(REALTIME_SESSIONS_CACHE_KEY, JSON.stringify(updatedCache));
+        } catch {}
+
+        // 3. Upsert lên Supabase Cloud
+        const { error: upsertErr } = await supabase
+            .from('realtime_store_sessions')
+            .upsert([updatedRecord], { onConflict: 'store_name' });
+
+        if (upsertErr) {
+            const isMissing = upsertErr.code === 'PGRST205' ||
+                upsertErr.code === '42P01' ||
+                upsertErr.message?.includes('does not exist') ||
+                upsertErr.message?.includes('schema cache');
+
+            if (isMissing) {
+                return {
+                    success: false,
+                    isTableMissing: true,
+                    error: 'Bảng realtime_store_sessions chưa được tạo trên Supabase.',
+                    updatedSessions: updatedCache
+                };
+            }
+            return { success: false, error: upsertErr.message, updatedSessions: updatedCache };
+        }
+
+        return { success: true, updatedSessions: updatedCache };
+    } catch (err: any) {
+        return { success: false, error: err?.message || 'Lỗi khi lưu thi đua siêu thị' };
     }
 }
 

@@ -23,6 +23,7 @@ interface Props {
     isAdmin: boolean;
     onRefresh: () => void;
     onOpenUpdateModal: () => void;
+    onOpenQuickEmulationModal?: () => void;
 }
 
 export default function RealtimeSessionBanner({
@@ -32,7 +33,8 @@ export default function RealtimeSessionBanner({
     isTableMissing,
     isAdmin,
     onRefresh,
-    onOpenUpdateModal
+    onOpenUpdateModal,
+    onOpenQuickEmulationModal
 }: Props) {
     const [showSqlModal, setShowSqlModal] = useState(false);
     const [isCopied, setIsCopied] = useState(false);
@@ -132,6 +134,19 @@ export default function RealtimeSessionBanner({
                         <span>Làm mới Cloud</span>
                     </button>
 
+                    {/* Nút Nạp Nhanh Thi Đua Từng Siêu Thị (Thẻ Mobile) */}
+                    {onOpenQuickEmulationModal && (
+                        <button
+                            type="button"
+                            onClick={onOpenQuickEmulationModal}
+                            className="px-3.5 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition shadow-sm border border-emerald-400/40 cursor-pointer"
+                            title="Nạp nhanh thi đua thẻ mobile cho từng siêu thị (hỗ trợ Ctrl+V hoặc kéo thả ảnh)"
+                        >
+                            <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                            <span>📸 Thi Đua Từng Siêu Thị</span>
+                        </button>
+                    )}
+
                     {/* Nút Nạp Phiên Realtime Mới (OCR / Nhập tay) */}
                     <button
                         type="button"
@@ -139,7 +154,7 @@ export default function RealtimeSessionBanner({
                         className="px-3.5 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition shadow-sm border border-blue-400/30 cursor-pointer"
                     >
                         <Camera className="w-3.5 h-3.5" />
-                        <span>Nạp Phiên Mới (OCR / Nhập tay)</span>
+                        <span>Nạp Cả Cụm (Bảng To)</span>
                     </button>
                 </div>
             </div>

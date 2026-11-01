@@ -24,7 +24,9 @@ import {
     Calendar,
     Store,
     Info,
-    Edit3
+    Edit3,
+    Camera,
+    Sparkles
 } from 'lucide-react';
 import ReportActionButtons from '../../shared/components/report/ReportActionButtons';
 import CloudDataSyncStatusBanner from '../../shared/components/report/CloudDataSyncStatusBanner';
@@ -46,6 +48,7 @@ import {
 } from './services/realtimeSessionService';
 import RealtimeSessionBanner from './components/RealtimeSessionBanner';
 import RealtimeDataUpdateModal from './components/RealtimeDataUpdateModal';
+import QuickStoreEmulationModal from './components/QuickStoreEmulationModal';
 
 import DailyRealtimeTable from './components/DailyRealtimeTable';
 import DailyRemainingTable from './components/DailyRemainingTable';
@@ -69,6 +72,7 @@ export default function DailyReportPage() {
     const [isLoadingSessions, setIsLoadingSessions] = useState<boolean>(false);
     const [isTableMissing, setIsTableMissing] = useState<boolean>(false);
     const [isUpdateModalOpen, setIsUpdateModalOpen] = useState<boolean>(false);
+    const [isQuickEmulationModalOpen, setIsQuickEmulationModalOpen] = useState<boolean>(false);
     const [availableStores, setAvailableStores] = useState<StoreItem[]>([]);
     const [showLegacyPasteInput, setShowLegacyPasteInput] = useState<boolean>(false);
 
@@ -509,6 +513,7 @@ export default function DailyReportPage() {
                 isAdmin={isAdmin}
                 onRefresh={() => loadRealtimeSessions()}
                 onOpenUpdateModal={() => setIsUpdateModalOpen(true)}
+                onOpenQuickEmulationModal={() => setIsQuickEmulationModalOpen(true)}
             />
 
             {/* HEADER CÔNG CỤ & TAB SEGMENTED SWITCHER */}
@@ -605,10 +610,21 @@ export default function DailyReportPage() {
                 {/* Dòng 1: Chọn Siêu Thị & Nút Hành Động */}
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
                     <div className="flex-1">
-                        <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1 flex items-center gap-1">
-                            <Store className="w-3.5 h-3.5 text-blue-600" />
-                            <span>Đơn Vị / Siêu Thị</span>
-                        </label>
+                        <div className="flex items-center justify-between mb-1">
+                            <label className="text-[11px] font-bold text-slate-600 uppercase flex items-center gap-1">
+                                <Store className="w-3.5 h-3.5 text-blue-600" />
+                                <span>Đơn Vị / Siêu Thị</span>
+                            </label>
+                            <button
+                                type="button"
+                                onClick={() => setIsQuickEmulationModalOpen(true)}
+                                className="text-[11px] font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded-lg flex items-center gap-1 transition cursor-pointer"
+                                title="Nạp nhanh thi đua thẻ mobile cho siêu thị (hỗ trợ Ctrl+V hoặc kéo thả ảnh)"
+                            >
+                                <Camera className="w-3 h-3 text-emerald-600" />
+                                <span>📸 Nạp Thi Đua Thẻ Mobile</span>
+                            </button>
+                        </div>
                         <select
                             value={selectedStore}
                             onChange={(e) => setSelectedStore(e.target.value)}
@@ -816,7 +832,7 @@ export default function DailyReportPage() {
                 </div>
             )}
 
-            {/* MODAL NẠP DỮ LIỆU REALTIME MỚI (OCR & NHẬP TRỰC QUAN) */}
+            {/* MODAL NẠP DỮ LIỆU REALTIME MỚI (OCR & NHẬP TRỰC QUAN CẢ CỤM) */}
             <RealtimeDataUpdateModal
                 isOpen={isUpdateModalOpen}
                 onClose={() => setIsUpdateModalOpen(false)}
@@ -825,6 +841,19 @@ export default function DailyReportPage() {
                 campaignDict={campaignsDict}
                 isAdmin={isAdmin}
                 currentUserName={currentUser?.full_name || currentUser?.employee_id || 'ADMIN'}
+            />
+
+            {/* MODAL NẠP NHANH THI ĐUA TỪNG SIÊU THỊ (THẺ MOBILE - HỖ TRỢ CTRL+V) */}
+            <QuickStoreEmulationModal
+                isOpen={isQuickEmulationModalOpen}
+                onClose={() => setIsQuickEmulationModalOpen(false)}
+                availableStores={availableStores}
+                existingSessions={realtimeSessions}
+                campaignDict={campaignsDict}
+                defaultSelectedStore={selectedStore}
+                isAdmin={isAdmin}
+                currentUserName={currentUser?.full_name || currentUser?.employee_id || 'ADMIN'}
+                onSavedSuccessfully={handleSavedSuccessfully}
             />
         </div>
     );

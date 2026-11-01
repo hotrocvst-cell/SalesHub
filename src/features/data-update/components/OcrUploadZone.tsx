@@ -253,6 +253,9 @@ export default function OcrUploadZone({
                         <p className="text-[10.5px] text-slate-500 mt-1">
                             Hỗ trợ nạp <strong>nhiều ảnh cùng lúc</strong> (20-30 chương trình thi đua)
                         </p>
+                        <p className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-lg mt-1 font-medium">
+                            📱 Cần nạp thi đua từ <strong>Thẻ Mobile từng siêu thị</strong> (ảnh 2 cột)? Sử dụng nút <strong>"📸 Thi Đua Từng Siêu Thị"</strong> ở thanh Cloud Banner.
+                        </p>
                         {emulationFiles.length >= 4 && (
                             <span className="text-[10px] text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md font-bold block mt-1">
                                 ⚡ Tự động chia thành các đợt 3 ảnh để quét tuần tự an toàn &amp; không timeout

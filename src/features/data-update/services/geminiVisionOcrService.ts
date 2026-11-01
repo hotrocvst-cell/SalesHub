@@ -1,4 +1,4 @@
-import type { StoreReportingData, EmulationOcrItem, OcrExtractionResult } from '../types/ocrTypes';
+import type { StoreReportingData, EmulationOcrItem, StoreMobileEmulationCardItem, OcrExtractionResult } from '../types/ocrTypes';
 import { getShortStoreName, normalizeToMillion, cleanBiNumber } from '../../../core/lib/formatters';
 import {
     GeminiQuotaExceededError,
@@ -298,6 +298,161 @@ LƯU Ý NGHIỆP VỤ BẮT BUỘC:
     const parsed = await callGeminiVision(apiKey, base64, file.type, prompt, keySource);
     return {
         programs: parsed.programs || []
+    };
+}
+
+/**
+ * 3b. TRÍCH XUẤT THẺ THI ĐUA MOBILE TỪNG SIÊU THỊ (LƯỚI THẺ 2 CỘT)
+ * Dành riêng cho ảnh chụp màn hình điện thoại danh sách thẻ thi đua theo từng siêu thị.
+ */
+export async function extractStoreMobileEmulationCards(
+    apiKey: string,
+    file: File,
+    keySource: GeminiKeySource = 'ADMIN'
+): Promise<{
+    storeName?: string;
+    reportDate?: string;
+    reportTime?: string;
+    cards: StoreMobileEmulationCardItem[];
+}> {
+    const base64 = await fileToBase64(file);
+    const prompt = `Bạn là chuyên gia bóc tách số liệu kinh doanh bán lẻ từ ảnh chụp màn hình điện thoại (Mobile App).
+Ảnh này chứa các THẺ THI ĐUA HÌNH CHỮ NHẬT XẾP THÀNH 2 CỘT (Mobile Card Grid).
+
+CẤU TRÚC CHI TIẾT CỦA MỖI THẺ:
+1. TIÊU ĐỀ THẺ: Tên chương trình thi đua ở góc trên bên trái của thẻ (ví dụ: "T11 - Trả chậm Homecredit", "T11 - VAS", "T11 - Phụ kiện khác IT & Nhóm khác", "T11 - Ví trả sau", "T11 - Cáp sạc", "T11 - Bảo hiểm Tổng", "T11 - Bảo hiểm Thợ ICT", "T11 - MỞ THẺ TÍN DỤNG VPBANK MWG VÀ TPBANK EVO",...).
+2. BADGE ĐƠN VỊ: Thẻ badge nhỏ ở góc trên bên phải (chữ "DT" là Doanh thu, chữ "SL" là Số lượng).
+3. TỶ LỆ HOÀN THÀNH LỚN: Số phần trăm cỡ lớn in đậm màu xanh lá cây hoặc đỏ nổi bật (ví dụ: "54.9%", "74.4%", "114.5%", "280.9%", "283%", "294.9%", "530.3%", "3,003%"). Đây là "% HT NGÀY".
+4. BỐ CỤC 4 Ô SỐ LIỆU PHÍA DƯỚI THANH TIẾN ĐỘ:
+   - Ô trên bên trái: "THỰC HIỆN" (Giá trị thực tế, ví dụ: 31.47, 12, 22.29, 20.00, 0.90, 35.00, 22.71, 1). Nếu badge là DT thì số này là Triệu đồng (giữ nguyên số thập phân, không tự ý nhân triệu).
+   - Ô trên bên phải: "TARGET NGÀY" (Chỉ tiêu ngày, ví dụ: 57.29, 16, 19.47, 7.12, 0.32, 11.87, 4.28, 0).
+   - Ô dưới bên trái: "% HT NGÀY" (Tỷ lệ hoàn thành ngày, ví dụ: 54.9%, 74.4%, 114.5%, 280.9%, 283%, 294.9%, 530.3%, 3,003%).
+   - Ô dưới bên phải: "DT DỰ KIẾN" hoặc "SL DỰ KIẾN" (Nếu là dấu gạch "—" thì để null hoặc 0).
+
+QUY TẮC BẮT BUỘC:
+- BỎ QUA HOÀN TOÀN hình mờ watermark (ví dụ chữ mờ tên nhân viên/mã NV).
+- Trích xuất ĐẦY ĐỦ TẤT CẢ các thẻ có trong ảnh theo thứ tự từ trên xuống dưới, từ trái qua phải.
+- Với tỷ lệ ghi dạng "3,003%" thì chuyển thành số 3003 (loại bỏ dấu phẩy phân cách hàng nghìn).
+- Với số thập phân (31.47, 22.29, 0.90), giữ nguyên phần thập phân.
+- Nếu ở thanh tiêu đề ảnh có tên Siêu thị hoặc ngày giờ thì trích xuất vào storeName, reportDate, reportTime. Nếu không có thì để null.
+
+Định dạng JSON trả về:
+{
+  "storeName": null,
+  "reportDate": null,
+  "reportTime": null,
+  "cards": [
+    {
+      "programName": "T11 - Trả chậm Homecredit",
+      "unit": "DT",
+      "actual": 31.47,
+      "target": 57.29,
+      "completionRate": 54.9,
+      "forecastRate": 0
+    },
+    {
+      "programName": "T11 - VAS",
+      "unit": "SL",
+      "actual": 12,
+      "target": 16,
+      "completionRate": 74.4,
+      "forecastRate": 0
+    }
+  ]
+}`;
+
+    const parsed = await callGeminiVision(apiKey, base64, file.type, prompt, keySource);
+    const rawCards = Array.isArray(parsed?.cards) ? parsed.cards : [];
+
+    const cleanedCards: StoreMobileEmulationCardItem[] = rawCards
+        .filter((c: any) => c && (c.programName || c.name))
+        .map((c: any) => {
+            const progName = String(c.programName || c.name || '').trim();
+            const unit = String(c.unit || 'DT').toUpperCase().includes('SL') ? 'SL' : 'DT';
+            const act = cleanBiNumber(c.actual);
+            const tg = cleanBiNumber(c.target);
+
+            let pct = cleanBiNumber(c.completionRate);
+            if (!pct && tg > 0) {
+                pct = Number(((act / tg) * 100).toFixed(1));
+            }
+
+            const forecast = cleanBiNumber(c.forecastRate);
+
+            return {
+                programName: progName,
+                unit,
+                actual: act,
+                target: tg,
+                completionRate: pct,
+                forecastRate: forecast > 0 ? forecast : undefined
+            };
+        });
+
+    return {
+        storeName: parsed?.storeName || undefined,
+        reportDate: parsed?.reportDate || undefined,
+        reportTime: parsed?.reportTime || undefined,
+        cards: cleanedCards
+    };
+}
+
+/**
+ * 3c. TRÍCH XUẤT HÀNG LOẠT THẺ MOBILE (HỖ TRỢ NHIỀU ẢNH CUỘN MÀN HÌNH)
+ */
+export async function extractStoreMobileEmulationCardsBatch(
+    apiKey: string,
+    files: File[],
+    onProgress?: (msg: string, percent: number) => void,
+    keySource: GeminiKeySource = 'ADMIN'
+): Promise<{
+    storeName?: string;
+    reportDate?: string;
+    reportTime?: string;
+    cards: StoreMobileEmulationCardItem[];
+    errors?: string[];
+}> {
+    if (!files || files.length === 0) {
+        return { cards: [] };
+    }
+
+    const cardMap = new Map<string, StoreMobileEmulationCardItem>();
+    const errors: string[] = [];
+    let detectedStore = '';
+    let detectedDate = '';
+    let detectedTime = '';
+
+    const total = files.length;
+    for (let i = 0; i < total; i++) {
+        const file = files[i];
+        const pct = Math.round(((i + 1) / total) * 100);
+        onProgress?.(`Đang bóc tách thẻ mobile (${i + 1}/${total}): ${file.name || 'Ảnh dán'}...`, pct);
+
+        try {
+            const res = await extractStoreMobileEmulationCards(apiKey, file, keySource);
+            if (res.storeName && !detectedStore) detectedStore = res.storeName;
+            if (res.reportDate && !detectedDate) detectedDate = res.reportDate;
+            if (res.reportTime && !detectedTime) detectedTime = res.reportTime;
+
+            (res.cards || []).forEach(card => {
+                const key = card.programName.toLowerCase().trim();
+                // Nếu trùng chương trình, ưu tiên ghi đè bằng thẻ có số liệu khác 0
+                if (!cardMap.has(key) || (card.actual > 0 || card.target > 0)) {
+                    cardMap.set(key, card);
+                }
+            });
+        } catch (err: any) {
+            if (err?.isQuotaExceeded || err instanceof GeminiQuotaExceededError) throw err;
+            errors.push(`Lỗi đọc ảnh ${file.name || `thẻ #${i + 1}`}: ${err?.message || 'Không rõ lỗi'}`);
+        }
+    }
+
+    return {
+        storeName: detectedStore || undefined,
+        reportDate: detectedDate || undefined,
+        reportTime: detectedTime || undefined,
+        cards: Array.from(cardMap.values()),
+        errors: errors.length > 0 ? errors : undefined
     };
 }
 

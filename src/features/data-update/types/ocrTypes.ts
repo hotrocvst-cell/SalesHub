@@ -9,6 +9,16 @@ export interface EmulationOcrItem {
     forecastRate?: number;
 }
 
+export interface StoreMobileEmulationCardItem {
+    programName: string;
+    unit: 'DT' | 'SL' | string;
+    actual: number;
+    target: number;
+    completionRate: number;
+    forecastRate?: number;
+    forecastValue?: number;
+}
+
 export interface StoreReportingData {
     storeCode?: string;
     storeRawName: string;
