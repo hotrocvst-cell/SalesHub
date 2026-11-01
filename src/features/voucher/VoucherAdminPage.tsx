@@ -37,6 +37,8 @@ import {
     markVoucherUsed,
     deleteVoucher,
     deleteVouchersBatch,
+    deleteCampaignVouchers,
+    deleteCampaignsBatch,
     checkSupabaseVoucherTable,
     syncLocalVouchersToCloud,
     type SupabaseStorageStatus,
@@ -46,6 +48,7 @@ import {
     saveVoucherCampaignStatus,
     saveVoucherCampaignHiddenStatus,
     isCampaignHidden,
+    isCampaignOrDenomEnded,
     isCampaignEndedOrHidden
 } from './services/voucherService';
 import type { VoucherCampaignStatusConfig } from './types';
@@ -62,6 +65,7 @@ import VoucherEditModal from './components/VoucherEditModal';
 import VoucherBatchEditModal from './components/VoucherBatchEditModal';
 import VoucherRuleConfigModal from './components/VoucherRuleConfigModal';
 import VoucherHideCampaignModal from './components/VoucherHideCampaignModal';
+import VoucherDeleteCampaignModal from './components/VoucherDeleteCampaignModal';
 
 export default function VoucherAdminPage() {
     const { currentUser, isAdmin, canConfigure } = useAuth();
@@ -89,6 +93,7 @@ export default function VoucherAdminPage() {
     const [isQrModalOpen, setIsQrModalOpen] = useState<boolean>(false);
     const [isCleanModalOpen, setIsCleanModalOpen] = useState<boolean>(false);
     const [isHideCampaignModalOpen, setIsHideCampaignModalOpen] = useState<boolean>(false);
+    const [isDeleteCampaignModalOpen, setIsDeleteCampaignModalOpen] = useState<boolean>(false);
     const [qrModalVouchers, setQrModalVouchers] = useState<VoucherItem[]>([]);
     const [filterEmployeeId, setFilterEmployeeId] = useState<string>('');
     const [filterStatusFromStats, setFilterStatusFromStats] = useState<string>('ALL');
@@ -320,6 +325,30 @@ export default function VoucherAdminPage() {
         }
     };
 
+    const handleDeleteSingleCampaign = async (campaignName: string) => {
+        const confirmMsg = `⚠️ XÁC NHẬN XÓA VĨNH VIỄN CHƯƠNG TRÌNH PMH:\n\nBạn có chắc chắn muốn XÓA TOÀN BỘ chương trình "${campaignName}" khỏi kho?\n\n• Toàn bộ mã voucher thuộc chương trình này sẽ bị xóa khỏi kho.\n• Trạng thái chương trình sẽ bị dọn sạch.\n• Thao tác này KHÔNG THỂ HOÀN TÁC!`;
+        if (!window.confirm(confirmMsg)) return;
+
+        const clusterCtx = {
+            userStoreName: selectedStore,
+            accessibleStores: accessible,
+            currentUserDisplayName: currentUser.full_name || currentUser.employee_id,
+            isAdmin
+        };
+        const res = await deleteCampaignVouchers(campaignName, clusterCtx);
+        if (res.success) {
+            showToast(`🗑️ Đã xóa vĩnh viễn chương trình "${campaignName}" (${res.deletedCount} mã PMH)!`);
+            await loadData();
+        } else {
+            showToast(`❌ Lỗi khi xóa: ${res.error}`);
+        }
+    };
+
+    const handleDeleteCampaignsSuccess = async (deletedVoucherCount: number, message: string) => {
+        showToast(message);
+        await loadData();
+    };
+
     // Thống kê mã quá hạn phục vụ cảnh báo tồn kho
     const todayStr = new Date().toISOString().slice(0, 10);
     const allExpiredVouchers = useMemo(() => {
@@ -344,6 +373,26 @@ export default function VoucherAdminPage() {
     const hiddenCampaignsCount = useMemo(() => {
         return Object.values(campaignStatuses).filter(s => s.is_hidden).length;
     }, [campaignStatuses]);
+
+    // Thống kê số lượng chương trình đã kết thúc hoặc có mã hết hạn
+    const endedCampaignsCount = useMemo(() => {
+        const set = new Set<string>();
+        vouchers.forEach(v => {
+            const cName = (v.campaign_name || '').trim();
+            if (!cName) return;
+            const isEnded = isCampaignOrDenomEnded(campaignStatuses, cName);
+            const isExpired = Boolean(v.expires_at && v.expires_at < todayStr && v.status !== 'USED');
+            if (isEnded || isExpired) {
+                set.add(cName);
+            }
+        });
+        Object.values(campaignStatuses).forEach(s => {
+            if (s && s.is_ended && s.campaign_name) {
+                set.add(s.campaign_name.trim());
+            }
+        });
+        return set.size;
+    }, [vouchers, campaignStatuses, todayStr]);
 
     const handleOpenQrDoubleCheck = (customList?: VoucherItem[]) => {
         if (customList && customList.length > 0) {
@@ -517,6 +566,21 @@ export default function VoucherAdminPage() {
                     >
                         <Trash2 className="w-4 h-4 text-rose-600" />
                         <span>Làm Sạch Kho</span>
+                    </button>
+
+                    <button
+                        type="button"
+                        onClick={() => setIsDeleteCampaignModalOpen(true)}
+                        className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 active:scale-[0.98] text-white text-xs font-black transition cursor-pointer shadow-xs flex items-center gap-1.5 border border-rose-700"
+                        title="Lựa chọn và xóa vĩnh viễn các chương trình PMH đã kết thúc hoặc hết hạn"
+                    >
+                        <Trash2 className="w-4 h-4 text-white" />
+                        <span>Xóa CT Hết Hạn</span>
+                        {endedCampaignsCount > 0 && (
+                            <span className="bg-white text-rose-700 text-[10px] font-black px-1.5 py-0.2 rounded-full shadow-2xs">
+                                {endedCampaignsCount}
+                            </span>
+                        )}
                     </button>
 
                     <button
@@ -722,6 +786,15 @@ export default function VoucherAdminPage() {
                                 <Trash2 className="w-3.5 h-3.5" />
                                 <span>Làm Sạch Kho</span>
                             </button>
+                            <button
+                                type="button"
+                                onClick={() => setIsDeleteCampaignModalOpen(true)}
+                                className="px-3.5 py-1.5 bg-rose-700 hover:bg-rose-800 active:scale-[0.99] text-white rounded-xl text-xs font-black transition cursor-pointer shadow-sm flex items-center gap-1.5"
+                                title="Lựa chọn và xóa vĩnh viễn các chương trình PMH đã kết thúc (hết hạn)"
+                            >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                <span>Xóa CT Hết Hạn</span>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -761,6 +834,8 @@ export default function VoucherAdminPage() {
                 campaignStatuses={campaignStatuses}
                 onToggleCampaignEndStatus={handleToggleCampaignEndStatus}
                 onToggleCampaignHiddenStatus={handleToggleCampaignHiddenStatus}
+                onOpenDeleteCampaignModal={() => setIsDeleteCampaignModalOpen(true)}
+                onDeleteCampaign={handleDeleteSingleCampaign}
                 defaultExpanded={false}
                 onOpenImportModalWithPreset={(cName, denom, desc) => {
                     setImportPreset({
@@ -1026,6 +1101,24 @@ export default function VoucherAdminPage() {
                 campaignStatuses={campaignStatuses}
                 onToggleHideCampaign={handleToggleCampaignHiddenStatus}
                 onBulkHideEndedCampaigns={handleBulkHideEndedCampaigns}
+                onOpenDeleteCampaignModal={() => {
+                    setIsHideCampaignModalOpen(false);
+                    setIsDeleteCampaignModalOpen(true);
+                }}
+                onDeleteCampaign={handleDeleteSingleCampaign}
+            />
+
+            {/* MODAL LỰA CHỌN XÓA CHƯƠNG TRÌNH PMH ĐÃ KẾT THÚC / HẾT HẠN */}
+            <VoucherDeleteCampaignModal
+                isOpen={isDeleteCampaignModalOpen}
+                onClose={() => setIsDeleteCampaignModalOpen(false)}
+                vouchers={vouchers}
+                campaignStatuses={campaignStatuses}
+                currentStoreName={selectedStore}
+                accessibleStores={accessible}
+                currentUserDisplayName={currentUser.full_name || currentUser.employee_id}
+                isAdmin={isAdmin}
+                onSuccess={handleDeleteCampaignsSuccess}
             />
         </div>
     );

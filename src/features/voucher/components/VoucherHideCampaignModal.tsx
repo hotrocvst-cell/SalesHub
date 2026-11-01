@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { X, Eye, EyeOff, Search, Ban, CheckCircle2, AlertTriangle, ShieldCheck, Sparkles, Layers } from 'lucide-react';
+import { X, Eye, EyeOff, Search, Ban, CheckCircle2, AlertTriangle, ShieldCheck, Sparkles, Layers, Trash2 } from 'lucide-react';
 import type { VoucherItem, VoucherCampaignStatusConfig } from '../types';
 import { isCampaignHidden, isCampaignOrDenomEnded } from '../services/voucherService';
 
@@ -10,6 +10,8 @@ interface Props {
     campaignStatuses: Record<string, VoucherCampaignStatusConfig>;
     onToggleHideCampaign: (campaignName: string, currentIsHidden: boolean) => Promise<void>;
     onBulkHideEndedCampaigns?: (campaignNames: string[]) => Promise<void>;
+    onOpenDeleteCampaignModal?: () => void;
+    onDeleteCampaign?: (campaignName: string) => Promise<void>;
 }
 
 export default function VoucherHideCampaignModal({
@@ -18,7 +20,9 @@ export default function VoucherHideCampaignModal({
     vouchers,
     campaignStatuses,
     onToggleHideCampaign,
-    onBulkHideEndedCampaigns
+    onBulkHideEndedCampaigns,
+    onOpenDeleteCampaignModal,
+    onDeleteCampaign
 }: Props) {
     const [searchQuery, setSearchQuery] = useState<string>('');
     const [filterTab, setFilterTab] = useState<'ALL' | 'ACTIVE' | 'HIDDEN' | 'EXPIRED_HAS'>('ALL');
@@ -171,18 +175,35 @@ export default function VoucherHideCampaignModal({
                         </div>
                     </div>
 
-                    {unhiddenExpiredCampaigns.length > 0 && onBulkHideEndedCampaigns && (
-                        <button
-                            type="button"
-                            onClick={handleBulkHide}
-                            disabled={isBulkProcessing}
-                            className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white font-black text-xs transition cursor-pointer shadow-xs inline-flex items-center gap-1.5 shrink-0 disabled:opacity-50"
-                            title="Ẩn tất cả các chương trình đã hết hạn chỉ bằng 1 cú nhấp chuột"
-                        >
-                            <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                            <span>{isBulkProcessing ? 'Đang xử lý...' : `Ẩn nhanh ${unhiddenExpiredCampaigns.length} CT hết hạn`}</span>
-                        </button>
-                    )}
+                    <div className="flex items-center gap-2 shrink-0">
+                        {unhiddenExpiredCampaigns.length > 0 && onBulkHideEndedCampaigns && (
+                            <button
+                                type="button"
+                                onClick={handleBulkHide}
+                                disabled={isBulkProcessing}
+                                className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white font-black text-xs transition cursor-pointer shadow-xs inline-flex items-center gap-1.5 shrink-0 disabled:opacity-50"
+                                title="Ẩn tất cả các chương trình đã hết hạn chỉ bằng 1 cú nhấp chuột"
+                            >
+                                <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                                <span>{isBulkProcessing ? 'Đang xử lý...' : `Ẩn nhanh ${unhiddenExpiredCampaigns.length} CT`}</span>
+                            </button>
+                        )}
+
+                        {onOpenDeleteCampaignModal && (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    onClose();
+                                    onOpenDeleteCampaignModal();
+                                }}
+                                className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 active:scale-[0.98] text-white font-black text-xs transition cursor-pointer shadow-xs inline-flex items-center gap-1.5 shrink-0"
+                                title="Chuyển sang màn hình lựa chọn xóa vĩnh viễn các chương trình PMH đã kết thúc (hết hạn)"
+                            >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                <span>Xóa CT Hết Hạn</span>
+                            </button>
+                        )}
+                    </div>
                 </div>
 
                 {/* Thanh tìm kiếm và bộ lọc tab */}
@@ -302,8 +323,8 @@ export default function VoucherHideCampaignModal({
                                         </div>
                                     </div>
 
-                                    {/* Nút hành động Ẩn / Hiện */}
-                                    <div className="flex items-center gap-2 shrink-0">
+                                    {/* Nút hành động Ẩn / Hiện & Xóa */}
+                                    <div className="flex items-center gap-1.5 shrink-0">
                                         {c.is_hidden ? (
                                             <button
                                                 type="button"
@@ -325,6 +346,17 @@ export default function VoucherHideCampaignModal({
                                             >
                                                 <EyeOff className="w-3.5 h-3.5 text-slate-600" />
                                                 <span>{isProcessing ? 'Đang lưu...' : 'Ẩn Chương Trình'}</span>
+                                            </button>
+                                        )}
+
+                                        {onDeleteCampaign && (c.is_ended || c.expired > 0 || c.is_hidden) && (
+                                            <button
+                                                type="button"
+                                                onClick={() => onDeleteCampaign(c.campaign_name)}
+                                                className="p-1.5 rounded-xl bg-white hover:bg-rose-50 text-rose-600 hover:text-rose-700 border border-rose-200 hover:border-rose-300 transition cursor-pointer shadow-2xs active:scale-95"
+                                                title={`Xóa vĩnh viễn chương trình "${c.campaign_name}" khỏi kho`}
+                                            >
+                                                <Trash2 className="w-3.5 h-3.5" />
                                             </button>
                                         )}
                                     </div>

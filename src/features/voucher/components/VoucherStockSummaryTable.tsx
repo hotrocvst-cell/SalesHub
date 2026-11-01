@@ -18,7 +18,8 @@ import {
     Ban,
     Search,
     Eye,
-    EyeOff
+    EyeOff,
+    Trash2
 } from 'lucide-react';
 import type { VoucherItem, VoucherStockForecast, VoucherCampaignStatusConfig } from '../types';
 import { calculateStockForecasts, getDenominationHotStyle, formatCurrency, parseConditionLines } from '../voucherFormatters';
@@ -29,6 +30,8 @@ interface Props {
     onOpenImportModalWithPreset?: (campaignName: string, denomination: number, description?: string) => void;
     onToggleCampaignEndStatus?: (campaignName: string, denomination: number, currentIsEnded: boolean) => void;
     onToggleCampaignHiddenStatus?: (campaignName: string, currentIsHidden: boolean) => void;
+    onOpenDeleteCampaignModal?: () => void;
+    onDeleteCampaign?: (campaignName: string) => Promise<void>;
     defaultExpanded?: boolean;
 }
 
@@ -38,6 +41,8 @@ export default function VoucherStockSummaryTable({
     onOpenImportModalWithPreset,
     onToggleCampaignEndStatus,
     onToggleCampaignHiddenStatus,
+    onOpenDeleteCampaignModal,
+    onDeleteCampaign,
     defaultExpanded = false
 }: Props) {
     // Mặc định hiển thị thu gọn theo yêu cầu
@@ -331,6 +336,19 @@ export default function VoucherStockSummaryTable({
                                     <span>{showHidden ? `Đang Hiện Đã Ẩn (${hiddenForecastsCount})` : `Hiện Đã Ẩn (${hiddenForecastsCount})`}</span>
                                 </button>
                             )}
+
+                            {/* 6. Nút mở Modal Lựa chọn Xóa CT đã kết thúc/hết hạn */}
+                            {onOpenDeleteCampaignModal && (
+                                <button
+                                    type="button"
+                                    onClick={onOpenDeleteCampaignModal}
+                                    className="px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 bg-rose-600 hover:bg-rose-700 text-white shadow-xs sm:ml-auto"
+                                    title="Mở bảng lựa chọn xóa vĩnh viễn các chương trình PMH đã kết thúc (hết hạn)"
+                                >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                    <span>Lựa Chọn Xóa CT Hết Hạn</span>
+                                </button>
+                            )}
                         </div>
                     </div>
 
@@ -594,6 +612,18 @@ export default function VoucherStockSummaryTable({
                                                                     <span>Ẩn CT</span>
                                                                 </button>
                                                             )
+                                                        )}
+
+                                                        {onDeleteCampaign && (isEnded || item.alertLevel === 'ENDED' || item.available === 0) && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => onDeleteCampaign(item.campaign_name)}
+                                                                className="px-2 py-1 rounded-xl text-[10.5px] font-bold transition cursor-pointer inline-flex items-center gap-1 shadow-2xs active:scale-[0.98] bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 hover:border-rose-300"
+                                                                title={`Xóa vĩnh viễn chương trình "${item.campaign_name}" khỏi kho`}
+                                                            >
+                                                                <Trash2 className="w-3 h-3 text-rose-600" />
+                                                                <span>Xóa CT</span>
+                                                            </button>
                                                         )}
                                                     </div>
                                                 </td>

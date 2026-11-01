@@ -1359,9 +1359,13 @@ export async function deleteVouchersBatch(
         const remaining = all.filter(v => !targetIdSet.has(v.id));
         setLocalVouchers(remaining);
 
-        // Xóa trên Supabase Cloud
+        // Xóa trên Supabase Cloud theo chunk
         try {
-            await supabase.from('store_vouchers').delete().in('id', targetIds);
+            const CHUNK_SIZE = 100;
+            for (let i = 0; i < targetIds.length; i += CHUNK_SIZE) {
+                const chunk = targetIds.slice(i, i + CHUNK_SIZE);
+                await supabase.from('store_vouchers').delete().in('id', chunk);
+            }
         } catch (e) {
             console.warn('Lỗi xóa batch trên Supabase:', e);
         }
@@ -1370,6 +1374,147 @@ export async function deleteVouchersBatch(
     } catch (e: any) {
         return { success: false, deletedCount: 0, error: e.message || 'Lỗi khi xóa mã voucher hàng loạt' };
     }
+}
+
+/**
+ * Xóa vĩnh viễn một hoặc nhiều chương trình PMH đã kết thúc / hết hạn khỏi kho (Local + Supabase Cloud)
+ * - Xóa tất cả các mã voucher thuộc danh sách chương trình
+ * - Xóa cấu hình trạng thái của các chương trình trong store_voucher_campaign_statuses
+ */
+export async function deleteCampaignsBatch(
+    campaignNames: string[],
+    clusterContext?: {
+        userStoreName?: string;
+        accessibleStores?: string[];
+        currentUserDisplayName?: string;
+        isAdmin?: boolean;
+    }
+): Promise<{
+    success: boolean;
+    deletedVoucherCount: number;
+    deletedCampaignCount: number;
+    totalValue: number;
+    error?: string;
+}> {
+    try {
+        if (!campaignNames || campaignNames.length === 0) {
+            return { success: true, deletedVoucherCount: 0, deletedCampaignCount: 0, totalValue: 0 };
+        }
+
+        const cleanNames = Array.from(new Set(campaignNames.map(c => (c || '').trim()).filter(Boolean)));
+        if (cleanNames.length === 0) {
+            return { success: true, deletedVoucherCount: 0, deletedCampaignCount: 0, totalValue: 0 };
+        }
+
+        const nameSetLower = new Set(cleanNames.map(c => c.toLowerCase()));
+
+        // 1. Quét voucher trong LocalStorage
+        const allVouchers = getLocalVouchers();
+        let targets = allVouchers.filter(v => nameSetLower.has((v.campaign_name || '').trim().toLowerCase()));
+
+        // Lọc theo cụm / siêu thị nếu không phải Admin
+        if (clusterContext && !clusterContext.isAdmin) {
+            targets = targets.filter(t =>
+                isVoucherInUserCluster(
+                    t,
+                    clusterContext.userStoreName,
+                    clusterContext.accessibleStores,
+                    clusterContext.currentUserDisplayName,
+                    false
+                )
+            );
+        }
+
+        const totalValue = targets.reduce((sum, v) => sum + (Number(v.denomination) || 0), 0);
+        const targetIds = targets.map(v => v.id);
+        const targetIdSet = new Set(targetIds);
+
+        // 2. Cập nhật LocalStorage cho voucher
+        const remainingVouchers = allVouchers.filter(v => !targetIdSet.has(v.id));
+        setLocalVouchers(remainingVouchers);
+
+        // 3. Xóa các mã voucher trên Supabase Cloud theo chunk
+        if (targetIds.length > 0) {
+            const CHUNK_SIZE = 100;
+            for (let i = 0; i < targetIds.length; i += CHUNK_SIZE) {
+                const chunk = targetIds.slice(i, i + CHUNK_SIZE);
+                try {
+                    await supabase.from('store_vouchers').delete().in('id', chunk);
+                } catch (err) {
+                    console.warn('Lỗi xóa voucher chunk trên Supabase:', err);
+                }
+            }
+        }
+
+        // 4. Dọn dẹp trạng thái chương trình trong store_voucher_campaign_statuses (Local + Supabase)
+        try {
+            const rawStatus = localStorage.getItem(CAMPAIGN_STATUS_STORAGE_KEY);
+            if (rawStatus) {
+                const statusMap: Record<string, VoucherCampaignStatusConfig> = JSON.parse(rawStatus);
+                let changed = false;
+                Object.keys(statusMap).forEach(key => {
+                    const item = statusMap[key];
+                    if (item && nameSetLower.has((item.campaign_name || '').trim().toLowerCase())) {
+                        delete statusMap[key];
+                        changed = true;
+                    }
+                });
+                if (changed) {
+                    localStorage.setItem(CAMPAIGN_STATUS_STORAGE_KEY, JSON.stringify(statusMap));
+                }
+            }
+        } catch (e) {
+            console.warn('Lỗi dọn local campaign statuses:', e);
+        }
+
+        // Xóa campaign statuses trên Supabase Cloud
+        try {
+            for (const campName of cleanNames) {
+                await supabase
+                    .from('store_voucher_campaign_statuses')
+                    .delete()
+                    .ilike('campaign_name', campName);
+            }
+        } catch (err) {
+            console.warn('Lỗi xóa campaign status trên Supabase:', err);
+        }
+
+        return {
+            success: true,
+            deletedVoucherCount: targets.length,
+            deletedCampaignCount: cleanNames.length,
+            totalValue
+        };
+    } catch (e: any) {
+        return {
+            success: false,
+            deletedVoucherCount: 0,
+            deletedCampaignCount: 0,
+            totalValue: 0,
+            error: e.message || 'Lỗi khi xóa chương trình PMH'
+        };
+    }
+}
+
+/**
+ * Xóa vĩnh viễn một chương trình PMH
+ */
+export async function deleteCampaignVouchers(
+    campaignName: string,
+    clusterContext?: {
+        userStoreName?: string;
+        accessibleStores?: string[];
+        currentUserDisplayName?: string;
+        isAdmin?: boolean;
+    }
+): Promise<{ success: boolean; deletedCount: number; totalValue: number; error?: string }> {
+    const res = await deleteCampaignsBatch([campaignName], clusterContext);
+    return {
+        success: res.success,
+        deletedCount: res.deletedVoucherCount,
+        totalValue: res.totalValue,
+        error: res.error
+    };
 }
 
 /**
@@ -1746,13 +1891,14 @@ export function getVoucherExpiryStats(
 export async function cleanVouchers(params: {
     type: 'EXPIRED' | 'USED' | 'ALL_INACTIVE';
     mode: 'DELETE' | 'MARK_EXPIRED';
+    campaignName?: string;
     storeName?: string;
     accessibleStores?: string[];
     currentUserDisplayName?: string;
     isAdmin?: boolean;
 }): Promise<{ success: boolean; affectedCount: number; totalValue: number; error?: string }> {
     try {
-        const { type, mode, storeName, accessibleStores, currentUserDisplayName, isAdmin } = params;
+        const { type, mode, campaignName, storeName, accessibleStores, currentUserDisplayName, isAdmin } = params;
         const all = getLocalVouchers();
         const todayStr = new Date().toISOString().slice(0, 10);
 
@@ -1768,6 +1914,9 @@ export async function cleanVouchers(params: {
 
         const isTarget = (v: VoucherItem) => {
             if (!matchStore(v)) return false;
+            if (campaignName && campaignName !== 'ALL' && (v.campaign_name || '').trim().toLowerCase() !== campaignName.trim().toLowerCase()) {
+                return false;
+            }
             const isExpired = Boolean(v.expires_at && v.expires_at < todayStr);
 
             if (type === 'EXPIRED') {
@@ -1797,7 +1946,11 @@ export async function cleanVouchers(params: {
             setLocalVouchers(remaining);
 
             try {
-                await supabase.from('store_vouchers').delete().in('id', targetIds);
+                const CHUNK_SIZE = 100;
+                for (let i = 0; i < targetIds.length; i += CHUNK_SIZE) {
+                    const chunk = targetIds.slice(i, i + CHUNK_SIZE);
+                    await supabase.from('store_vouchers').delete().in('id', chunk);
+                }
             } catch (e) {
                 console.warn('Lỗi xóa trên Supabase khi clean:', e);
             }
@@ -1817,7 +1970,11 @@ export async function cleanVouchers(params: {
 
             try {
                 const toUpdate = updated.filter(v => targetIdSet.has(v.id));
-                await supabase.from('store_vouchers').upsert(toUpdate, { onConflict: 'id' });
+                const CHUNK_SIZE = 100;
+                for (let i = 0; i < toUpdate.length; i += CHUNK_SIZE) {
+                    const chunk = toUpdate.slice(i, i + CHUNK_SIZE);
+                    await supabase.from('store_vouchers').upsert(chunk, { onConflict: 'id' });
+                }
             } catch (e) {
                 console.warn('Lỗi cập nhật EXPIRED trên Supabase:', e);
             }

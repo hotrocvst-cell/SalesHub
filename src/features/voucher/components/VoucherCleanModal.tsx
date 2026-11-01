@@ -92,6 +92,7 @@ export default function VoucherCleanModal({
             const res = await cleanVouchers({
                 type: cleanType,
                 mode: cleanMode,
+                campaignName: selectedCampaign,
                 storeName: currentStoreName,
                 accessibleStores,
                 currentUserDisplayName,
@@ -209,10 +210,42 @@ export default function VoucherCleanModal({
                     </div>
                 </div>
 
-                {/* 2. Chọn hình thức xử lý */}
+                {/* 2. Chọn chương trình áp dụng */}
+                {campaignOptions.length > 0 && (
+                    <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                            <label className="block text-xs font-black uppercase tracking-wider text-slate-700">
+                                2. Chương trình áp dụng:
+                            </label>
+                            {selectedCampaign !== 'ALL' && (
+                                <button
+                                    type="button"
+                                    onClick={() => setSelectedCampaign('ALL')}
+                                    className="text-[10px] text-rose-600 hover:underline font-bold cursor-pointer"
+                                >
+                                    Xem tất cả
+                                </button>
+                            )}
+                        </div>
+                        <select
+                            value={selectedCampaign}
+                            onChange={(e) => setSelectedCampaign(e.target.value)}
+                            className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:border-rose-500 shadow-2xs"
+                        >
+                            <option value="ALL">🌟 Tất cả chương trình ({campaignOptions.length})</option>
+                            {campaignOptions.map(camp => (
+                                <option key={camp} value={camp}>
+                                    {camp}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                )}
+
+                {/* 3. Chọn hình thức xử lý */}
                 <div className="space-y-1.5">
                     <label className="block text-xs font-black uppercase tracking-wider text-slate-700">
-                        2. Hình thức dọn dẹp:
+                        {campaignOptions.length > 0 ? '3. Hình thức dọn dẹp:' : '2. Hình thức dọn dẹp:'}
                     </label>
                     <div className="grid grid-cols-2 gap-2">
                         <button
