@@ -12,7 +12,8 @@ import {
 import {
     getYesterdayDateString,
     formatDate,
-    getShortStoreName
+    getShortStoreName,
+    cleanBiNumber
 } from '../../core/lib/formatters';
 import CloudDataSyncStatusBanner from '../../shared/components/report/CloudDataSyncStatusBanner';
 import OcrUploadZone from './components/OcrUploadZone';
@@ -26,7 +27,9 @@ import {
     type ActiveKeyInfo
 } from './services/geminiApiKeyService';
 import { runClientTesseractOcr } from './services/tesseractOcrService';
-import type { OcrEngineType, StoreReportingData } from './types/ocrTypes';
+import type { OcrEngineType, StoreReportingData, StoreMobileEmulationCardItem, EmulationOcrItem } from './types/ocrTypes';
+import QuickStoreEmulationModal from '../daily-report/components/QuickStoreEmulationModal';
+import { saveSingleStoreEmulationDailyRecord } from './services/dailyBusinessRecordService';
 import {
     Sparkles,
     Calendar,
@@ -166,6 +169,8 @@ export default function DataExtractOcrPage() {
     const [campaignDict, setCampaignDict] = useState<CampaignDictItem[]>([]);
     const [existingRecordCount, setExistingRecordCount] = useState<number>(0);
     const [isCheckingCloudRecords, setIsCheckingCloudRecords] = useState<boolean>(false);
+    const [isQuickEmulationModalOpen, setIsQuickEmulationModalOpen] = useState<boolean>(false);
+    const [quickModalSelectedStore, setQuickModalSelectedStore] = useState<string>('');
 
     // Tự động kiểm tra số lượng bản ghi đã tồn tại cho ngày chốt này trên Supabase Cloud
     useEffect(() => {
@@ -381,6 +386,91 @@ export default function DataExtractOcrPage() {
         }
     };
 
+    // Áp dụng thẻ thi đua bóc tách vào siêu thị (in-memory hoặc lưu Supabase)
+    const handleApplyCardsToStore = async (
+        targetStore: string,
+        cards: StoreMobileEmulationCardItem[],
+        saveDirectlyToCloud: boolean = false
+    ) => {
+        const cleanTarget = targetStore.trim();
+        const updated = [...storesData];
+        let storeIdx = updated.findIndex(st =>
+            st.storeRawName === cleanTarget ||
+            st.storeShortName === getShortStoreName(cleanTarget) ||
+            getShortStoreName(st.storeRawName) === getShortStoreName(cleanTarget)
+        );
+
+        const newEmulations: Record<string, EmulationOcrItem> = {};
+        cards.forEach(c => {
+            const progName = c.programName.trim();
+            const act = cleanBiNumber(c.actual);
+            const tg = cleanBiNumber(c.target);
+            const pctHT = c.completionRate !== undefined && c.completionRate !== null
+                ? cleanBiNumber(c.completionRate)
+                : (tg > 0 ? Number(((act / tg) * 100).toFixed(1)) : 0);
+            const pctDK = (tg > 0 && passedDays > 0)
+                ? Number((((act / passedDays * totalDays) / tg) * 100).toFixed(1))
+                : (c.forecastRate || 0);
+
+            newEmulations[progName] = {
+                programName: progName,
+                unit: c.unit === 'SL' ? 'SỐ LƯỢNG' : 'DOANH THU',
+                actual: act,
+                target: tg,
+                completionRate: pctHT,
+                forecastRate: pctDK
+            };
+        });
+
+        if (storeIdx >= 0) {
+            updated[storeIdx] = {
+                ...updated[storeIdx],
+                emulations: {
+                    ...(updated[storeIdx].emulations || {}),
+                    ...newEmulations
+                }
+            };
+        } else {
+            updated.push({
+                storeRawName: cleanTarget,
+                storeShortName: getShortStoreName(cleanTarget),
+                revenueQd: 0,
+                targetQd: 0,
+                quantityQd: 0,
+                revenueReal: 0,
+                targetReal: 0,
+                quantityReal: 0,
+                installmentReal: 0,
+                installmentRateReal: 0,
+                emulations: newEmulations
+            });
+        }
+
+        setStoresData(updated);
+        setIsSaved(false);
+
+        // Lưu trực tiếp lên Supabase Cloud nếu người dùng chọn Lưu Ngay
+        if (saveDirectlyToCloud) {
+            const res = await saveSingleStoreEmulationDailyRecord(
+                cleanTarget,
+                reportDate,
+                passedDays,
+                totalDays,
+                cards,
+                campaignDict
+            );
+            if (res.success) {
+                showToast(`🎉 Đã lưu thi đua cho ${getShortStoreName(cleanTarget)} (Chốt ngày ${formatDate(reportDate)}) lên Cloud!`);
+            } else {
+                showToast(`⚠️ Đã cập nhật vào bảng nhưng lưu Cloud thất bại: ${res.error}`);
+            }
+        } else {
+            showToast(`✅ Đã áp dụng ${cards.length} thẻ thi đua cho ${getShortStoreName(cleanTarget)} vào bảng rà soát!`);
+        }
+
+        setActiveTab('manual');
+    };
+
     const totalExtractedFiles = (qdFile ? 1 : 0) + (realFile ? 1 : 0) + emulationFiles.length;
 
     return (
@@ -415,8 +505,21 @@ export default function DataExtractOcrPage() {
                         </div>
                     </div>
 
-                    {/* Cài đặt Gemini API Key (Hiển thị nguồn Key hiện tại) */}
-                    <div className="flex items-center gap-2">
+                    {/* Cài đặt Gemini API Key & Nút Nạp Thi Đua Thẻ Mobile */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setQuickModalSelectedStore(storesData[0]?.storeRawName || availableStores[0]?.name || '');
+                                setIsQuickEmulationModalOpen(true);
+                            }}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-xs border border-emerald-400/40 transition cursor-pointer"
+                            title="Nạp nhanh thi đua thẻ mobile cho từng siêu thị (hỗ trợ Ctrl+V hoặc kéo thả ảnh)"
+                        >
+                            <Camera className="w-3.5 h-3.5 text-amber-300" />
+                            <span>📸 Thi Đua Thẻ Mobile (Ctrl+V)</span>
+                        </button>
+
                         <button
                             onClick={() => setIsKeyModalOpen(true)}
                             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${
@@ -648,6 +751,10 @@ export default function DataExtractOcrPage() {
                         onSaveToSupabase={handleSaveToSupabase}
                         isSaving={isSaving}
                         existingRecordCount={existingRecordCount}
+                        onOpenQuickEmulationModal={(st) => {
+                            setQuickModalSelectedStore(st || storesData[0]?.storeRawName || availableStores[0]?.name || '');
+                            setIsQuickEmulationModalOpen(true);
+                        }}
                     />
                 )}
             </div>
@@ -664,6 +771,21 @@ export default function DataExtractOcrPage() {
                     setIsQuotaExceeded(false);
                     showToast(`✅ Đã áp dụng ${updated.source === 'USER' ? 'Key Cá Nhân' : 'Key Hệ Thống'}!`);
                 }}
+            />
+
+            {/* Modal Nạp Nhanh Thi Đua Từng Siêu Thị (Thẻ Mobile - Hỗ Trợ Ctrl+V) */}
+            <QuickStoreEmulationModal
+                isOpen={isQuickEmulationModalOpen}
+                onClose={() => setIsQuickEmulationModalOpen(false)}
+                availableStores={availableStores}
+                campaignDict={campaignDict}
+                defaultSelectedStore={quickModalSelectedStore || storesData[0]?.storeRawName || availableStores[0]?.name || ''}
+                isAdmin={isAdmin}
+                mode="DAILY_BUSINESS_RECORD"
+                reportDate={reportDate}
+                passedDays={passedDays}
+                totalDays={totalDays}
+                onApplyDailyRecord={handleApplyCardsToStore}
             />
         </div>
     );

@@ -39,24 +39,36 @@ interface Props {
     isOpen: boolean;
     onClose: () => void;
     availableStores: StoreItem[];
-    existingSessions: RealtimeStoreSessionRecord[];
+    existingSessions?: RealtimeStoreSessionRecord[];
     campaignDict: CampaignDictItem[];
     defaultSelectedStore?: string;
     currentUserName?: string;
     isAdmin: boolean;
-    onSavedSuccessfully: (updatedSessions: RealtimeStoreSessionRecord[]) => void;
+    onSavedSuccessfully?: (updatedSessions: RealtimeStoreSessionRecord[]) => void;
+
+    // Chế độ mở rộng cho trang Cập Nhật Lũy Kế (/cap-nhat-ocr)
+    mode?: 'REALTIME_SESSION' | 'DAILY_BUSINESS_RECORD';
+    reportDate?: string;
+    passedDays?: number;
+    totalDays?: number;
+    onApplyDailyRecord?: (storeName: string, cards: StoreMobileEmulationCardItem[], saveCloud: boolean) => Promise<void> | void;
 }
 
 export default function QuickStoreEmulationModal({
     isOpen,
     onClose,
     availableStores,
-    existingSessions,
+    existingSessions = [],
     campaignDict,
     defaultSelectedStore = 'Tổng',
     currentUserName = 'ADMIN',
     isAdmin,
-    onSavedSuccessfully
+    onSavedSuccessfully,
+    mode = 'REALTIME_SESSION',
+    reportDate,
+    passedDays,
+    totalDays,
+    onApplyDailyRecord
 }: Props) {
     if (!isOpen) return null;
 
@@ -64,7 +76,7 @@ export default function QuickStoreEmulationModal({
     const storeOptions = useMemo(() => {
         const set = new Set<string>();
         // Ưu tiên các siêu thị đã có phiên
-        existingSessions.forEach(s => {
+        (existingSessions || []).forEach(s => {
             if (s.store_name) set.add(s.store_name);
         });
         // Bổ sung các siêu thị từ danh mục
@@ -298,8 +310,8 @@ export default function QuickStoreEmulationModal({
         ]);
     };
 
-    // Lưu thi đua cho siêu thị đang chọn lên Cloud
-    const handleSave = async () => {
+    // Lưu thi đua cho siêu thị đang chọn lên Cloud hoặc Áp dụng vào bảng số liệu
+    const handleSave = async (saveDirectlyToCloud: boolean = true) => {
         if (!selectedStore) {
             showToast('⚠️ Vui lòng chọn siêu thị cần lưu thi đua!');
             return;
@@ -312,6 +324,18 @@ export default function QuickStoreEmulationModal({
 
         setIsSaving(true);
         try {
+            if (mode === 'DAILY_BUSINESS_RECORD') {
+                if (onApplyDailyRecord) {
+                    await onApplyDailyRecord(selectedStore, cards, saveDirectlyToCloud);
+                }
+                setTimeout(() => {
+                    setIsSaving(false);
+                    onClose();
+                }, 400);
+                return;
+            }
+
+            // Chế độ mặc định: REALTIME_SESSION (/bc-ngay/tong-quan)
             const campaignItems = convertMobileCardsToCampaignItems(cards, selectedStore, campaignDict);
             const res = await saveSingleStoreEmulationSession(
                 selectedStore,
@@ -327,7 +351,7 @@ export default function QuickStoreEmulationModal({
             }
 
             showToast(`✅ Đã lưu thành công ${campaignItems.length} chỉ tiêu thi đua cho ${getShortStoreName(selectedStore)}!`);
-            if (res.updatedSessions) {
+            if (res.updatedSessions && onSavedSuccessfully) {
                 onSavedSuccessfully(res.updatedSessions);
             }
 
@@ -369,11 +393,15 @@ export default function QuickStoreEmulationModal({
                                     Nạp Nhanh Thi Đua Từng Siêu Thị
                                 </h2>
                                 <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-400/20 text-emerald-300 border border-emerald-400/30">
-                                    OCR Thẻ Mobile
+                                    {mode === 'DAILY_BUSINESS_RECORD' && reportDate
+                                        ? `Lũy Kế • Chốt ${formatDate(reportDate)}`
+                                        : 'OCR Thẻ Mobile'}
                                 </span>
                             </div>
                             <p className="text-xs text-slate-300 mt-0.5">
-                                Hỗ trợ dán ảnh trực tiếp từ Zalo/Clipboard (<kbd className="font-mono bg-white/20 px-1 rounded">Ctrl+V</kbd>) hoặc kéo thả ảnh chụp thẻ
+                                {mode === 'DAILY_BUSINESS_RECORD' && reportDate
+                                    ? `Trích xuất thẻ mobile thi đua chốt ngày ${formatDate(reportDate)} (Ngày ${passedDays || 1}/${totalDays || 30}) • Dán ảnh Ctrl+V`
+                                    : 'Hỗ trợ dán ảnh trực tiếp từ Zalo/Clipboard (Ctrl+V) hoặc kéo thả ảnh chụp thẻ'}
                             </p>
                         </div>
                     </div>
@@ -439,7 +467,9 @@ export default function QuickStoreEmulationModal({
                         <div className="text-[11px] text-slate-500 flex items-center gap-1.5">
                             <Clock className="w-3.5 h-3.5 text-amber-500 shrink-0" />
                             <span>
-                                Lưu thi đua cho siêu thị này sẽ <strong>bảo lưu 100% doanh thu (DTQĐ, DT Thực)</strong> đã có từ trước của siêu thị.
+                                {mode === 'DAILY_BUSINESS_RECORD' && reportDate
+                                    ? `Cập nhật thi đua cho siêu thị này sẽ bảo lưu 100% doanh thu đã có của chốt ngày ${formatDate(reportDate)}.`
+                                    : 'Lưu thi đua cho siêu thị này sẽ bảo lưu 100% doanh thu (DTQĐ, DT Thực) đã có từ trước của siêu thị.'}
                             </span>
                         </div>
                     </div>
@@ -694,26 +724,54 @@ export default function QuickStoreEmulationModal({
                 <div className="p-4 sm:p-5 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
                     <div className="text-xs text-slate-500 font-medium">
                         Đang lưu cho: <strong className="text-blue-700">{getShortStoreName(selectedStore)}</strong>
+                        {mode === 'DAILY_BUSINESS_RECORD' && reportDate && (
+                            <span className="ml-1 text-slate-400">({formatDate(reportDate)})</span>
+                        )}
                     </div>
 
-                    <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                    <div className="flex items-center gap-2 w-full sm:w-auto justify-end flex-wrap">
                         <button
                             type="button"
                             onClick={onClose}
-                            className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-200 transition cursor-pointer"
+                            className="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-200 transition cursor-pointer"
                         >
                             Đóng
                         </button>
 
-                        <button
-                            type="button"
-                            onClick={handleSave}
-                            disabled={isSaving || cards.length === 0}
-                            className="px-5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-50 text-white rounded-xl text-xs font-black flex items-center gap-2 shadow-md transition cursor-pointer"
-                        >
-                            <Save className={`w-4 h-4 ${isSaving ? 'animate-spin' : ''}`} />
-                            <span>{isSaving ? 'Đang lưu Cloud...' : 'Lưu Thi Đua Siêu Thị'}</span>
-                        </button>
+                        {mode === 'DAILY_BUSINESS_RECORD' ? (
+                            <>
+                                <button
+                                    type="button"
+                                    onClick={() => handleSave(false)}
+                                    disabled={isSaving || cards.length === 0}
+                                    className="px-3.5 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-800 disabled:opacity-50 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs transition cursor-pointer"
+                                    title="Chỉ cập nhật vào bảng rà soát trên trang để xem lại trước khi lưu"
+                                >
+                                    <span>Áp Dụng Vào Bảng Rà Soát</span>
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={() => handleSave(true)}
+                                    disabled={isSaving || cards.length === 0}
+                                    className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-50 text-white rounded-xl text-xs font-black flex items-center gap-2 shadow-md transition cursor-pointer"
+                                    title="Cập nhật vào bảng và đồng bộ ngay lên Supabase Cloud"
+                                >
+                                    <Save className={`w-4 h-4 ${isSaving ? 'animate-spin' : ''}`} />
+                                    <span>{isSaving ? 'Đang lưu Cloud...' : 'Lưu Ngay Lên Cloud'}</span>
+                                </button>
+                            </>
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={() => handleSave(true)}
+                                disabled={isSaving || cards.length === 0}
+                                className="px-5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-50 text-white rounded-xl text-xs font-black flex items-center gap-2 shadow-md transition cursor-pointer"
+                            >
+                                <Save className={`w-4 h-4 ${isSaving ? 'animate-spin' : ''}`} />
+                                <span>{isSaving ? 'Đang lưu Cloud...' : 'Lưu Thi Đua Siêu Thị'}</span>
+                            </button>
+                        )}
                     </div>
                 </div>
             </div>

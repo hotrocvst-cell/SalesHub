@@ -15,7 +15,8 @@ import {
     Calendar,
     Copy,
     Check,
-    RefreshCw
+    RefreshCw,
+    Camera
 } from 'lucide-react';
 import type { StoreReportingData, EmulationOcrItem } from '../types/ocrTypes';
 import type { StoreItem, CampaignDictItem } from '../../../core/lib/storage';
@@ -32,6 +33,7 @@ interface Props {
     onSaveToSupabase: () => void;
     isSaving: boolean;
     existingRecordCount?: number;
+    onOpenQuickEmulationModal?: (storeName?: string) => void;
 }
 
 export default function ManualDataEntryModule({
@@ -44,7 +46,8 @@ export default function ManualDataEntryModule({
     reportDate,
     onSaveToSupabase,
     isSaving,
-    existingRecordCount = 0
+    existingRecordCount = 0,
+    onOpenQuickEmulationModal
 }: Props) {
     const [selectedStoreIndex, setSelectedStoreIndex] = useState<number>(0);
     const [newProgramName, setNewProgramName] = useState('');
@@ -457,9 +460,22 @@ export default function ManualDataEntryModule({
                                 <span>Chương Trình Thi Đua Lũy Kế ({Object.keys(activeStore.emulations || {}).length} Chương Trình)</span>
                             </div>
 
-                            <span className="text-[11px] text-slate-400">
-                                Nhập Chỉ Tiêu và Thực Đạt, hệ thống tự động tính % Hoàn thành &amp; % Dự kiến bán
-                            </span>
+                            <div className="flex items-center gap-2 flex-wrap">
+                                {onOpenQuickEmulationModal && (
+                                    <button
+                                        type="button"
+                                        onClick={() => onOpenQuickEmulationModal(activeStore?.storeRawName)}
+                                        className="px-2.5 py-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-[11px] font-bold flex items-center gap-1 shadow-2xs transition cursor-pointer"
+                                        title="Nạp nhanh thi đua thẻ mobile cho siêu thị này (hỗ trợ Ctrl+V hoặc kéo thả ảnh)"
+                                    >
+                                        <Camera className="w-3.5 h-3.5" />
+                                        <span>📸 Quét Thẻ Mobile (Ctrl+V)</span>
+                                    </button>
+                                )}
+                                <span className="text-[11px] text-slate-400">
+                                    Nhập Chỉ Tiêu và Thực Đạt, hệ thống tự động tính % Hoàn thành &amp; % Dự kiến bán
+                                </span>
+                            </div>
                         </div>
 
                         {/* Bảng danh sách các chương trình */}
