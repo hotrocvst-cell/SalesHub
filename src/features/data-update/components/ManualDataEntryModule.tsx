@@ -195,7 +195,7 @@ export default function ManualDataEntryModule({
     const handleCopySummaryText = () => {
         let text = `BÁO CÁO KINH DOANH NGÀY ${reportDate} (Nhịp ${passedDays}/${totalDays})\n`;
         storesData.forEach(st => {
-            text += `\n🏢 SIÊU THỊ: ${st.storeRawName}\n`;
+            text += `\n🏢 ST: ${st.storeRawName}\n`;
             text += `- DT Quy Đổi: ${st.revenueQd} tr / Target: ${st.targetQd} tr (SL: ${st.quantityQd})\n`;
             text += `- DT Thực: ${st.revenueReal} tr / Target: ${st.targetReal} tr (Trả góp: ${st.installmentReal} tr - ${st.installmentRateReal}%)\n`;
             const emuList = Object.values(st.emulations || {});

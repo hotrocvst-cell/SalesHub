@@ -315,7 +315,7 @@ export default function UserManagementPage() {
                 const found = allEmployees.find(e => e.employee_id.trim().toLowerCase() === trimmed.toLowerCase());
                 if (found) {
                     const parsed = parseEmployeeRoleAndDept(found);
-                    setMatchedEmpInfo(`✓ Khớp nhân sự hệ thống: [${found.full_name}] • Siêu thị: ${found.store_name} • Vai trò: ${found.role || 'Nhân viên'}`);
+                    setMatchedEmpInfo(`✓ Khớp nhân sự hệ thống: [${found.full_name}] • ST: ${found.store_name} • Vai trò: ${found.role || 'Nhân viên'}`);
                     // MẶC ĐỊNH SỬ DỤNG HỌ TÊN VÀ VAI TRÒ THEO HỆ THỐNG ĐÃ LƯU TRƯỚC
                     next.full_name = formatCapitalizeWords(found.full_name);
                     next.store_name = found.store_name;
@@ -708,7 +708,7 @@ export default function UserManagementPage() {
                                                         <Link
                                                             to="/phan-quyen-sieu-thi"
                                                             className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 text-[10px] font-bold hover:bg-amber-200 transition"
-                                                            title={`Được xem ${u.accessible_stores.length} siêu thị: ${u.accessible_stores.join(', ')}`}
+                                                            title={`Được xem ${u.accessible_stores.length} ST: ${u.accessible_stores.join(', ')}`}
                                                         >
                                                             <span>🏢 Phụ trách {u.accessible_stores.length} shop</span>
                                                         </Link>

@@ -57,7 +57,7 @@ export default function CampaignProgressRemarkModal({
             `📢 [THI ĐUA: ${item.displayName.toUpperCase()}]`,
             `📅 Luỹ kế đã tính: ${reportDateDisplay} • 🏢 ${storeDisplay}`,
             `----------------------------------------`,
-            `🎯 SIÊU THỊ:`,
+            `🎯 ST:`,
             `• Target: ${item.totalTarget.toLocaleString('vi-VN')} ${item.unit}`,
             `• Lũy kế: ${item.totalActual.toLocaleString('vi-VN')} ${item.unit}`,
             `• %DKHT: ${item.forecastRate}% [${item.isAchieved ? '🟢 ĐÃ ĐẠT TIẾN ĐỘ' : '🔴 KHÔNG ĐẠT - CẦN TĂNG TỐC'}]`,

@@ -64,15 +64,14 @@ function SupabaseSyncStatusBar({
 
     return (
         <div
-            className={`rounded-2xl transition-all duration-300 p-3.5 sm:p-4 border shadow-2xs ${
-                isUnsaved
+            className={`rounded-2xl transition-all duration-300 p-3.5 sm:p-4 border shadow-2xs ${isUnsaved
                     ? 'bg-gradient-to-r from-amber-50/95 via-orange-50/40 to-white border-amber-300 ring-2 ring-amber-400/20 shadow-xs'
                     : isSavingStatus
-                    ? 'bg-gradient-to-r from-blue-50/95 via-indigo-50/40 to-white border-blue-300 shadow-xs'
-                    : isError
-                    ? 'bg-gradient-to-r from-rose-50/95 via-red-50/40 to-white border-rose-300 ring-2 ring-rose-400/20 shadow-xs'
-                    : 'bg-gradient-to-r from-emerald-50/90 via-teal-50/30 to-white border-emerald-200/90'
-            }`}
+                        ? 'bg-gradient-to-r from-blue-50/95 via-indigo-50/40 to-white border-blue-300 shadow-xs'
+                        : isError
+                            ? 'bg-gradient-to-r from-rose-50/95 via-red-50/40 to-white border-rose-300 ring-2 ring-rose-400/20 shadow-xs'
+                            : 'bg-gradient-to-r from-emerald-50/90 via-teal-50/30 to-white border-emerald-200/90'
+                }`}
         >
             <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3.5">
                 {/* 1. Cụm Trạng Thái Đồng Bộ Supabase Cloud */}
@@ -113,15 +112,14 @@ function SupabaseSyncStatusBar({
                     <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
                             <span
-                                className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md border ${
-                                    isUnsaved
+                                className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md border ${isUnsaved
                                         ? 'bg-amber-100 text-amber-900 border-amber-300'
                                         : isSavingStatus
-                                        ? 'bg-blue-100 text-blue-900 border-blue-300'
-                                        : isError
-                                        ? 'bg-rose-100 text-rose-900 border-rose-300'
-                                        : 'bg-emerald-100 text-emerald-900 border-emerald-300'
-                                }`}
+                                            ? 'bg-blue-100 text-blue-900 border-blue-300'
+                                            : isError
+                                                ? 'bg-rose-100 text-rose-900 border-rose-300'
+                                                : 'bg-emerald-100 text-emerald-900 border-emerald-300'
+                                    }`}
                             >
                                 {isUnsaved && '⚠️ Chưa lưu lên Supabase'}
                                 {isSavingStatus && '⚡ Đang đồng bộ...'}
@@ -137,7 +135,7 @@ function SupabaseSyncStatusBar({
                         <div className="text-xs sm:text-sm font-black tracking-tight mt-0.5 truncate">
                             {isUnsaved && (
                                 <span className="text-amber-950">
-                                    Có thay đổi mục tiêu chưa được lưu vào cơ sở dữ liệu Supabase!
+                                    Có thay đổi mục tiêu chưa được lưu vào cơ sở dữ liệu Cloud!
                                 </span>
                             )}
                             {isSavingStatus && (
@@ -173,11 +171,10 @@ function SupabaseSyncStatusBar({
                 <div className="flex flex-wrap items-center gap-2">
                     {/* Chip: Nhân sự có chỉ tiêu DT */}
                     <div
-                        className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs shadow-2xs ${
-                            completionRate === 100
+                        className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs shadow-2xs ${completionRate === 100
                                 ? 'bg-white/90 border-emerald-200 text-emerald-950'
                                 : 'bg-white/90 border-amber-200 text-amber-950'
-                        }`}
+                            }`}
                         title="Số nhân sự đã được nhập chỉ tiêu doanh thu cho tháng này"
                     >
                         <div className={`p-1 rounded-lg ${completionRate === 100 ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>

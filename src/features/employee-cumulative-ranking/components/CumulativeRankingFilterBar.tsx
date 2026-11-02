@@ -107,7 +107,7 @@ export default function CumulativeRankingFilterBar({
                 <div className="flex items-center gap-2">
                     <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 hover:border-blue-400 px-3 py-2 rounded-xl text-xs transition-all shadow-2xs">
                         <StoreIcon className="w-4 h-4 text-blue-600 shrink-0" />
-                        <span className="text-[11px] font-bold text-slate-500 whitespace-nowrap">Siêu thị:</span>
+                        <span className="text-[11px] font-bold text-slate-500 whitespace-nowrap">ST:</span>
                         <select
                             value={selectedStore}
                             disabled={isLockedToSingleStore}

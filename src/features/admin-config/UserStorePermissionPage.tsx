@@ -765,7 +765,7 @@ export default function UserStorePermissionPage() {
                                 <div className="bg-blue-50 border border-blue-200 rounded-2xl p-3 text-xs text-blue-900 flex items-start gap-2.5">
                                     <Sparkles className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
                                     <div>
-                                        <span className="font-extrabold">Quản lý / Trưởng ca phụ trách đa siêu thị:</span> Tích chọn một hoặc nhiều siêu thị mà nhân sự này được phép xem báo cáo và điều hành.
+                                        <span className="font-extrabold">Quản lý / Trưởng ca phụ trách đa ST:</span> Tích chọn một hoặc nhiều siêu thị mà nhân sự này được phép xem báo cáo và điều hành.
                                     </div>
                                 </div>
                             )}

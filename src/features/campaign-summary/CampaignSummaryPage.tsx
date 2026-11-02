@@ -679,7 +679,7 @@ export default function CampaignSummaryPage() {
             `⚡ [KẾ HOẠCH HÀNH ĐỘNG HỐI SỐ & ĐỘT PHÁ THI ĐUA NGÀNH HÀNG]`,
             `🏢 ${storeLabel} • 📅 ${formatDate(campaignData.date_display)}`,
             `----------------------------------------`,
-            `🎯 3 HÀNH ĐỘNG TRỌNG TÂM TOÀN SIÊU THỊ:`,
+            `🎯 3 HÀNH ĐỘNG TRỌNG TÂM TOÀN ST:`,
             `1. Tập trung vào ngành hàng yếu: ${analysis.weakCategories.map(c => c.name).join(', ') || 'các nhóm hàng còn thiếu'}.`,
             `2. Nhân viên xuất sắc chia sẻ kinh nghiệm và hỗ trợ các bạn còn thiếu số.`,
             `3. Đôn đốc tư vấn trả góp và combo phụ kiện kèm theo mỗi đơn hàng.`,
@@ -733,7 +733,7 @@ export default function CampaignSummaryPage() {
                             ) : (
                                 <Store className="w-4 h-4 text-emerald-600 shrink-0" />
                             )}
-                            <span className="text-slate-500 font-bold whitespace-nowrap">Siêu thị:</span>
+                            <span className="text-slate-500 font-bold whitespace-nowrap">ST:</span>
                             <select
                                 value={selectedStore}
                                 onChange={e => handleStoreChange(e.target.value)}

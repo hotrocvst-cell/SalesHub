@@ -1363,7 +1363,7 @@ export default function EmployeeDetailReportPage() {
                             ) : (
                                 <Store className="w-4 h-4 text-amber-600 shrink-0" />
                             )}
-                            <span className="text-slate-500 font-bold whitespace-nowrap">Siêu thị:</span>
+                            <span className="text-slate-500 font-bold whitespace-nowrap">ST:</span>
                             <select
                                 value={selectedStore}
                                 disabled={isLockedToSingleStore}
@@ -2098,7 +2098,7 @@ export default function EmployeeDetailReportPage() {
                                 Đang Xuất Ảnh Báo Cáo 8K
                             </h3>
                             <p className="text-xs text-slate-500 mt-1 flex items-center justify-center gap-1.5 flex-wrap">
-                                <span>Siêu thị: <strong className="text-slate-800">{selectedStore === 'all' ? 'Tất cả siêu thị' : getShortStoreName(selectedStore)}</strong></span>
+                                <span>ST: <strong className="text-slate-800">{selectedStore === 'all' ? 'Tất cả siêu thị' : getShortStoreName(selectedStore)}</strong></span>
                                 <span className="text-slate-300">•</span>
                                 <span>Cấu hình: <strong className="text-indigo-700">{includeAnalysisSection ? 'Xuất All' : 'Loại trừ Phân Tích'}</strong></span>
                             </p>

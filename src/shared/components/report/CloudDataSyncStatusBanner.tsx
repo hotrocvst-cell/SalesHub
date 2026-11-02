@@ -95,26 +95,24 @@ export default function CloudDataSyncStatusBanner({
             data-cloud-sync-banner="true"
             data-html2canvas-ignore="true"
             data-export-ignore="true"
-            className={`rounded-2xl border transition-all select-none ${
-                !tableReady
-                    ? 'bg-amber-50/90 border-amber-300 text-amber-950 shadow-2xs'
-                    : isLocal || hasUnsynced
-                        ? 'bg-amber-50/70 border-amber-200 text-amber-900 shadow-2xs'
-                        : 'bg-slate-50/90 border-slate-200/90 text-slate-800 shadow-2xs'
-            } ${compact ? 'p-2 sm:p-2.5 text-xs' : 'p-3 text-xs'} ${className}`}
+            className={`rounded-2xl border transition-all select-none ${!tableReady
+                ? 'bg-amber-50/90 border-amber-300 text-amber-950 shadow-2xs'
+                : isLocal || hasUnsynced
+                    ? 'bg-amber-50/70 border-amber-200 text-amber-900 shadow-2xs'
+                    : 'bg-slate-50/90 border-slate-200/90 text-slate-800 shadow-2xs'
+                } ${compact ? 'p-2 sm:p-2.5 text-xs' : 'p-3 text-xs'} ${className}`}
         >
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 {/* NHÓM THÔNG TIN BÊN TRÁI: NGUỒN DỮ LIỆU & TRẠNG THÁI */}
                 <div className="flex items-center gap-2 flex-wrap">
                     {/* CHIP NGUỒN DỮ LIỆU */}
                     <div
-                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl font-black text-[11px] shadow-2xs ${
-                            isCloud
-                                ? 'bg-indigo-600 text-white'
-                                : isLocal
-                                    ? 'bg-amber-600 text-white'
-                                    : 'bg-teal-600 text-white'
-                        }`}
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl font-black text-[11px] shadow-2xs ${isCloud
+                            ? 'bg-indigo-600 text-white'
+                            : isLocal
+                                ? 'bg-amber-600 text-white'
+                                : 'bg-teal-600 text-white'
+                            }`}
                     >
                         {isCloud ? (
                             <Cloud className="w-3.5 h-3.5 shrink-0" />
@@ -123,7 +121,7 @@ export default function CloudDataSyncStatusBanner({
                         )}
                         <span>
                             {isCloud
-                                ? 'Dữ liệu Supabase Cloud'
+                                ? 'Dữ liệu Cloud'
                                 : isLocal
                                     ? 'Bộ nhớ đệm Local'
                                     : 'Đồng bộ Hybrid'}
@@ -150,7 +148,7 @@ export default function CloudDataSyncStatusBanner({
                         {tableReady ? (
                             <span className="text-slate-600 bg-white border border-slate-200 px-2 py-0.5 rounded-lg font-medium flex items-center gap-1">
                                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                <span>Bảng Cloud sẵn sàng {tableName ? `(${tableName})` : ''}</span>
+                                <span>Cloud sẵn sàng</span>
                             </span>
                         ) : isAdmin ? (
                             <button
@@ -189,11 +187,10 @@ export default function CloudDataSyncStatusBanner({
                             type="button"
                             onClick={handleSyncClick}
                             disabled={isSyncing}
-                            className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 ${
-                                hasUnsynced
-                                    ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-2xs'
-                                    : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200'
-                            }`}
+                            className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 ${hasUnsynced
+                                ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-2xs'
+                                : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200'
+                                }`}
                         >
                             <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin text-indigo-400' : ''}`} />
                             <span>{isSyncing ? 'Đang đồng bộ...' : 'Đồng bộ Cloud'}</span>
@@ -238,7 +235,7 @@ export default function CloudDataSyncStatusBanner({
 
                         <div className="p-4 overflow-y-auto space-y-3 flex-1 text-xs">
                             <p className="text-slate-600 text-xs">
-                                Bảng <strong>{tableName || 'dữ liệu'}</strong> chưa được tạo trên cơ sở dữ liệu Supabase. 
+                                Bảng <strong>{tableName || 'dữ liệu'}</strong> chưa được tạo trên cơ sở dữ liệu Cloud.
                                 Hãy sao chép câu lệnh dưới đây và dán vào <strong>SQL Editor</strong> trên Supabase dashboard để kích hoạt lưu trữ đám mây.
                             </p>
                             <div className="relative">

@@ -286,7 +286,7 @@ export default function RegisterPage() {
                                 </div>
                                 {matchedEmployee && (
                                     <p className="text-[10px] text-emerald-700 mt-1 font-medium">
-                                        🔒 Họ tên đã được khóa cố định theo hồ sơ siêu thị đã lưu: <b>{matchedEmployee.full_name}</b> (#{matchedEmployee.employee_id}) • Siêu thị: <b>{matchedEmployee.store_name}</b>.
+                                        🔒 Họ tên đã được khóa cố định theo hồ sơ siêu thị đã lưu: <b>{matchedEmployee.full_name}</b> (#{matchedEmployee.employee_id}) • ST: <b>{matchedEmployee.store_name}</b>.
                                     </p>
                                 )}
                             </div>
@@ -473,7 +473,7 @@ export default function RegisterPage() {
                                     <div className="p-2.5 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-800 flex items-center gap-2">
                                         <Sparkles className="w-4 h-4 text-blue-600 shrink-0" />
                                         <span>
-                                            Vai trò nghiệp vụ đã lưu trong siêu thị: <b>{matchedEmployee.role || matchedEmployee.job_title || matchedEmployee.department}</b>
+                                            Vai trò nghiệp vụ đã lưu trong ST: <b>{matchedEmployee.role || matchedEmployee.job_title || matchedEmployee.department}</b>
                                         </span>
                                     </div>
                                 )}
@@ -519,7 +519,7 @@ export default function RegisterPage() {
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                                             <div>
                                                 <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                                                    Tên siêu thị: <span className="text-rose-500">*</span>
+                                                    Tên ST: <span className="text-rose-500">*</span>
                                                 </label>
                                                 <input
                                                     type="text"
@@ -548,7 +548,7 @@ export default function RegisterPage() {
 
                                         <div>
                                             <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                                                Địa chỉ siêu thị:
+                                                Địa chỉ ST:
                                             </label>
                                             <input
                                                 type="text"

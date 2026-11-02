@@ -113,7 +113,7 @@ export default function ApprovalModal({ isOpen, onClose, onUpdated }: Props) {
                             <p className="text-xs text-blue-200">
                                 {currentUser.role === 'ADMIN'
                                     ? 'Cấp quyền Quản lý Siêu thị, Trưởng ca & Mở Siêu thị mới'
-                                    : `Duyệt Nhân viên gia nhập Siêu thị: ${currentUser.store_name}`}
+                                    : `Duyệt Nhân viên gia nhập ST: ${currentUser.store_name}`}
                             </p>
                         </div>
                     </div>
@@ -382,7 +382,7 @@ export default function ApprovalModal({ isOpen, onClose, onUpdated }: Props) {
                                     </div>
 
                                     <div className="text-slate-600">
-                                        Vai trò: <b>{ROLE_LABELS[req.requested_role]}</b> | Siêu thị: <b>{req.store_name}</b>
+                                        Vai trò: <b>{ROLE_LABELS[req.requested_role]}</b> | ST: <b>{req.store_name}</b>
                                     </div>
 
                                     {req.reviewed_by && (

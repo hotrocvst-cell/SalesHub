@@ -3,9 +3,11 @@ import html2canvas from 'html2canvas';
 import {
     formatValue,
     formatDate,
+    getTodayDateString,
     getYesterdayDateString,
     isStoreMatch,
     getShortStoreName,
+    formatStoreDisplayName,
     cleanEmployeeName,
     getShortenedEmployeeName
 } from '../../core/lib/formatters';
@@ -107,13 +109,8 @@ export default function DailyEmployeeRevenueReportPage() {
     const [rawText, setRawText] = useState<string>('');
     const [rawRealText, setRawRealText] = useState<string>('');
 
-    const [reportDate, setReportDate] = useState<string>(() => {
-        try {
-            return localStorage.getItem(DRAFT_DATE_KEY) || getYesterdayDateString();
-        } catch {
-            return getYesterdayDateString();
-        }
-    });
+    // Báo cáo Realtime trong ngày: luôn mặc định theo ngày hôm nay
+    const [reportDate, setReportDate] = useState<string>(() => getTodayDateString());
 
     // Tên siêu thị nhận diện được từ văn bản dán
     const [detectedStoreName, setDetectedStoreName] = useState<string>('');
@@ -773,7 +770,7 @@ export default function DailyEmployeeRevenueReportPage() {
                     lastSyncTime={cloudSession?.updated_at || cloudSession?.session_time}
                     customMessage={
                         cloudSession
-                            ? `Phiên lưu siêu thị: ${cloudSession.store_name} • Ngày: ${formatDate(cloudSession.report_date)} • Cập nhật: ${new Date(cloudSession.updated_at || cloudSession.session_time || '').toLocaleTimeString('vi-VN')}`
+                            ? `Phiên lưu: ${cloudSession.store_name} • Ngày: ${formatDate(cloudSession.report_date)} • Cập nhật: ${new Date(cloudSession.updated_at || cloudSession.session_time || '').toLocaleTimeString('vi-VN')}`
                             : undefined
                     }
                 />
@@ -786,18 +783,9 @@ export default function DailyEmployeeRevenueReportPage() {
                 <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                     {/* Tiêu đề & Chọn Siêu thị / Ngày */}
                     <div className="space-y-1.5">
-                        <div className="flex items-center gap-2 flex-wrap">
-                            <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 text-[11px] font-black rounded-lg uppercase tracking-wider flex items-center gap-1">
-                                <Zap className="w-3.5 h-3.5 text-emerald-600" />
-                                <span>BÁO CÁO NGÀY</span>
-                            </span>
-                            <span className="px-2.5 py-1 bg-blue-50 text-blue-700 text-[11px] font-bold rounded-lg border border-blue-200">
-                                Doanh Thu Nhân Viên
-                            </span>
-                        </div>
 
                         <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-                            Báo Cáo Doanh Thu Nhân Viên Trong Ngày
+                            Báo Cáo Doanh Thu Nhân Viên
                         </h1>
 
                         {/* 1. Chọn Siêu thị (Dòng độc lập đầu tiên - Rule 10 Convention) */}
@@ -811,7 +799,7 @@ export default function DailyEmployeeRevenueReportPage() {
                                 ) : (
                                     <Store className="w-4 h-4 text-emerald-600 shrink-0" />
                                 )}
-                                <span className="text-slate-500 font-bold whitespace-nowrap">Siêu thị:</span>
+                                <span className="text-slate-500 font-bold whitespace-nowrap">ST:</span>
                                 <select
                                     value={selectedStore}
                                     onChange={e => setSelectedStore(e.target.value)}
@@ -827,7 +815,7 @@ export default function DailyEmployeeRevenueReportPage() {
                                     )}
                                     {allowedStores.map(s => (
                                         <option key={s.id || s.name} value={s.name}>
-                                            🏪 {s.code ? `[${s.code}] ` : ''}{s.name}
+                                            🏪 {formatStoreDisplayName(s.name)}
                                         </option>
                                     ))}
                                 </select>
@@ -839,20 +827,8 @@ export default function DailyEmployeeRevenueReportPage() {
                             </div>
                         </div>
 
-                        {/* 2. Các tiêu chí khác: Chọn ngày báo cáo & Điểm danh ca (Dòng 2) */}
+                        {/* 2. Tiêu chí bổ trợ: Trạng thái Realtime & Điểm danh ca (Dòng 2) */}
                         <div className="flex items-center gap-3 pt-1 flex-wrap">
-                            {/* Chọn ngày báo cáo */}
-                            <div className="flex items-center gap-1.5 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-bold">
-                                <Calendar className="w-3.5 h-3.5 text-slate-500" />
-                                <span className="text-slate-500 hidden sm:inline">Ngày:</span>
-                                <input
-                                    type="date"
-                                    value={reportDate}
-                                    onChange={e => setReportDate(e.target.value)}
-                                    className="bg-transparent text-slate-800 font-extrabold outline-hidden cursor-pointer"
-                                />
-                            </div>
-
                             {/* Nút mở Danh sách nhân sự đi làm trong ca */}
                             <button
                                 type="button"
@@ -880,7 +856,7 @@ export default function DailyEmployeeRevenueReportPage() {
                             title="Quét ảnh chụp màn hình BI Mobile bằng AI Gemini Vision (Hỗ trợ phím Ctrl+V và chọn nhiều ảnh)"
                         >
                             <Sparkles className="w-4 h-4 text-amber-300 animate-pulse shrink-0" />
-                            <span>📸 Quét OCR BI (Ctrl+V)</span>
+                            <span>📸 Nhập liệu</span>
                         </button>
 
                         {/* 1. Nút Mở Ô Dán Báo Cáo */}
@@ -1223,7 +1199,7 @@ export default function DailyEmployeeRevenueReportPage() {
                                 <p className="text-xs font-semibold text-amber-100 flex items-center justify-center sm:justify-start gap-2 flex-wrap">
                                     <span className="inline-flex items-center gap-1">
                                         <Store className="w-3.5 h-3.5 text-amber-300 shrink-0" />
-                                        <span>Siêu thị: <b className="text-white">{displayStoreTitle}</b></span>
+                                        <span>ST: <b className="text-white">{displayStoreTitle}</b></span>
                                     </span>
                                     <span>•</span>
                                     <span className="inline-flex items-center gap-1">
@@ -1468,13 +1444,12 @@ export default function DailyEmployeeRevenueReportPage() {
 
                             {/* HIỂN THỊ DẠNG THẺ CHIP CÂN ĐỐI (FLEX-WRAP CHIPS) */}
                             {reminderViewMode === 'CARDS' ? (
-                                <div className={`grid grid-cols-1 ${
-                                    (hasQdData ? 1 : 0) + (zeroOrNegativeEmployees.length > 0 ? 1 : 0) + (hasInstallmentData ? 1 : 0) >= 3
-                                        ? 'sm:grid-cols-3'
-                                        : (hasQdData ? 1 : 0) + (zeroOrNegativeEmployees.length > 0 ? 1 : 0) + (hasInstallmentData ? 1 : 0) === 2
-                                            ? 'sm:grid-cols-2'
-                                            : 'sm:grid-cols-1'
-                                } gap-2.5 items-stretch`}>
+                                <div className={`grid grid-cols-1 ${(hasQdData ? 1 : 0) + (zeroOrNegativeEmployees.length > 0 ? 1 : 0) + (hasInstallmentData ? 1 : 0) >= 3
+                                    ? 'sm:grid-cols-3'
+                                    : (hasQdData ? 1 : 0) + (zeroOrNegativeEmployees.length > 0 ? 1 : 0) + (hasInstallmentData ? 1 : 0) === 2
+                                        ? 'sm:grid-cols-2'
+                                        : 'sm:grid-cols-1'
+                                    } gap-2.5 items-stretch`}>
                                     {/* CỘT 1: DTQĐ DƯỚI TRUNG BÌNH */}
                                     {hasQdData && (
                                         <div className="bg-gradient-to-b from-amber-50/70 to-white border border-amber-200 rounded-2xl p-3 flex flex-col justify-between shadow-2xs space-y-2.5 min-h-[150px]">
@@ -2115,19 +2090,16 @@ export default function DailyEmployeeRevenueReportPage() {
             <DailyEmployeeRevenueOcrModal
                 isOpen={isOcrModalOpen}
                 onClose={() => setIsOcrModalOpen(false)}
-                availableStores={stores}
+                availableStores={allowedStores}
                 employeesDirectory={employees}
                 defaultSelectedStore={selectedStore}
                 defaultReportDate={reportDate}
                 currentUserName={currentUser?.full_name || currentUser?.employee_id || 'Admin'}
                 isAdmin={isAdmin}
-                onApplyToReport={(records, appliedStore, appliedDate) => {
+                onApplyToReport={(records, appliedStore) => {
                     setCustomRecords(records);
                     if (appliedStore && appliedStore !== selectedStore) {
                         setSelectedStore(appliedStore);
-                    }
-                    if (appliedDate && appliedDate !== reportDate) {
-                        setReportDate(appliedDate);
                     }
                     showToast(`🎉 Đã áp dụng ${records.length} nhân sự từ kết quả OCR vào báo cáo!`);
                 }}
@@ -2136,9 +2108,6 @@ export default function DailyEmployeeRevenueReportPage() {
                     setCustomRecords(session.records);
                     if (session.store_name && session.store_name !== selectedStore) {
                         setSelectedStore(session.store_name);
-                    }
-                    if (session.report_date && session.report_date !== reportDate) {
-                        setReportDate(session.report_date);
                     }
                     showToast('💾 Đã lưu dữ liệu báo cáo nhân sự lên Cloud thành công!');
                 }}

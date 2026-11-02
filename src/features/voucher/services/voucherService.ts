@@ -11,9 +11,25 @@ import type {
     VoucherCampaignStatusConfig
 } from '../types';
 
-const STORAGE_KEY = 'saleshub_store_vouchers_v1';
-const DISTRIBUTION_CONFIG_STORAGE_KEY = 'saleshub_voucher_distribution_config';
-const CAMPAIGN_STATUS_STORAGE_KEY = 'saleshub_voucher_campaign_statuses';
+export const STORAGE_KEY = 'saleshub_store_vouchers_v1';
+export const DISTRIBUTION_CONFIG_STORAGE_KEY = 'saleshub_voucher_distribution_config';
+export const CAMPAIGN_STATUS_STORAGE_KEY = 'saleshub_voucher_campaign_statuses';
+
+/**
+ * Tự động xóa sạch toàn bộ cache dữ liệu voucher cũ khỏi LocalStorage của thiết bị.
+ * Mục đích: Đảm bảo 100% Cloud-Only, không để dữ liệu cũ tồn đọng gây sai lệch tồn kho hay hồi sinh mã đã xóa.
+ */
+export function cleanupLegacyLocalStorageVouchers(): void {
+    try {
+        if (typeof window !== 'undefined' && window.localStorage) {
+            localStorage.removeItem(STORAGE_KEY);
+            localStorage.removeItem(DISTRIBUTION_CONFIG_STORAGE_KEY);
+            localStorage.removeItem(CAMPAIGN_STATUS_STORAGE_KEY);
+        }
+    } catch (e) {
+        console.warn('Lỗi dọn dẹp cache local voucher:', e);
+    }
+}
 
 export const DEFAULT_VOUCHER_DISTRIBUTION_CONFIG: VoucherDistributionConfig = {
     rule_type: 'FIFO',
@@ -107,25 +123,10 @@ ON public.store_voucher_campaign_statuses FOR ALL USING (true) WITH CHECK (true)
 `;
 
 /**
- * Lấy cấu hình quy tắc phân phối voucher (Cloud-first, fallback LocalStorage)
+ * Lấy cấu hình quy tắc phân phối voucher (100% Cloud-Direct Supabase)
  * Mặc định: FIFO (First In, First Out)
  */
 export async function getVoucherDistributionConfig(): Promise<VoucherDistributionConfig> {
-    // 1. Đọc từ LocalStorage trước
-    let localConfig: VoucherDistributionConfig = DEFAULT_VOUCHER_DISTRIBUTION_CONFIG;
-    try {
-        const raw = localStorage.getItem(DISTRIBUTION_CONFIG_STORAGE_KEY);
-        if (raw) {
-            const parsed = JSON.parse(raw);
-            if (parsed && parsed.rule_type) {
-                localConfig = parsed;
-            }
-        }
-    } catch (e) {
-        console.warn('Lỗi đọc local config voucher:', e);
-    }
-
-    // 2. Thử tải cấu hình mới nhất từ Supabase Cloud
     try {
         const { data, error } = await supabase
             .from('store_voucher_configs')
@@ -134,28 +135,21 @@ export async function getVoucherDistributionConfig(): Promise<VoucherDistributio
             .maybeSingle();
 
         if (!error && data && data.rule_type) {
-            const cloudConfig: VoucherDistributionConfig = {
+            return {
                 rule_type: data.rule_type as VoucherDistributionRule,
                 updated_by: data.updated_by,
                 updated_at: data.updated_at,
                 description: data.description
             };
-            try {
-                localStorage.setItem(DISTRIBUTION_CONFIG_STORAGE_KEY, JSON.stringify(cloudConfig));
-            } catch {
-                // ignore
-            }
-            return cloudConfig;
         }
-    } catch {
-        // Fallback local
+    } catch (e) {
+        console.warn('Lỗi đọc cấu hình voucher từ Supabase Cloud:', e);
     }
-
-    return localConfig;
+    return DEFAULT_VOUCHER_DISTRIBUTION_CONFIG;
 }
 
 /**
- * Lưu cấu hình quy tắc phân phối voucher (Cloud-first upsert, sync LocalStorage)
+ * Lưu cấu hình quy tắc phân phối voucher (100% Cloud Upsert trực tiếp vào Supabase)
  */
 export async function saveVoucherDistributionConfig(
     rule: VoucherDistributionRule,
@@ -174,14 +168,6 @@ export async function saveVoucherDistributionConfig(
         description: descriptionMap[rule] || ''
     };
 
-    // 1. Lưu LocalStorage trước (tốc độ 0ms)
-    try {
-        localStorage.setItem(DISTRIBUTION_CONFIG_STORAGE_KEY, JSON.stringify(newConfig));
-    } catch (e) {
-        console.warn('Lỗi lưu LocalStorage config voucher:', e);
-    }
-
-    // 2. Đồng bộ Supabase Cloud
     try {
         const { error } = await supabase
             .from('store_voucher_configs')
@@ -194,14 +180,13 @@ export async function saveVoucherDistributionConfig(
             }, { onConflict: 'config_key' });
 
         if (error) {
-            console.warn('Lỗi upsert Supabase store_voucher_configs:', error);
-            return { success: true, config: newConfig, error: error.message };
+            console.error('Lỗi upsert Supabase store_voucher_configs:', error);
+            return { success: false, config: newConfig, error: error.message };
         }
+        return { success: true, config: newConfig };
     } catch (e: any) {
-        console.warn('Lỗi kết nối Supabase khi lưu cấu hình:', e);
+        return { success: false, config: newConfig, error: e.message || String(e) };
     }
-
-    return { success: true, config: newConfig };
 }
 
 /**
@@ -248,11 +233,12 @@ export function isCampaignOrDenomEnded(
 
     // 3. Quét không phân biệt hoa thường ở cấp chương trình
     for (const v of Object.values(statuses)) {
-        if (!v) continue;
-        if ((v.campaign_name || '').trim().toLowerCase() === lowerCamp) {
-            if ((!v.denomination || v.denomination === 0) && v.is_ended) {
-                return true;
-            }
+        if (
+            (!v.denomination || v.denomination === 0) &&
+            v.campaign_name.trim().toLowerCase() === lowerCamp &&
+            v.is_ended
+        ) {
+            return true;
         }
     }
 
@@ -260,7 +246,7 @@ export function isCampaignOrDenomEnded(
 }
 
 /**
- * Kiểm tra xem chương trình hoặc mệnh giá có bị ẩn (lưu trữ) hay không
+ * Kiểm tra xem một chương trình hoặc mức mệnh giá cụ thể đã bị ẨN khỏi hệ thống hay chưa
  */
 export function isCampaignHidden(
     statuses: Record<string, VoucherCampaignStatusConfig> | undefined,
@@ -272,7 +258,7 @@ export function isCampaignHidden(
     if (!cleanCamp) return false;
     const lowerCamp = cleanCamp.toLowerCase();
 
-    // 1. Nếu có cấu hình riêng cho mệnh giá cụ thể
+    // 1. Kiểm tra cấu hình ẩn cho mức mệnh giá cụ thể
     if (denomination && denomination > 0) {
         const specificKey = `${cleanCamp}:::${denomination}`;
         if (statuses[specificKey] && statuses[specificKey].is_hidden) {
@@ -285,20 +271,18 @@ export function isCampaignHidden(
         }
     }
 
-    // 2. Kiểm tra trực tiếp key chương trình
+    // 2. Kiểm tra cấu hình ẩn toàn chương trình
     if (statuses[cleanCamp] && statuses[cleanCamp].is_hidden) {
         return true;
     }
 
-    // 3. Quét không phân biệt hoa thường trong toàn bộ map:
-    // Nếu có bất kỳ cấu hình nào ở cấp chương trình (denomination = 0 hoặc id == campaign_name) mang is_hidden = true
     for (const v of Object.values(statuses)) {
-        if (!v) continue;
-        const vCamp = (v.campaign_name || '').trim().toLowerCase();
-        if (vCamp === lowerCamp) {
-            if ((!v.denomination || v.denomination === 0) && v.is_hidden) {
-                return true;
-            }
+        if (
+            (!v.denomination || v.denomination === 0) &&
+            v.campaign_name.trim().toLowerCase() === lowerCamp &&
+            v.is_hidden
+        ) {
+            return true;
         }
     }
 
@@ -306,8 +290,7 @@ export function isCampaignHidden(
 }
 
 /**
- * Kiểm tra xem chương trình hoặc mệnh giá đã kết thúc hoặc đã bị ẩn (lưu trữ) hay chưa
- * Dùng để loại trừ triệt để khỏi các cảnh báo tồn kho quá hạn
+ * Kiểm tra xem chương trình/mệnh giá đã kết thúc HOẶC bị ẩn hay chưa
  */
 export function isCampaignEndedOrHidden(
     statuses: Record<string, VoucherCampaignStatusConfig> | undefined,
@@ -319,25 +302,11 @@ export function isCampaignEndedOrHidden(
 }
 
 /**
- * Lấy danh sách trạng thái chương trình / mệnh giá (Cloud-first, fallback LocalStorage)
+ * Lấy danh sách trạng thái chương trình / mệnh giá (100% Cloud-Direct Supabase)
  */
 export async function fetchVoucherCampaignStatuses(): Promise<Record<string, VoucherCampaignStatusConfig>> {
     const statusMap: Record<string, VoucherCampaignStatusConfig> = {};
 
-    // 1. Đọc từ LocalStorage trước để phản hồi tức thì
-    try {
-        const raw = localStorage.getItem(CAMPAIGN_STATUS_STORAGE_KEY);
-        if (raw) {
-            const parsed = JSON.parse(raw);
-            if (parsed && typeof parsed === 'object') {
-                Object.assign(statusMap, parsed);
-            }
-        }
-    } catch (e) {
-        console.warn('Lỗi đọc local campaign statuses:', e);
-    }
-
-    // 2. Thử tải dữ liệu mới nhất từ Supabase Cloud
     try {
         const { data, error } = await supabase
             .from('store_voucher_campaign_statuses')
@@ -346,45 +315,28 @@ export async function fetchVoucherCampaignStatuses(): Promise<Record<string, Vou
         if (!error && Array.isArray(data)) {
             data.forEach((row: any) => {
                 const key = row.id || getCampaignStatusKey(row.campaign_name, row.denomination);
-                const localItem = statusMap[key];
-
-                // BẢO VỆ DỮ LIỆU: Chỉ ghi đè nếu Cloud trả về giá trị xác định (khác undefined và null)
-                // Tránh việc bảng Cloud chưa có cột is_hidden làm mất trạng thái ẩn đã lưu ở LocalStorage
-                const isHiddenVal = (row.is_hidden !== undefined && row.is_hidden !== null)
-                    ? Boolean(row.is_hidden)
-                    : Boolean(localItem?.is_hidden);
-
-                const isEndedVal = (row.is_ended !== undefined && row.is_ended !== null)
-                    ? Boolean(row.is_ended)
-                    : Boolean(localItem?.is_ended);
-
                 statusMap[key] = {
                     id: key,
                     campaign_name: row.campaign_name,
                     denomination: Number(row.denomination) || 0,
-                    is_ended: isEndedVal,
-                    is_hidden: isHiddenVal,
-                    updated_by: row.updated_by || localItem?.updated_by,
-                    updated_at: row.updated_at || localItem?.updated_at
+                    is_ended: Boolean(row.is_ended),
+                    is_hidden: Boolean(row.is_hidden),
+                    updated_by: row.updated_by,
+                    updated_at: row.updated_at
                 };
             });
-
-            // Ghi đè lại LocalStorage cache
-            try {
-                localStorage.setItem(CAMPAIGN_STATUS_STORAGE_KEY, JSON.stringify(statusMap));
-            } catch {
-                // ignore
-            }
+        } else if (error) {
+            console.warn('Lỗi đọc store_voucher_campaign_statuses từ Cloud:', error);
         }
     } catch (e) {
-        // Fallback local
+        console.warn('Lỗi kết nối Supabase Cloud khi đọc trạng thái chương trình:', e);
     }
 
     return statusMap;
 }
 
 /**
- * Lưu trạng thái chương trình / mệnh giá (Cloud-first upsert, sync LocalStorage cache)
+ * Lưu trạng thái chương trình / mệnh giá (100% Cloud Upsert trực tiếp vào Supabase)
  * isEnded = true: Hết mã hoàn toàn - Kết thúc chương trình
  * isEnded = false: Đang hoạt động - Còn nạp thêm
  */
@@ -396,75 +348,41 @@ export async function saveVoucherCampaignStatus(
 ): Promise<{ success: boolean; config?: VoucherCampaignStatusConfig; error?: string }> {
     const key = getCampaignStatusKey(campaignName, denomination);
 
-    let existingItem: VoucherCampaignStatusConfig | undefined;
-    let map: Record<string, VoucherCampaignStatusConfig> = {};
     try {
-        const raw = localStorage.getItem(CAMPAIGN_STATUS_STORAGE_KEY);
-        if (raw) {
-            map = JSON.parse(raw);
-            existingItem = map[key];
-        }
-    } catch {
-        // ignore
-    }
+        // Đọc cấu hình hiện có trên Cloud để bảo toàn trạng thái is_hidden
+        const { data: existing } = await supabase
+            .from('store_voucher_campaign_statuses')
+            .select('is_hidden')
+            .eq('id', key)
+            .maybeSingle();
 
-    const item: VoucherCampaignStatusConfig = {
-        id: key,
-        campaign_name: campaignName.trim(),
-        denomination: denomination || 0,
-        is_ended: isEnded,
-        is_hidden: existingItem?.is_hidden ?? false,
-        updated_by: updatedBy,
-        updated_at: new Date().toISOString()
-    };
+        const item: VoucherCampaignStatusConfig = {
+            id: key,
+            campaign_name: campaignName.trim(),
+            denomination: denomination || 0,
+            is_ended: isEnded,
+            is_hidden: existing?.is_hidden ?? false,
+            updated_by: updatedBy,
+            updated_at: new Date().toISOString()
+        };
 
-    // 1. Cập nhật LocalStorage cache ngay lập tức
-    try {
-        map[key] = item;
-        localStorage.setItem(CAMPAIGN_STATUS_STORAGE_KEY, JSON.stringify(map));
-    } catch (e) {
-        console.warn('Lỗi ghi local campaign status:', e);
-    }
-
-    // 2. Upsert lên Supabase Cloud
-    try {
         const { error } = await supabase
             .from('store_voucher_campaign_statuses')
-            .upsert([{
-                id: item.id,
-                campaign_name: item.campaign_name,
-                denomination: item.denomination,
-                is_ended: item.is_ended,
-                is_hidden: item.is_hidden,
-                updated_by: item.updated_by,
-                updated_at: item.updated_at
-            }], { onConflict: 'id' });
+            .upsert([item], { onConflict: 'id' });
 
         if (error) {
-            console.warn('Supabase store_voucher_campaign_statuses warning:', error.message);
-            // Fallback nếu schema cache chưa nhận diện cột is_hidden
-            if (error.message && error.message.includes('is_hidden')) {
-                await supabase
-                    .from('store_voucher_campaign_statuses')
-                    .upsert([{
-                        id: item.id,
-                        campaign_name: item.campaign_name,
-                        denomination: item.denomination,
-                        is_ended: item.is_ended,
-                        updated_by: item.updated_by,
-                        updated_at: item.updated_at
-                    }], { onConflict: 'id' });
-            }
+            console.warn('Lỗi upsert Supabase store_voucher_campaign_statuses:', error.message);
+            return { success: false, error: error.message };
         }
-    } catch (e) {
-        console.warn('Không thể kết nối Cloud để lưu campaign status:', e);
-    }
 
-    return { success: true, config: item };
+        return { success: true, config: item };
+    } catch (e: any) {
+        return { success: false, error: e.message || String(e) };
+    }
 }
 
 /**
- * Ẩn / Hiện chương trình áp dụng voucher (Cloud-first, sync LocalStorage cache)
+ * Ẩn / Hiện chương trình áp dụng voucher (100% Cloud-Direct Supabase)
  * isHidden = true: Ẩn chương trình (Lưu trữ lịch sử, không xóa mã, loại trừ khỏi cảnh báo mã hết hạn)
  * isHidden = false: Mở hiển thị lại chương trình
  */
@@ -476,80 +394,48 @@ export async function saveVoucherCampaignHiddenStatus(
     const cleanCamp = campaignName.trim();
     const key = cleanCamp;
 
-    let existingItem: VoucherCampaignStatusConfig | undefined;
-    let map: Record<string, VoucherCampaignStatusConfig> = {};
     try {
-        const raw = localStorage.getItem(CAMPAIGN_STATUS_STORAGE_KEY);
-        if (raw) {
-            map = JSON.parse(raw);
-            existingItem = map[key];
-        }
-    } catch {
-        // ignore
-    }
-
-    const item: VoucherCampaignStatusConfig = {
-        id: key,
-        campaign_name: cleanCamp,
-        denomination: existingItem?.denomination || 0,
-        is_ended: existingItem?.is_ended ?? true, // Khi ẩn thường mặc định là chương trình đã kết thúc
-        is_hidden: isHidden,
-        updated_by: updatedBy,
-        updated_at: new Date().toISOString()
-    };
-
-    // 1. Cập nhật LocalStorage cache ngay lập tức (cho cả chương trình và các mệnh giá con của nó)
-    try {
-        map[key] = item;
-        Object.keys(map).forEach(k => {
-            const entry = map[k];
-            if (entry && (entry.campaign_name || '').trim().toLowerCase() === cleanCamp.toLowerCase()) {
-                entry.is_hidden = isHidden;
-                if (isHidden) {
-                    entry.is_ended = true;
-                }
-            }
-        });
-        localStorage.setItem(CAMPAIGN_STATUS_STORAGE_KEY, JSON.stringify(map));
-    } catch (e) {
-        console.warn('Lỗi ghi local campaign hidden status:', e);
-    }
-
-    // 2. Upsert lên Supabase Cloud
-    try {
-        const { error } = await supabase
+        const { data: existing } = await supabase
             .from('store_voucher_campaign_statuses')
-            .upsert([{
-                id: item.id,
-                campaign_name: item.campaign_name,
-                denomination: item.denomination,
-                is_ended: item.is_ended,
-                is_hidden: item.is_hidden,
-                updated_by: item.updated_by,
-                updated_at: item.updated_at
-            }], { onConflict: 'id' });
+            .select('is_ended, denomination')
+            .eq('id', key)
+            .maybeSingle();
 
-        if (error) {
-            console.warn('Supabase store_voucher_campaign_statuses warning:', error.message);
-            // Fallback nếu schema cache chưa có cột is_hidden
-            if (error.message && error.message.includes('is_hidden')) {
-                await supabase
-                    .from('store_voucher_campaign_statuses')
-                    .upsert([{
-                        id: item.id,
-                        campaign_name: item.campaign_name,
-                        denomination: item.denomination,
-                        is_ended: item.is_ended,
-                        updated_by: item.updated_by,
-                        updated_at: item.updated_at
-                    }], { onConflict: 'id' });
-            }
+        const now = new Date().toISOString();
+        const rootItem: VoucherCampaignStatusConfig = {
+            id: key,
+            campaign_name: cleanCamp,
+            denomination: existing?.denomination || 0,
+            is_ended: existing?.is_ended ?? true,
+            is_hidden: isHidden,
+            updated_by: updatedBy,
+            updated_at: now
+        };
+
+        // 1. Cập nhật cấp chương trình
+        const { error: rootErr } = await supabase
+            .from('store_voucher_campaign_statuses')
+            .upsert([rootItem], { onConflict: 'id' });
+
+        if (rootErr) {
+            return { success: false, error: rootErr.message };
         }
-    } catch (e) {
-        console.warn('Không thể kết nối Cloud để lưu campaign hidden status:', e);
-    }
 
-    return { success: true, config: item };
+        // 2. Cập nhật tất cả mệnh giá con của chương trình này
+        await supabase
+            .from('store_voucher_campaign_statuses')
+            .update({
+                is_hidden: isHidden,
+                is_ended: isHidden ? true : existing?.is_ended ?? false,
+                updated_by: updatedBy,
+                updated_at: now
+            })
+            .ilike('campaign_name', cleanCamp);
+
+        return { success: true, config: rootItem };
+    } catch (e: any) {
+        return { success: false, error: e.message || String(e) };
+    }
 }
 
 /**
@@ -564,59 +450,50 @@ export function sortVouchersByDistributionRule(
 ): VoucherItem[] {
     return [...vouchers].sort((a, b) => {
         if (rule === 'FIFO') {
-            // FIFO: Ưu tiên mã có created_at sớm nhất (cũ nhất)
             const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
             const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
             if (timeA !== timeB) return timeA - timeB;
+            return (a.id || '').localeCompare(b.id || '');
+        }
 
-            // Nếu cùng thời điểm nạp, ưu tiên mã có hạn sử dụng gần hơn
-            if (a.expires_at && b.expires_at) {
-                const expCmp = a.expires_at.localeCompare(b.expires_at);
-                if (expCmp !== 0) return expCmp;
-            } else if (a.expires_at || b.expires_at) {
-                return (a.expires_at ? 0 : 1) - (b.expires_at ? 0 : 1);
-            }
-            return (a.code || '').localeCompare(b.code || '');
-        } else if (rule === 'FEFO') {
-            // FEFO: Ưu tiên mã có ngày hết hạn sớm nhất
-            if (a.expires_at && b.expires_at) {
-                const expCmp = a.expires_at.localeCompare(b.expires_at);
-                if (expCmp !== 0) return expCmp;
-            } else if (a.expires_at || b.expires_at) {
-                return (a.expires_at ? 0 : 1) - (b.expires_at ? 0 : 1);
-            }
-            // Nếu cùng hạn dùng, áp dụng FIFO
+        if (rule === 'FEFO') {
+            const expA = a.expires_at || '9999-12-31';
+            const expB = b.expires_at || '9999-12-31';
+            if (expA !== expB) return expA.localeCompare(expB);
+
             const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
             const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
             return timeA - timeB;
-        } else {
-            // LIFO: Mã mới nạp nhất lên đầu
+        }
+
+        if (rule === 'LIFO') {
             const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
             const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
-            return timeB - timeA;
+            if (timeA !== timeB) return timeB - timeA;
+            return (b.id || '').localeCompare(a.id || '');
         }
+
+        return 0;
     });
 }
 
-
 /**
- * Lấy ngày cuối cùng của tháng hiện tại dạng YYYY-MM-DD
- * Mặc định: ví dụ hôm nay thuộc tháng 10 -> ngày cuối là 31/10
+ * Lấy hạn sử dụng mặc định (ngày cuối cùng của tháng hiện tại)
  */
 export function getDefaultExpiryDate(): string {
     const now = new Date();
-    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-    const yyyy = lastDay.getFullYear();
-    const mm = String(lastDay.getMonth() + 1).padStart(2, '0');
-    const dd = String(lastDay.getDate()).padStart(2, '0');
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    const yyyy = endOfMonth.getFullYear();
+    const mm = String(endOfMonth.getMonth() + 1).padStart(2, '0');
+    const dd = String(endOfMonth.getDate()).padStart(2, '0');
     return `${yyyy}-${mm}-${dd}`;
 }
 
 export interface SupabaseStorageStatus {
-    isConnected: boolean;
     tableExists: boolean;
-    error?: string;
+    totalCloudRecords: number;
     cloudCount?: number;
+    error?: string;
 }
 
 /**
@@ -626,86 +503,63 @@ export async function checkSupabaseVoucherTable(): Promise<SupabaseStorageStatus
     try {
         const { count, error } = await supabase
             .from('store_vouchers')
-            .select('id', { count: 'exact', head: true });
+            .select('*', { count: 'exact', head: true });
 
         if (error) {
-            // Lỗi PGRST205: bảng chưa được tạo trong PostgreSQL
             if (error.code === 'PGRST205' || error.message?.includes('schema cache') || error.message?.includes('store_vouchers')) {
                 return {
-                    isConnected: true,
                     tableExists: false,
+                    totalCloudRecords: 0,
+                    cloudCount: 0,
                     error: 'Bảng "store_vouchers" chưa được tạo trên CLOUD.'
                 };
             }
             return {
-                isConnected: false,
                 tableExists: false,
+                totalCloudRecords: 0,
+                cloudCount: 0,
                 error: error.message
             };
         }
 
         return {
-            isConnected: true,
             tableExists: true,
-            cloudCount: count ?? 0
+            totalCloudRecords: count || 0,
+            cloudCount: count || 0
         };
-    } catch (err: any) {
+    } catch (e: any) {
         return {
-            isConnected: false,
             tableExists: false,
-            error: err.message || 'Lỗi kết nối Supabase'
+            totalCloudRecords: 0,
+            cloudCount: 0,
+            error: e.message || String(e)
         };
     }
 }
 
 /**
- * Đẩy toàn bộ danh sách mã từ LocalStorage lên Supabase Cloud
+ * Hàm tương thích ngược: Dọn dẹp cache LocalStorage cũ
  */
 export async function syncLocalVouchersToCloud(): Promise<{ success: boolean; syncedCount: number; error?: string }> {
-    try {
-        const local = getLocalVouchers();
-        if (local.length === 0) {
-            return { success: true, syncedCount: 0 };
-        }
-
-        const { error } = await supabase.from('store_vouchers').upsert(local, { onConflict: 'id' });
-        if (error) {
-            return { success: false, syncedCount: 0, error: error.message };
-        }
-
-        return { success: true, syncedCount: local.length };
-    } catch (e: any) {
-        return { success: false, syncedCount: 0, error: e.message || String(e) };
-    }
+    cleanupLegacyLocalStorageVouchers();
+    return { success: true, syncedCount: 0 };
 }
 
 /**
- * Đọc toàn bộ danh sách mã từ LocalStorage
+ * Hàm tương thích ngược (Deprecated - Không còn sử dụng LocalStorage)
  */
 export function getLocalVouchers(): VoucherItem[] {
-    try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (!raw) return [];
-        return JSON.parse(raw);
-    } catch {
-        return [];
-    }
+    cleanupLegacyLocalStorageVouchers();
+    return [];
 }
 
 /**
- * Lưu danh sách mã vào LocalStorage
+ * Hàm tương thích ngược (Deprecated - Không còn sử dụng LocalStorage)
  */
-export function setLocalVouchers(list: VoucherItem[]): void {
-    try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
-    } catch (e) {
-        console.warn('Lỗi ghi LocalStorage voucher:', e);
-    }
+export function setLocalVouchers(_list: VoucherItem[]): void {
+    cleanupLegacyLocalStorageVouchers();
 }
 
-/**
- * Kiểm tra đối chiếu tên siêu thị / cụm siêu thị cho voucher
- * Hỗ trợ:
 /**
  * Trích xuất địa chỉ vật lý từ tên siêu thị dạng "[MÃ] - [BRAND] - [ĐỊA CHỈ]"
  */
@@ -787,7 +641,6 @@ export function isStoreOrClusterMatch(
     }
 
     // 6. Xử lý các mã cũ đã lỡ nạp chuỗi "Toàn Cụm Siêu Thị" / "Toàn Cụm":
-    // CHỈ cho phép hiển thị nếu người tạo khớp với Quản lý của cụm này hoặc có nhắc đến shop trong note
     const isOldClusterString = (
         vStore === 'Toàn Cụm Siêu Thị' ||
         vStore === 'Toàn Cụm' ||
@@ -795,11 +648,9 @@ export function isStoreOrClusterMatch(
         vStore.toLowerCase().includes('toàn cụm')
     );
     if (isOldClusterString) {
-        // Khớp theo người nạp (Quản lý tạo mã cho cụm của mình)
         if (currentUserDisplayName && voucherCreatedBy && currentUserDisplayName.trim().toLowerCase() === voucherCreatedBy.trim().toLowerCase()) {
             return true;
         }
-        // Khớp nếu note chứa tên hoặc địa chỉ siêu thị trong cụm
         if (voucherNote) {
             const noteLower = voucherNote.toLowerCase();
             if (clusterStores.some(s => noteLower.includes(s.toLowerCase()) || (extractStoreAddress(s) && noteLower.includes(extractStoreAddress(s))))) {
@@ -837,7 +688,43 @@ export function isVoucherInUserCluster(
 }
 
 /**
- * Tải danh sách voucher theo siêu thị / cụm siêu thị (Đồng bộ Cloud Supabase + LocalStorage)
+ * Helper tải trọn vẹn toàn bộ bản ghi voucher từ Cloud (phân trang an toàn)
+ */
+async function fetchAllCloudVouchers(): Promise<VoucherItem[]> {
+    const CHUNK_SIZE = 1000;
+    let from = 0;
+    const allRecords: VoucherItem[] = [];
+    let hasMore = true;
+
+    while (hasMore) {
+        const { data, error } = await supabase
+            .from('store_vouchers')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .range(from, from + CHUNK_SIZE - 1);
+
+        if (error) {
+            console.error('Lỗi truy vấn store_vouchers từ Supabase:', error);
+            throw error;
+        }
+
+        if (data && data.length > 0) {
+            allRecords.push(...(data as VoucherItem[]));
+            if (data.length < CHUNK_SIZE) {
+                hasMore = false;
+            } else {
+                from += CHUNK_SIZE;
+            }
+        } else {
+            hasMore = false;
+        }
+    }
+
+    return allRecords;
+}
+
+/**
+ * Tải danh sách voucher theo siêu thị / cụm siêu thị (100% Cloud Supabase)
  * Phân lập hoàn toàn quyền riêng tư giữa các Cụm khác nhau
  */
 export async function fetchStoreVouchers(
@@ -846,50 +733,30 @@ export async function fetchStoreVouchers(
     currentUserDisplayName?: string,
     isAdmin?: boolean
 ): Promise<VoucherItem[]> {
-    let localList = getLocalVouchers();
+    // Tự động dọn dẹp cache LocalStorage cũ
+    cleanupLegacyLocalStorageVouchers();
 
-    // Đồng bộ từ Supabase nếu có kết nối
+    let cloudList: VoucherItem[] = [];
     try {
-        const { data, error } = await supabase
-            .from('store_vouchers')
-            .select('*')
-            .order('created_at', { ascending: false });
-
-        if (!error && data && Array.isArray(data)) {
-            const cloudMap = new Map<string, VoucherItem>();
-            data.forEach((item: any) => {
-                cloudMap.set(item.id, item as VoucherItem);
-            });
-
-            // Hợp nhất dữ liệu local chưa sync
-            localList.forEach(item => {
-                if (!cloudMap.has(item.id)) {
-                    cloudMap.set(item.id, item);
-                }
-            });
-
-            const merged = Array.from(cloudMap.values());
-            setLocalVouchers(merged);
-            localList = merged;
-        }
+        cloudList = await fetchAllCloudVouchers();
     } catch (e) {
-        // Fallback local
+        console.warn('Lỗi kết nối Supabase Cloud khi tải voucher:', e);
+        return [];
     }
 
     // Nếu là Admin và chọn xem toàn bộ ('all'): Cho phép xem tất cả
     if (isAdmin && (!storeName || storeName === 'all')) {
-        return localList;
+        return cloudList;
     }
 
-    // Với mọi trường hợp khác (Quản lý Cụm, Nhân viên, hoặc Admin chọn lọc siêu thị):
-    // Luôn lọc nghiêm ngặt theo phạm vi Cụm của người dùng
-    return localList.filter(v =>
+    // Với mọi trường hợp khác: Luôn lọc nghiêm ngặt theo phạm vi Cụm của người dùng
+    return cloudList.filter(v =>
         isVoucherInUserCluster(v, storeName, accessibleStores, currentUserDisplayName, isAdmin)
     );
 }
 
 /**
- * Nạp thêm mã voucher vào kho (Hỗ trợ nhiều dòng, lọc trùng lặp, lưu Cloud + Local)
+ * Nạp thêm mã voucher vào kho (Kiểm tra trùng lặp và lưu trữ trực tiếp 100% lên Cloud)
  */
 export async function importVouchers(params: {
     store_name: string;
@@ -910,9 +777,25 @@ export async function importVouchers(params: {
     error?: string;
 }> {
     try {
-        const all = getLocalVouchers();
-        // Kiểm tra trùng mã trên toàn hệ thống để không cấp trùng mã
-        const existingCodes = new Set(all.map(v => v.code.toUpperCase()));
+        cleanupLegacyLocalStorageVouchers();
+
+        // 1. Kiểm tra trùng mã trực tiếp từ Cloud để không bao giờ nạp trùng mã
+        const { data: codeRows, error: codeErr } = await supabase
+            .from('store_vouchers')
+            .select('code');
+
+        if (codeErr) {
+            return {
+                success: false,
+                addedCount: 0,
+                duplicateCount: 0,
+                error: `Không thể kết nối Cloud để kiểm tra mã trùng lặp: ${codeErr.message}`
+            };
+        }
+
+        const existingCodes = new Set(
+            (codeRows || []).map((r: any) => String(r.code || '').trim().toUpperCase())
+        );
 
         const newItems: VoucherItem[] = [];
         let duplicateCount = 0;
@@ -951,27 +834,20 @@ export async function importVouchers(params: {
             newItems.push(item);
         }
 
-        let cloudSaved = false;
-        let cloudWarning: string | undefined;
-
+        // 2. Lưu trực tiếp lên Supabase Cloud theo batch 100 mã
         if (newItems.length > 0) {
-            const updated = [...newItems, ...all];
-            setLocalVouchers(updated);
-
-            // Đồng bộ trực tiếp lên Supabase Cloud
-            try {
-                const { error: cloudErr } = await supabase.from('store_vouchers').upsert(newItems, { onConflict: 'id' });
-                if (!cloudErr) {
-                    cloudSaved = true;
-                } else {
-                    if (cloudErr.code === 'PGRST205' || cloudErr.message?.includes('store_vouchers')) {
-                        cloudWarning = 'Bảng "store_vouchers" chưa được tạo trên CLOUD! Dữ liệu đã lưu tạm ở máy này.';
-                    } else {
-                        cloudWarning = `Chưa đồng bộ Cloud: ${cloudErr.message}`;
-                    }
+            const CHUNK_SIZE = 100;
+            for (let i = 0; i < newItems.length; i += CHUNK_SIZE) {
+                const chunk = newItems.slice(i, i + CHUNK_SIZE);
+                const { error: insertErr } = await supabase.from('store_vouchers').insert(chunk);
+                if (insertErr) {
+                    return {
+                        success: false,
+                        addedCount: 0,
+                        duplicateCount,
+                        error: `Lỗi khi lưu mã vào Supabase Cloud: ${insertErr.message}`
+                    };
                 }
-            } catch (cloudErr: any) {
-                cloudWarning = `Không thể kết nối CLOUD: ${cloudErr.message}`;
             }
         }
 
@@ -979,8 +855,7 @@ export async function importVouchers(params: {
             success: true,
             addedCount: newItems.length,
             duplicateCount,
-            cloudSaved,
-            cloudWarning
+            cloudSaved: true
         };
     } catch (e: any) {
         return { success: false, addedCount: 0, duplicateCount: 0, error: e.message || String(e) };
@@ -988,55 +863,68 @@ export async function importVouchers(params: {
 }
 
 /**
- * Cấp mã voucher cho nhân viên (Ràng buộc mã đơn hàng, atomic select)
+ * Cấp mã voucher cho nhân viên (100% Cloud-Only với Cơ Chế Chống Tranh Chấp Atomic Update)
  * Nhân viên CHỈ được lấy mã trong phạm vi Cụm siêu thị của mình!
  */
 export async function claimVoucher(
     req: VoucherClaimRequest
 ): Promise<{ success: boolean; voucher?: VoucherItem; error?: string }> {
     try {
-        // Đồng bộ dữ liệu mới nhất từ Supabase Cloud để chống tranh chấp mã
-        try {
-            const { data: cloudData, error: cloudErr } = await supabase
-                .from('store_vouchers')
-                .select('*')
-                .order('created_at', { ascending: true }); // Thứ tự nạp tăng dần (FIFO)
+        cleanupLegacyLocalStorageVouchers();
 
-            if (!cloudErr && cloudData && Array.isArray(cloudData)) {
-                setLocalVouchers(cloudData as VoucherItem[]);
-            }
-        } catch (e) {
-            console.warn('Fallback local khi claim voucher:', e);
-        }
-
-        // Lấy cấu hình quy tắc cấp phát hiện tại (mặc định FIFO)
+        // 1. Kiểm tra cấu hình quy tắc phân phối hiện tại từ Cloud (FIFO / FEFO / LIFO)
         const config = await getVoucherDistributionConfig();
         const rule = config.rule_type || 'FIFO';
 
-        const all = getLocalVouchers();
+        // 2. Kiểm tra xem chương trình hoặc mức mệnh giá đã chốt kết thúc hay chưa
+        const statuses = await fetchVoucherCampaignStatuses();
+        if (isCampaignOrDenomEnded(statuses, req.campaign_name, req.denomination)) {
+            return {
+                success: false,
+                error: `Chương trình "${req.campaign_name}" (mệnh giá ${req.denomination.toLocaleString('vi-VN')}đ) đã hết mã hoàn toàn và chính thức kết thúc chương trình!`
+            };
+        }
+
+        // 3. Tải các mã khả dụng trực tiếp từ Supabase Cloud
         const todayStr = new Date().toISOString().slice(0, 10);
-        const isNotExpired = (v: VoucherItem) => !v.expires_at || v.expires_at >= todayStr;
+        const { data: availableRows, error: fetchErr } = await supabase
+            .from('store_vouchers')
+            .select('*')
+            .eq('status', 'AVAILABLE')
+            .eq('denomination', req.denomination)
+            .ilike('campaign_name', req.campaign_name.trim());
+
+        if (fetchErr) {
+            return {
+                success: false,
+                error: `Lỗi kết nối Cloud khi tìm kiếm mã voucher: ${fetchErr.message}`
+            };
+        }
+
+        const allAvailable = ((availableRows || []) as VoucherItem[]).filter(v =>
+            !v.expires_at || v.expires_at >= todayStr
+        );
+
+        // 4. Lọc ứng viên theo Tier
         const matchesCampaignAndDenom = (v: VoucherItem) =>
             v.campaign_name.trim().toLowerCase() === req.campaign_name.trim().toLowerCase() &&
-            Number(v.denomination) === Number(req.denomination) &&
-            v.status === 'AVAILABLE' &&
-            isNotExpired(v);
+            Number(v.denomination) === Number(req.denomination);
 
-        // 1. Tìm các ứng viên riêng của siêu thị nhân viên đang làm việc (Tier 1)
-        const tier1Candidates = all.filter(v =>
+        // Tier 1: Của chính siêu thị nhân viên
+        const tier1Candidates = allAvailable.filter(v =>
             isStoreMatch(v.store_name, req.store_name) && matchesCampaignAndDenom(v)
         );
 
-        // 2. Tìm trong danh sách siêu thị được phân quyền của Cụm (Tier 2)
+        // Tier 2: Danh sách siêu thị thuộc phân quyền Cụm
         const tier2Candidates = (!tier1Candidates.length && req.accessible_stores && req.accessible_stores.length > 0)
-            ? all.filter(v =>
+            ? allAvailable.filter(v =>
                 req.accessible_stores!.some(s => isStoreMatch(v.store_name, s)) && matchesCampaignAndDenom(v)
             )
             : [];
 
-        // 3. Tìm theo Cụm chung (Tier 3)
+        // Tier 3: Cụm dùng chung
         const tier3Candidates = (!tier1Candidates.length && !tier2Candidates.length)
-            ? all.filter(v =>
+            ? allAvailable.filter(v =>
                 isStoreOrClusterMatch(
                     v.store_name,
                     req.store_name,
@@ -1049,19 +937,9 @@ export async function claimVoucher(
             )
             : [];
 
-        // Chọn nhóm ứng viên hợp lệ ưu tiên
         const candidates = tier1Candidates.length > 0
             ? tier1Candidates
             : (tier2Candidates.length > 0 ? tier2Candidates : tier3Candidates);
-
-        // 0. Kiểm tra xem chương trình hoặc mức mệnh giá đã chốt hết mã hoàn toàn hay chưa
-        const statuses = await fetchVoucherCampaignStatuses();
-        if (isCampaignOrDenomEnded(statuses, req.campaign_name, req.denomination)) {
-            return {
-                success: false,
-                error: `Chương trình "${req.campaign_name}" (mệnh giá ${req.denomination.toLocaleString('vi-VN')}đ) đã hết mã hoàn toàn và chính thức kết thúc chương trình!`
-            };
-        }
 
         if (candidates.length === 0) {
             return {
@@ -1070,104 +948,68 @@ export async function claimVoucher(
             };
         }
 
-        // Áp dụng quy tắc cấp phát (Mặc định: FIFO - Nhập trước cấp trước)
+        // 5. Sắp xếp theo quy tắc cấp phát (Mặc định: FIFO - Nhập trước cấp trước)
         const sortedCandidates = sortVouchersByDistributionRule(candidates, rule);
-        const target = sortedCandidates[0];
-        const index = all.findIndex(v => v.id === target.id);
 
-        if (index === -1) {
-            return {
-                success: false,
-                error: 'Không tìm thấy vị trí mã voucher khả dụng trong kho!'
-            };
-        }
-
+        // 6. ATOMIC CLAIM VỚI CHỐNG TRANH CHẤP ĐA THIẾT BỊ (Concurrency Protection)
+        // Duyệt lần lượt ứng viên và cập nhật với điều kiện status = 'AVAILABLE'
         const now = new Date().toISOString();
-        const updatedVoucher: VoucherItem = {
-            ...target,
-            status: 'CLAIMED',
-            claimed_at: now,
-            claimed_by_id: req.employee_id.trim(),
-            claimed_by_name: req.employee_name.trim(),
-            claimed_by_store: req.store_name.trim(), // Lưu chính xác tên siêu thị của user thao tác
-            order_id: req.order_id.trim().toUpperCase()
-        };
+        for (const target of sortedCandidates) {
+            const { data: updatedVoucher, error: updateErr } = await supabase
+                .from('store_vouchers')
+                .update({
+                    status: 'CLAIMED',
+                    claimed_at: now,
+                    claimed_by_id: req.employee_id.trim(),
+                    claimed_by_name: req.employee_name.trim(),
+                    claimed_by_store: req.store_name.trim(),
+                    order_id: req.order_id.trim().toUpperCase()
+                })
+                .eq('id', target.id)
+                .eq('status', 'AVAILABLE') // CHỐT CHẶN BẢO VỆ: Chỉ cấp nếu mã vẫn đang AVAILABLE trên Cloud
+                .select()
+                .maybeSingle();
 
-        all[index] = updatedVoucher;
-        setLocalVouchers(all);
-
-        // Đồng bộ trực tiếp lên Supabase Cloud
-        try {
-            await supabase.from('store_vouchers').upsert([updatedVoucher], { onConflict: 'id' });
-        } catch (e) {
-            console.warn('Không thể sync ngay với Cloud:', e);
+            if (!updateErr && updatedVoucher) {
+                return { success: true, voucher: updatedVoucher as VoucherItem };
+            }
+            // Nếu updateErr hoặc updatedVoucher là null, tức mã vừa bị thiết bị khác lấy mất -> Tự động thử mã kế tiếp
         }
 
-        return { success: true, voucher: updatedVoucher };
+        return {
+            success: false,
+            error: 'Mã voucher vừa được nhận bởi nhân viên khác ngay trước đó! Vui lòng bấm Nhận lại mã để lấy mã kế tiếp.'
+        };
     } catch (e: any) {
         return { success: false, error: e.message || 'Lỗi khi cấp mã voucher' };
     }
 }
 
 /**
- * Reset mã đã lấy nhưng chưa dùng quay trở về kho chờ (AVAILABLE)
+ * Reset mã đã lấy nhưng chưa dùng quay trở về kho chờ (AVAILABLE) trực tiếp trên Cloud
  */
 export async function resetClaimedVoucher(
     code: string,
     performedBy: string,
-    storeName?: string,
-    accessibleStores?: string[]
+    _storeName?: string,
+    _accessibleStores?: string[]
 ): Promise<{ success: boolean; voucher?: VoucherItem; error?: string }> {
     try {
-        let all = getLocalVouchers();
+        cleanupLegacyLocalStorageVouchers();
         const cleanCode = code.trim().toUpperCase();
 
-        // Đồng bộ realtime bản ghi mới nhất từ Supabase Cloud nếu có kết nối
-        try {
-            const { data: cloudRow } = await supabase
-                .from('store_vouchers')
-                .select('*')
-                .eq('code', cleanCode)
-                .maybeSingle();
+        // 1. Tải bản ghi mới nhất từ Cloud
+        const { data: target, error: findErr } = await supabase
+            .from('store_vouchers')
+            .select('*')
+            .eq('code', cleanCode)
+            .maybeSingle();
 
-            if (cloudRow) {
-                const cIdx = all.findIndex(v => v.id === cloudRow.id || v.code.toUpperCase() === cleanCode);
-                if (cIdx >= 0) {
-                    all[cIdx] = cloudRow;
-                } else {
-                    all.push(cloudRow);
-                }
-                setLocalVouchers(all);
-            }
-        } catch (e) {
-            console.warn('Không thể kiểm tra cloud trước khi reset:', e);
+        if (findErr || !target) {
+            return { success: false, error: `Không tìm thấy mã voucher "${cleanCode}" trên Cloud!` };
         }
 
-        // 1. Tìm theo mã và siêu thị/cụm
-        let index = all.findIndex(v => {
-            const matchCode = v.code.toUpperCase() === cleanCode;
-            if (!matchCode) return false;
-            if (storeName && storeName !== 'all') {
-                return (
-                    isStoreOrClusterMatch(v.store_name, storeName, accessibleStores) ||
-                    (v.claimed_by_store && isStoreOrClusterMatch(v.claimed_by_store, storeName, accessibleStores))
-                );
-            }
-            return true;
-        });
-
-        // 2. Fallback tìm theo mã chính xác nếu không lọc trúng storeName
-        if (index === -1) {
-            index = all.findIndex(v => v.code.toUpperCase() === cleanCode);
-        }
-
-        if (index === -1) {
-            return { success: false, error: `Không tìm thấy mã voucher "${cleanCode}" trong hệ thống!` };
-        }
-
-        const target = all[index];
-
-        // Chặn không cho trả lại mã đã sử dụng hoàn tất trong đơn hàng
+        // 2. Chặn không cho trả lại mã đã sử dụng hoàn tất trong đơn hàng
         if (target.status === 'USED') {
             return {
                 success: false,
@@ -1175,84 +1017,69 @@ export async function resetClaimedVoucher(
             };
         }
 
-        // Nếu mã đã ở trạng thái AVAILABLE sẵn rồi
+        // 3. Nếu mã đã ở trạng thái AVAILABLE sẵn rồi
         if (target.status === 'AVAILABLE') {
             return {
                 success: true,
-                voucher: target
+                voucher: target as VoucherItem
             };
         }
 
         const prevClaimed = target.claimed_by_name ? ` (NV: ${target.claimed_by_name} - ${target.claimed_by_id || ''} [${target.claimed_by_store || target.store_name}])` : '';
         const prevOrder = target.order_id ? ` (ĐH: ${target.order_id})` : '';
         const resetNote = `[Trả lại kho lúc ${new Date().toLocaleTimeString('vi-VN')} ${new Date().toLocaleDateString('vi-VN')} bởi ${performedBy}] Trước đó: ${target.status}${prevClaimed}${prevOrder}`;
+        const finalNote = target.note ? `${target.note} | ${resetNote}` : resetNote;
 
-        const updated: VoucherItem = {
-            ...target,
-            status: 'AVAILABLE',
-            claimed_at: undefined,
-            claimed_by_id: undefined,
-            claimed_by_name: undefined,
-            claimed_by_store: undefined,
-            order_id: undefined,
-            used_at: undefined,
-            note: target.note ? `${target.note} | ${resetNote}` : resetNote
-        };
-
-        all[index] = updated;
-        setLocalVouchers(all);
-
-        // Đồng bộ lên Supabase Cloud: Gán các trường claimed/order thành null để Postgres DB xóa sạch dữ liệu cũ
-        try {
-            const dbPayload = {
-                ...updated,
+        // 4. Cập nhật trực tiếp trên Cloud
+        const { data: updated, error: resetErr } = await supabase
+            .from('store_vouchers')
+            .update({
+                status: 'AVAILABLE',
                 claimed_at: null,
                 claimed_by_id: null,
                 claimed_by_name: null,
                 claimed_by_store: null,
                 order_id: null,
-                used_at: null
-            };
-            await supabase.from('store_vouchers').upsert([dbPayload], { onConflict: 'id' });
-        } catch (e) {
-            console.warn('Sync cloud error on reset:', e);
+                used_at: null,
+                note: finalNote
+            })
+            .eq('id', target.id)
+            .select()
+            .maybeSingle();
+
+        if (resetErr || !updated) {
+            return { success: false, error: resetErr?.message || 'Lỗi khi reset voucher trên Cloud' };
         }
 
-        return { success: true, voucher: updated };
+        return { success: true, voucher: updated as VoucherItem };
     } catch (e: any) {
         return { success: false, error: e.message || 'Lỗi khi reset voucher' };
     }
 }
 
 /**
- * Đánh dấu mã đã sử dụng thành công trên hóa đơn thực tế và cập nhật mã đơn hàng mới nếu có
+ * Đánh dấu mã đã sử dụng thành công trên hóa đơn thực tế và cập nhật mã đơn hàng mới nếu có trực tiếp trên Cloud
  */
 export async function markVoucherUsed(code: string, newOrderId?: string): Promise<{ success: boolean; error?: string }> {
     try {
-        const all = getLocalVouchers();
+        cleanupLegacyLocalStorageVouchers();
         const cleanCode = code.trim().toUpperCase();
-        const index = all.findIndex(v => v.code.toUpperCase() === cleanCode);
 
-        if (index === -1) {
-            return { success: false, error: 'Không tìm thấy mã voucher' };
-        }
-
-        const finalOrderId = newOrderId !== undefined
-            ? (newOrderId.trim().toUpperCase() || undefined)
-            : all[index].order_id;
-
-        all[index] = {
-            ...all[index],
+        const payload: any = {
             status: 'USED',
-            order_id: finalOrderId,
             used_at: new Date().toISOString()
         };
-        setLocalVouchers(all);
+        if (newOrderId !== undefined) {
+            payload.order_id = newOrderId.trim().toUpperCase() || null;
+        }
 
-        try {
-            await supabase.from('store_vouchers').upsert([all[index]], { onConflict: 'id' });
-        } catch {
-            // silent
+        const { error } = await supabase
+            .from('store_vouchers')
+            .update(payload)
+            .eq('code', cleanCode);
+
+        if (error) {
+            return { success: false, error: error.message };
         }
         return { success: true };
     } catch (e: any) {
@@ -1261,7 +1088,7 @@ export async function markVoucherUsed(code: string, newOrderId?: string): Promis
 }
 
 /**
- * Xóa một mã voucher khỏi hệ thống (Local + Supabase Cloud)
+ * Xóa một mã voucher khỏi hệ thống trực tiếp trên Cloud
  */
 export async function deleteVoucher(
     idOrCode: string,
@@ -1273,15 +1100,21 @@ export async function deleteVoucher(
     }
 ): Promise<{ success: boolean; error?: string }> {
     try {
-        const all = getLocalVouchers();
+        cleanupLegacyLocalStorageVouchers();
         const clean = idOrCode.trim();
-        const target = all.find(v => v.id === clean || v.code.toUpperCase() === clean.toUpperCase());
 
-        if (!target) {
-            return { success: false, error: 'Không tìm thấy mã voucher để xóa' };
+        // 1. Tìm voucher từ Cloud
+        const { data: target, error: findErr } = await supabase
+            .from('store_vouchers')
+            .select('*')
+            .or(`id.eq.${clean},code.ilike.${clean}`)
+            .maybeSingle();
+
+        if (findErr || !target) {
+            return { success: false, error: 'Không tìm thấy mã voucher để xóa trên Cloud' };
         }
 
-        // Chặn người dùng xóa mã thuộc Cụm khác nếu không phải Admin
+        // 2. Chặn người dùng xóa mã thuộc Cụm khác nếu không phải Admin
         if (clusterContext && !clusterContext.isAdmin) {
             const isOwned = isVoucherInUserCluster(
                 target,
@@ -1295,14 +1128,14 @@ export async function deleteVoucher(
             }
         }
 
-        const remaining = all.filter(v => v.id !== target.id);
-        setLocalVouchers(remaining);
+        // 3. Xóa trên Supabase Cloud
+        const { error: delErr } = await supabase
+            .from('store_vouchers')
+            .delete()
+            .eq('id', target.id);
 
-        // Xóa trên Supabase Cloud
-        try {
-            await supabase.from('store_vouchers').delete().eq('id', target.id);
-        } catch (e) {
-            console.warn('Lỗi xóa voucher trên Supabase:', e);
+        if (delErr) {
+            return { success: false, error: delErr.message };
         }
 
         return { success: true };
@@ -1312,7 +1145,7 @@ export async function deleteVoucher(
 }
 
 /**
- * Xóa nhiều mã voucher theo danh sách id hoặc mã code (Batch delete)
+ * Xóa nhiều mã voucher theo danh sách id hoặc mã code (Batch delete trực tiếp trên Cloud)
  */
 export async function deleteVouchersBatch(
     idsOrCodes: string[],
@@ -1324,15 +1157,16 @@ export async function deleteVouchersBatch(
     }
 ): Promise<{ success: boolean; deletedCount: number; error?: string }> {
     try {
+        cleanupLegacyLocalStorageVouchers();
         if (!idsOrCodes || idsOrCodes.length === 0) {
             return { success: true, deletedCount: 0 };
         }
 
         const cleanSet = new Set(idsOrCodes.map(s => s.trim().toUpperCase()));
         const idSet = new Set(idsOrCodes.map(s => s.trim()));
-        const all = getLocalVouchers();
+        const allCloud = await fetchAllCloudVouchers();
 
-        let targets = all.filter(v => idSet.has(v.id) || cleanSet.has(v.code.toUpperCase()));
+        let targets = allCloud.filter(v => idSet.has(v.id) || cleanSet.has(v.code.toUpperCase()));
         if (targets.length === 0) {
             return { success: true, deletedCount: 0 };
         }
@@ -1354,20 +1188,15 @@ export async function deleteVouchersBatch(
         }
 
         const targetIds = targets.map(t => t.id);
-        const targetIdSet = new Set(targetIds);
 
-        const remaining = all.filter(v => !targetIdSet.has(v.id));
-        setLocalVouchers(remaining);
-
-        // Xóa trên Supabase Cloud theo chunk
-        try {
-            const CHUNK_SIZE = 100;
-            for (let i = 0; i < targetIds.length; i += CHUNK_SIZE) {
-                const chunk = targetIds.slice(i, i + CHUNK_SIZE);
-                await supabase.from('store_vouchers').delete().in('id', chunk);
+        // Xóa trên Supabase Cloud theo chunk 100 mã
+        const CHUNK_SIZE = 100;
+        for (let i = 0; i < targetIds.length; i += CHUNK_SIZE) {
+            const chunk = targetIds.slice(i, i + CHUNK_SIZE);
+            const { error: delErr } = await supabase.from('store_vouchers').delete().in('id', chunk);
+            if (delErr) {
+                return { success: false, deletedCount: 0, error: delErr.message };
             }
-        } catch (e) {
-            console.warn('Lỗi xóa batch trên Supabase:', e);
         }
 
         return { success: true, deletedCount: targets.length };
@@ -1377,7 +1206,7 @@ export async function deleteVouchersBatch(
 }
 
 /**
- * Xóa vĩnh viễn một hoặc nhiều chương trình PMH đã kết thúc / hết hạn khỏi kho (Local + Supabase Cloud)
+ * Xóa vĩnh viễn một hoặc nhiều chương trình PMH đã kết thúc / hết hạn khỏi kho trực tiếp trên Cloud
  * - Xóa tất cả các mã voucher thuộc danh sách chương trình
  * - Xóa cấu hình trạng thái của các chương trình trong store_voucher_campaign_statuses
  */
@@ -1397,6 +1226,7 @@ export async function deleteCampaignsBatch(
     error?: string;
 }> {
     try {
+        cleanupLegacyLocalStorageVouchers();
         if (!campaignNames || campaignNames.length === 0) {
             return { success: true, deletedVoucherCount: 0, deletedCampaignCount: 0, totalValue: 0 };
         }
@@ -1408,8 +1238,8 @@ export async function deleteCampaignsBatch(
 
         const nameSetLower = new Set(cleanNames.map(c => c.toLowerCase()));
 
-        // 1. Quét voucher trong LocalStorage
-        const allVouchers = getLocalVouchers();
+        // 1. Quét voucher trên Cloud
+        const allVouchers = await fetchAllCloudVouchers();
         let targets = allVouchers.filter(v => nameSetLower.has((v.campaign_name || '').trim().toLowerCase()));
 
         // Lọc theo cụm / siêu thị nếu không phải Admin
@@ -1427,13 +1257,8 @@ export async function deleteCampaignsBatch(
 
         const totalValue = targets.reduce((sum, v) => sum + (Number(v.denomination) || 0), 0);
         const targetIds = targets.map(v => v.id);
-        const targetIdSet = new Set(targetIds);
 
-        // 2. Cập nhật LocalStorage cho voucher
-        const remainingVouchers = allVouchers.filter(v => !targetIdSet.has(v.id));
-        setLocalVouchers(remainingVouchers);
-
-        // 3. Xóa các mã voucher trên Supabase Cloud theo chunk
+        // 2. Xóa các mã voucher trên Supabase Cloud theo chunk
         if (targetIds.length > 0) {
             const CHUNK_SIZE = 100;
             for (let i = 0; i < targetIds.length; i += CHUNK_SIZE) {
@@ -1446,37 +1271,16 @@ export async function deleteCampaignsBatch(
             }
         }
 
-        // 4. Dọn dẹp trạng thái chương trình trong store_voucher_campaign_statuses (Local + Supabase)
-        try {
-            const rawStatus = localStorage.getItem(CAMPAIGN_STATUS_STORAGE_KEY);
-            if (rawStatus) {
-                const statusMap: Record<string, VoucherCampaignStatusConfig> = JSON.parse(rawStatus);
-                let changed = false;
-                Object.keys(statusMap).forEach(key => {
-                    const item = statusMap[key];
-                    if (item && nameSetLower.has((item.campaign_name || '').trim().toLowerCase())) {
-                        delete statusMap[key];
-                        changed = true;
-                    }
-                });
-                if (changed) {
-                    localStorage.setItem(CAMPAIGN_STATUS_STORAGE_KEY, JSON.stringify(statusMap));
-                }
-            }
-        } catch (e) {
-            console.warn('Lỗi dọn local campaign statuses:', e);
-        }
-
-        // Xóa campaign statuses trên Supabase Cloud
-        try {
-            for (const campName of cleanNames) {
+        // 3. Xóa trạng thái chương trình trong store_voucher_campaign_statuses trên Supabase
+        for (const campName of cleanNames) {
+            try {
                 await supabase
                     .from('store_voucher_campaign_statuses')
                     .delete()
                     .ilike('campaign_name', campName);
+            } catch (err) {
+                console.warn('Lỗi xóa campaign status trên Supabase:', err);
             }
-        } catch (err) {
-            console.warn('Lỗi xóa campaign status trên Supabase:', err);
         }
 
         return {
@@ -1518,9 +1322,9 @@ export async function deleteCampaignVouchers(
 }
 
 /**
- * Đổi tên / Chỉnh sửa tên chương trình voucher trên toàn hệ thống (Local + Supabase Cloud)
+ * Đổi tên / Chỉnh sửa tên chương trình voucher trên toàn hệ thống trực tiếp trên Cloud
  * - Cập nhật campaign_name của toàn bộ mã voucher thuộc chương trình này
- * - Di chuyển cấu hình trạng thái chương trình (kết thúc/ẩn) sang tên mới trong store_voucher_campaign_statuses
+ * - Di chuyển cấu hình trạng thái chương trình sang tên mới trong store_voucher_campaign_statuses
  */
 export async function renameVoucherCampaign(
     oldCampaignName: string,
@@ -1537,6 +1341,7 @@ export async function renameVoucherCampaign(
     error?: string;
 }> {
     try {
+        cleanupLegacyLocalStorageVouchers();
         const cleanOld = (oldCampaignName || '').trim();
         const cleanNew = (newCampaignName || '').trim();
 
@@ -1552,8 +1357,8 @@ export async function renameVoucherCampaign(
 
         const oldNameLower = cleanOld.toLowerCase();
 
-        // 1. Quét voucher trong LocalStorage
-        const allVouchers = getLocalVouchers();
+        // 1. Quét voucher trên Cloud
+        const allVouchers = await fetchAllCloudVouchers();
         let targets = allVouchers.filter(v => (v.campaign_name || '').trim().toLowerCase() === oldNameLower);
 
         // Lọc theo cụm nếu không phải Admin
@@ -1569,94 +1374,51 @@ export async function renameVoucherCampaign(
             );
         }
 
-        const targetIdSet = new Set(targets.map(t => t.id));
+        const targetIds = targets.map(t => t.id);
 
-        // Cập nhật tên chương trình trong LocalStorage
-        const updatedVouchers: VoucherItem[] = [];
-        for (let i = 0; i < allVouchers.length; i++) {
-            if (targetIdSet.has(allVouchers[i].id)) {
-                allVouchers[i] = {
-                    ...allVouchers[i],
-                    campaign_name: cleanNew
-                };
-                updatedVouchers.push(allVouchers[i]);
+        // 2. Cập nhật trên Supabase Cloud theo chunk 100 mã
+        if (targetIds.length > 0) {
+            const CHUNK_SIZE = 100;
+            for (let i = 0; i < targetIds.length; i += CHUNK_SIZE) {
+                const chunk = targetIds.slice(i, i + CHUNK_SIZE);
+                try {
+                    await supabase
+                        .from('store_vouchers')
+                        .update({ campaign_name: cleanNew })
+                        .in('id', chunk);
+                } catch (err) {
+                    console.warn('Lỗi update voucher khi rename:', err);
+                }
             }
         }
-        setLocalVouchers(allVouchers);
 
-        // 2. Cập nhật trên Supabase Cloud theo chunk
-        if (updatedVouchers.length > 0) {
-            const dbPayloads = updatedVouchers.map(item => ({
-                ...item,
-                claimed_at: item.claimed_at ?? null,
-                claimed_by_id: item.claimed_by_id ?? null,
-                claimed_by_name: item.claimed_by_name ?? null,
-                claimed_by_store: item.claimed_by_store ?? null,
-                order_id: item.order_id ?? null,
-                used_at: item.used_at ?? null
+        // 3. Di chuyển trạng thái chương trình trong store_voucher_campaign_statuses
+        const { data: oldStatuses } = await supabase
+            .from('store_voucher_campaign_statuses')
+            .select('*')
+            .ilike('campaign_name', cleanOld);
+
+        if (oldStatuses && oldStatuses.length > 0) {
+            const migratedStatuses: VoucherCampaignStatusConfig[] = oldStatuses.map((item: any) => ({
+                id: getCampaignStatusKey(cleanNew, item.denomination),
+                campaign_name: cleanNew,
+                denomination: item.denomination || 0,
+                is_ended: Boolean(item.is_ended),
+                is_hidden: Boolean(item.is_hidden),
+                updated_by: clusterContext?.currentUserDisplayName || 'Quản lý',
+                updated_at: new Date().toISOString()
             }));
 
-            const CHUNK_SIZE = 100;
-            for (let i = 0; i < dbPayloads.length; i += CHUNK_SIZE) {
-                const chunk = dbPayloads.slice(i, i + CHUNK_SIZE);
-                try {
-                    await supabase.from('store_vouchers').upsert(chunk, { onConflict: 'id' });
-                } catch (err) {
-                    console.warn('Lỗi upsert voucher khi rename:', err);
-                }
-            }
-        }
+            // Xóa trạng thái cũ
+            await supabase
+                .from('store_voucher_campaign_statuses')
+                .delete()
+                .ilike('campaign_name', cleanOld);
 
-        // 3. Di chuyển trạng thái chương trình trong store_voucher_campaign_statuses (Local + Supabase)
-        const migratedStatuses: VoucherCampaignStatusConfig[] = [];
-        try {
-            const rawStatus = localStorage.getItem(CAMPAIGN_STATUS_STORAGE_KEY);
-            if (rawStatus) {
-                const statusMap: Record<string, VoucherCampaignStatusConfig> = JSON.parse(rawStatus);
-                let changed = false;
-
-                Object.keys(statusMap).forEach(key => {
-                    const item = statusMap[key];
-                    if (item && (item.campaign_name || '').trim().toLowerCase() === oldNameLower) {
-                        const newKey = getCampaignStatusKey(cleanNew, item.denomination);
-                        const newItem: VoucherCampaignStatusConfig = {
-                            ...item,
-                            id: newKey,
-                            campaign_name: cleanNew,
-                            updated_at: new Date().toISOString(),
-                            updated_by: clusterContext?.currentUserDisplayName || 'Quản lý'
-                        };
-                        migratedStatuses.push(newItem);
-                        statusMap[newKey] = newItem;
-                        delete statusMap[key];
-                        changed = true;
-                    }
-                });
-
-                if (changed) {
-                    localStorage.setItem(CAMPAIGN_STATUS_STORAGE_KEY, JSON.stringify(statusMap));
-                }
-            }
-        } catch (e) {
-            console.warn('Lỗi di chuyển local campaign status khi rename:', e);
-        }
-
-        // Cập nhật trạng thái trên Supabase Cloud
-        try {
-            if (migratedStatuses.length > 0) {
-                // Xóa trạng thái cũ
-                await supabase
-                    .from('store_voucher_campaign_statuses')
-                    .delete()
-                    .ilike('campaign_name', cleanOld);
-
-                // Thêm trạng thái mới
-                await supabase
-                    .from('store_voucher_campaign_statuses')
-                    .upsert(migratedStatuses, { onConflict: 'id' });
-            }
-        } catch (err) {
-            console.warn('Lỗi di chuyển campaign status trên Supabase:', err);
+            // Thêm trạng thái mới
+            await supabase
+                .from('store_voucher_campaign_statuses')
+                .upsert(migratedStatuses, { onConflict: 'id' });
         }
 
         return {
@@ -1687,7 +1449,6 @@ export function extractClusterStoresFromNote(note?: string | null): string[] {
  */
 export function formatNoteWithCluster(baseNote?: string | null, clusterStores?: string[]): string {
     const rawNote = baseNote || '';
-    // Xóa tag CỤM cũ nếu có
     const cleaned = rawNote.replace(/\[CỤM:\s*[^\]]+\]/gi, '').trim();
     if (!clusterStores || clusterStores.length === 0) {
         return cleaned;
@@ -1710,7 +1471,7 @@ export interface UpdateVoucherParams {
 }
 
 /**
- * Cập nhật chỉnh sửa thông tin một mã voucher đơn lẻ (Local + Supabase Cloud)
+ * Cập nhật chỉnh sửa thông tin một mã voucher đơn lẻ trực tiếp trên Cloud
  */
 export async function updateVoucher(
     voucherId: string,
@@ -1723,16 +1484,20 @@ export async function updateVoucher(
     }
 ): Promise<{ success: boolean; voucher?: VoucherItem; error?: string }> {
     try {
-        const all = getLocalVouchers();
-        const index = all.findIndex(v => v.id === voucherId);
+        cleanupLegacyLocalStorageVouchers();
 
-        if (index === -1) {
-            return { success: false, error: 'Không tìm thấy mã voucher cần cập nhật!' };
+        // 1. Tải bản ghi từ Cloud
+        const { data: target, error: targetErr } = await supabase
+            .from('store_vouchers')
+            .select('*')
+            .eq('id', voucherId)
+            .maybeSingle();
+
+        if (targetErr || !target) {
+            return { success: false, error: 'Không tìm thấy mã voucher cần cập nhật trên Cloud!' };
         }
 
-        const target = all[index];
-
-        // Kiểm tra phân quyền Cụm nếu không phải Admin
+        // 2. Kiểm tra phân quyền Cụm nếu không phải Admin
         if (clusterContext && !clusterContext.isAdmin) {
             const isOwned = isVoucherInUserCluster(
                 target,
@@ -1746,20 +1511,28 @@ export async function updateVoucher(
             }
         }
 
-        // Nếu thay đổi mã code: kiểm tra trùng lặp với mã khác
+        // 3. Nếu thay đổi mã code: kiểm tra trùng lặp trên Cloud
         let finalCode = target.code;
         if (updates.code && updates.code.trim()) {
             const cleanNewCode = updates.code.trim().toUpperCase();
             if (cleanNewCode !== target.code.toUpperCase()) {
-                const duplicate = all.find(v => v.id !== target.id && v.code.toUpperCase() === cleanNewCode);
+                const { data: dupRows } = await supabase
+                    .from('store_vouchers')
+                    .select('id, campaign_name')
+                    .ilike('code', cleanNewCode);
+
+                const duplicate = (dupRows || []).find((r: any) => r.id !== target.id);
                 if (duplicate) {
-                    return { success: false, error: `Mã coupon "${cleanNewCode}" đã tồn tại trong hệ thống (thuộc chương trình "${duplicate.campaign_name}")!` };
+                    return {
+                        success: false,
+                        error: `Mã coupon "${cleanNewCode}" đã tồn tại trong hệ thống (thuộc chương trình "${duplicate.campaign_name}")!`
+                    };
                 }
                 finalCode = cleanNewCode;
             }
         }
 
-        // Xác định ghi chú và tag cụm
+        // 4. Xác định ghi chú và tag cụm
         let finalNote = target.note;
         if (updates.cluster_stores !== undefined) {
             finalNote = formatNoteWithCluster(
@@ -1767,24 +1540,21 @@ export async function updateVoucher(
                 updates.cluster_stores
             );
         } else if (updates.note !== undefined) {
-            // Giữ lại tag cụm cũ nếu có
             const currentClusters = extractClusterStoresFromNote(target.note);
             finalNote = formatNoteWithCluster(updates.note, currentClusters.length > 0 ? currentClusters : undefined);
         }
 
-        // Xác định tên siêu thị / kho sở hữu
+        // 5. Xác định tên siêu thị / kho sở hữu
         let finalStoreName = target.store_name;
         if (updates.store_name) {
             finalStoreName = updates.store_name;
         } else if (updates.cluster_stores && updates.cluster_stores.length > 0) {
-            // Nếu chọn danh sách cụm mà chưa chỉ định store_name, dùng shop đầu tiên
             finalStoreName = updates.cluster_stores[0] || 'Toàn Cụm Siêu Thị';
         }
 
         const willResetClaimed = updates.resetClaimedInfo || (updates.status === 'AVAILABLE' && target.status !== 'AVAILABLE');
 
-        const updatedVoucher: VoucherItem = {
-            ...target,
+        const dbPayload: any = {
             code: finalCode,
             campaign_name: updates.campaign_name !== undefined ? updates.campaign_name.trim() : target.campaign_name,
             denomination: updates.denomination !== undefined ? Number(updates.denomination) : target.denomination,
@@ -1792,35 +1562,27 @@ export async function updateVoucher(
             status: updates.status !== undefined ? updates.status : target.status,
             store_name: finalStoreName,
             note: finalNote,
-            description: updates.description !== undefined ? (updates.description.trim() || undefined) : target.description,
-            claimed_at: willResetClaimed ? undefined : target.claimed_at,
-            claimed_by_id: willResetClaimed ? undefined : target.claimed_by_id,
-            claimed_by_name: willResetClaimed ? undefined : target.claimed_by_name,
-            claimed_by_store: willResetClaimed ? undefined : target.claimed_by_store,
-            order_id: willResetClaimed ? undefined : target.order_id,
-            used_at: willResetClaimed ? undefined : target.used_at
+            description: updates.description !== undefined ? (updates.description.trim() || null) : target.description,
+            claimed_at: willResetClaimed ? null : (target.claimed_at || null),
+            claimed_by_id: willResetClaimed ? null : (target.claimed_by_id || null),
+            claimed_by_name: willResetClaimed ? null : (target.claimed_by_name || null),
+            claimed_by_store: willResetClaimed ? null : (target.claimed_by_store || null),
+            order_id: willResetClaimed ? null : (target.order_id || null),
+            used_at: willResetClaimed ? null : (target.used_at || null)
         };
 
-        all[index] = updatedVoucher;
-        setLocalVouchers(all);
+        const { data: updated, error: updateErr } = await supabase
+            .from('store_vouchers')
+            .update(dbPayload)
+            .eq('id', voucherId)
+            .select()
+            .maybeSingle();
 
-        // Đồng bộ lên Supabase Cloud
-        try {
-            const dbPayload = {
-                ...updatedVoucher,
-                claimed_at: updatedVoucher.claimed_at ?? null,
-                claimed_by_id: updatedVoucher.claimed_by_id ?? null,
-                claimed_by_name: updatedVoucher.claimed_by_name ?? null,
-                claimed_by_store: updatedVoucher.claimed_by_store ?? null,
-                order_id: updatedVoucher.order_id ?? null,
-                used_at: updatedVoucher.used_at ?? null
-            };
-            await supabase.from('store_vouchers').upsert([dbPayload], { onConflict: 'id' });
-        } catch (e) {
-            console.warn('Lỗi sync cloud khi update voucher:', e);
+        if (updateErr || !updated) {
+            return { success: false, error: updateErr?.message || 'Lỗi khi cập nhật mã voucher trên Cloud' };
         }
 
-        return { success: true, voucher: updatedVoucher };
+        return { success: true, voucher: updated as VoucherItem };
     } catch (e: any) {
         return { success: false, error: e.message || 'Lỗi khi cập nhật mã voucher' };
     }
@@ -1840,8 +1602,7 @@ export interface UpdateVouchersBatchParams {
 }
 
 /**
- * Cập nhật hàng loạt nhiều mã voucher (Local + Supabase Cloud)
- * Hỗ trợ cập nhật đồng loạt: Cụm/Kho được phép sử dụng, CT, Mệnh giá, HSD, Trạng thái, Ghi chú
+ * Cập nhật hàng loạt nhiều mã voucher trực tiếp trên Cloud
  */
 export async function updateVouchersBatch(
     idsOrCodes: string[],
@@ -1854,15 +1615,16 @@ export async function updateVouchersBatch(
     }
 ): Promise<{ success: boolean; updatedCount: number; error?: string }> {
     try {
+        cleanupLegacyLocalStorageVouchers();
         if (!idsOrCodes || idsOrCodes.length === 0) {
             return { success: true, updatedCount: 0 };
         }
 
         const idSet = new Set(idsOrCodes.map(s => s.trim()));
         const codeSet = new Set(idsOrCodes.map(s => s.trim().toUpperCase()));
-        const all = getLocalVouchers();
+        const allCloud = await fetchAllCloudVouchers();
 
-        let targets = all.filter(v => idSet.has(v.id) || codeSet.has(v.code.toUpperCase()));
+        let targets = allCloud.filter(v => idSet.has(v.id) || codeSet.has(v.code.toUpperCase()));
         if (targets.length === 0) {
             return { success: false, updatedCount: 0, error: 'Không tìm thấy mã voucher nào thỏa mãn để cập nhật!' };
         }
@@ -1883,15 +1645,7 @@ export async function updateVouchersBatch(
             }
         }
 
-        const targetIdSet = new Set(targets.map(t => t.id));
-        const updatedList: VoucherItem[] = [];
-
-        for (let i = 0; i < all.length; i++) {
-            if (!targetIdSet.has(all[i].id)) continue;
-
-            const t = all[i];
-
-            // 1. Cụm/Kho & Note
+        const updatedList = targets.map(t => {
             let finalNote = t.note;
             if (updates.cluster_stores !== undefined) {
                 finalNote = formatNoteWithCluster(
@@ -1913,50 +1667,34 @@ export async function updateVouchersBatch(
                 finalStoreName = updates.cluster_stores[0] || 'Toàn Cụm Siêu Thị';
             }
 
-            // 2. Trạng thái & Reset cấp phát
             const willResetClaimed = updates.resetClaimedInfo || (updates.status === 'AVAILABLE' && t.status !== 'AVAILABLE');
 
-            const updatedItem: VoucherItem = {
-                ...t,
+            return {
+                id: t.id,
+                store_name: finalStoreName,
                 campaign_name: updates.campaign_name !== undefined ? updates.campaign_name.trim() : t.campaign_name,
                 denomination: updates.denomination !== undefined ? Number(updates.denomination) : t.denomination,
                 expires_at: updates.expires_at !== undefined ? updates.expires_at : t.expires_at,
                 status: updates.status !== undefined ? updates.status : t.status,
-                store_name: finalStoreName,
                 note: finalNote,
-                description: updates.description !== undefined ? (updates.description.trim() || undefined) : t.description,
-                claimed_at: willResetClaimed ? undefined : t.claimed_at,
-                claimed_by_id: willResetClaimed ? undefined : t.claimed_by_id,
-                claimed_by_name: willResetClaimed ? undefined : t.claimed_by_name,
-                claimed_by_store: willResetClaimed ? undefined : t.claimed_by_store,
-                order_id: willResetClaimed ? undefined : t.order_id,
-                used_at: willResetClaimed ? undefined : t.used_at
+                description: updates.description !== undefined ? (updates.description.trim() || null) : t.description,
+                claimed_at: willResetClaimed ? null : (t.claimed_at || null),
+                claimed_by_id: willResetClaimed ? null : (t.claimed_by_id || null),
+                claimed_by_name: willResetClaimed ? null : (t.claimed_by_name || null),
+                claimed_by_store: willResetClaimed ? null : (t.claimed_by_store || null),
+                order_id: willResetClaimed ? null : (t.order_id || null),
+                used_at: willResetClaimed ? null : (t.used_at || null)
             };
+        });
 
-            all[i] = updatedItem;
-            updatedList.push(updatedItem);
-        }
-
-        setLocalVouchers(all);
-
-        // Đồng bộ Supabase Cloud theo chunk 150 records
-        try {
-            const dbPayloads = updatedList.map(item => ({
-                ...item,
-                claimed_at: item.claimed_at ?? null,
-                claimed_by_id: item.claimed_by_id ?? null,
-                claimed_by_name: item.claimed_by_name ?? null,
-                claimed_by_store: item.claimed_by_store ?? null,
-                order_id: item.order_id ?? null,
-                used_at: item.used_at ?? null
-            }));
-
-            for (let idx = 0; idx < dbPayloads.length; idx += 150) {
-                const chunk = dbPayloads.slice(idx, idx + 150);
-                await supabase.from('store_vouchers').upsert(chunk, { onConflict: 'id' });
+        // Upsert theo chunk 100 lên Supabase
+        const CHUNK_SIZE = 100;
+        for (let idx = 0; idx < updatedList.length; idx += CHUNK_SIZE) {
+            const chunk = updatedList.slice(idx, idx + CHUNK_SIZE);
+            const { error: upsertErr } = await supabase.from('store_vouchers').upsert(chunk, { onConflict: 'id' });
+            if (upsertErr) {
+                return { success: false, updatedCount: 0, error: upsertErr.message };
             }
-        } catch (e) {
-            console.warn('Lỗi sync cloud batch update:', e);
         }
 
         return { success: true, updatedCount: updatedList.length };
@@ -1964,7 +1702,6 @@ export async function updateVouchersBatch(
         return { success: false, updatedCount: 0, error: e.message || 'Lỗi khi cập nhật mã voucher hàng loạt' };
     }
 }
-
 
 /**
  * Thống kê các chỉ số hết hạn và tồn kho mã voucher
@@ -2040,7 +1777,7 @@ export function getVoucherExpiryStats(
 }
 
 /**
- * Làm sạch kho mã: Dọn dẹp các mã hết hạn hoặc đã sử dụng
+ * Làm sạch kho mã: Dọn dẹp các mã hết hạn hoặc đã sử dụng trực tiếp trên Cloud
  * Có thể chọn XÓA VĨNH VIỄN (DELETE) hoặc CHUYỂN SANG EXPIRED
  */
 export async function cleanVouchers(params: {
@@ -2053,8 +1790,9 @@ export async function cleanVouchers(params: {
     isAdmin?: boolean;
 }): Promise<{ success: boolean; affectedCount: number; totalValue: number; error?: string }> {
     try {
+        cleanupLegacyLocalStorageVouchers();
         const { type, mode, campaignName, storeName, accessibleStores, currentUserDisplayName, isAdmin } = params;
-        const all = getLocalVouchers();
+        const allCloud = await fetchAllCloudVouchers();
         const todayStr = new Date().toISOString().slice(0, 10);
 
         const matchStore = (v: VoucherItem) => {
@@ -2086,58 +1824,38 @@ export async function cleanVouchers(params: {
             return false;
         };
 
-        const targets = all.filter(isTarget);
+        const targets = allCloud.filter(isTarget);
         if (targets.length === 0) {
             return { success: true, affectedCount: 0, totalValue: 0 };
         }
 
         const totalValue = targets.reduce((sum, v) => sum + (Number(v.denomination) || 0), 0);
         const targetIds = targets.map(v => v.id);
-        const targetIdSet = new Set(targetIds);
 
         if (mode === 'DELETE') {
-            // Xóa hoàn toàn
-            const remaining = all.filter(v => !targetIdSet.has(v.id));
-            setLocalVouchers(remaining);
-
-            try {
-                const CHUNK_SIZE = 100;
-                for (let i = 0; i < targetIds.length; i += CHUNK_SIZE) {
-                    const chunk = targetIds.slice(i, i + CHUNK_SIZE);
-                    await supabase.from('store_vouchers').delete().in('id', chunk);
-                }
-            } catch (e) {
-                console.warn('Lỗi xóa trên Supabase khi clean:', e);
+            const CHUNK_SIZE = 100;
+            for (let i = 0; i < targetIds.length; i += CHUNK_SIZE) {
+                const chunk = targetIds.slice(i, i + CHUNK_SIZE);
+                await supabase.from('store_vouchers').delete().in('id', chunk);
             }
         } else {
             // Đánh dấu thành EXPIRED
-            const updated = all.map(v => {
-                if (targetIdSet.has(v.id)) {
-                    return {
-                        ...v,
-                        status: 'EXPIRED' as const,
-                        note: v.note ? `${v.note} | [Quá hạn lúc ${todayStr}]` : `[Quá hạn lúc ${todayStr}]`
-                    };
-                }
-                return v;
-            });
-            setLocalVouchers(updated);
+            const toUpdate = targets.map(v => ({
+                id: v.id,
+                status: 'EXPIRED' as const,
+                note: v.note ? `${v.note} | [Quá hạn lúc ${todayStr}]` : `[Quá hạn lúc ${todayStr}]`
+            }));
 
-            try {
-                const toUpdate = updated.filter(v => targetIdSet.has(v.id));
-                const CHUNK_SIZE = 100;
-                for (let i = 0; i < toUpdate.length; i += CHUNK_SIZE) {
-                    const chunk = toUpdate.slice(i, i + CHUNK_SIZE);
-                    await supabase.from('store_vouchers').upsert(chunk, { onConflict: 'id' });
-                }
-            } catch (e) {
-                console.warn('Lỗi cập nhật EXPIRED trên Supabase:', e);
+            const CHUNK_SIZE = 100;
+            for (let i = 0; i < toUpdate.length; i += CHUNK_SIZE) {
+                const chunk = toUpdate.slice(i, i + CHUNK_SIZE);
+                await supabase.from('store_vouchers').upsert(chunk, { onConflict: 'id' });
             }
         }
 
         return { success: true, affectedCount: targets.length, totalValue };
     } catch (e: any) {
-        return { success: false, affectedCount: 0, totalValue: 0, error: e.message || 'Lỗi khi làm sạch kho voucher' };
+        return { success: false, affectedCount: 0, totalValue: 0, error: e.message || 'Lỗi khi làm sạch kho voucher trên Cloud' };
     }
 }
 
@@ -2221,7 +1939,6 @@ export function getCampaignSummaries(
     });
 
     return result.sort((a, b) => {
-        // Ưu tiên chương trình còn hoạt động lên trước
         if (a.is_ended !== b.is_ended) {
             return a.is_ended ? 1 : -1;
         }
@@ -2292,9 +2009,6 @@ export function analyzeHoardingRisks(
         const reasons: string[] = [];
         let risk: 'NORMAL' | 'WARNING' | 'CRITICAL' = 'NORMAL';
 
-        // Chỉ cảnh báo nếu số lượng mã chưa dùng lớn hơn hoặc bằng số mã đã lấy đang bị cảnh báo theo ngưỡng
-        // Ngưỡng nguy cơ cao (CRITICAL): lấy từ 5 mã trong ngày VÀ chưa sử dụng >= 5 mã
-        // Ngưỡng cần theo dõi (WARNING): lấy từ 3 mã trong ngày VÀ chưa sử dụng >= 3 mã
         if (todayCount >= 5 && unspentCount >= 5) {
             risk = 'CRITICAL';
             reasons.push(`Lấy ${todayCount} mã trong ngày và đang giữ ${unspentCount} mã chưa dùng`);
@@ -2326,7 +2040,6 @@ export function analyzeHoardingRisks(
         });
     });
 
-    // Ưu tiên hiển thị rủi ro cao trước
     const riskRank = { CRITICAL: 3, WARNING: 2, NORMAL: 1 };
     return alerts.sort((a, b) => {
         const rDiff = riskRank[b.risk_level] - riskRank[a.risk_level];

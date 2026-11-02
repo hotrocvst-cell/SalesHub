@@ -531,7 +531,7 @@ export default function CampaignOffsetPage() {
                             BẢNG CÂN ĐỐI & CẤN TRỪ THI ĐUA CUỐI THÁNG
                         </h2>
                         <div className="text-xs text-slate-600 mt-0.5">
-                            Siêu thị: <b className="text-purple-800 font-bold">{selectedStore === 'all' ? 'Toàn bộ siêu thị' : selectedStore}</b> • Kỳ: <b className="text-slate-800 font-bold">Tháng {selectedMonth}/{selectedYear}</b>
+                            ST: <b className="text-purple-800 font-bold">{selectedStore === 'all' ? 'Toàn bộ siêu thị' : selectedStore}</b> • Kỳ: <b className="text-slate-800 font-bold">Tháng {selectedMonth}/{selectedYear}</b>
                         </div>
                     </div>
 

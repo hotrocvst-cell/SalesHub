@@ -242,7 +242,7 @@ export default function RevenuePasteTab({
             {detectedStore && (
                 <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-2 text-xs text-emerald-800">
                     <Store className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>Tự động phát hiện Siêu thị: <strong className="font-bold text-emerald-900">{detectedStore}</strong></span>
+                    <span>Tự động phát hiện ST: <strong className="font-bold text-emerald-900">{detectedStore}</strong></span>
                 </div>
             )}
 

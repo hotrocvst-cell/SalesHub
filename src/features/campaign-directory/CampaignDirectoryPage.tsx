@@ -660,7 +660,7 @@ Số lượng: ${programsToExport.length} chương trình
                         Cẩm Nang Chương Trình Thi Đua Kinh Doanh
                     </h2>
                     <p className="text-[11px] sm:text-xs text-blue-100 font-medium">
-                        {selectedStore !== 'all' ? `🏪 Siêu thị: ${userStoreLabel} • ` : ''}
+                        {selectedStore !== 'all' ? `🏪 ST: ${userStoreLabel} • ` : ''}
                         Tổng hợp {programsToExport.length} chương trình thi đua trọng tâm • Cập nhật ngày {new Date().toLocaleDateString('vi-VN')}
                     </p>
                 </div>

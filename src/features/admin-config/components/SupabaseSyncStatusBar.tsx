@@ -150,7 +150,7 @@ export default function SupabaseSyncStatusBar({
                             )}
                             {effectiveStatus === 'OFFLINE' && (
                                 <>
-                                    {errorMessage || 'Không thể kết nối tới cơ sở dữ liệu Supabase'}. Đang tự động lưu trữ trên LocalStorage của trình duyệt.
+                                    {errorMessage || 'Không thể kết nối tới cơ sở dữ liệu Cloud'}. Đang tự động lưu trữ trên LocalStorage của trình duyệt.
                                 </>
                             )}
                         </p>

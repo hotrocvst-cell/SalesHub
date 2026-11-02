@@ -209,7 +209,7 @@ export default function PeriodTargetSessionManagerModal({
                     <div className="flex items-center gap-2 flex-1 min-w-0">
                         <div className="flex items-center gap-2 bg-white border border-slate-200 hover:border-indigo-400 px-3 py-1.5 rounded-xl text-xs transition-all shadow-2xs w-full sm:w-auto">
                             <StoreIcon className="w-4 h-4 text-indigo-600 shrink-0" />
-                            <span className="text-[11px] font-bold text-slate-500 whitespace-nowrap">Siêu thị:</span>
+                            <span className="text-[11px] font-bold text-slate-500 whitespace-nowrap">ST:</span>
                             <select
                                 value={selectedFilterStore}
                                 disabled={isLockedToSingleStore}

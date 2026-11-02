@@ -12,7 +12,8 @@ import {
     History,
     ChevronDown,
     RotateCcw,
-    X
+    X,
+    Cloud
 } from 'lucide-react';
 import { useAuth } from '../../shared/contexts/AuthContext';
 import type { VoucherItem, VoucherCampaignSummary, VoucherCampaignStatusConfig } from './types';
@@ -22,7 +23,8 @@ import {
     resetClaimedVoucher,
     getCampaignSummaries,
     fetchVoucherCampaignStatuses,
-    isCampaignHidden
+    isCampaignHidden,
+    cleanupLegacyLocalStorageVouchers
 } from './services/voucherService';
 import VoucherCard from './components/VoucherCard';
 import { getDenominationHotStyle, formatCurrency, parseConditionLines } from './voucherFormatters';
@@ -55,6 +57,7 @@ export default function VoucherClaimPage() {
     }, [currentUser]);
 
     const loadData = async () => {
+        cleanupLegacyLocalStorageVouchers();
         setLoading(true);
         try {
             const [list, statuses] = await Promise.all([
@@ -296,6 +299,10 @@ export default function VoucherClaimPage() {
                                         Cụm {accessibleStores.length} shop
                                     </span>
                                 )}
+                                <span className="bg-emerald-950/80 text-emerald-300 px-2 py-0.5 rounded-full text-[10px] font-black border border-emerald-500/60 flex items-center gap-1">
+                                    <Cloud className="w-2.5 h-2.5 text-emerald-400 animate-pulse" />
+                                    <span>Cloud Realtime</span>
+                                </span>
                             </div>
                         </div>
                     </div>

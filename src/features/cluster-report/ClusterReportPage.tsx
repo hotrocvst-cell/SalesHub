@@ -21,7 +21,7 @@ import {
 } from '../../core/lib/guestDemoStoreService';
 
 /**
- * Rút gọn tên siêu thị & Loại bỏ mã số siêu thị:
+ * Rút gọn tên siêu thị & Loại bỏ mã số ST:
  * Ví dụ:
  * - "111 - TGD_BRV_VTA - 290 Trương Công Định"  => "TGD - 290 Trương Công Định"
  * - "1841 - ĐML_CMA_CMA - 155A NGUYỄN TẤT THÀNH" => "ĐML - 155A NGUYỄN TẤT THÀNH"
@@ -706,7 +706,7 @@ export default function ClusterReportPage() {
             `3. GIẢI PHÁP HÀNH ĐỘNG THỰC CHIẾN:`,
             `• Nhịp ca: Bám sát target từng ca, không để dồn số về cuối ngày.`,
             `• Cơ cấu doanh thu: Tối ưu triệt để DTQĐ các ngành hàng trọng điểm${clusterSummary.hasInstallmentRate ? ` và nâng tỷ lệ trả chậm >${clusterSummary.avgInstallmentRate > 30 ? clusterSummary.avgInstallmentRate.toFixed(0) : '35'}%` : ''}.`,
-            `• Quản lý siêu thị: Trực tiếp bám sàn trong khung giờ vàng 18h-21h30 để chốt đơn và hỗ trợ nhân viên.`,
+            `• Quản lý ST: Trực tiếp bám sàn trong khung giờ vàng 18h-21h30 để chốt đơn và hỗ trợ nhân viên.`,
             `💪 Quyết tâm 100% siêu thị trong cụm cán đích!`
         ];
 
@@ -1206,7 +1206,7 @@ export default function ClusterReportPage() {
                                                         key={`b1-${row.storeName}`}
                                                         className="hover:bg-amber-50/20 transition group"
                                                     >
-                                                        {/* 1. SIÊU THỊ: Gọn gàng, không hiển thị mã số */}
+                                                        {/* 1. ST: Gọn gàng, không hiển thị mã số */}
                                                         <td className="py-2.5 px-2.5 border-r border-slate-100">
                                                             <div className="flex items-center gap-1.5">
                                                                 <span className="w-5 h-5 rounded-md bg-slate-100 text-slate-700 border border-slate-200 font-black text-[10px] flex items-center justify-center shrink-0 shadow-2xs">

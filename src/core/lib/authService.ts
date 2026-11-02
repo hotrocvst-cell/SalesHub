@@ -417,7 +417,7 @@ export async function createUserProfile(params: {
     let finalFullName = formatCapitalizeWords(params.full_name);
     let finalDept = params.department?.trim() || '';
 
-    // TRƯỜNG HỢP USER ĐĂNG KÝ TRÙNG VỚI USER ĐÃ KHAI BÁO TRONG SIÊU THỊ:
+    // TRƯỜNG HỢP USER ĐĂNG KÝ TRÙNG VỚI USER ĐÃ KHAI BÁO TRONG ST:
     // Mặc định sử dụng thông tin họ tên & bộ phận theo hệ thống đã lưu trước!
     if (params.employee_id?.trim()) {
         try {
@@ -621,7 +621,7 @@ export async function submitOnboardingRequest(params: {
                 id: qlNotifId,
                 target_role: 'QUAN_LY',
                 target_store_name: store_name,
-                title: `Nhân viên mới đăng ký vào Siêu thị: ${user.full_name}`,
+                title: `Nhân viên mới đăng ký vào ST: ${user.full_name}`,
                 message: `Nhân sự ${user.full_name} (${user.email}) đã đăng ký tài khoản Nhân viên kinh doanh tại siêu thị ${store_name}. Vui lòng xác nhận xét duyệt.`,
                 type: 'APPROVAL_REQUEST',
                 link_path: '/cau-hinh-sieu-thi-nhan-vien',
@@ -824,7 +824,7 @@ export async function processApprovalRequest(params: {
             }
 
             if (existingEmp) {
-                // Đã tồn tại trong hệ thống siêu thị:
+                // Đã tồn tại trong hệ thống ST:
                 // MẶC ĐỊNH GIỮ NGUYÊN HỌ TÊN VÀ VAI TRÒ ĐÃ LƯU TRƯỚC (ĐẶC BIỆT LÀ AIO), KHÔNG ĐƯỢC ĐÈ THÀNH "Nhân viên"!
                 const preserveName = existingEmp.full_name?.trim() || req.full_name;
 

@@ -59,6 +59,35 @@ export function getShortStoreName(name: string): string {
     return cleaned;
 }
 
+/**
+ * Định dạng tên siêu thị hiển thị gọn gàng, tinh tế và chuyên nghiệp:
+ * - Nếu có mã siêu thị ở đầu: [Mã] Chuỗi - Địa chỉ (ví dụ: [10335] AAR - 290 Trương Công Định)
+ * - Nếu không có mã: Chuỗi - Địa chỉ (ví dụ: AAR - 290 Trương Công Định)
+ * - Nếu chỉ có mã số: Siêu thị [Mã]
+ */
+export function formatStoreDisplayName(name: string): string {
+    if (!name) return 'Toàn Cụm (Tổng)';
+    const trimmed = name.trim();
+    if (/^(tổng|tong|toàn cụm|toan cum|all)$/i.test(trimmed)) return 'Toàn Cụm (Tổng)';
+
+    if (/^\d{3,8}$/.test(trimmed)) {
+        return `Siêu thị [${trimmed}]`;
+    }
+
+    const match = trimmed.match(/^(\d{3,8})\s*[-–—._]\s*(.+)$/);
+    if (match) {
+        const code = match[1];
+        const rest = match[2].trim();
+        const shortRest = getShortStoreName(rest);
+        if (shortRest && shortRest !== 'Tổng') {
+            return `[${code}] ${shortRest}`;
+        }
+        return `[${code}] ${rest}`;
+    }
+
+    return getShortStoreName(trimmed);
+}
+
 // Chuẩn hóa tên siêu thị để kiểm tra quyền
 export function cleanStoreNameForAuth(name: string): string {
     if (!name) return '';
@@ -163,6 +192,79 @@ export function isStoreMatch(
     return cleanA.includes(cleanB) || cleanB.includes(cleanA);
 }
 
+/**
+ * Chuẩn hóa và loại bỏ trùng lặp danh sách siêu thị (Deduplication)
+ * - Nhóm các tên siêu thị đại diện cho cùng 1 siêu thị vật lý (dựa trên isStoreMatch & getShortStoreName)
+ * - Tự động nâng cấp tên rút gọn thành tên đầy đủ có mã số nếu tìm thấy trong danh mục availableStores
+ * - Ưu tiên giữ lại tên chuẩn có mã số siêu thị ở đầu (ví dụ: "10335 - AAR_BRV_VTA - 290 Trương Công Định")
+ *   thay vì tên rút gọn không có mã số (ví dụ: "AAR - 290 Trương Công Định")
+ */
+export function deduplicateStoreNames(
+    stores: string[],
+    availableStoresList?: Array<{ code?: string; name: string; short_name?: string }>
+): string[] {
+    const result: string[] = [];
+
+    const extractStoreCode = (str: string): string => {
+        const m = str.match(/^(\d{3,8})\s*[-–—._]/);
+        return m ? m[1] : '';
+    };
+
+    const resolveBestName = (rawName: string): string => {
+        if (!rawName) return '';
+        const trimmed = rawName.trim();
+        if (extractStoreCode(trimmed)) return trimmed;
+
+        if (availableStoresList && availableStoresList.length > 0) {
+            const matched = availableStoresList.find(s => {
+                const sName = s.name || '';
+                const sShort = s.short_name || '';
+                return isStoreMatch(sName, trimmed) || isStoreMatch(sShort, trimmed);
+            });
+            if (matched && matched.name && extractStoreCode(matched.name)) {
+                return matched.name.trim();
+            }
+        }
+
+        return trimmed;
+    };
+
+    for (const raw of stores) {
+        if (!raw) continue;
+        const candidate = resolveBestName(raw);
+        if (!candidate || /^(tổng|tong|all|toàn cụm)/i.test(candidate)) continue;
+
+        const existingIdx = result.findIndex(existing => isStoreMatch(existing, candidate, availableStoresList));
+
+        if (existingIdx === -1) {
+            result.push(candidate);
+        } else {
+            const existing = result[existingIdx];
+            const candidateHasCode = Boolean(extractStoreCode(candidate));
+            const existingHasCode = Boolean(extractStoreCode(existing));
+
+            if (candidateHasCode && !existingHasCode) {
+                result[existingIdx] = candidate;
+            } else if (candidateHasCode === existingHasCode) {
+                if (candidate.length > existing.length) {
+                    result[existingIdx] = candidate;
+                }
+            }
+        }
+    }
+
+    return result.sort((a, b) => a.localeCompare(b, 'vi'));
+}
+
+
+// Lấy ngày hôm nay chuẩn định dạng YYYY-MM-DD theo giờ địa phương
+export function getTodayDateString(): string {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
 
 // Lấy ngày hôm qua chuẩn định dạng YYYY-MM-DD (xử lý chính xác cả ngày đầu tháng và năm mới)
 export function getYesterdayDateString(): string {

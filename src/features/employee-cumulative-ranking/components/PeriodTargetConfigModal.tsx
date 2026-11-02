@@ -316,7 +316,7 @@ export default function PeriodTargetConfigModal({
                         </div>
                         <div className="text-[11px] text-slate-500 flex items-center gap-1.5 font-medium">
                             <StoreIcon className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                            <span>Siêu thị: <strong>{selectedStore === 'all' ? 'Tất cả siêu thị' : selectedStore}</strong></span>
+                            <span>ST: <strong>{selectedStore === 'all' ? 'Tất cả siêu thị' : selectedStore}</strong></span>
                         </div>
                     </div>
 

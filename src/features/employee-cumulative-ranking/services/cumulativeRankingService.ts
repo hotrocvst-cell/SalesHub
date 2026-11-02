@@ -393,7 +393,7 @@ export async function fetchCumulativeRankingData(params: {
         const sumOfEmployees = Array.from(empMap.values()).reduce((sum, e) => sum + e.cumulativeRevenue, 0);
 
         // ĐỒNG BỘ SỐ TỔNG VÀ NHỊP NGÀY CỦA SIÊU THỊ THEO DTQĐ (THEO PHƯƠNG PHÁP RevenueTrendPage)
-        // 1. Tính nhịp DTQĐ từng ngày của từng siêu thị: key = `${date}_${sName}` => dailyPace
+        // 1. Tính nhịp DTQĐ từng ngày của từng ST: key = `${date}_${sName}` => dailyPace
         const paceByStoreDate = new Map<string, number>();
 
         sessionsByStoreAndDate.forEach((dateMap, sName) => {

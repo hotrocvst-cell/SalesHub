@@ -241,7 +241,7 @@ export default function ShortageSelectionStep({
                             </h2>
                         </div>
                         <p className="text-xs text-slate-600 mt-1">
-                            Siêu thị: <span className="font-bold text-blue-800">{targetStore || 'Chưa chọn'}</span> • Cần bổ sung <b className="text-blue-700">{selectedCount}</b>/{items.length} mã ({selectedCategories.length} ngành, {selectedSubCategories.length} nhóm đang chọn)
+                            ST: <span className="font-bold text-blue-800">{targetStore || 'Chưa chọn'}</span> • Cần bổ sung <b className="text-blue-700">{selectedCount}</b>/{items.length} mã ({selectedCategories.length} ngành, {selectedSubCategories.length} nhóm đang chọn)
                         </p>
                     </div>
 

@@ -17,10 +17,21 @@ import {
     TrendingUp,
     CreditCard,
     Coins,
-    Users
+    Users,
+    Zap
 } from 'lucide-react';
 import type { StoreItem, EmployeeItem } from '../../../core/lib/storage';
-import { getShortStoreName, formatValue, cleanBiNumber, formatDate } from '../../../core/lib/formatters';
+import {
+    getShortStoreName,
+    formatStoreDisplayName,
+    isStoreMatch,
+    deduplicateStoreNames,
+    getTodayDateString,
+    formatValue,
+    cleanBiNumber,
+    formatDate
+} from '../../../core/lib/formatters';
+import { useAuth } from '../../../shared/contexts/AuthContext';
 import type { ParsedEmployeeRevenue } from '../../employee-cumulative/utils/employeeParsers';
 import { extractDailyEmployeeRevenueImagesBatch } from '../services/geminiDailyEmployeeOcrService';
 import {
@@ -79,21 +90,89 @@ export default function DailyEmployeeRevenueOcrModal({
         return map;
     }, [employeesDirectory]);
 
-    // Khởi tạo siêu thị và ngày chốt (mặc định cho phép 'all' - Toàn Cụm)
-    const storeOptions = useMemo(() => {
-        const names = availableStores.map(s => s.name);
-        return ['all', ...names];
-    }, [availableStores]);
+    const { currentUser, isAdmin: authIsAdmin, canAccessStore } = useAuth();
+    const effectiveIsAdmin = Boolean(isAdmin || authIsAdmin || currentUser?.role === 'ADMIN');
+
+    // Lọc danh sách siêu thị theo phân quyền người dùng
+    const permittedStores = useMemo<StoreItem[]>(() => {
+        if (effectiveIsAdmin) {
+            return availableStores;
+        }
+
+        const isGuest = Boolean(currentUser?.is_guest);
+        if (isGuest) {
+            const guestTarget = currentUser?.store_name || '838679';
+            return availableStores.filter(s => isStoreMatch(s.name, guestTarget, availableStores));
+        }
+
+        if (currentUser?.role === 'NHAN_VIEN') {
+            if (!currentUser?.store_name) return [];
+            return availableStores.filter(s => isStoreMatch(s.name, currentUser.store_name, availableStores));
+        }
+
+        // Quản lý hoặc Trưởng ca
+        const accessible = currentUser?.accessible_stores && currentUser.accessible_stores.length > 0
+            ? currentUser.accessible_stores
+            : (currentUser?.store_name ? [currentUser.store_name] : []);
+
+        if (accessible.length === 0) return availableStores;
+        return availableStores.filter(s =>
+            canAccessStore(s.name) ||
+            canAccessStore(getShortStoreName(s.name)) ||
+            accessible.some(acc => isStoreMatch(s.name, acc, availableStores))
+        );
+    }, [availableStores, effectiveIsAdmin, currentUser, canAccessStore]);
+
+    // Khử trùng lặp danh sách siêu thị và chuẩn hóa tên có mã số
+    const deduplicatedStores = useMemo<StoreItem[]>(() => {
+        const uniqueNames = deduplicateStoreNames(permittedStores.map(s => s.name), availableStores);
+        return uniqueNames.map(name => {
+            const found = availableStores.find(s => s.name === name || isStoreMatch(s.name, name, availableStores));
+            return found || { name, code: '' };
+        });
+    }, [permittedStores, availableStores]);
+
+    // Quyền nạp Toàn Cụm: Chỉ Admin hoặc Quản lý phụ trách >= 2 siêu thị
+    const canAccessAllCluster = useMemo(() => {
+        if (effectiveIsAdmin) return true;
+        if (currentUser?.role === 'NHAN_VIEN') return false;
+        return deduplicatedStores.length > 1;
+    }, [effectiveIsAdmin, currentUser, deduplicatedStores]);
 
     const [selectedStore, setSelectedStore] = useState<string>(() => {
-        if (defaultSelectedStore) {
-            return defaultSelectedStore;
+        if (defaultSelectedStore === 'all' && canAccessAllCluster) {
+            return 'all';
         }
-        return 'all';
+        if (defaultSelectedStore && defaultSelectedStore !== 'all') {
+            const match = deduplicatedStores.find(s => isStoreMatch(s.name, defaultSelectedStore, availableStores));
+            if (match) return match.name;
+        }
+        if (canAccessAllCluster) return 'all';
+        return deduplicatedStores[0]?.name || '';
     });
 
-    const [reportDate, setReportDate] = useState<string>(() => {
-        return defaultReportDate || new Date().toISOString().split('T')[0];
+    // Đồng bộ lại selectedStore khi modal mở hoặc danh sách siêu thị đổi
+    useEffect(() => {
+        if (!isOpen || deduplicatedStores.length === 0) return;
+        if (selectedStore === 'all') {
+            if (!canAccessAllCluster) {
+                setSelectedStore(deduplicatedStores[0]?.name || '');
+            }
+            return;
+        }
+        const isValid = deduplicatedStores.some(s => isStoreMatch(s.name, selectedStore, availableStores));
+        if (!isValid) {
+            if (canAccessAllCluster) {
+                setSelectedStore('all');
+            } else {
+                setSelectedStore(deduplicatedStores[0]?.name || '');
+            }
+        }
+    }, [isOpen, deduplicatedStores, canAccessAllCluster]);
+
+    // Ngày báo cáo realtime luôn cố định theo ngày hôm nay
+    const [reportDate] = useState<string>(() => {
+        return defaultReportDate || getTodayDateString();
     });
 
     // 1. Quản lý 2 danh sách file trong cùng 1 khung upload duy nhất
@@ -265,9 +344,6 @@ export default function DailyEmployeeRevenueOcrModal({
             if (result.reportTime || result.reportDate) {
                 const timeInfo = [result.reportTime, result.reportDate ? formatDate(result.reportDate) : ''].filter(Boolean).join(' ');
                 setDetectedScreenshotTime(timeInfo);
-                if (result.reportDate) {
-                    setReportDate(result.reportDate);
-                }
             } else {
                 setDetectedScreenshotTime(`${new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} ${formatDate(reportDate)}`);
             }
@@ -450,14 +526,12 @@ export default function DailyEmployeeRevenueOcrModal({
                         <div>
                             <div className="flex items-center gap-2 flex-wrap">
                                 <h2 className="text-base sm:text-lg font-black tracking-tight text-white">
-                                    Quét OCR Doanh Thu Ngày Nhân Viên
+                                    Nhập liệu Doanh Thu Nhân Viên
                                 </h2>
-                                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-400/20 text-emerald-300 border border-emerald-400/30">
-                                    BI Mobile Vision
-                                </span>
+
                             </div>
                             <p className="text-xs text-slate-300 mt-0.5">
-                                Hỗ trợ chọn nhiều ảnh cuộn, dán nhanh <kbd className="font-mono bg-white/20 px-1 rounded">Ctrl+V</kbd> &amp; tự động xử lý ảnh mất tiêu đề
+                                Hỗ trợ chọn nhiều ảnh, dán nhanh <kbd className="font-mono bg-white/20 px-1 rounded">Ctrl+V</kbd>
                             </p>
                         </div>
                     </div>
@@ -480,65 +554,69 @@ export default function DailyEmployeeRevenueOcrModal({
 
                 {/* 2. BODY CUỘN */}
                 <div className="p-4 sm:p-5 overflow-y-auto space-y-4 flex-1">
-                    {/* KHỐI THIẾT LẬP SIÊU THỊ & NGÀY CHỐT */}
+                    {/* KHỐI THIẾT LẬP SIÊU THỊ REALTIME */}
                     <div className="bg-slate-50 border border-slate-200/90 rounded-2xl p-3.5 space-y-3">
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                            <div className="sm:col-span-2">
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                            <div className="flex-1">
                                 <label className="block text-[11px] font-black uppercase text-slate-600 mb-1 flex items-center gap-1.5">
                                     <Store className="w-3.5 h-3.5 text-blue-600" />
-                                    <span>Siêu Thị Cần Nạp Số Liệu</span>
+                                    <span>Chọn ST nhập liệu:</span>
                                     <span className="text-rose-500">*</span>
+                                    {!effectiveIsAdmin && deduplicatedStores.length > 0 && (
+                                        <span className="ml-auto text-[10px] font-normal normal-case text-slate-500">
+                                            (Được phân quyền: <strong className="text-blue-700 font-bold">{deduplicatedStores.length}</strong> ST)
+                                        </span>
+                                    )}
                                 </label>
-                                <select
-                                    value={selectedStore}
-                                    onChange={(e) => setSelectedStore(e.target.value)}
-                                    className="w-full bg-white border border-slate-300 text-slate-800 py-2 px-3 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs"
-                                >
-                                    <option value="all">🌐 Toàn Cụm Siêu Thị (Nhập chung 1 lần nhiều siêu thị)</option>
-                                    {availableStores.map(st => (
-                                        <option key={st.id || st.code || st.name} value={st.name}>
-                                            {st.code ? `[${st.code}] ` : ''}{getShortStoreName(st.name)}
-                                        </option>
-                                    ))}
-                                </select>
+                                {deduplicatedStores.length === 0 ? (
+                                    <div className="text-xs text-rose-600 font-bold p-2 bg-rose-50 border border-rose-200 rounded-xl">
+                                        ⚠️ Tài khoản của bạn chưa được phân quyền ST nào để nhập liệu. Vui lòng liên hệ Quản trị viên.
+                                    </div>
+                                ) : (
+                                    <select
+                                        value={selectedStore}
+                                        onChange={(e) => setSelectedStore(e.target.value)}
+                                        className="w-full bg-white border border-slate-300 text-slate-800 py-2.5 px-3 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs"
+                                    >
+                                        {canAccessAllCluster && (
+                                            <option value="all">🌐 Toàn Cụm (Nhập 1 lần nhiều ST)</option>
+                                        )}
+                                        {deduplicatedStores.map(st => (
+                                            <option key={st.id || st.code || st.name} value={st.name}>
+                                                {formatStoreDisplayName(st.name)}
+                                            </option>
+                                        ))}
+                                    </select>
+                                )}
                                 {selectedStore === 'all' && (
                                     <div className="mt-2 bg-blue-50 border border-blue-200 rounded-xl p-2.5 flex items-start gap-2 text-xs text-blue-900">
                                         <Users className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
                                         <div>
-                                            <strong className="font-bold">Chế độ Nhập liệu Toàn Cụm:</strong> Khi lưu Cloud, hệ thống sẽ lưu 1 phiên Toàn Cụm đồng thời tự động phân bổ số liệu về từng siêu thị thành viên theo danh bạ nhân sự!
+                                            <strong className="font-bold">Chế độ Nhập liệu Toàn Cụm:</strong> Hệ thống sẽ lưu 1 phiên Toàn Cụm đồng thời tự động phân bổ số liệu về từng ST theo danh sách nhân sự!
                                         </div>
                                     </div>
                                 )}
                             </div>
 
-                            <div>
-                                <label className="block text-[11px] font-black uppercase text-slate-600 mb-1 flex items-center gap-1.5">
-                                    <Calendar className="w-3.5 h-3.5 text-emerald-600" />
-                                    <span>Ngày Báo Cáo</span>
-                                    <span className="text-rose-500">*</span>
-                                </label>
-                                <input
-                                    type="date"
-                                    value={reportDate}
-                                    onChange={e => setReportDate(e.target.value)}
-                                    className="w-full bg-white border border-slate-300 text-slate-800 py-2 px-3 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs"
-                                />
+                            <div className="self-end sm:self-center pt-1 sm:pt-4 shrink-0 flex items-center gap-2">
+                                <div className="px-3 py-2 rounded-xl text-xs font-bold bg-blue-50 text-blue-800 border border-blue-200 flex items-center gap-1.5 shadow-2xs">
+                                    <Zap className="w-3.5 h-3.5 text-blue-600 animate-pulse" />
+                                    <span>Hôm nay: {formatDate(reportDate)}</span>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsKeyModalOpen(true)}
+                                    className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition shadow-2xs cursor-pointer ${isQuotaExceeded
+                                        ? 'bg-rose-50 text-rose-800 border-rose-300'
+                                        : keyInfo.source === 'USER'
+                                            ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                                            : 'bg-slate-50 text-slate-800 border-slate-300'
+                                        }`}
+                                >
+                                    <KeyRound className="w-3.5 h-3.5" />
+                                    <span>{Boolean(keyInfo.key) ? (keyInfo.source === 'USER' ? 'Key Cá Nhân' : 'Key Hệ Thống') : 'Nhập API Key'}</span>
+                                </button>
                             </div>
-                        </div>
-
-                        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-200/70 text-xs">
-                            <span className="text-[11px] text-slate-500 flex items-center gap-1.5">
-                                <span>🔑 API Key:</span>
-                                <strong className="text-slate-700">{Boolean(keyInfo.key) ? (keyInfo.source === 'USER' ? 'Key Cá Nhân' : 'Key Hệ Thống') : 'Chưa có Key'}</strong>
-                            </span>
-                            <button
-                                type="button"
-                                onClick={() => setIsKeyModalOpen(true)}
-                                className="text-[11px] text-blue-600 hover:underline font-bold flex items-center gap-1 cursor-pointer"
-                            >
-                                <KeyRound className="w-3 h-3" />
-                                <span>Quản lý Key Gemini</span>
-                            </button>
                         </div>
                     </div>
 
@@ -555,11 +633,10 @@ export default function DailyEmployeeRevenueOcrModal({
                                     <button
                                         type="button"
                                         onClick={() => setPasteTarget('QD')}
-                                        className={`px-2.5 py-1 rounded-md transition cursor-pointer flex items-center gap-1 ${
-                                            pasteTarget === 'QD'
-                                                ? 'bg-emerald-600 text-white shadow-2xs font-black'
-                                                : 'text-slate-600 hover:text-slate-900'
-                                        }`}
+                                        className={`px-2.5 py-1 rounded-md transition cursor-pointer flex items-center gap-1 ${pasteTarget === 'QD'
+                                            ? 'bg-emerald-600 text-white shadow-2xs font-black'
+                                            : 'text-slate-600 hover:text-slate-900'
+                                            }`}
                                     >
                                         <TrendingUp className="w-3 h-3" />
                                         <span>DTQĐ &amp; Số Lượng ({qdFiles.length})</span>
@@ -567,11 +644,10 @@ export default function DailyEmployeeRevenueOcrModal({
                                     <button
                                         type="button"
                                         onClick={() => setPasteTarget('REAL')}
-                                        className={`px-2.5 py-1 rounded-md transition cursor-pointer flex items-center gap-1 ${
-                                            pasteTarget === 'REAL'
-                                                ? 'bg-purple-600 text-white shadow-2xs font-black'
-                                                : 'text-slate-600 hover:text-slate-900'
-                                        }`}
+                                        className={`px-2.5 py-1 rounded-md transition cursor-pointer flex items-center gap-1 ${pasteTarget === 'REAL'
+                                            ? 'bg-purple-600 text-white shadow-2xs font-black'
+                                            : 'text-slate-600 hover:text-slate-900'
+                                            }`}
                                     >
                                         <CreditCard className="w-3 h-3" />
                                         <span>DT Thực &amp; Trả Góp ({realFiles.length})</span>
@@ -597,13 +673,12 @@ export default function DailyEmployeeRevenueOcrModal({
                                 onDragOver={(e) => { e.preventDefault(); setIsDraggingQD(true); }}
                                 onDragLeave={() => setIsDraggingQD(false)}
                                 onDrop={(e) => handleDropCategory(e, 'QD')}
-                                className={`border-2 border-dashed rounded-2xl p-3.5 flex flex-col justify-between transition-all bg-white ${
-                                    isDraggingQD
-                                        ? 'border-emerald-500 bg-emerald-50/70 scale-[0.99]'
-                                        : pasteTarget === 'QD'
+                                className={`border-2 border-dashed rounded-2xl p-3.5 flex flex-col justify-between transition-all bg-white ${isDraggingQD
+                                    ? 'border-emerald-500 bg-emerald-50/70 scale-[0.99]'
+                                    : pasteTarget === 'QD'
                                         ? 'border-emerald-300 ring-2 ring-emerald-100'
                                         : 'border-slate-200'
-                                }`}
+                                    }`}
                             >
                                 <input
                                     ref={qdInputRef}
@@ -678,13 +753,12 @@ export default function DailyEmployeeRevenueOcrModal({
                                 onDragOver={(e) => { e.preventDefault(); setIsDraggingReal(true); }}
                                 onDragLeave={() => setIsDraggingReal(false)}
                                 onDrop={(e) => handleDropCategory(e, 'REAL')}
-                                className={`border-2 border-dashed rounded-2xl p-3.5 flex flex-col justify-between transition-all bg-white ${
-                                    isDraggingReal
-                                        ? 'border-purple-500 bg-purple-50/70 scale-[0.99]'
-                                        : pasteTarget === 'REAL'
+                                className={`border-2 border-dashed rounded-2xl p-3.5 flex flex-col justify-between transition-all bg-white ${isDraggingReal
+                                    ? 'border-purple-500 bg-purple-50/70 scale-[0.99]'
+                                    : pasteTarget === 'REAL'
                                         ? 'border-purple-300 ring-2 ring-purple-100'
                                         : 'border-slate-200'
-                                }`}
+                                    }`}
                             >
                                 <input
                                     ref={realInputRef}
@@ -840,7 +914,7 @@ export default function DailyEmployeeRevenueOcrModal({
                                                 <th className="px-2 py-2 w-20">Mã NV</th>
                                                 <th className="px-2 py-2 min-w-[140px]">Họ và Tên Chuẩn</th>
                                                 {selectedStore === 'all' && (
-                                                    <th className="px-2 py-2 min-w-[100px] text-left">Siêu Thị</th>
+                                                    <th className="px-2 py-2 min-w-[100px] text-left">ST</th>
                                                 )}
                                                 <th className="px-2 py-2 w-14 text-right">SL</th>
                                                 <th className="px-2 py-2 w-20 text-right">DT Thực</th>
@@ -941,7 +1015,7 @@ export default function DailyEmployeeRevenueOcrModal({
                 {/* 3. FOOTER HÀNH ĐỘNG */}
                 <div className="p-4 sm:p-5 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
                     <div className="text-xs text-slate-500 font-medium">
-                        Đang nạp cho: <strong className="text-blue-700">{getShortStoreName(selectedStore)}</strong> • Ngày <strong className="text-emerald-700">{formatDate(reportDate)}</strong>
+                        Đang nạp Realtime cho: <strong className="text-blue-700">{selectedStore === 'all' ? 'Toàn Cụm' : formatStoreDisplayName(selectedStore)}</strong> • {formatDate(reportDate)}
                     </div>
 
                     <div className="flex items-center gap-2 w-full sm:w-auto justify-end flex-wrap">

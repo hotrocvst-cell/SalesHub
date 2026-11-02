@@ -292,7 +292,7 @@ export default function AccountStatusLookupModal({
                         {!isEditing && (
                             <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2 text-xs">
                                 <div className="flex justify-between items-center py-1 border-b border-slate-200/60">
-                                    <span className="text-slate-500">Đơn vị Siêu thị:</span>
+                                    <span className="text-slate-500">Đơn vị ST:</span>
                                     <span className="font-bold text-slate-800 text-right max-w-[280px] truncate">
                                         {user.store_name || '(Chưa gán siêu thị)'}
                                     </span>

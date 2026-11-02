@@ -172,7 +172,7 @@ export function buildCampaignSummaryFromSession(
         return true;
     });
 
-    // 2. Tổng số thi đua chỉ tính theo thi đua có target và theo siêu thị:
+    // 2. Tổng số thi đua chỉ tính theo thi đua có target và theo ST:
     // Thu thập các thi đua mà các nhân viên thuộc siêu thị này có target > 0
     // Chuẩn hóa về canonicalKey để triệt tiêu việc nhân đôi cột khi đổi tên / cập nhật raw_key (ví dụ: Ví trả sau vs T10 - VÍ TRẢ SAU)
     const canonicalCategoriesMap = new Map<string, {

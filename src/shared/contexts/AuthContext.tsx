@@ -488,7 +488,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         try {
             let authUserId: string | undefined;
 
-            // KIỂM TRA ĐỐI CHIẾU NHÂN SỰ ĐÃ KHAI BÁO TRƯỚC VỚI SIÊU THỊ:
+            // KIỂM TRA ĐỐI CHIẾU NHÂN SỰ ĐÃ KHAI BÁO TRƯỚC VỚI ST:
             // Nếu mã NV khớp với nhân sự đã có trong hệ thống, mặc định sử dụng họ tên và bộ phận đã lưu trước!
             let resolvedFullName = params.full_name.trim();
             let resolvedDept = params.department?.trim();

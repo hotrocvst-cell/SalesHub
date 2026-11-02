@@ -79,7 +79,7 @@ export default function SessionHistoryTab({
                 setSessions([]);
             }
         } catch (e: any) {
-            setMessage(`❌ Lỗi tải dữ liệu Supabase: ${e.message || String(e)}`);
+            setMessage(`❌ Lỗi tải dữ liệu Cloud: ${e.message || String(e)}`);
             setSessions([]);
         } finally {
             setIsLoading(false);
@@ -400,7 +400,7 @@ export default function SessionHistoryTab({
 
                                     <div className="text-[11px] text-slate-600 space-y-1 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
                                         <div className="flex justify-between">
-                                            <span className="text-slate-500">Siêu thị:</span>
+                                            <span className="text-slate-500">ST:</span>
                                             <strong className="text-slate-800">{sess.store_name}</strong>
                                         </div>
                                         {sess.report_date && (

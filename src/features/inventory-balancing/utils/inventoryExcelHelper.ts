@@ -133,7 +133,7 @@ export async function parseInventoryExcel(file: File): Promise<InventoryRawRecor
             const norm = normalizeSearchStr(val);
             if (!norm) return;
 
-            // Tên siêu thị: TUYỆT ĐỐI KHÔNG chứa 'ton kho', 'so luong', 'sl', 'toi thieu', 'khong bao gom'
+            // Tên ST: TUYỆT ĐỐI KHÔNG chứa 'ton kho', 'so luong', 'sl', 'toi thieu', 'khong bao gom'
             const isQtyOrInventory = norm.includes('so luong') || norm.includes('sl ') || norm.startsWith('sl') || norm.includes('ton kho') || norm.includes('khong bao gom') || norm.includes('toi thieu') || norm.includes('ton lo');
             if (!isQtyOrInventory) {
                 if (norm.includes('ten sieu thi') || norm.includes('ten st')) {
@@ -265,7 +265,7 @@ export function generateZaloOverallMessage(
 ): string {
     const validMatches = matches.filter(m => m.hasSource);
     if (validMatches.length === 0) {
-        return `[SALESHUB - XIN HÀNG TỒN KHO]\nSiêu thị: ${targetStore}\nHiện tại chưa tìm thấy mã hàng thiếu nào có siêu thị đối tác hỗ trợ.`;
+        return `[SALESHUB - XIN HÀNG TỒN KHO]\nST: ${targetStore}\nHiện tại chưa tìm thấy mã hàng thiếu nào có siêu thị đối tác hỗ trợ.`;
     }
 
     let msg = `📦 [ĐỀ XUẤT XIN ĐIỀU CHUYỂN TỒN KHO]\n`;

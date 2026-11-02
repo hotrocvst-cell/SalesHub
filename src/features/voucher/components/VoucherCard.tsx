@@ -135,7 +135,7 @@ export default function VoucherCard({ voucher, onCopySuccess, compact = false, o
                             {voucher.claimed_by_store && (
                                 <div className="flex items-center gap-1.5 col-span-2 text-emerald-800 bg-emerald-50/80 px-2 py-1 rounded-lg border border-emerald-100 overflow-hidden font-bold">
                                     <Store className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                                    <span className="truncate">Siêu thị: <strong>{getShortStoreName(voucher.claimed_by_store)}</strong></span>
+                                    <span className="truncate">ST: <strong>{getShortStoreName(voucher.claimed_by_store)}</strong></span>
                                 </div>
                             )}
                             {voucher.claimed_at && (

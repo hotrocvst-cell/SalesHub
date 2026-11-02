@@ -863,7 +863,7 @@ export default function EmployeePerformanceReportPage() {
                             ) : (
                                 <Store className="w-4 h-4 text-amber-600 shrink-0" />
                             )}
-                            <span className="text-slate-500 font-bold whitespace-nowrap">Siêu thị:</span>
+                            <span className="text-slate-500 font-bold whitespace-nowrap">ST:</span>
                             <select
                                 value={selectedStore}
                                 onChange={e => setSelectedStore(e.target.value)}

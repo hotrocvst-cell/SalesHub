@@ -283,7 +283,7 @@ LƯU Ý NGHIỆP VỤ BẮT BUỘC:
    - CỘT 2: Tiêu đề cột có thể là "DOANH THU" hoặc "SỐ LƯỢNG".
    - CỘT 3: Luôn là "TARGET".
    - CỘT 4: "% HT THÁNG".
-4. DƯỚI DÒNG TỔNG là CÁC DÒNG SIÊU THỊ:
+4. DƯỚI DÒNG TỔNG là CÁC DÒNG ST:
    - Tên siêu thị chữ màu xanh dương (ví dụ: "AAR_BRV_VTA - 290 Trương Công Định", "TGD_BRV_VTA - 290 Trương Công Định").
    - Giá trị Cột 2 (DOANH THU hoặc SỐ LƯỢNG thực tế).
    - Giá trị Cột 3 (TARGET).

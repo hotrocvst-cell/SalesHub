@@ -166,7 +166,7 @@ export default function StoreConfirmModal({
                     <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-2.5 text-xs text-amber-800">
                         <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                         <div>
-                            <span className="font-bold block">Quy chuẩn dữ liệu siêu thị:</span>
+                            <span className="font-bold block">Quy chuẩn dữ liệu ST:</span>
                             <span>
                                 Báo cáo Doanh thu và Thi đua được xuất theo từng siêu thị riêng biệt. Vui lòng xác nhận chính xác siêu thị đích trước khi lưu.
                             </span>

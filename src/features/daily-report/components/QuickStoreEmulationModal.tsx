@@ -17,7 +17,16 @@ import {
     RotateCcw
 } from 'lucide-react';
 import type { StoreItem, CampaignDictItem } from '../../../core/lib/storage';
-import { getShortStoreName, formatValue, cleanBiNumber, formatDate } from '../../../core/lib/formatters';
+import {
+    getShortStoreName,
+    formatStoreDisplayName,
+    isStoreMatch,
+    deduplicateStoreNames,
+    formatValue,
+    cleanBiNumber,
+    formatDate
+} from '../../../core/lib/formatters';
+import { useAuth } from '../../../shared/contexts/AuthContext';
 import type { StoreMobileEmulationCardItem } from '../../data-update/types/ocrTypes';
 import {
     extractStoreMobileEmulationCardsBatch
@@ -72,30 +81,100 @@ export default function QuickStoreEmulationModal({
 }: Props) {
     if (!isOpen) return null;
 
-    // Danh sách siêu thị đầy đủ để chọn
-    const storeOptions = useMemo(() => {
-        const set = new Set<string>();
+    const { currentUser, isAdmin: authIsAdmin, canAccessStore } = useAuth();
+    const effectiveIsAdmin = Boolean(isAdmin || authIsAdmin || currentUser?.role === 'ADMIN');
+
+    // 1. Tập hợp tất cả các siêu thị từ các nguồn và loại bỏ trùng lặp triệt để
+    const allStoreOptions = useMemo(() => {
+        const rawList: string[] = [];
         // Ưu tiên các siêu thị đã có phiên
         (existingSessions || []).forEach(s => {
-            if (s.store_name) set.add(s.store_name);
+            if (s.store_name) rawList.push(s.store_name);
         });
-        // Bổ sung các siêu thị từ danh mục
+        // Bổ sung các siêu thị từ danh mục availableStores
         availableStores.forEach(s => {
-            const raw = s.name || s.short_name;
-            if (raw) set.add(raw);
+            if (s.name) rawList.push(s.name);
+            else if (s.short_name) rawList.push(s.short_name);
         });
-        const list = Array.from(set).filter(Boolean);
-        return list.sort();
-    }, [existingSessions, availableStores]);
+        // Bổ sung siêu thị từ user profile
+        if (currentUser?.store_name) {
+            rawList.push(currentUser.store_name);
+        }
+        (currentUser?.accessible_stores || []).forEach(s => {
+            if (s) rawList.push(s);
+        });
 
-    // Khởi tạo siêu thị mặc định (nếu defaultSelectedStore hợp lệ và không phải 'Tổng')
+        // Loại bỏ trùng lặp triệt để và ưu tiên tên đầy đủ có mã số
+        return deduplicateStoreNames(rawList, availableStores);
+    }, [existingSessions, availableStores, currentUser]);
+
+    // 2. Lọc danh sách siêu thị nghiêm ngặt theo phân quyền người dùng
+    const storeOptions = useMemo(() => {
+        let allowed: string[] = [];
+        if (effectiveIsAdmin) {
+            allowed = allStoreOptions;
+        } else {
+            // Với người dùng không phải Admin (Quản lý cụm, Trưởng ca, Nhân viên)
+            allowed = allStoreOptions.filter(st => {
+                if (/^(tổng|tong|all|toàn cụm)/i.test(st)) return false;
+                // 1. Kiểm tra bằng canAccessStore
+                if (canAccessStore(st) || canAccessStore(getShortStoreName(st))) return true;
+                // 2. Kiểm tra danh sách accessible_stores của user
+                if (currentUser?.accessible_stores && currentUser.accessible_stores.length > 0) {
+                    if (currentUser.accessible_stores.some(acc => isStoreMatch(acc, st, availableStores))) return true;
+                }
+                // 3. Kiểm tra siêu thị chính của user
+                if (currentUser?.store_name && isStoreMatch(currentUser.store_name, st, availableStores)) {
+                    return true;
+                }
+                return false;
+            });
+
+            // Dự phòng nếu danh sách lọc rỗng nhưng user có store_name
+            if (allowed.length === 0 && currentUser?.store_name) {
+                allowed = [currentUser.store_name];
+            }
+        }
+
+        // Đảm bảo kết quả cuối cùng không bao giờ bị trùng lặp
+        return deduplicateStoreNames(allowed, availableStores);
+    }, [allStoreOptions, effectiveIsAdmin, canAccessStore, currentUser, availableStores]);
+
+    // Khởi tạo siêu thị mặc định (nếu defaultSelectedStore hợp lệ và user có quyền)
     const [selectedStore, setSelectedStore] = useState<string>(() => {
-        if (defaultSelectedStore && defaultSelectedStore !== 'Tổng' && defaultSelectedStore !== 'all') {
-            const match = storeOptions.find(s => s === defaultSelectedStore || getShortStoreName(s) === defaultSelectedStore);
+        if (defaultSelectedStore && !/^(tổng|tong|all|toàn cụm)/i.test(defaultSelectedStore)) {
+            const match = storeOptions.find(s => isStoreMatch(s, defaultSelectedStore) || s === defaultSelectedStore);
             if (match) return match;
         }
-        return storeOptions[0] || '10335 - AAR_BRV_VTA - 290 Trương Công Định';
+        if (currentUser?.store_name) {
+            const userStoreMatch = storeOptions.find(s => isStoreMatch(s, currentUser.store_name));
+            if (userStoreMatch) return userStoreMatch;
+        }
+        return storeOptions[0] || '';
     });
+
+    // Đồng bộ lại selectedStore khi mở modal hoặc danh sách options thay đổi
+    useEffect(() => {
+        if (!isOpen || storeOptions.length === 0) return;
+        const isCurrentValid = storeOptions.includes(selectedStore);
+        if (!isCurrentValid || (defaultSelectedStore && !/^(tổng|tong|all|toàn cụm)/i.test(defaultSelectedStore))) {
+            let nextStore = '';
+            if (defaultSelectedStore && !/^(tổng|tong|all|toàn cụm)/i.test(defaultSelectedStore)) {
+                const match = storeOptions.find(s => isStoreMatch(s, defaultSelectedStore) || s === defaultSelectedStore);
+                if (match) nextStore = match;
+            }
+            if (!nextStore && currentUser?.store_name) {
+                const userStoreMatch = storeOptions.find(s => isStoreMatch(s, currentUser.store_name));
+                if (userStoreMatch) nextStore = userStoreMatch;
+            }
+            if (!nextStore) {
+                nextStore = storeOptions[0] || '';
+            }
+            if (nextStore && nextStore !== selectedStore) {
+                setSelectedStore(nextStore);
+            }
+        }
+    }, [isOpen, defaultSelectedStore, storeOptions]);
 
     // 1. Quản lý danh sách file ảnh (upload hoặc Ctrl+V)
     const [files, setFiles] = useState<File[]>([]);
@@ -350,7 +429,7 @@ export default function QuickStoreEmulationModal({
                 return;
             }
 
-            showToast(`✅ Đã lưu thành công ${campaignItems.length} chỉ tiêu thi đua cho ${getShortStoreName(selectedStore)}!`);
+            showToast(`✅ Đã lưu thành công ${campaignItems.length} chỉ tiêu thi đua cho ${formatStoreDisplayName(selectedStore)}!`);
             if (res.updatedSessions && onSavedSuccessfully) {
                 onSavedSuccessfully(res.updatedSessions);
             }
@@ -390,7 +469,7 @@ export default function QuickStoreEmulationModal({
                         <div>
                             <div className="flex items-center gap-2 flex-wrap">
                                 <h2 className="text-base sm:text-lg font-black tracking-tight text-white">
-                                    Nạp Nhanh Thi Đua Từng Siêu Thị
+                                    Nhập Thi Đua Từng Siêu Thị
                                 </h2>
                                 <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-400/20 text-emerald-300 border border-emerald-400/30">
                                     {mode === 'DAILY_BUSINESS_RECORD' && reportDate
@@ -398,11 +477,6 @@ export default function QuickStoreEmulationModal({
                                         : 'OCR Thẻ Mobile'}
                                 </span>
                             </div>
-                            <p className="text-xs text-slate-300 mt-0.5">
-                                {mode === 'DAILY_BUSINESS_RECORD' && reportDate
-                                    ? `Trích xuất thẻ mobile thi đua chốt ngày ${formatDate(reportDate)} (Ngày ${passedDays || 1}/${totalDays || 30}) • Dán ảnh Ctrl+V`
-                                    : 'Hỗ trợ dán ảnh trực tiếp từ Zalo/Clipboard (Ctrl+V) hoặc kéo thả ảnh chụp thẻ'}
-                            </p>
                         </div>
                     </div>
 
@@ -432,31 +506,41 @@ export default function QuickStoreEmulationModal({
                                     <Store className="w-3.5 h-3.5 text-blue-600" />
                                     <span>Chọn Siêu Thị Cần Cập Nhật Thi Đua</span>
                                     <span className="text-rose-500">*</span>
+                                    {!effectiveIsAdmin && storeOptions.length > 0 && (
+                                        <span className="ml-auto text-[10px] font-normal normal-case text-slate-500">
+                                            (Được phân quyền: <strong className="text-blue-700 font-bold">{storeOptions.length}</strong> siêu thị)
+                                        </span>
+                                    )}
                                 </label>
-                                <select
-                                    value={selectedStore}
-                                    onChange={(e) => setSelectedStore(e.target.value)}
-                                    className="w-full bg-white border border-slate-300 text-slate-800 py-2 px-3 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs"
-                                >
-                                    {storeOptions.map(st => (
-                                        <option key={st} value={st}>
-                                            {getShortStoreName(st)} ({st})
-                                        </option>
-                                    ))}
-                                </select>
+                                {storeOptions.length === 0 ? (
+                                    <div className="text-xs text-rose-600 font-bold p-2 bg-rose-50 border border-rose-200 rounded-xl">
+                                        ⚠️ Tài khoản của bạn chưa được phân quyền siêu thị nào để nhập liệu. Vui lòng liên hệ Quản trị viên.
+                                    </div>
+                                ) : (
+                                    <select
+                                        value={selectedStore}
+                                        onChange={(e) => setSelectedStore(e.target.value)}
+                                        className="w-full bg-white border border-slate-300 text-slate-800 py-2 px-3 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs"
+                                    >
+                                        {storeOptions.map(st => (
+                                            <option key={st} value={st}>
+                                                {formatStoreDisplayName(st)}
+                                            </option>
+                                        ))}
+                                    </select>
+                                )}
                             </div>
 
                             <div className="self-end sm:self-center pt-1 sm:pt-4">
                                 <button
                                     type="button"
                                     onClick={() => setIsKeyModalOpen(true)}
-                                    className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition shadow-2xs cursor-pointer ${
-                                        isQuotaExceeded
-                                            ? 'bg-rose-50 text-rose-800 border-rose-300'
-                                            : keyInfo.source === 'USER'
+                                    className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition shadow-2xs cursor-pointer ${isQuotaExceeded
+                                        ? 'bg-rose-50 text-rose-800 border-rose-300'
+                                        : keyInfo.source === 'USER'
                                             ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
                                             : 'bg-blue-50 text-blue-800 border-blue-300'
-                                    }`}
+                                        }`}
                                 >
                                     <KeyRound className="w-3.5 h-3.5" />
                                     <span>{Boolean(keyInfo.key) ? (keyInfo.source === 'USER' ? 'Key Cá Nhân' : 'Key Hệ Thống') : 'Nhập API Key'}</span>
@@ -479,13 +563,12 @@ export default function QuickStoreEmulationModal({
                         onDragOver={handleDragOver}
                         onDragLeave={handleDragLeave}
                         onDrop={handleDrop}
-                        className={`relative border-2 border-dashed rounded-2xl p-5 text-center transition-all ${
-                            isDragging
-                                ? 'border-blue-500 bg-blue-50/70 scale-[0.99]'
-                                : files.length > 0
+                        className={`relative border-2 border-dashed rounded-2xl p-5 text-center transition-all ${isDragging
+                            ? 'border-blue-500 bg-blue-50/70 scale-[0.99]'
+                            : files.length > 0
                                 ? 'border-emerald-300 bg-emerald-50/30'
                                 : 'border-slate-300 bg-slate-50/50 hover:bg-slate-50 hover:border-blue-400'
-                        }`}
+                            }`}
                     >
                         <input
                             ref={fileInputRef}
@@ -503,11 +586,9 @@ export default function QuickStoreEmulationModal({
 
                             <div className="space-y-1">
                                 <p className="text-xs sm:text-sm font-extrabold text-slate-800">
-                                    Nhấn <kbd className="font-mono bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded border border-blue-200 font-bold">Ctrl + V</kbd> để dán ảnh ngay, hoặc kéo thả ảnh vào đây
+                                    Nhấn <kbd className="font-mono bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded border border-blue-200 font-bold">Ctrl + V</kbd> để nhập ảnh ngay, hoặc kéo thả ảnh vào đây
                                 </p>
-                                <p className="text-[11px] text-slate-500">
-                                    Hỗ trợ ảnh chụp màn hình điện thoại, ảnh tin nhắn Zalo. Có thể nạp nhiều ảnh liên tiếp nếu cuộn màn hình.
-                                </p>
+
                             </div>
 
                             <button
@@ -662,11 +743,10 @@ export default function QuickStoreEmulationModal({
                                                             <button
                                                                 type="button"
                                                                 onClick={() => handleUpdateCard(idx, 'unit', c.unit === 'DT' ? 'SL' : 'DT')}
-                                                                className={`px-1.5 py-0.5 rounded text-[10px] font-black cursor-pointer border ${
-                                                                    c.unit === 'DT'
-                                                                        ? 'bg-blue-50 text-blue-700 border-blue-200'
-                                                                        : 'bg-purple-50 text-purple-700 border-purple-200'
-                                                                }`}
+                                                                className={`px-1.5 py-0.5 rounded text-[10px] font-black cursor-pointer border ${c.unit === 'DT'
+                                                                    ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                                                    : 'bg-purple-50 text-purple-700 border-purple-200'
+                                                                    }`}
                                                                 title="Bấm để đổi Đơn vị: DT (Doanh thu triệu) hoặc SL (Số lượng)"
                                                             >
                                                                 {c.unit}
@@ -691,11 +771,10 @@ export default function QuickStoreEmulationModal({
                                                             />
                                                         </td>
                                                         <td className="px-2 py-1.5 text-right font-mono font-black">
-                                                            <span className={`px-1.5 py-0.5 rounded text-[10.5px] ${
-                                                                isPassed
-                                                                    ? 'bg-emerald-100 text-emerald-800'
-                                                                    : 'bg-rose-100 text-rose-800'
-                                                            }`}>
+                                                            <span className={`px-1.5 py-0.5 rounded text-[10.5px] ${isPassed
+                                                                ? 'bg-emerald-100 text-emerald-800'
+                                                                : 'bg-rose-100 text-rose-800'
+                                                                }`}>
                                                                 {c.completionRate}%
                                                             </span>
                                                         </td>
@@ -723,7 +802,7 @@ export default function QuickStoreEmulationModal({
                 {/* 3. FOOTER HÀNH ĐỘNG */}
                 <div className="p-4 sm:p-5 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
                     <div className="text-xs text-slate-500 font-medium">
-                        Đang lưu cho: <strong className="text-blue-700">{getShortStoreName(selectedStore)}</strong>
+                        Đang lưu cho: <strong className="text-blue-700">{formatStoreDisplayName(selectedStore)}</strong>
                         {mode === 'DAILY_BUSINESS_RECORD' && reportDate && (
                             <span className="ml-1 text-slate-400">({formatDate(reportDate)})</span>
                         )}

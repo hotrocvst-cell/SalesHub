@@ -215,7 +215,7 @@ export default function EmployeeListSection({
                     <div className="flex flex-wrap items-center gap-2 flex-1">
                         <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
                             <Store className="w-4 h-4 text-blue-600" />
-                            <span>Siêu thị:</span>
+                            <span>ST:</span>
                         </div>
                         <select
                             value={selectedStoreFilter}

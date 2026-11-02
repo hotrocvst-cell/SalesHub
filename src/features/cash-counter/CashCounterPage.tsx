@@ -266,7 +266,7 @@ export default function CashCounterPage() {
 
         const lines = [
             `💵 [PHIẾU KIỂM QUỸ]`,
-            `🏪 Siêu thị: ${selectedStore || currentUser.store_name || 'N/A'}`,
+            `🏪 ST: ${selectedStore || currentUser.store_name || 'N/A'}`,
             `👤 Người kiểm: ${userNote || 'N/A'}`,
             ...(auditNote.trim() ? [`📝 Ghi chú: ${auditNote.trim()}`] : []),
             `⏰ Giờ kiểm: ${new Date().toLocaleString('vi-VN')}`,
@@ -450,7 +450,7 @@ export default function CashCounterPage() {
                     <div className="space-y-1">
                         <label className="text-[10.5px] font-bold text-slate-600 flex items-center gap-1">
                             <Store className="w-3 h-3 text-indigo-600" />
-                            Siêu Thị:
+                            ST:
                         </label>
                         <input
                             type="text"

@@ -460,7 +460,7 @@ export default function PerformanceConfigModal({
                                     ))}
                                 </select>
                                 <p className="text-[11px] text-amber-900/80 leading-relaxed">
-                                    💡 <strong>Cấu hình theo đích danh siêu thị:</strong> Mỗi siêu thị có thể áp dụng tỷ lệ % hoặc số lượng TOP/BOT độc lập để phù hợp với quân số thực tế của shop.
+                                    💡 <strong>Cấu hình theo đích danh ST:</strong> Mỗi siêu thị có thể áp dụng tỷ lệ % hoặc số lượng TOP/BOT độc lập để phù hợp với quân số thực tế của shop.
                                 </p>
                             </div>
 

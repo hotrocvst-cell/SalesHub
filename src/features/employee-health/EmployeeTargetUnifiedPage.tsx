@@ -426,7 +426,7 @@ export default function EmployeeTargetUnifiedPage() {
             <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                     <Store className="w-4 h-4 text-blue-600" />
-                    <span className="text-xs font-bold text-slate-700">Lọc theo siêu thị:</span>
+                    <span className="text-xs font-bold text-slate-700">Lọc theo ST:</span>
                     <select
                         value={selectedStore}
                         onChange={e => setSelectedStore(e.target.value)}

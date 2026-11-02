@@ -229,13 +229,13 @@ export default function RealtimeDataUpdateModal({
                         </div>
                         <div>
                             <h2 className="text-base sm:text-lg font-black text-white tracking-tight flex items-center gap-2">
-                                <span>Nạp Phiên Dữ Liệu Realtime Mới</span>
+                                <span>Nạp Dữ Liệu Realtime</span>
                                 <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-400/30">
                                     Cloud Realtime
                                 </span>
                             </h2>
                             <p className="text-xs text-slate-400 mt-0.5">
-                                Trích xuất ảnh OCR tự động hoặc nhập trực quan • Mỗi siêu thị lưu duy nhất 1 phiên mới nhất
+                                Mỗi siêu thị lưu duy nhất 1 phiên mới nhất
                             </p>
                         </div>
                     </div>
@@ -265,26 +265,24 @@ export default function RealtimeDataUpdateModal({
                         <button
                             type="button"
                             onClick={() => setActiveTab('ocr')}
-                            className={`flex items-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-bold transition cursor-pointer ${
-                                activeTab === 'ocr'
-                                    ? 'bg-blue-600 text-white shadow-xs'
-                                    : 'text-slate-600 hover:text-slate-900'
-                            }`}
+                            className={`flex items-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-bold transition cursor-pointer ${activeTab === 'ocr'
+                                ? 'bg-blue-600 text-white shadow-xs'
+                                : 'text-slate-600 hover:text-slate-900'
+                                }`}
                         >
                             <Camera className="w-3.5 h-3.5" />
-                            <span>1. Tải Ảnh OCR Tự Động</span>
+                            <span>1. Tải Ảnh</span>
                         </button>
                         <button
                             type="button"
                             onClick={() => setActiveTab('manual')}
-                            className={`flex items-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-bold transition cursor-pointer ${
-                                activeTab === 'manual'
-                                    ? 'bg-blue-600 text-white shadow-xs'
-                                    : 'text-slate-600 hover:text-slate-900'
-                            }`}
+                            className={`flex items-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-bold transition cursor-pointer ${activeTab === 'manual'
+                                ? 'bg-blue-600 text-white shadow-xs'
+                                : 'text-slate-600 hover:text-slate-900'
+                                }`}
                         >
                             <Edit3 className="w-3.5 h-3.5" />
-                            <span>2. Rà Soát & Nhập Trực Quan ({storesData.length} ST)</span>
+                            <span>2. Rà Soát & Nhập ({storesData.length} ST)</span>
                         </button>
                     </div>
 

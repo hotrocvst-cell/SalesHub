@@ -102,7 +102,7 @@ export default function DataStatusHeader({
                         ) : (
                             <Store className="w-3.5 h-3.5 text-slate-500 shrink-0" />
                         )}
-                        <span className="text-xs font-medium text-slate-600">Siêu thị:</span>
+                        <span className="text-xs font-medium text-slate-600">ST:</span>
                         <select
                             value={selectedStore}
                             onChange={e => onSelectStore(e.target.value)}

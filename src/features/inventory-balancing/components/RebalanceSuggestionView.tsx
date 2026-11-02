@@ -93,7 +93,7 @@ export default function RebalanceSuggestionView({
     // Hai input tìm kiếm lọc song song: theo sản phẩm và theo siêu thị
     const [searchProductKeyword, setSearchProductKeyword] = useState<string>('');
     const [searchStoreKeyword, setSearchStoreKeyword] = useState<string>('');
-    // Bộ lọc trạng thái lệnh khi xem theo siêu thị: 'ALL' (Tất cả) | 'UNORDERED' (Chưa tạo lệnh - Ẩn đã tạo) | 'ORDERED' (Đã tạo lệnh)
+    // Bộ lọc trạng thái lệnh khi xem theo ST: 'ALL' (Tất cả) | 'UNORDERED' (Chưa tạo lệnh - Ẩn đã tạo) | 'ORDERED' (Đã tạo lệnh)
     const [orderedFilterMode, setOrderedFilterMode] = useState<'ALL' | 'UNORDERED' | 'ORDERED'>('ALL');
 
     // Tổng số lượng lệnh xin hàng đã đánh dấu
@@ -154,7 +154,7 @@ export default function RebalanceSuggestionView({
     }, [matches, filterOnlyHasSource, searchProductKeyword, searchStoreKeyword, filterOnlyHasSales, salesVelocityMap]);
 
     // Lọc danh sách theo siêu thị đối tác, từ khóa tìm kiếm (SP & Siêu thị hoạt động song song) và trạng thái tạo lệnh
-    // Khi đang xem theo siêu thị: Danh sách sản phẩm bên trong được sắp xếp theo tên sản phẩm A-Z
+    // Khi đang xem theo ST: Danh sách sản phẩm bên trong được sắp xếp theo tên sản phẩm A-Z
     const displayedGroupedByStore = useMemo(() => {
         const pKw = (searchProductKeyword || '').toLowerCase().trim();
         const sKw = (searchStoreKeyword || '').toLowerCase().trim();
@@ -224,7 +224,7 @@ export default function RebalanceSuggestionView({
     const searchDisplayLabel = useMemo(() => {
         const parts = [];
         if (searchProductKeyword.trim()) parts.push(`Sản phẩm: "${searchProductKeyword.trim()}"`);
-        if (searchStoreKeyword.trim()) parts.push(`Siêu thị: "${searchStoreKeyword.trim()}"`);
+        if (searchStoreKeyword.trim()) parts.push(`ST: "${searchStoreKeyword.trim()}"`);
         return parts.join(' • ');
     }, [searchProductKeyword, searchStoreKeyword]);
 
@@ -373,7 +373,7 @@ export default function RebalanceSuggestionView({
                             )}
                         </button>
 
-                        {/* Khi đang xem theo siêu thị: Cho phép xuất Excel xin hàng 4 cột ERP */}
+                        {/* Khi đang xem theo ST: Cho phép xuất Excel xin hàng 4 cột ERP */}
                         {viewMode === 'store' && displayedGroupedByStore.length > 0 && (
                             <button
                                 type="button"

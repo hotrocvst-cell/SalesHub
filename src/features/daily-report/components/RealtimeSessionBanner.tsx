@@ -80,7 +80,7 @@ export default function RealtimeSessionBanner({
                             </span>
                             <span className="text-xs sm:text-sm font-extrabold text-white tracking-tight flex items-center gap-1.5">
                                 <Clock className="w-3.5 h-3.5 text-blue-300" />
-                                <span>Phiên Cloud:</span>
+                                <span>Phiên:</span>
                                 <span className="text-amber-300 font-mono font-black">{timeDisplay}</span>
                                 {dateDisplay && <span className="text-slate-300 text-xs font-normal">({dateDisplay})</span>}
                             </span>
@@ -88,7 +88,7 @@ export default function RealtimeSessionBanner({
 
                         <p className="text-[11px] text-slate-300 mt-0.5 flex items-center gap-2 flex-wrap">
                             <span>
-                                Đơn vị: <strong className="text-white">{selectedStore === 'Tổng' ? 'Toàn Cụm' : selectedStore}</strong>
+                                Cụm/ST: <strong className="text-white">{selectedStore === 'Tổng' ? 'Toàn Cụm' : selectedStore}</strong>
                             </span>
                             <span className="text-slate-500">•</span>
                             <span>
@@ -154,7 +154,7 @@ export default function RealtimeSessionBanner({
                         className="px-3.5 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition shadow-sm border border-blue-400/30 cursor-pointer"
                     >
                         <Camera className="w-3.5 h-3.5" />
-                        <span>Nạp Cả Cụm (Bảng To)</span>
+                        <span>Nạp Cả Cụm</span>
                     </button>
                 </div>
             </div>

@@ -11,7 +11,7 @@ trigger: always_on
      - Ghi chú hệ thống: *"Hệ thống phân tích hiệu quả...", "SalesHub Analytics System", "SalesHub Report..."*
      - Thông tin kỹ thuật: *"Độ phân giải siêu nét 4K/8K (xxx px)..."*
      - Ngày giờ xuất báo cáo: *"Xuất lúc: ...", "Xuất từ SalesHub: ..."*
-     - Thông tin siêu thị phụ lục ở chân ảnh: *"Báo cáo... • Siêu thị: ..."*
+     - Thông tin siêu thị phụ lục ở chân ảnh: *"Báo cáo... • ST: ..."*
 
 2. **Mục đích**:
    - Giữ cho hình ảnh báo cáo tinh gọn, thẩm mỹ, sạch sẽ và tối ưu tối đa không gian hiển thị theo chiều dọc màn hình smartphone (portrait) cũng như màn hình desktop.

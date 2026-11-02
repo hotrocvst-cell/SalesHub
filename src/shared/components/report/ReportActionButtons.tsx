@@ -90,6 +90,7 @@ export default function ReportActionButtons({
     const finalIsCopying = isCopying || isCopyingImage;
     const [isInternalModalOpen, setIsInternalModalOpen] = useState<boolean>(false);
     const [internalCopySuccess, setInternalCopySuccess] = useState<boolean>(false);
+    const [internalTextCopySuccess, setInternalTextCopySuccess] = useState<boolean>(false);
 
     // Xử lý mở Modal nhận xét
     const handleOpenAssessment = () => {
@@ -109,6 +110,18 @@ export default function ReportActionButtons({
             setTimeout(() => setInternalCopySuccess(false), 2500);
         } catch (e) {
             console.error('Lỗi sao chép ảnh:', e);
+        }
+    };
+
+    // Xử lý wrap Copy chữ có hiệu ứng phản hồi
+    const handleCopyTextWrapped = async () => {
+        if (!onCopyText) return;
+        try {
+            await onCopyText();
+            setInternalTextCopySuccess(true);
+            setTimeout(() => setInternalTextCopySuccess(false), 2500);
+        } catch (e) {
+            console.error('Lỗi sao chép văn bản:', e);
         }
     };
 
@@ -212,12 +225,20 @@ export default function ReportActionButtons({
             {onCopyText && (
                 <button
                     type="button"
-                    onClick={onCopyText}
-                    className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-2xl text-xs font-black flex items-center gap-1.5 transition cursor-pointer shadow-2xs active:scale-95"
-                    title="Sao chép toàn bộ văn bản tóm tắt vào bộ nhớ tạm"
+                    onClick={handleCopyTextWrapped}
+                    className={`px-3 py-2 border rounded-2xl text-xs font-black flex items-center gap-1.5 transition cursor-pointer shadow-2xs active:scale-95 ${
+                        internalTextCopySuccess
+                            ? 'bg-blue-600 text-white border-blue-600'
+                            : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
+                    }`}
+                    title="Sao chép văn bản nhận xét tóm tắt vào bộ nhớ tạm"
                 >
-                    <FileText className="w-4 h-4 text-slate-500" />
-                    <span>{copyTextLabel}</span>
+                    {internalTextCopySuccess ? (
+                        <Check className="w-4 h-4 text-white" />
+                    ) : (
+                        <FileText className="w-4 h-4 text-slate-500" />
+                    )}
+                    <span>{internalTextCopySuccess ? 'ĐÃ COPY CHỮ!' : copyTextLabel}</span>
                 </button>
             )}
 

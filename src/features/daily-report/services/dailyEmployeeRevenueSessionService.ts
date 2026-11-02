@@ -230,7 +230,7 @@ export async function saveDailyEmployeeSession(
 }
 
 /**
- * Lưu phiên Doanh thu ngày cho Cụm nhiều siêu thị:
+ * Lưu phiên Doanh thu ngày cho Cụm nhiều ST:
  * 1. Lưu phiên tổng hợp với store_name = 'all'
  * 2. Tự động nhóm nhân viên theo store_name trong danh bạ và lưu phiên riêng cho từng siêu thị trong cụm
  */

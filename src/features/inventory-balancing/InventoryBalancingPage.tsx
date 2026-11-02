@@ -93,10 +93,10 @@ export default function InventoryBalancingPage() {
     // Key: `${source_store}__${product_code}` -> { is_ordered, ordered_at }
     const [orderedItemsMap, setOrderedItemsMap] = useState<Record<string, { is_ordered: boolean; ordered_at: string }>>({});
 
-    // Map lưu trạng thái giữ / loại trừ sản phẩm cần xin hàng theo từng siêu thị: key `${source_store}__${product_code}`
+    // Map lưu trạng thái giữ / loại trừ sản phẩm cần xin hàng theo từng ST: key `${source_store}__${product_code}`
     const [excludedStoreItemKeys, setExcludedStoreItemKeys] = useState<Record<string, boolean>>({});
 
-    // Map điều chỉnh nhanh số lượng cần xin tùy chỉnh theo từng siêu thị: key `${source_store}__${product_code}`
+    // Map điều chỉnh nhanh số lượng cần xin tùy chỉnh theo từng ST: key `${source_store}__${product_code}`
     const [storeCustomQtyMap, setStoreCustomQtyMap] = useState<Record<string, number>>({});
 
     // Từ khóa loại trừ sản phẩm trong Bước 1 (ví dụ: Apple, iPhone, iPad...)
@@ -992,7 +992,7 @@ export default function InventoryBalancingPage() {
             setLastSyncTime(new Date().toISOString());
 
             if (result.storageType === 'cloud') {
-                alert(`Đã lưu cấu hình cân tồn kho & trạng thái lệnh xin hàng thành công lên Supabase Cloud cho siêu thị: ${targetStore}!`);
+                alert(`Đã lưu cấu hình cân tồn kho & trạng thái lệnh xin hàng thành công lên Supabase Cloud cho ST: ${targetStore}!`);
             } else {
                 alert(`Đã lưu danh sách vào bộ nhớ cục bộ (Local cache). Hãy kiểm tra kết nối bảng Supabase Cloud.`);
             }

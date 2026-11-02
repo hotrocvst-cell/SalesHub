@@ -173,7 +173,7 @@ export default function VoucherResetModal({
                                     </div>
                                 </div>
                                 <div>
-                                    <span className="text-slate-400">Siêu thị:</span>
+                                    <span className="text-slate-400">ST:</span>
                                     <div className="font-bold text-slate-800">{foundVoucher.store_name}</div>
                                 </div>
                                 {foundVoucher.claimed_by_name && (

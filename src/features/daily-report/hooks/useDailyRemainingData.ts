@@ -562,8 +562,8 @@ export function useDailyRemainingData({
             }
             t += `🎯 ĐẠT TARGET NGÀY: ${stats.pass.length} / ${stats.total} ngành hàng (${stats.passRate.toFixed(0)}%)\n`;
 
-            if (type === 1) {
-                // MẪU 1: VỪA TỔNG QUÁT VỪA CHI TIẾT 3 NHÓM
+            if (type === 3) {
+                // MẪU 3: TỔNG QUÁT SÚC TÍCH
                 const totalFails = stats.near.length + stats.speed.length + stats.alert.length;
                 if (totalFails === 0) {
                     t += `\n🎉 Toàn bộ các chỉ tiêu thi đua đều đạt target ngày!`;
@@ -572,26 +572,6 @@ export function useDailyRemainingData({
                     if (stats.near.length > 0) t += `\n- ⚡ CẬN ĐÍCH (>80%): ${stats.near.length} NH`;
                     if (stats.speed.length > 0) t += `\n- 🔥 CẦN TĂNG TỐC (50% - 80%): ${stats.speed.length} NH`;
                     if (stats.alert.length > 0) t += `\n- 🚨 NGUY HIỂM (<50%): ${stats.alert.length} NH`;
-
-                    t += `\n\n📋 CHI TIẾT THEO TỪNG NHÓM:`;
-                    if (stats.near.length > 0) {
-                        t += `\n\n⚡ CẬN ĐÍCH (>80%):`;
-                        stats.near.forEach(c => {
-                            t += `\n• ${c.label}: thiếu ${c.appliedShortage} (RT: ${c.actual}/${c.appliedDailyTarget}, ${c.appliedPctHT.toFixed(0)}%)`;
-                        });
-                    }
-                    if (stats.speed.length > 0) {
-                        t += `\n\n🔥 CẦN TĂNG TỐC (50% - 80%):`;
-                        stats.speed.forEach(c => {
-                            t += `\n• ${c.label}: thiếu ${c.appliedShortage} (RT: ${c.actual}/${c.appliedDailyTarget}, ${c.appliedPctHT.toFixed(0)}%)`;
-                        });
-                    }
-                    if (stats.alert.length > 0) {
-                        t += `\n\n🚨 NGUY HIỂM (<50%):`;
-                        stats.alert.forEach(c => {
-                            t += `\n• ${c.label}: thiếu ${c.appliedShortage} (RT: ${c.actual}/${c.appliedDailyTarget}, ${c.appliedPctHT.toFixed(0)}%)`;
-                        });
-                    }
                 }
             } else if (type === 2) {
                 // MẪU 2: CHI TIẾT 3 NHÓM
@@ -619,17 +599,6 @@ export function useDailyRemainingData({
                         });
                     }
                 }
-            } else if (type === 3) {
-                // MẪU 3: TỔNG QUÁT SÚC TÍCH
-                const totalFails = stats.near.length + stats.speed.length + stats.alert.length;
-                if (totalFails === 0) {
-                    t += `\n🎉 Toàn bộ các chỉ tiêu thi đua đều đạt target ngày!`;
-                } else {
-                    t += `\n📊 TỔNG HỢP CHƯA ĐẠT (${totalFails} NH):`;
-                    if (stats.near.length > 0) t += `\n- ⚡ CẬN ĐÍCH (>80%): ${stats.near.length} NH`;
-                    if (stats.speed.length > 0) t += `\n- 🔥 CẦN TĂNG TỐC (50% - 80%): ${stats.speed.length} NH`;
-                    if (stats.alert.length > 0) t += `\n- 🚨 NGUY HIỂM (<50%): ${stats.alert.length} NH`;
-                }
             } else {
                 // MẪU 4: CHI TIẾT TOÀN BỘ
                 t += `\n📋 TIẾN ĐỘ CHI TIẾT TOÀN BỘ:\n`;
@@ -643,11 +612,11 @@ export function useDailyRemainingData({
 
         return [
             {
-                id: 1,
-                title: 'Mẫu 1: Tổng Quát & Chi Tiết 3 Nhóm',
-                badge: 'Khuyên Dùng',
-                content: genText(1),
-                description: 'Vừa tổng quát 3 nhóm vừa liệt kê chi tiết từng ngành hàng chưa đạt theo nhóm'
+                id: 3,
+                title: 'Mẫu 3: Tổng Quát Súc Tích',
+                badge: 'Súc Tích',
+                content: genText(3),
+                description: 'Tóm tắt nhanh số lượng ngành hàng theo 3 mức tiến độ'
             },
             {
                 id: 2,
@@ -655,13 +624,6 @@ export function useDailyRemainingData({
                 badge: '3 Nhóm',
                 content: genText(2),
                 description: 'Liệt kê chi tiết các ngành hàng theo từng nhóm phân loại tiến độ'
-            },
-            {
-                id: 3,
-                title: 'Mẫu 3: Tổng Quát Súc Tích',
-                badge: 'Súc Tích',
-                content: genText(3),
-                description: 'Tóm tắt nhanh số lượng ngành hàng theo 3 mức tiến độ'
             },
             {
                 id: 4,

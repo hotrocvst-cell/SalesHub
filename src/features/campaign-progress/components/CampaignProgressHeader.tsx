@@ -116,7 +116,7 @@ export default function CampaignProgressHeader({
                     ) : (
                         <Store className="w-4 h-4 text-blue-600 shrink-0" />
                     )}
-                    <span className="text-[11px] font-bold text-slate-500 whitespace-nowrap">Siêu thị:</span>
+                    <span className="text-[11px] font-bold text-slate-500 whitespace-nowrap">ST:</span>
                     <select
                         value={selectedStore}
                         onChange={(e) => setSelectedStore(e.target.value)}

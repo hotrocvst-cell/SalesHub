@@ -75,11 +75,8 @@ export default function OcrUploadZone({
                 <div className="space-y-0.5">
                     <div className="flex items-center gap-1.5 text-xs font-black text-slate-900 uppercase tracking-wide">
                         <Sparkles className="w-4 h-4 text-purple-600" />
-                        <span>Nạp Ảnh Chụp Màn Hình Báo Cáo BI Để Trích Xuất Dữ Liệu</span>
+                        <span>Nạp Ảnh Báo Cáo</span>
                     </div>
-                    <p className="text-[11px] text-slate-500">
-                        Hệ thống tự động lọc bỏ hình mờ (watermark), thanh điều hướng, chỉ trích xuất số liệu các siêu thị thực tế
-                    </p>
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap">
@@ -87,15 +84,14 @@ export default function OcrUploadZone({
                     <button
                         type="button"
                         onClick={onOpenKeyModal}
-                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer border shadow-2xs ${
-                            isQuotaExceeded
-                                ? 'bg-rose-50 text-rose-900 border-rose-300 hover:bg-rose-100 animate-pulse'
-                                : keySource === 'USER'
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer border shadow-2xs ${isQuotaExceeded
+                            ? 'bg-rose-50 text-rose-900 border-rose-300 hover:bg-rose-100 animate-pulse'
+                            : keySource === 'USER'
                                 ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
                                 : keySource === 'ADMIN'
-                                ? 'bg-blue-50 text-blue-800 border-blue-300 hover:bg-blue-100'
-                                : 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100 animate-pulse'
-                        }`}
+                                    ? 'bg-blue-50 text-blue-800 border-blue-300 hover:bg-blue-100'
+                                    : 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100 animate-pulse'
+                            }`}
                         title="Quản lý Google Gemini API Key"
                     >
                         <Key className="w-3.5 h-3.5 shrink-0" />
@@ -103,10 +99,10 @@ export default function OcrUploadZone({
                             {isQuotaExceeded
                                 ? '⚠️ Key hết lượt - Nhập key Google'
                                 : keySource === 'USER'
-                                ? '👤 Key Cá Nhân (Ưu tiên)'
-                                : keySource === 'ADMIN'
-                                ? '🛡️ Key Hệ Thống (Admin)'
-                                : '🟡 Cần Cài Gemini API Key'}
+                                    ? '👤 Key Cá Nhân (Ưu tiên)'
+                                    : keySource === 'ADMIN'
+                                        ? '🛡️ Key Hệ Thống (Admin)'
+                                        : '🟡 Cần Cài Gemini API Key'}
                         </span>
                     </button>
                 </div>
@@ -120,15 +116,12 @@ export default function OcrUploadZone({
                         <div className="flex items-center justify-between">
                             <span className="text-xs font-black text-blue-900 uppercase tracking-wide flex items-center gap-1.5">
                                 <FileImage className="w-3.5 h-3.5 text-blue-600" />
-                                <span>1. Ảnh Doanh Thu QĐ</span>
+                                <span>1. Doanh Thu QĐ</span>
                             </span>
                             <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-blue-100 text-blue-800">
                                 1 file
                             </span>
                         </div>
-                        <p className="text-[10.5px] text-slate-500 mt-1">
-                            Ảnh màn hình "Doanh thu hợp nhất" sắp xếp <strong>DOANH THU QĐ</strong>
-                        </p>
                     </div>
 
                     <input
@@ -182,15 +175,12 @@ export default function OcrUploadZone({
                         <div className="flex items-center justify-between">
                             <span className="text-xs font-black text-emerald-900 uppercase tracking-wide flex items-center gap-1.5">
                                 <FileImage className="w-3.5 h-3.5 text-emerald-600" />
-                                <span>2. Ảnh Doanh Thu Thực</span>
+                                <span>2. Doanh Thu Thực</span>
                             </span>
                             <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800">
                                 1 file
                             </span>
                         </div>
-                        <p className="text-[10.5px] text-slate-500 mt-1">
-                            Ảnh màn hình "Doanh thu hợp nhất" sắp xếp <strong>DOANH THU</strong>
-                        </p>
                     </div>
 
                     <input
@@ -244,17 +234,14 @@ export default function OcrUploadZone({
                         <div className="flex items-center justify-between">
                             <span className="text-xs font-black text-purple-900 uppercase tracking-wide flex items-center gap-1.5">
                                 <Layers className="w-3.5 h-3.5 text-purple-600" />
-                                <span>3. Bộ Ảnh Thi Đua Lũy Kế</span>
+                                <span>3. Thi đua Realtime</span>
                             </span>
                             <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-purple-100 text-purple-800 font-mono">
                                 {emulationFiles.length} ảnh
                             </span>
                         </div>
-                        <p className="text-[10.5px] text-slate-500 mt-1">
-                            Hỗ trợ nạp <strong>nhiều ảnh cùng lúc</strong> (20-30 chương trình thi đua)
-                        </p>
                         <p className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-lg mt-1 font-medium">
-                            📱 Cần nạp thi đua từ <strong>Thẻ Mobile từng siêu thị</strong> (ảnh 2 cột)? Sử dụng nút <strong>"📸 Thi Đua Từng Siêu Thị"</strong> ở thanh Cloud Banner.
+                            📱 Cần nạp thi đua từng siêu thị? Sử dụng nút <strong>"📸 Thi Đua Từng Siêu Thị"</strong> ở thanh Banner.
                         </p>
                         {emulationFiles.length >= 4 && (
                             <span className="text-[10px] text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md font-bold block mt-1">

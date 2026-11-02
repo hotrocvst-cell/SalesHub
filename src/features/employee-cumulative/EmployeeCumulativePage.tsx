@@ -839,7 +839,7 @@ export default function EmployeeCumulativePage() {
                                 {editingSession.session_title}
                             </h3>
                             <p className="text-xs text-blue-200/90 mt-0.5">
-                                Siêu thị: <b>{editingSession.store_name}</b> · Loại phiên:{' '}
+                                ST: <b>{editingSession.store_name}</b> · Loại phiên:{' '}
                                 <b>{editingSession.session_type === 'REVENUE_CAMPAIGN' ? 'Doanh Thu & Thi Đua' : 'Giờ Công Toàn Cụm'}</b>
                             </p>
                         </div>

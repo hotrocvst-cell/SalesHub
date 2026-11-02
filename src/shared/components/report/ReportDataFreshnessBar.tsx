@@ -151,7 +151,7 @@ export default function ReportDataFreshnessBar({
 
                             {storeName && storeName !== 'all' && (
                                 <span className="text-slate-500 font-normal">
-                                    • Siêu thị: <strong className="text-slate-800 font-bold">{storeName}</strong>
+                                    • ST: <strong className="text-slate-800 font-bold">{storeName}</strong>
                                 </span>
                             )}
                         </p>

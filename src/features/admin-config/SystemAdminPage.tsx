@@ -1151,7 +1151,7 @@ export default function SystemAdminPage() {
                                                                 ? 'bg-slate-100 hover:bg-violet-100 text-slate-700 hover:text-violet-800 border border-slate-200 hover:border-violet-300'
                                                                 : 'bg-violet-600 hover:bg-violet-700 text-white shadow-2xs shadow-violet-200'
                                                                 }`}
-                                                            title={isAll ? 'Đang mở cho tất cả siêu thị (Nhấn để giới hạn)' : `Chỉ định ${count} siêu thị: ${item.allowed_stores?.join(', ')}`}
+                                                            title={isAll ? 'Đang mở cho tất cả siêu thị (Nhấn để giới hạn)' : `Chỉ định ${count} ST: ${item.allowed_stores?.join(', ')}`}
                                                         >
                                                             <Building2 className="w-3 h-3" />
                                                             <span>{isAll ? 'Tất cả ST' : `${count} Siêu thị`}</span>

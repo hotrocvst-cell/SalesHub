@@ -301,7 +301,7 @@ export default function OnboardingPage() {
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                         <div>
                                             <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                                                Tên siêu thị: <span className="text-rose-500">*</span>
+                                                Tên ST: <span className="text-rose-500">*</span>
                                             </label>
                                             <input
                                                 type="text"
@@ -330,7 +330,7 @@ export default function OnboardingPage() {
 
                                     <div>
                                         <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                                            Địa chỉ siêu thị:
+                                            Địa chỉ ST:
                                         </label>
                                         <input
                                             type="text"
@@ -351,7 +351,7 @@ export default function OnboardingPage() {
                                 <div className="p-3.5 bg-blue-50 rounded-2xl border border-blue-200 flex items-start gap-3 text-xs text-blue-900">
                                     <Database className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
                                     <div className="space-y-1">
-                                        <span className="font-extrabold block">Bảo toàn &amp; Kế thừa dữ liệu siêu thị:</span>
+                                        <span className="font-extrabold block">Bảo toàn &amp; Kế thừa dữ liệu ST:</span>
                                         <p className="text-[11px] text-blue-800 leading-relaxed">
                                             Trong trường hợp siêu thị thay đổi Quản lý, tài khoản mới đăng ký theo siêu thị này sẽ tiếp tục sử dụng trọn vẹn toàn bộ dữ liệu kinh doanh, phiên cập nhật và mục tiêu nhân sự hiện tại của siêu thị.
                                         </p>

@@ -150,7 +150,7 @@ export default function CampaignProgressCard({ item, reportDateDisplay, storeNam
             `📢 [TIẾN ĐỘ THI ĐUA: ${item.displayName.toUpperCase()}]`,
             `📅 Luỹ kế: ${reportDateDisplay} • 🏢 ${storeDisplay}`,
             `----------------------------------------`,
-            `🎯 SIÊU THỊ:`,
+            `🎯 ST:`,
             `• Target: ${item.totalTarget.toLocaleString('vi-VN')} ${item.unit}`,
             `• Lũy kế: ${item.totalActual.toLocaleString('vi-VN')} ${item.unit}`,
             `• %DKHT: ${item.forecastRate}% [${item.isAchieved ? '🟢 ĐÃ ĐẠT TIẾN ĐỘ' : '🔴 CHƯA ĐẠT - CẦN TĂNG TỐC'}]`,

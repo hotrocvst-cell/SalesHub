@@ -106,7 +106,7 @@ export default function DailyReportPage() {
     // Tùy chọn giao diện
     const [isInputCollapsed, setIsInputCollapsed] = useState<boolean>(false);
     const [isPointsEnabled, setIsPointsEnabled] = useState<boolean>(false);
-    const [summaryMode, setSummaryMode] = useState<number>(1);
+    const [summaryMode, setSummaryMode] = useState<number>(0);
     const [isExporting, setIsExporting] = useState<boolean>(false);
     const [isCopying, setIsCopying] = useState<boolean>(false);
 
@@ -147,7 +147,7 @@ export default function DailyReportPage() {
         } catch { }
     }, [selectedStore]);
 
-    // Tải phiên Realtime từ Supabase Cloud
+    // Tải phiên Realtime từ Cloud
     const loadRealtimeSessions = async (currentDict: CampaignDictItem[] = campaignsDict) => {
         setIsLoadingSessions(true);
         const res = await fetchRealtimeStoreSessions();
@@ -293,7 +293,7 @@ export default function DailyReportPage() {
         const dispStore = isAll ? 'TỔNG CỤM' : selectedStore;
 
         const generateText = (mode: number) => {
-            let txt = `📢 [${dispStore}]\n- CẬP NHẬT REALTIME: ${new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`;
+            let txt = `📢 [${dispStore}]`;
             if (currentRevenue) {
                 const revVal = currentRevenue.rev || currentRevenue.rawRev || 0;
                 const pctVal = typeof currentRevenue.pct === 'number'
@@ -320,35 +320,12 @@ export default function DailyReportPage() {
                     const groupSpeed = realtimeStats.fails.filter(d => (d.pctHT ?? 0) >= 50 && (d.pctHT ?? 0) < 80);
                     const groupAlert = realtimeStats.fails.filter(d => (d.pctHT ?? 0) < 50);
 
-                    if (mode === 1) {
-                        // MẪU 1: VỪA TỔNG QUÁT VỪA CHI TIẾT THEO TỪNG NHÓM
+                    if (mode === 3) {
+                        // MẪU 3: TỔNG QUÁT SÚC TÍCH (Chỉ số lượng)
                         txt += `\n\n📊 TỔNG HỢP CHƯA ĐẠT (${realtimeStats.fails.length} NH):`;
                         if (groupNear.length > 0) txt += `\n- ⚡ CẬN ĐÍCH (>80%): ${groupNear.length} NH`;
                         if (groupSpeed.length > 0) txt += `\n- 🔥 CẦN TĂNG TỐC (50% - 80%): ${groupSpeed.length} NH`;
                         if (groupAlert.length > 0) txt += `\n- ⚠️ NGUY HIỂM (<50%): ${groupAlert.length} NH`;
-
-                        txt += `\n\n📋 CHI TIẾT THEO TỪNG NHÓM:`;
-                        if (groupNear.length > 0) {
-                            txt += `\n\n⚡ CẬN ĐÍCH (>80%):`;
-                            groupNear.forEach(d => {
-                                const rate = typeof d.pctHT === 'number' ? d.pctHT.toFixed(1) : '0';
-                                txt += `\n• ${d.label}: thiếu ${formatValue(Math.max(0, d.target - d.actual))} (RT: ${formatValue(d.actual)}/${formatValue(d.target)}, ${rate}%)`;
-                            });
-                        }
-                        if (groupSpeed.length > 0) {
-                            txt += `\n\n🔥 CẦN TĂNG TỐC (50% - 80%):`;
-                            groupSpeed.forEach(d => {
-                                const rate = typeof d.pctHT === 'number' ? d.pctHT.toFixed(1) : '0';
-                                txt += `\n• ${d.label}: thiếu ${formatValue(Math.max(0, d.target - d.actual))} (RT: ${formatValue(d.actual)}/${formatValue(d.target)}, ${rate}%)`;
-                            });
-                        }
-                        if (groupAlert.length > 0) {
-                            txt += `\n\n⚠️ NGUY HIỂM (<50%):`;
-                            groupAlert.forEach(d => {
-                                const rate = typeof d.pctHT === 'number' ? d.pctHT.toFixed(1) : '0';
-                                txt += `\n• ${d.label}: thiếu ${formatValue(Math.max(0, d.target - d.actual))} (RT: ${formatValue(d.actual)}/${formatValue(d.target)}, ${rate}%)`;
-                            });
-                        }
                     } else if (mode === 2) {
                         // MẪU 2: CHI TIẾT 3 NHÓM
                         txt += `\n\n📊 CHI TIẾT CHƯA ĐẠT THEO 3 NHÓM (${realtimeStats.fails.length} NH):`;
@@ -373,12 +350,6 @@ export default function DailyReportPage() {
                                 txt += `\n- ${d.label}: thiếu ${formatValue(Math.max(0, d.target - d.actual))} (${rate}%)`;
                             });
                         }
-                    } else if (mode === 3) {
-                        // MẪU 3: TỔNG QUÁT SÚC TÍCH (Chỉ số lượng)
-                        txt += `\n\n📊 TỔNG HỢP CHƯA ĐẠT (${realtimeStats.fails.length} NH):`;
-                        if (groupNear.length > 0) txt += `\n- ⚡ CẬN ĐÍCH (>80%): ${groupNear.length} NH`;
-                        if (groupSpeed.length > 0) txt += `\n- 🔥 CẦN TĂNG TỐC (50% - 80%): ${groupSpeed.length} NH`;
-                        if (groupAlert.length > 0) txt += `\n- ⚠️ NGUY HIỂM (<50%): ${groupAlert.length} NH`;
                     } else {
                         // MẪU 4: CHI TIẾT TOÀN BỘ (Dạng danh sách phẳng)
                         txt += `\n\n⚠️ CHI TIẾT CHƯA ĐẠT (${realtimeStats.fails.length} NH):`;
@@ -394,11 +365,11 @@ export default function DailyReportPage() {
 
         return [
             {
-                id: 1,
-                title: 'Mẫu 1: Tổng Quát & Chi Tiết 3 Nhóm',
-                badge: 'Khuyên Dùng',
-                content: generateText(1),
-                description: 'Vừa tóm tắt tổng quan 3 nhóm vừa liệt kê chi tiết từng ngành hàng chưa đạt theo nhóm'
+                id: 3,
+                title: 'Mẫu 3: Tổng Quát Súc Tích',
+                badge: 'Súc Tích',
+                content: generateText(3),
+                description: 'Tóm tắt nhanh số lượng ngành hàng theo 3 mức tiến độ'
             },
             {
                 id: 2,
@@ -406,13 +377,6 @@ export default function DailyReportPage() {
                 badge: '3 Nhóm',
                 content: generateText(2),
                 description: 'Liệt kê chi tiết các ngành hàng theo từng nhóm phân loại tiến độ'
-            },
-            {
-                id: 3,
-                title: 'Mẫu 3: Tổng Quát Súc Tích',
-                badge: 'Súc Tích',
-                content: generateText(3),
-                description: 'Tóm tắt nhanh số lượng ngành hàng theo 3 mức tiến độ'
             },
             {
                 id: 4,
@@ -497,7 +461,7 @@ export default function DailyReportPage() {
                     tableReady={!isTableMissing}
                     tableName="realtime_store_sessions"
                     customMessage={sessionSummary
-                        ? `Phiên Realtime Cloud: ${sessionSummary.screenshotTimeStr || (sessionSummary.sessionTime ? new Date(sessionSummary.sessionTime).toLocaleTimeString('vi-VN') : '')} (${sessionSummary.storeCount} siêu thị)`
+                        ? `Phiên Realtime: ${sessionSummary.screenshotTimeStr || (sessionSummary.sessionTime ? new Date(sessionSummary.sessionTime).toLocaleTimeString('vi-VN') : '')} (${sessionSummary.storeCount} siêu thị)`
                         : 'Bảng realtime_store_sessions (Mỗi siêu thị lưu 1 phiên duy nhất)'
                     }
                     compact={true}
@@ -542,8 +506,8 @@ export default function DailyReportPage() {
                         </div>
                         <p className="text-xs text-slate-500 mt-0.5">
                             {activeTab === 'remaining'
-                                ? 'Tự động tính toán Target ngày linh hoạt theo số lượng còn thiếu thực tế của tháng.'
-                                : 'Đánh giá kết quả kinh doanh trong ngày theo đúng chỉ tiêu ngày cố định ban đầu.'
+                                ? 'Tính toán Target ngày linh hoạt theo target còn lại.'
+                                : 'Đánh giá Doanh thu, Thi đua trong ngày theo target chuẩn.'
                             }
                         </p>
                     </div>
@@ -613,7 +577,7 @@ export default function DailyReportPage() {
                         <div className="flex items-center justify-between mb-1">
                             <label className="text-[11px] font-bold text-slate-600 uppercase flex items-center gap-1">
                                 <Store className="w-3.5 h-3.5 text-blue-600" />
-                                <span>Đơn Vị / Siêu Thị</span>
+                                <span>Cụm / Siêu Thị</span>
                             </label>
                             <button
                                 type="button"
@@ -645,12 +609,14 @@ export default function DailyReportPage() {
                             isCopying={isCopying}
                             exportButtonLabel="LƯU ẢNH"
                             copyImageButtonLabel="COPY ẢNH"
-                            hasAssessment={true}
+                            hasAssessment={false}
                             assessmentTemplates={currentAssessmentTemplates}
                             onCopyText={() => {
-                                if (currentAssessmentTemplates.length > 0) {
-                                    navigator.clipboard.writeText(currentAssessmentTemplates[0].content);
-                                    showToast('Đã copy văn bản tóm tắt Messaging App!');
+                                const activeIdx = (summaryMode >= 0 && summaryMode < currentAssessmentTemplates.length) ? summaryMode : 0;
+                                const targetTpl = currentAssessmentTemplates[activeIdx] || currentAssessmentTemplates[0];
+                                if (targetTpl?.content) {
+                                    navigator.clipboard.writeText(targetTpl.content);
+                                    showToast(`Đã copy ${targetTpl.title || 'văn bản tóm tắt'}!`);
                                 }
                             }}
                             reportTitle={currentReportTitle}
@@ -788,7 +754,7 @@ export default function DailyReportPage() {
                         <div className="flex flex-wrap items-center gap-2">
                             <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
                                 <Info className="w-4 h-4 text-blue-600" />
-                                <span>Tóm tắt gửi Messaging App</span>
+                                <span>Nhận xét kết quả:</span>
                             </span>
 
                             {/* Cụm nút chọn mẫu nhận xét */}
@@ -810,15 +776,18 @@ export default function DailyReportPage() {
                         </div>
 
                         <button
+                            type="button"
                             onClick={() => {
-                                const activeIdx = summaryMode >= currentAssessmentTemplates.length ? 0 : summaryMode;
+                                const activeIdx = (summaryMode >= 0 && summaryMode < currentAssessmentTemplates.length) ? summaryMode : 0;
                                 const textToCopy = currentAssessmentTemplates[activeIdx]?.content || '';
-                                navigator.clipboard.writeText(textToCopy);
-                                showToast(`Đã copy ${currentAssessmentTemplates[activeIdx]?.title || 'văn bản tóm tắt'}!`);
+                                if (textToCopy) {
+                                    navigator.clipboard.writeText(textToCopy);
+                                    showToast(`Đã copy ${currentAssessmentTemplates[activeIdx]?.title || 'văn bản tóm tắt'}!`);
+                                }
                             }}
-                            className="text-xs text-blue-600 hover:text-blue-700 font-bold underline cursor-pointer self-start sm:self-auto"
+                            className="text-xs text-blue-600 hover:text-blue-700 font-bold underline cursor-pointer self-start sm:self-auto flex items-center gap-1"
                         >
-                            Sao chép mẫu đang chọn
+                            📋 Sao chép văn bản
                         </button>
                     </div>
 
