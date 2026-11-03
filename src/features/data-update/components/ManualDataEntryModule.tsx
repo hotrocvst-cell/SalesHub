@@ -283,11 +283,10 @@ export default function ManualDataEntryModule({
                         type="button"
                         onClick={onSaveToSupabase}
                         disabled={isSaving || storesData.length === 0}
-                        className={`px-4 py-1.5 text-white rounded-xl text-xs font-black transition cursor-pointer shadow-xs flex items-center gap-1.5 disabled:opacity-50 active:scale-95 ${
-                            existingRecordCount > 0
+                        className={`px-4 py-1.5 text-white rounded-xl text-xs font-black transition cursor-pointer shadow-xs flex items-center gap-1.5 disabled:opacity-50 active:scale-95 ${existingRecordCount > 0
                                 ? 'bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500'
                                 : 'bg-emerald-600 hover:bg-emerald-700'
-                        }`}
+                            }`}
                         title={existingRecordCount > 0 ? `Ngày ${formatDate(reportDate)} đã có số liệu ${existingRecordCount} siêu thị, bấm để ghi đè và làm mới số liệu` : ''}
                     >
                         {existingRecordCount > 0 ? (
@@ -299,8 +298,8 @@ export default function ManualDataEntryModule({
                             {isSaving
                                 ? 'Đang lưu...'
                                 : existingRecordCount > 0
-                                ? `🔄 Ghi Đè & Lưu Ngày ${formatDate(reportDate)}`
-                                : `Lưu Chốt Ngày ${formatDate(reportDate)}`}
+                                    ? `🔄 Ghi Đè & Lưu Ngày ${formatDate(reportDate)}`
+                                    : `Lưu Chốt Ngày ${formatDate(reportDate)}`}
                         </span>
                     </button>
                 </div>
@@ -313,11 +312,10 @@ export default function ManualDataEntryModule({
                         key={st.storeShortName || idx}
                         type="button"
                         onClick={() => setSelectedStoreIndex(idx)}
-                        className={`px-3 py-2 rounded-2xl text-xs font-black transition flex items-center gap-2 cursor-pointer shrink-0 border ${
-                            selectedStoreIndex === idx
+                        className={`px-3 py-2 rounded-2xl text-xs font-black transition flex items-center gap-2 cursor-pointer shrink-0 border ${selectedStoreIndex === idx
                                 ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
                                 : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                        }`}
+                            }`}
                     >
                         <Building2 className="w-3.5 h-3.5" />
                         <span>{st.storeShortName || st.storeRawName || `Siêu thị #${idx + 1}`}</span>
@@ -363,7 +361,7 @@ export default function ManualDataEntryModule({
                     <AlertCircle className="w-8 h-8 text-amber-600 mx-auto" />
                     <p className="text-xs font-bold text-amber-900">
                         Chưa có siêu thị nào trong bảng rà soát tạm thời.
-                        {existingRecordCount > 0 ? ` Ngày ${formatDate(reportDate)} đã có số liệu của ${existingRecordCount} siêu thị trên Supabase Cloud.` : ' Vui lòng quét ảnh ở Tab 1 hoặc thêm siêu thị bằng nút bên trên.'}
+                        {existingRecordCount > 0 ? ` Ngày ${formatDate(reportDate)} đã có số liệu của ${existingRecordCount} ST trên Cloud.` : ' Vui lòng quét ảnh ở Tab 1 hoặc thêm siêu thị bằng nút bên trên.'}
                     </p>
                     {onLoadFromCloud && existingRecordCount > 0 && (
                         <button

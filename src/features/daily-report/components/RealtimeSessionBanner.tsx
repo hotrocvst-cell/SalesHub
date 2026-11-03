@@ -164,22 +164,20 @@ export default function RealtimeSessionBanner({
                             title="Nạp nhanh thi đua thẻ mobile cho từng siêu thị (hỗ trợ Ctrl+V hoặc kéo thả ảnh)"
                         >
                             <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                            <span>📸 Thi Đua Từng Siêu Thị</span>
+                            <span>📸 Thi Đua Từng ST</span>
                         </button>
                     )}
 
-                    {/* Nút Nạp Phiên Realtime Cả Cụm (OCR / Nhập tay) - CHỈ DÀNH CHO ADMIN */}
-                    {isAdmin && (
-                        <button
-                            type="button"
-                            onClick={onOpenUpdateModal}
-                            className="px-3.5 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition shadow-sm border border-blue-400/30 cursor-pointer"
-                            title="Nạp dữ liệu OCR/Nhập tay cả cụm siêu thị (Admin)"
-                        >
-                            <Camera className="w-3.5 h-3.5" />
-                            <span>Nạp Cả Cụm</span>
-                        </button>
-                    )}
+                    {/* Nút Nạp Phiên Realtime (OCR / Nhập tay Doanh Thu & Thi Đua) */}
+                    <button
+                        type="button"
+                        onClick={onOpenUpdateModal}
+                        className="px-3.5 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition shadow-sm border border-blue-400/30 cursor-pointer"
+                        title={isAdmin ? "Nạp dữ liệu OCR/Nhập tay cả cụm siêu thị (Admin)" : "Nạp doanh thu & thi đua realtime cho siêu thị phụ trách"}
+                    >
+                        <Camera className="w-3.5 h-3.5" />
+                        <span>{isAdmin ? '📸 Nạp Cả Cụm' : '📸 Doanh Thu & Thi Đua Cụm'}</span>
+                    </button>
                 </div>
             </div>
 

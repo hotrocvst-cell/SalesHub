@@ -75,7 +75,7 @@ export default function OcrUploadZone({
                 <div className="space-y-0.5">
                     <div className="flex items-center gap-1.5 text-xs font-black text-slate-900 uppercase tracking-wide">
                         <Sparkles className="w-4 h-4 text-purple-600" />
-                        <span>Nạp Ảnh Báo Cáo</span>
+                        <span>Tải Ảnh</span>
                     </div>
                 </div>
 
@@ -241,7 +241,7 @@ export default function OcrUploadZone({
                             </span>
                         </div>
                         <p className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-lg mt-1 font-medium">
-                            📱 Cần nạp thi đua từng siêu thị? Sử dụng nút <strong>"📸 Thi Đua Từng Siêu Thị"</strong> ở thanh Banner.
+                            📱 Cần nạp thi đua từng ST? Sử dụng nút <strong>"📸 Thi Đua Từng ST"</strong> ở thanh Banner.
                         </p>
                         {emulationFiles.length >= 4 && (
                             <span className="text-[10px] text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md font-bold block mt-1">

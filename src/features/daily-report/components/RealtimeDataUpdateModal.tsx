@@ -247,7 +247,7 @@ export default function RealtimeDataUpdateModal({
                         </div>
                         <div>
                             <h2 className="text-base sm:text-lg font-black text-white tracking-tight flex items-center gap-2">
-                                <span>Nạp Dữ Liệu Realtime</span>
+                                <span>{effectiveIsAdmin ? 'Nạp Dữ Liệu Realtime (Cả Cụm)' : 'Nạp Doanh Thu & Thi Đua Realtime'}</span>
                                 <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-400/30">
                                     Cloud Realtime
                                 </span>

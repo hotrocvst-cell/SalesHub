@@ -202,7 +202,8 @@ export async function saveSingleStoreEmulationSession(
     storeName: string,
     emulationList: CampaignItem[],
     userName: string = 'ADMIN',
-    screenshotTimeStr?: string
+    screenshotTimeStr?: string,
+    customRevenueData?: RevenueItem | Record<string, any>
 ): Promise<{
     success: boolean;
     isTableMissing?: boolean;
@@ -233,20 +234,22 @@ export async function saveSingleStoreEmulationSession(
         const nowIso = new Date().toISOString();
         const defaultTimeStr = `${new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} ${formatDate(new Date())}`;
 
-        const revenueData = existingRecord?.revenue_data && Object.keys(existingRecord.revenue_data).length > 0
-            ? existingRecord.revenue_data
-            : {
-                store: storeName,
-                shortName: getShortStoreName(storeName),
-                sl: 0,
-                rev: 0,
-                rawRev: 0,
-                target: 0,
-                pct: 0,
-                pctTraGop: 0,
-                dtTraGop: 0,
-                isNewFormat: true
-            };
+        const revenueData = (customRevenueData && Object.keys(customRevenueData).length > 0)
+            ? customRevenueData
+            : (existingRecord?.revenue_data && Object.keys(existingRecord.revenue_data).length > 0
+                ? existingRecord.revenue_data
+                : {
+                    store: storeName,
+                    shortName: getShortStoreName(storeName),
+                    sl: 0,
+                    rev: 0,
+                    rawRev: 0,
+                    target: 0,
+                    pct: 0,
+                    pctTraGop: 0,
+                    dtTraGop: 0,
+                    isNewFormat: true
+                });
 
         const updatedRecord: RealtimeStoreSessionRecord = {
             store_name: existingRecord?.store_name || storeName,

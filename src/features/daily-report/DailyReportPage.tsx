@@ -378,7 +378,7 @@ export default function DailyReportPage() {
                         if (groupAlert.length > 0) txt += `\n- ⚠️ NGUY HIỂM (<50%): ${groupAlert.length} NH`;
                     } else if (mode === 2) {
                         // MẪU 2: CHI TIẾT 3 NHÓM
-                        txt += `\n\n📊 CHI TIẾT CHƯA ĐẠT THEO 3 NHÓM (${realtimeStats.fails.length} NH):`;
+                        txt += `\n\n📊 CHI TIẾT CHƯA ĐẠT (${realtimeStats.fails.length} NH):`;
                         if (groupNear.length > 0) {
                             txt += `\n\n⚡ CẬN ĐÍCH (>80%): ${groupNear.length} NH`;
                             groupNear.forEach(d => {
@@ -415,8 +415,8 @@ export default function DailyReportPage() {
 
         return [
             {
-                id: 3,
-                title: 'Mẫu 3: Tổng Quát Súc Tích',
+                id: 1,
+                title: 'Mẫu 1: Tổng Quát Súc Tích',
                 badge: 'Súc Tích',
                 content: generateText(3),
                 description: 'Tóm tắt nhanh số lượng ngành hàng theo 3 mức tiến độ'
@@ -429,8 +429,8 @@ export default function DailyReportPage() {
                 description: 'Liệt kê chi tiết các ngành hàng theo từng nhóm phân loại tiến độ'
             },
             {
-                id: 4,
-                title: 'Mẫu 4: Chi Tiết Toàn Bộ',
+                id: 3,
+                title: 'Mẫu 3: Chi Tiết Toàn Bộ',
                 badge: 'Hành Động',
                 content: generateText(4),
                 description: 'Danh sách chi tiết toàn bộ các ngành hàng chưa đạt chỉ tiêu ngày'
@@ -625,20 +625,31 @@ export default function DailyReportPage() {
                 {/* Dòng 1: Chọn Siêu Thị & Nút Hành Động */}
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
                     <div className="flex-1">
-                        <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center justify-between mb-1 flex-wrap gap-1.5">
                             <label className="text-[11px] font-bold text-slate-600 uppercase flex items-center gap-1">
                                 <Store className="w-3.5 h-3.5 text-blue-600" />
                                 <span>Cụm / Siêu Thị</span>
                             </label>
-                            <button
-                                type="button"
-                                onClick={() => setIsQuickEmulationModalOpen(true)}
-                                className="text-[11px] font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded-lg flex items-center gap-1 transition cursor-pointer"
-                                title="Nạp nhanh thi đua thẻ mobile cho siêu thị (hỗ trợ Ctrl+V hoặc kéo thả ảnh)"
-                            >
-                                <Camera className="w-3 h-3 text-emerald-600" />
-                                <span>📸 Nạp Thi Đua Thẻ Mobile</span>
-                            </button>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                                <button
+                                    type="button"
+                                    onClick={() => setIsUpdateModalOpen(true)}
+                                    className="text-[11px] font-bold text-blue-700 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2 py-0.5 rounded-lg flex items-center gap-1 transition cursor-pointer"
+                                    title="Nạp doanh thu (DTQĐ, DT Thực, Trả góp) và thi đua qua OCR hoặc nhập tay trực quan"
+                                >
+                                    <Camera className="w-3 h-3 text-blue-600" />
+                                    <span>📸 Doanh Thu & Thi Đua Cụm</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsQuickEmulationModalOpen(true)}
+                                    className="text-[11px] font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded-lg flex items-center gap-1 transition cursor-pointer"
+                                    title="Nạp nhanh thi đua thẻ mobile cho siêu thị (hỗ trợ Ctrl+V hoặc kéo thả ảnh)"
+                                >
+                                    <Sparkles className="w-3 h-3 text-emerald-600" />
+                                    <span>📸 Thi Đua Từng ST</span>
+                                </button>
+                            </div>
                         </div>
                         <select
                             value={selectedStore}
@@ -843,7 +854,7 @@ export default function DailyReportPage() {
                             }}
                             className="text-xs text-blue-600 hover:text-blue-700 font-bold underline cursor-pointer self-start sm:self-auto flex items-center gap-1"
                         >
-                            📋 Sao chép văn bản
+                            📋 Copy
                         </button>
                     </div>
 
@@ -857,12 +868,12 @@ export default function DailyReportPage() {
                 </div>
             )}
 
-            {/* MODAL NẠP DỮ LIỆU REALTIME MỚI (OCR & NHẬP TRỰC QUAN CẢ CỤM) */}
+            {/* MODAL NẠP DỮ LIỆU REALTIME MỚI (OCR & NHẬP TRỰC QUAN DOANH THU & THI ĐUA) */}
             <RealtimeDataUpdateModal
                 isOpen={isUpdateModalOpen}
                 onClose={() => setIsUpdateModalOpen(false)}
                 onSavedSuccessfully={handleSavedSuccessfully}
-                availableStores={availableStores}
+                availableStores={isAdmin ? availableStores : availableStores.filter(s => canAccessStore(s.name) || canAccessStore(s.code || ''))}
                 campaignDict={campaignsDict}
                 isAdmin={isAdmin}
                 currentUserName={currentUser?.full_name || currentUser?.employee_id || 'ADMIN'}

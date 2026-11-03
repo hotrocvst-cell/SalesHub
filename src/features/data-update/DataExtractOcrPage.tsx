@@ -573,14 +573,14 @@ export default function DataExtractOcrPage() {
                         <div>
                             <div className="flex items-center gap-2">
                                 <h1 className="text-base sm:text-lg font-black text-slate-900 leading-tight">
-                                    Cập Nhật Số Liệu (OCR & Tự Nhập Liệu)
+                                    Nhập Liệu Lũy Kế ST (OCR)
                                 </h1>
                                 <span className="bg-indigo-100 text-indigo-800 text-[10px] font-black px-2 py-0.5 rounded-full border border-indigo-200">
-                                    AI Vision 3.5
+                                    AI Vision
                                 </span>
                             </div>
                             <p className="text-xs text-slate-500 font-medium hidden sm:block">
-                                Trích xuất tự động từ ảnh chụp màn hình BI hoặc tự nhập liệu trực tiếp lưu trữ Cloud
+                                Trích xuất từ ảnh chụp màn hình hoặc tự nhập liệu.
                             </p>
                         </div>
                     </div>
@@ -602,15 +602,14 @@ export default function DataExtractOcrPage() {
 
                         <button
                             onClick={() => setIsKeyModalOpen(true)}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${
-                                isQuotaExceeded
-                                    ? 'bg-rose-50 text-rose-800 border-rose-300 hover:bg-rose-100 animate-pulse'
-                                    : keyInfo.source === 'USER'
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${isQuotaExceeded
+                                ? 'bg-rose-50 text-rose-800 border-rose-300 hover:bg-rose-100 animate-pulse'
+                                : keyInfo.source === 'USER'
                                     ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
                                     : keyInfo.source === 'ADMIN'
-                                    ? 'bg-blue-50 text-blue-800 border-blue-300 hover:bg-blue-100'
-                                    : 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100 animate-pulse'
-                            }`}
+                                        ? 'bg-blue-50 text-blue-800 border-blue-300 hover:bg-blue-100'
+                                        : 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100 animate-pulse'
+                                }`}
                             title="Quản lý Google Gemini API Key"
                         >
                             <KeyRound className="w-3.5 h-3.5" />
@@ -618,10 +617,10 @@ export default function DataExtractOcrPage() {
                                 {isQuotaExceeded
                                     ? '⚠️ Key hết lượt - Nhập key Google'
                                     : keyInfo.source === 'USER'
-                                    ? 'Key cá nhân: Đang dùng'
-                                    : keyInfo.source === 'ADMIN'
-                                    ? 'Key hệ thống: Mặc định (Admin)'
-                                    : 'Cài đặt Gemini Key'}
+                                        ? 'Key cá nhân: Đang dùng'
+                                        : keyInfo.source === 'ADMIN'
+                                            ? 'Key hệ thống: Mặc định (Admin)'
+                                            : 'Cài đặt Gemini Key'}
                             </span>
                         </button>
                     </div>
@@ -701,22 +700,20 @@ export default function DataExtractOcrPage() {
                         <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
                             <button
                                 onClick={() => setActiveTab('ocr')}
-                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                                    activeTab === 'ocr'
-                                        ? 'bg-white text-indigo-700 shadow-xs'
-                                        : 'text-slate-600 hover:text-slate-900'
-                                }`}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${activeTab === 'ocr'
+                                    ? 'bg-white text-indigo-700 shadow-xs'
+                                    : 'text-slate-600 hover:text-slate-900'
+                                    }`}
                             >
                                 <Camera className="w-3.5 h-3.5" />
-                                <span>1. Quét Ảnh Tự Động</span>
+                                <span>1. Tải Ảnh</span>
                             </button>
                             <button
                                 onClick={() => setActiveTab('manual')}
-                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                                    activeTab === 'manual'
-                                        ? 'bg-white text-indigo-700 shadow-xs'
-                                        : 'text-slate-600 hover:text-slate-900'
-                                }`}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${activeTab === 'manual'
+                                    ? 'bg-white text-indigo-700 shadow-xs'
+                                    : 'text-slate-600 hover:text-slate-900'
+                                    }`}
                             >
                                 <Edit3 className="w-3.5 h-3.5" />
                                 <span>2. Rà Soát & Lưu Số Liệu ({storesData.length} ST)</span>
@@ -737,7 +734,7 @@ export default function DataExtractOcrPage() {
                                     <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
                                     <div>
                                         <span className="font-bold">
-                                            Ngày {formatDate(reportDate)} đã có số liệu của {existingRecordCount} siêu thị trên Supabase Cloud.
+                                            Ngày {formatDate(reportDate)} đã có số liệu của {existingRecordCount} ST trên Cloud.
                                         </span>
                                         <span className="text-[11px] text-amber-700 block mt-0.5">
                                             Khi bấm Lưu, hệ thống sẽ tự động <strong>GHI ĐÈ & CẬP NHẬT</strong> mới nhất cho các siêu thị trong phiên mà không làm mất số liệu của các siêu thị khác.
@@ -794,7 +791,7 @@ export default function DataExtractOcrPage() {
                                 <div className="flex items-center gap-2 text-emerald-800 font-semibold">
                                     <CheckCircle2 className="w-5 h-5 text-emerald-600" />
                                     <span>
-                                        Đã có số liệu của <strong>{storesData.length} siêu thị</strong> sẵn sàng.
+                                        Đã có số liệu của <strong>{storesData.length} ST</strong> sẵn sàng.
                                         Bạn có thể chuyển sang Tab 2 để rà soát chi tiết hoặc xuất lưu Cloud.
                                     </span>
                                 </div>
