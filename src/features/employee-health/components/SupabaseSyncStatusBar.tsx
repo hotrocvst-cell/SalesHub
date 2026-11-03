@@ -12,6 +12,7 @@ import {
     Trophy,
     Clock
 } from 'lucide-react';
+import { normalizeToMillion } from '../../../core/lib/formatters';
 
 export type SyncStatusType = 'synced' | 'unsaved' | 'saving' | 'error';
 
@@ -20,6 +21,7 @@ export interface TargetStats {
     countWithRevenue: number;
     totalRevenue: number;
     countCampaignTargets: number;
+    scopeLabel?: string;
 }
 
 interface Props {
@@ -35,11 +37,20 @@ interface Props {
 }
 
 function formatRevenueDisplay(rev: number): string {
-    if (!rev || rev <= 0) return '0 đ';
-    if (rev >= 1_000_000_000) {
-        return `${(rev / 1_000_000_000).toLocaleString('vi-VN', { maximumFractionDigits: 2 })} tỷ`;
+    const million = normalizeToMillion(rev);
+    if (!million || million <= 0) return '0 tr';
+    if (million >= 1000) {
+        const ty = million / 1000;
+        return `${ty.toLocaleString('vi-VN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} tỷ`;
     }
-    return `${(rev / 1_000_000).toLocaleString('vi-VN', { maximumFractionDigits: 0 })} tr`;
+    return `${million.toLocaleString('vi-VN', { maximumFractionDigits: 1 })} tr`;
+}
+
+function formatRevenueTooltip(rev: number): string {
+    const million = normalizeToMillion(rev);
+    if (!million || million <= 0) return '0 triệu đồng';
+    const tyText = million >= 1000 ? ` (${(million / 1000).toLocaleString('vi-VN', { maximumFractionDigits: 2 })} tỷ)` : '';
+    return `${million.toLocaleString('vi-VN')} triệu đồng${tyText}`;
 }
 
 function SupabaseSyncStatusBar({
@@ -191,13 +202,15 @@ function SupabaseSyncStatusBar({
                     {/* Chip: Tổng Doanh Thu đã giao */}
                     <div
                         className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/90 border border-blue-200 text-blue-950 text-xs shadow-2xs"
-                        title={`Tổng doanh thu đã giao trong tháng: ${stats.totalRevenue.toLocaleString('vi-VN')} VNĐ`}
+                        title={`Tổng doanh thu đã giao trong tháng: ${formatRevenueTooltip(stats.totalRevenue)}`}
                     >
                         <div className="p-1 rounded-lg bg-blue-100 text-blue-700">
                             <Coins className="w-3.5 h-3.5" />
                         </div>
                         <div className="leading-tight">
-                            <div className="text-[10px] uppercase font-bold text-slate-400">Tổng DT Giao</div>
+                            <div className="text-[10px] uppercase font-bold text-slate-400">
+                                Tổng DT Giao {stats.scopeLabel ? `• ${stats.scopeLabel}` : ''}
+                            </div>
                             <div className="font-black text-blue-900 text-[11.5px]">
                                 {formatRevenueDisplay(stats.totalRevenue)}
                             </div>

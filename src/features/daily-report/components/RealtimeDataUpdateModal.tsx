@@ -26,7 +26,8 @@ import {
 import { runClientTesseractOcr } from '../../data-update/services/tesseractOcrService';
 import type { OcrEngineType, StoreReportingData } from '../../data-update/types/ocrTypes';
 import type { StoreItem, CampaignDictItem } from '../../../core/lib/storage';
-import { formatDate } from '../../../core/lib/formatters';
+import { formatDate, formatStoreDisplayName, getShortStoreName } from '../../../core/lib/formatters';
+import { useAuth } from '../../../shared/contexts/AuthContext';
 import {
     convertStoreReportingDataToSessions,
     saveRealtimeStoreSessions,
@@ -53,6 +54,9 @@ export default function RealtimeDataUpdateModal({
     currentUserName = 'ADMIN'
 }: Props) {
     if (!isOpen) return null;
+
+    const { canAccessStore, isAdmin: authIsAdmin } = useAuth();
+    const effectiveIsAdmin = Boolean(isAdmin || authIsAdmin);
 
     // Tab chuyển đổi: 'ocr' (Tải ảnh trích xuất) hoặc 'manual' (Rà soát & Nhập trực quan)
     const [activeTab, setActiveTab] = useState<'ocr' | 'manual'>('ocr');
@@ -192,6 +196,20 @@ export default function RealtimeDataUpdateModal({
                 campaignDict,
                 currentUserName
             );
+
+            // Kiểm tra phân quyền nạp và lưu dữ liệu siêu thị
+            if (!effectiveIsAdmin) {
+                const unauthorizedStores = sessions.filter(s =>
+                    !canAccessStore(s.store_name) &&
+                    !canAccessStore(getShortStoreName(s.store_name))
+                );
+                if (unauthorizedStores.length > 0) {
+                    const unauthorizedNames = unauthorizedStores.map(s => formatStoreDisplayName(s.store_name)).join(', ');
+                    showToast(`❌ Bạn không có quyền nạp/lưu dữ liệu cho các siêu thị: ${unauthorizedNames}. Vui lòng chỉ nạp cho siêu thị bạn được phân quyền phụ trách!`);
+                    setIsSaving(false);
+                    return;
+                }
+            }
 
             const res = await saveRealtimeStoreSessions(sessions, currentUserName);
 

@@ -451,3 +451,108 @@ export function convertSessionsToDailyReportState(
     };
 }
 
+/**
+ * Xóa 1 phiên Realtime của siêu thị khỏi Supabase Cloud
+ */
+export async function deleteRealtimeStoreSession(
+    storeNameOrId: string | number
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        let query = supabase.from('realtime_store_sessions').delete();
+        if (typeof storeNameOrId === 'number') {
+            query = query.eq('id', storeNameOrId);
+        } else {
+            query = query.eq('store_name', storeNameOrId);
+        }
+
+        const { error } = await query;
+        if (error) {
+            console.error('Lỗi khi xóa phiên realtime:', error);
+            return { success: false, error: error.message };
+        }
+
+        // Cập nhật lại LocalStorage cache
+        try {
+            const cached = getCachedRealtimeSessions();
+            const updated = cached.filter(s => {
+                if (typeof storeNameOrId === 'number') return s.id !== storeNameOrId;
+                return s.store_name !== storeNameOrId;
+            });
+            localStorage.setItem(REALTIME_SESSIONS_CACHE_KEY, JSON.stringify(updated));
+        } catch {}
+
+        return { success: true };
+    } catch (err: any) {
+        return { success: false, error: err?.message || 'Lỗi khi xóa phiên' };
+    }
+}
+
+/**
+ * Đổi tên / Chuẩn hóa store_name của 1 phiên Realtime trong Supabase Cloud
+ */
+export async function renameRealtimeStoreSession(
+    oldStoreName: string,
+    newStoreName: string
+): Promise<{ success: boolean; error?: string }> {
+    if (!oldStoreName || !newStoreName || oldStoreName.trim() === newStoreName.trim()) {
+        return { success: false, error: 'Tên siêu thị mới không hợp lệ hoặc trùng tên cũ.' };
+    }
+
+    try {
+        const { error } = await supabase
+            .from('realtime_store_sessions')
+            .update({
+                store_name: newStoreName.trim(),
+                updated_at: new Date().toISOString()
+            })
+            .eq('store_name', oldStoreName);
+
+        if (error) {
+            console.error('Lỗi khi đổi tên siêu thị phiên realtime:', error);
+            return { success: false, error: error.message };
+        }
+
+        // Cập nhật cache
+        try {
+            const cached = getCachedRealtimeSessions();
+            const updated = cached.map(s => {
+                if (s.store_name === oldStoreName) {
+                    return { ...s, store_name: newStoreName.trim(), updated_at: new Date().toISOString() };
+                }
+                return s;
+            });
+            localStorage.setItem(REALTIME_SESSIONS_CACHE_KEY, JSON.stringify(updated));
+        } catch {}
+
+        return { success: true };
+    } catch (err: any) {
+        return { success: false, error: err?.message || 'Lỗi khi đổi tên siêu thị' };
+    }
+}
+
+/**
+ * Xóa toàn bộ các phiên Realtime (Dành cho Quản trị viên khi cần dọn dẹp hệ thống)
+ */
+export async function deleteAllRealtimeStoreSessions(): Promise<{ success: boolean; error?: string }> {
+    try {
+        const { error } = await supabase
+            .from('realtime_store_sessions')
+            .delete()
+            .neq('id', -999999); // Xóa toàn bộ bản ghi
+
+        if (error) {
+            console.error('Lỗi khi xóa tất cả phiên realtime:', error);
+            return { success: false, error: error.message };
+        }
+
+        try {
+            localStorage.removeItem(REALTIME_SESSIONS_CACHE_KEY);
+        } catch {}
+
+        return { success: true };
+    } catch (err: any) {
+        return { success: false, error: err?.message || 'Lỗi khi dọn dẹp các phiên' };
+    }
+}
+
+

@@ -250,7 +250,7 @@ export default function ImportTargetModal({
                                             <th className="p-2 border-b w-10 text-center">STT</th>
                                             <th className="p-2 border-b w-24">Mã NV</th>
                                             <th className="p-2 border-b">Họ và tên</th>
-                                            <th className="p-2 border-b text-right">Target Doanh Thu</th>
+                                            <th className="p-2 border-b text-right">Target DT (Triệu đ)</th>
                                             {campaigns.slice(0, 3).map(c => (
                                                 <th key={c.raw_key} className="p-2 border-b text-right truncate max-w-[100px]">
                                                     {c.display_name}
@@ -278,7 +278,7 @@ export default function ImportTargetModal({
                                                         {matchedEmp ? matchedEmp.full_name : (row.full_name || '—')}
                                                     </td>
                                                     <td className="p-2 text-right font-mono font-bold text-slate-900">
-                                                        {row.target_revenue !== undefined ? row.target_revenue.toLocaleString('vi-VN') : '—'}
+                                                        {row.target_revenue !== undefined ? `${row.target_revenue.toLocaleString('vi-VN')} tr` : '—'}
                                                     </td>
                                                     {campaigns.slice(0, 3).map(c => (
                                                         <td key={c.raw_key} className="p-2 text-right font-mono text-slate-700">

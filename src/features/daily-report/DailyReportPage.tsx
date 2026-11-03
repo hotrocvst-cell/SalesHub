@@ -10,7 +10,9 @@ import {
     formatValue,
     getShortStoreName,
     formatDate,
-    isStoreMatch
+    isStoreMatch,
+    deduplicateStoreNames,
+    formatStoreDisplayName
 } from '../../core/lib/formatters';
 import {
     fetchStores,
@@ -49,6 +51,7 @@ import {
 import RealtimeSessionBanner from './components/RealtimeSessionBanner';
 import RealtimeDataUpdateModal from './components/RealtimeDataUpdateModal';
 import QuickStoreEmulationModal from './components/QuickStoreEmulationModal';
+import RealtimeSessionManagerModal from './components/RealtimeSessionManagerModal';
 
 import DailyRealtimeTable from './components/DailyRealtimeTable';
 import DailyRemainingTable from './components/DailyRemainingTable';
@@ -56,7 +59,7 @@ import DailyReportInputSection from './components/DailyReportInputSection';
 import { useDailyRemainingData } from './hooks/useDailyRemainingData';
 
 export default function DailyReportPage() {
-    const { isAdmin, currentUser } = useAuth();
+    const { isAdmin, currentUser, canAccessStore } = useAuth();
     const exportRef = useRef<HTMLDivElement | null>(null);
     const [searchParams, setSearchParams] = useSearchParams();
 
@@ -73,6 +76,7 @@ export default function DailyReportPage() {
     const [isTableMissing, setIsTableMissing] = useState<boolean>(false);
     const [isUpdateModalOpen, setIsUpdateModalOpen] = useState<boolean>(false);
     const [isQuickEmulationModalOpen, setIsQuickEmulationModalOpen] = useState<boolean>(false);
+    const [isManagerModalOpen, setIsManagerModalOpen] = useState<boolean>(false);
     const [availableStores, setAvailableStores] = useState<StoreItem[]>([]);
     const [showLegacyPasteInput, setShowLegacyPasteInput] = useState<boolean>(false);
 
@@ -243,37 +247,83 @@ export default function DailyReportPage() {
 
     // Doanh thu siêu thị đang chọn
     const currentRevenue = useMemo(() => {
-        return revenueData[selectedStore] || revenueStores.find(r => r.shortName === selectedStore);
-    }, [revenueData, revenueStores, selectedStore]);
+        const isCluster = selectedStore === 'Tổng' || selectedStore === 'all';
+        if (isCluster) {
+            return revenueData['Tổng'] || revenueStores.find(r => r.shortName === 'Tổng' || r.store === 'Tổng');
+        }
+        return revenueData[selectedStore] ||
+            revenueStores.find(r =>
+                isStoreMatch(r.store, selectedStore, availableStores) ||
+                isStoreMatch(r.shortName, selectedStore, availableStores)
+            ) ||
+            revenueData[getShortStoreName(selectedStore)];
+    }, [revenueData, revenueStores, selectedStore, availableStores]);
 
     const hasInstallmentData = useMemo(() => {
         if (realRevenueText.trim()) return true;
         return Object.values(revenueData).some(r => (r.dtTraGop || 0) > 0 || (r.pctTraGop || 0) > 0);
     }, [realRevenueText, revenueData]);
 
-    // Danh sách siêu thị khả dụng
+    // Danh sách siêu thị khả dụng (khử trùng lặp và phân quyền theo vai trò)
     const storeOptions = useMemo(() => {
         const set = new Set<string>();
         allData.forEach(d => {
             if (d.shortName && d.shortName !== 'Tổng') set.add(d.shortName);
+            if (d.store && d.store !== 'Tổng') set.add(d.store);
         });
         revenueStores.forEach(s => {
             if (s.shortName && s.shortName !== 'Tổng') set.add(s.shortName);
+            if (s.store && s.store !== 'Tổng') set.add(s.store);
         });
-        return Array.from(set).sort();
-    }, [allData, revenueStores]);
+        realtimeSessions.forEach(sess => {
+            if (sess.store_name && sess.store_name !== 'Tổng') set.add(sess.store_name);
+        });
+        availableStores.forEach(s => {
+            if (s.name) set.add(s.name);
+        });
+
+        const deduplicated = deduplicateStoreNames(Array.from(set), availableStores);
+
+        // Với ADMIN: Được xem toàn bộ mọi siêu thị
+        if (isAdmin) {
+            return deduplicated;
+        }
+
+        // Với User KHÔNG PHẢI ADMIN: PHÂN QUYỀN HIỂN THỊ CHỈ XEM SIÊU THỊ PHỤ TRÁCH
+        return deduplicated.filter(s =>
+            canAccessStore(s) ||
+            canAccessStore(getShortStoreName(s))
+        );
+    }, [allData, revenueStores, realtimeSessions, availableStores, isAdmin, canAccessStore]);
+
+    // Tự động chuyển selectedStore nếu user không phải Admin đang ở 'Tổng' hoặc shop không có quyền
+    useEffect(() => {
+        if (isAdmin) return;
+        if (storeOptions.length > 0) {
+            const hasAccess = storeOptions.some(s =>
+                s === selectedStore ||
+                isStoreMatch(s, selectedStore, availableStores)
+            );
+            if (!hasAccess || selectedStore === 'Tổng' || selectedStore === 'all') {
+                setSelectedStore(storeOptions[0]);
+            }
+        }
+    }, [isAdmin, storeOptions, selectedStore, availableStores]);
 
     // =========================================================================
     // DỮ LIỆU TAB 1: CHUẨN REALTIME
     // =========================================================================
     const filteredRealtimeCampaigns = useMemo(() => {
+        const isCluster = selectedStore === 'Tổng' || selectedStore === 'all';
         const list = allData.filter(d => {
-            if (selectedStore === 'Tổng') return d.shortName === 'Tổng';
-            return d.shortName.toLowerCase() === selectedStore.toLowerCase() ||
+            if (isCluster) return d.shortName === 'Tổng' || d.store === 'Tổng';
+            return isStoreMatch(d.store, selectedStore, availableStores) ||
+                isStoreMatch(d.shortName, selectedStore, availableStores) ||
+                d.shortName.toLowerCase() === selectedStore.toLowerCase() ||
                 d.store.toLowerCase().includes(selectedStore.toLowerCase());
         });
         return list.sort((a, b) => (b.pctHT || 0) - (a.pctHT || 0) || (b.actual || 0) - (a.actual || 0));
-    }, [allData, selectedStore]);
+    }, [allData, selectedStore, availableStores]);
 
     const realtimeStats = useMemo(() => {
         const passed = filteredRealtimeCampaigns.filter(d => d.pctHT >= 100);
@@ -478,6 +528,7 @@ export default function DailyReportPage() {
                 onRefresh={() => loadRealtimeSessions()}
                 onOpenUpdateModal={() => setIsUpdateModalOpen(true)}
                 onOpenQuickEmulationModal={() => setIsQuickEmulationModalOpen(true)}
+                onOpenManagerModal={() => setIsManagerModalOpen(true)}
             />
 
             {/* HEADER CÔNG CỤ & TAB SEGMENTED SWITCHER */}
@@ -594,9 +645,14 @@ export default function DailyReportPage() {
                             onChange={(e) => setSelectedStore(e.target.value)}
                             className="w-full bg-white border border-slate-300 text-slate-800 py-2 px-3 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer shadow-xs"
                         >
-                            <option value="Tổng">🏢 TỔNG TOÀN CỤM</option>
+                            {isAdmin && (
+                                <option value="Tổng">🏢 TỔNG TOÀN CỤM</option>
+                            )}
+                            {!isAdmin && storeOptions.length === 0 && (
+                                <option value="" disabled>Chưa được phân quyền siêu thị</option>
+                            )}
                             {storeOptions.map(s => (
-                                <option key={s} value={s}>{s}</option>
+                                <option key={s} value={s}>{formatStoreDisplayName(s)}</option>
                             ))}
                         </select>
                     </div>
@@ -824,6 +880,18 @@ export default function DailyReportPage() {
                 currentUserName={currentUser?.full_name || currentUser?.employee_id || 'ADMIN'}
                 onSavedSuccessfully={handleSavedSuccessfully}
             />
+
+            {/* MODAL QUẢN LÝ CÁC PHIÊN REALTIME CLOUD (DÀNH RIÊNG CHO ADMIN) */}
+            {isAdmin && (
+                <RealtimeSessionManagerModal
+                    isOpen={isManagerModalOpen}
+                    onClose={() => setIsManagerModalOpen(false)}
+                    sessions={realtimeSessions}
+                    availableStores={availableStores}
+                    onRefresh={() => loadRealtimeSessions()}
+                    onSessionsUpdated={() => loadRealtimeSessions()}
+                />
+            )}
         </div>
     );
 }

@@ -10,7 +10,8 @@ import {
     Copy,
     Check,
     X,
-    Radio
+    Radio,
+    Settings
 } from 'lucide-react';
 import type { RealtimeSessionSummary } from '../services/realtimeSessionService';
 import { REALTIME_STORE_SESSIONS_SQL } from '../services/realtimeSessionService';
@@ -24,6 +25,7 @@ interface Props {
     onRefresh: () => void;
     onOpenUpdateModal: () => void;
     onOpenQuickEmulationModal?: () => void;
+    onOpenManagerModal?: () => void;
 }
 
 export default function RealtimeSessionBanner({
@@ -34,7 +36,8 @@ export default function RealtimeSessionBanner({
     isAdmin,
     onRefresh,
     onOpenUpdateModal,
-    onOpenQuickEmulationModal
+    onOpenQuickEmulationModal,
+    onOpenManagerModal
 }: Props) {
     const [showSqlModal, setShowSqlModal] = useState(false);
     const [isCopied, setIsCopied] = useState(false);
@@ -88,7 +91,12 @@ export default function RealtimeSessionBanner({
 
                         <p className="text-[11px] text-slate-300 mt-0.5 flex items-center gap-2 flex-wrap">
                             <span>
-                                Cụm/ST: <strong className="text-white">{selectedStore === 'Tổng' ? 'Toàn Cụm' : selectedStore}</strong>
+                                Cụm/ST: <strong className="text-white">
+                                    {!isAdmin
+                                        ? (selectedStore === 'Tổng' ? 'Siêu thị phân quyền' : selectedStore)
+                                        : (selectedStore === 'Tổng' ? 'Toàn Cụm' : selectedStore)
+                                    }
+                                </strong>
                             </span>
                             <span className="text-slate-500">•</span>
                             <span>
@@ -134,6 +142,19 @@ export default function RealtimeSessionBanner({
                         <span>Làm mới Cloud</span>
                     </button>
 
+                    {/* Nút Quản Lý Phiên Realtime Cloud - DÀNH RIÊNG CHO ADMIN */}
+                    {isAdmin && onOpenManagerModal && (
+                        <button
+                            type="button"
+                            onClick={onOpenManagerModal}
+                            className="px-3 py-1.5 bg-indigo-600/70 hover:bg-indigo-600 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition border border-indigo-400/40 cursor-pointer shadow-xs"
+                            title="Quản lý, chuẩn hóa tên siêu thị hoặc xóa các phiên Realtime trên Cloud"
+                        >
+                            <Settings className="w-3.5 h-3.5 text-indigo-200" />
+                            <span>Quản Lý Phiên</span>
+                        </button>
+                    )}
+
                     {/* Nút Nạp Nhanh Thi Đua Từng Siêu Thị (Thẻ Mobile) */}
                     {onOpenQuickEmulationModal && (
                         <button
@@ -147,15 +168,18 @@ export default function RealtimeSessionBanner({
                         </button>
                     )}
 
-                    {/* Nút Nạp Phiên Realtime Mới (OCR / Nhập tay) */}
-                    <button
-                        type="button"
-                        onClick={onOpenUpdateModal}
-                        className="px-3.5 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition shadow-sm border border-blue-400/30 cursor-pointer"
-                    >
-                        <Camera className="w-3.5 h-3.5" />
-                        <span>Nạp Cả Cụm</span>
-                    </button>
+                    {/* Nút Nạp Phiên Realtime Cả Cụm (OCR / Nhập tay) - CHỈ DÀNH CHO ADMIN */}
+                    {isAdmin && (
+                        <button
+                            type="button"
+                            onClick={onOpenUpdateModal}
+                            className="px-3.5 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition shadow-sm border border-blue-400/30 cursor-pointer"
+                            title="Nạp dữ liệu OCR/Nhập tay cả cụm siêu thị (Admin)"
+                        >
+                            <Camera className="w-3.5 h-3.5" />
+                            <span>Nạp Cả Cụm</span>
+                        </button>
+                    )}
                 </div>
             </div>
 

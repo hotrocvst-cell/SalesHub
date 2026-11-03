@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import type { EmployeeItem, CampaignDictItem } from '../../../core/lib/storage';
-import { getShortStoreName } from '../../../core/lib/formatters';
+import { getShortStoreName, normalizeToMillion } from '../../../core/lib/formatters';
 import { Coins, Trophy, Users } from 'lucide-react';
 
 interface Props {
@@ -27,8 +27,8 @@ export default function UnifiedTargetTable({
         campaigns.forEach(c => { totalCamps[c.raw_key] = 0; });
 
         employees.forEach(emp => {
-            const rev = revenueTargets[emp.employee_id] || 0;
-            totalRev += rev;
+            const rawRev = revenueTargets[emp.employee_id] || 0;
+            totalRev += normalizeToMillion(rawRev);
 
             const cMap = campaignTargets[emp.employee_id] || {};
             campaigns.forEach(c => {
@@ -54,7 +54,7 @@ export default function UnifiedTargetTable({
                             <th className="p-3 min-w-[170px] bg-blue-900/90 text-right border-r border-blue-800">
                                 <div className="flex items-center justify-end gap-1.5 text-blue-200">
                                     <Coins className="w-4 h-4 text-amber-300" />
-                                    <span>Target Doanh Thu (VNĐ)</span>
+                                    <span>Target Doanh Thu (Triệu đ)</span>
                                 </div>
                             </th>
 
@@ -109,15 +109,16 @@ export default function UnifiedTargetTable({
                                             {getShortStoreName(emp.store_name)}
                                         </td>
 
-                                        {/* Input Target Doanh Thu */}
+                                        {/* Input Target Doanh Thu (Đơn vị: Triệu đồng) */}
                                         <td className="p-1.5 text-right bg-blue-50/30 border-r border-slate-100">
                                             <input
                                                 type="number"
                                                 min={0}
-                                                step={1000000}
+                                                step={1}
                                                 value={rev || ''}
                                                 onChange={e => onRevenueChange(emp.employee_id, Number(e.target.value) || 0)}
-                                                placeholder="0"
+                                                placeholder="0 tr"
+                                                title={rev > 0 ? `${rev.toLocaleString('vi-VN')} triệu đồng (${(rev >= 1000 ? `${(rev / 1000).toLocaleString('vi-VN', { maximumFractionDigits: 2 })} tỷ` : `${rev} tr`)})` : 'Nhập target doanh thu (triệu đồng)'}
                                                 className="w-full text-right font-mono font-extrabold text-blue-900 bg-white border border-slate-200 group-hover:border-blue-300 focus:border-blue-600 px-2 py-1.5 rounded-lg text-xs outline-hidden shadow-2xs focus:ring-2 focus:ring-blue-500/20"
                                             />
                                         </td>
@@ -157,8 +158,10 @@ export default function UnifiedTargetTable({
                                 </td>
 
                                 {/* Tổng Doanh Thu */}
-                                <td className="p-3 text-right font-mono text-sm text-amber-300 border-r border-blue-900 bg-blue-950">
-                                    {totals.totalRev.toLocaleString('vi-VN')} đ
+                                <td className="p-3 text-right font-mono text-sm text-amber-300 border-r border-blue-900 bg-blue-950 whitespace-nowrap">
+                                    {totals.totalRev >= 1000
+                                        ? `${(totals.totalRev / 1000).toLocaleString('vi-VN', { maximumFractionDigits: 2 })} tỷ (${totals.totalRev.toLocaleString('vi-VN')} tr)`
+                                        : `${totals.totalRev.toLocaleString('vi-VN')} tr`}
                                 </td>
 
                                 {/* Tổng Thi Đua */}

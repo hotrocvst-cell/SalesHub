@@ -1,6 +1,6 @@
 import ExcelJS from 'exceljs';
 import type { EmployeeItem, CampaignDictItem } from '../../../core/lib/storage';
-import { getShortStoreName } from '../../../core/lib/formatters';
+import { getShortStoreName, normalizeToMillion } from '../../../core/lib/formatters';
 
 export interface ParsedTargetRow {
     employee_id: string;
@@ -35,7 +35,7 @@ export async function exportUnifiedTargetTemplate(
         { header: 'Mã NV', key: 'employee_id', width: 14 },
         { header: 'Họ và tên', key: 'full_name', width: 26 },
         { header: 'Siêu thị', key: 'store_name', width: 26 },
-        { header: 'Target Doanh Thu (VNĐ)', key: 'target_revenue', width: 24 }
+        { header: 'Target Doanh Thu (Triệu đ)', key: 'target_revenue', width: 24 }
     ];
 
     // Thêm các cột thi đua đang active
@@ -193,7 +193,8 @@ export async function parseExcelFile(
         let target_revenue: number | undefined = undefined;
         if (revCol !== -1) {
             const rawRev = row.getCell(revCol).value;
-            target_revenue = parseNumericCellValue(rawRev);
+            const parsed = parseNumericCellValue(rawRev);
+            target_revenue = normalizeToMillion(parsed);
         }
 
         const campaign_targets: Record<string, number> = {};

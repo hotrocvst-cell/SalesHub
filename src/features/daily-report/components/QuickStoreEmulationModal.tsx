@@ -16,7 +16,11 @@ import {
     AlertTriangle,
     RotateCcw
 } from 'lucide-react';
-import type { StoreItem, CampaignDictItem } from '../../../core/lib/storage';
+import {
+    fetchStores,
+    type StoreItem,
+    type CampaignDictItem
+} from '../../../core/lib/storage';
 import {
     getShortStoreName,
     formatStoreDisplayName,
@@ -84,70 +88,88 @@ export default function QuickStoreEmulationModal({
     const { currentUser, isAdmin: authIsAdmin, canAccessStore } = useAuth();
     const effectiveIsAdmin = Boolean(isAdmin || authIsAdmin || currentUser?.role === 'ADMIN');
 
-    // 1. Tập hợp tất cả các siêu thị từ các nguồn và loại bỏ trùng lặp triệt để
-    const allStoreOptions = useMemo(() => {
-        const rawList: string[] = [];
-        // Ưu tiên các siêu thị đã có phiên
-        (existingSessions || []).forEach(s => {
-            if (s.store_name) rawList.push(s.store_name);
-        });
-        // Bổ sung các siêu thị từ danh mục availableStores
-        availableStores.forEach(s => {
-            if (s.name) rawList.push(s.name);
-            else if (s.short_name) rawList.push(s.short_name);
-        });
-        // Bổ sung siêu thị từ user profile
-        if (currentUser?.store_name) {
-            rawList.push(currentUser.store_name);
-        }
-        (currentUser?.accessible_stores || []).forEach(s => {
-            if (s) rawList.push(s);
-        });
-
-        // Loại bỏ trùng lặp triệt để và ưu tiên tên đầy đủ có mã số
-        return deduplicateStoreNames(rawList, availableStores);
-    }, [existingSessions, availableStores, currentUser]);
-
-    // 2. Lọc danh sách siêu thị nghiêm ngặt theo phân quyền người dùng
-    const storeOptions = useMemo(() => {
-        let allowed: string[] = [];
-        if (effectiveIsAdmin) {
-            allowed = allStoreOptions;
+    // Tự động tải availableStores nếu component cha chưa tải kịp
+    const [localStores, setLocalStores] = useState<StoreItem[]>(availableStores);
+    useEffect(() => {
+        if (availableStores && availableStores.length > 0) {
+            setLocalStores(availableStores);
         } else {
-            // Với người dùng không phải Admin (Quản lý cụm, Trưởng ca, Nhân viên)
-            allowed = allStoreOptions.filter(st => {
-                if (/^(tổng|tong|all|toàn cụm)/i.test(st)) return false;
-                // 1. Kiểm tra bằng canAccessStore
-                if (canAccessStore(st) || canAccessStore(getShortStoreName(st))) return true;
-                // 2. Kiểm tra danh sách accessible_stores của user
-                if (currentUser?.accessible_stores && currentUser.accessible_stores.length > 0) {
-                    if (currentUser.accessible_stores.some(acc => isStoreMatch(acc, st, availableStores))) return true;
+            fetchStores().then(res => {
+                if (res.success && res.data && res.data.length > 0) {
+                    setLocalStores(res.data);
                 }
-                // 3. Kiểm tra siêu thị chính của user
-                if (currentUser?.store_name && isStoreMatch(currentUser.store_name, st, availableStores)) {
-                    return true;
-                }
-                return false;
             });
+        }
+    }, [availableStores]);
 
-            // Dự phòng nếu danh sách lọc rỗng nhưng user có store_name
-            if (allowed.length === 0 && currentUser?.store_name) {
-                allowed = [currentUser.store_name];
+    const activeAvailableStores = useMemo(() => {
+        return (localStores && localStores.length > 0) ? localStores : availableStores;
+    }, [localStores, availableStores]);
+
+    // 1. Tập hợp danh sách các siêu thị được phân quyền
+    const permittedStores = useMemo<StoreItem[]>(() => {
+        // Hợp nhất danh sách siêu thị từ activeAvailableStores và user profile
+        const masterList: StoreItem[] = [...activeAvailableStores];
+        const userStores = [
+            currentUser?.store_name,
+            ...(currentUser?.accessible_stores || [])
+        ].filter(Boolean) as string[];
+
+        userStores.forEach(ust => {
+            if (!masterList.some(s => isStoreMatch(s.name, ust, masterList))) {
+                masterList.push({ name: ust, code: '' });
             }
+        });
+
+        if (effectiveIsAdmin) {
+            return masterList;
         }
 
-        // Đảm bảo kết quả cuối cùng không bao giờ bị trùng lặp
-        return deduplicateStoreNames(allowed, availableStores);
-    }, [allStoreOptions, effectiveIsAdmin, canAccessStore, currentUser, availableStores]);
+        const isGuest = Boolean(currentUser?.is_guest);
+        if (isGuest) {
+            const guestTarget = currentUser?.store_name || '838679';
+            return masterList.filter(s => isStoreMatch(s.name, guestTarget, masterList));
+        }
+
+        if (currentUser?.role === 'NHAN_VIEN') {
+            if (!currentUser?.store_name) return [];
+            return masterList.filter(s => isStoreMatch(s.name, currentUser.store_name, masterList));
+        }
+
+        // Quản lý hoặc Trưởng ca
+        const accessible = currentUser?.accessible_stores && currentUser.accessible_stores.length > 0
+            ? currentUser.accessible_stores
+            : (currentUser?.store_name ? [currentUser.store_name] : []);
+
+        return masterList.filter(s =>
+            canAccessStore(s.name) ||
+            canAccessStore(getShortStoreName(s.name)) ||
+            accessible.some(acc => isStoreMatch(s.name, acc, masterList))
+        );
+    }, [activeAvailableStores, effectiveIsAdmin, currentUser, canAccessStore]);
+
+    // 2. Chuẩn hóa tên chuẩn (ưu tiên mã số) và khử trùng lặp triệt để
+    const storeOptions = useMemo<string[]>(() => {
+        // Rút trích danh sách tên từ permittedStores
+        const rawNames: string[] = permittedStores.map(s => {
+            if (s.code && !s.name.startsWith(s.code)) {
+                return `${s.code} - ${s.name.replace(/^\d+\s*[-–—._]\s*/, '')}`;
+            }
+            return s.name;
+        });
+
+        // Khử trùng lặp
+        return deduplicateStoreNames(rawNames, activeAvailableStores);
+    }, [permittedStores, activeAvailableStores]);
 
     // Khởi tạo siêu thị mặc định (nếu defaultSelectedStore hợp lệ và user có quyền)
     const [selectedStore, setSelectedStore] = useState<string>(() => {
         if (defaultSelectedStore && !/^(tổng|tong|all|toàn cụm)/i.test(defaultSelectedStore)) {
-            const match = storeOptions.find(s => isStoreMatch(s, defaultSelectedStore) || s === defaultSelectedStore);
+            const match = storeOptions.find(s => isStoreMatch(s, defaultSelectedStore, activeAvailableStores) || s === defaultSelectedStore);
             if (match) return match;
         }
         if (currentUser?.store_name) {
-            const userStoreMatch = storeOptions.find(s => isStoreMatch(s, currentUser.store_name));
+            const userStoreMatch = storeOptions.find(s => isStoreMatch(s, currentUser.store_name, activeAvailableStores));
             if (userStoreMatch) return userStoreMatch;
         }
         return storeOptions[0] || '';
@@ -156,15 +178,15 @@ export default function QuickStoreEmulationModal({
     // Đồng bộ lại selectedStore khi mở modal hoặc danh sách options thay đổi
     useEffect(() => {
         if (!isOpen || storeOptions.length === 0) return;
-        const isCurrentValid = storeOptions.includes(selectedStore);
+        const isCurrentValid = storeOptions.some(s => isStoreMatch(s, selectedStore, activeAvailableStores) || s === selectedStore);
         if (!isCurrentValid || (defaultSelectedStore && !/^(tổng|tong|all|toàn cụm)/i.test(defaultSelectedStore))) {
             let nextStore = '';
             if (defaultSelectedStore && !/^(tổng|tong|all|toàn cụm)/i.test(defaultSelectedStore)) {
-                const match = storeOptions.find(s => isStoreMatch(s, defaultSelectedStore) || s === defaultSelectedStore);
+                const match = storeOptions.find(s => isStoreMatch(s, defaultSelectedStore, activeAvailableStores) || s === defaultSelectedStore);
                 if (match) nextStore = match;
             }
             if (!nextStore && currentUser?.store_name) {
-                const userStoreMatch = storeOptions.find(s => isStoreMatch(s, currentUser.store_name));
+                const userStoreMatch = storeOptions.find(s => isStoreMatch(s, currentUser.store_name, activeAvailableStores));
                 if (userStoreMatch) nextStore = userStoreMatch;
             }
             if (!nextStore) {
@@ -174,7 +196,7 @@ export default function QuickStoreEmulationModal({
                 setSelectedStore(nextStore);
             }
         }
-    }, [isOpen, defaultSelectedStore, storeOptions]);
+    }, [isOpen, defaultSelectedStore, storeOptions, activeAvailableStores]);
 
     // 1. Quản lý danh sách file ảnh (upload hoặc Ctrl+V)
     const [files, setFiles] = useState<File[]>([]);
@@ -327,11 +349,14 @@ export default function QuickStoreEmulationModal({
             // Tự động nhận diện siêu thị nếu có trên ảnh
             if (result.storeName) {
                 const matched = storeOptions.find(s =>
+                    isStoreMatch(s, result.storeName, activeAvailableStores) ||
                     s.toLowerCase().includes(result.storeName!.toLowerCase()) ||
                     result.storeName!.toLowerCase().includes(getShortStoreName(s).toLowerCase())
                 );
                 if (matched) {
                     setSelectedStore(matched);
+                } else if (!effectiveIsAdmin) {
+                    setOcrError(`⚠️ Ảnh chụp thuộc siêu thị "${result.storeName}", không thuộc danh sách siêu thị bạn được phân quyền phụ trách! Vui lòng kiểm tra lại ảnh.`);
                 }
             }
 
@@ -393,6 +418,17 @@ export default function QuickStoreEmulationModal({
     const handleSave = async (saveDirectlyToCloud: boolean = true) => {
         if (!selectedStore) {
             showToast('⚠️ Vui lòng chọn siêu thị cần lưu thi đua!');
+            return;
+        }
+
+        // Kiểm tra phân quyền nạp và lưu siêu thị
+        const isPermitted = effectiveIsAdmin ||
+            canAccessStore(selectedStore) ||
+            canAccessStore(getShortStoreName(selectedStore)) ||
+            permittedStores.some(p => isStoreMatch(p.name, selectedStore, activeAvailableStores));
+
+        if (!isPermitted) {
+            showToast(`❌ Bạn không có quyền nạp/lưu dữ liệu cho siêu thị "${formatStoreDisplayName(selectedStore)}". Vui lòng chỉ chọn siêu thị bạn được phân quyền phụ trách!`);
             return;
         }
 

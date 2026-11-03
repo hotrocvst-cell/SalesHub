@@ -58,30 +58,28 @@ export default function SupabaseSyncStatusBar({
         <div className="space-y-2">
             {/* THANH TRẠNG THÁI CHÍNH */}
             <div
-                className={`rounded-2xl border px-4 py-3 shadow-xs transition-all duration-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
-                    effectiveStatus === 'PENDING_CHANGES'
+                className={`rounded-2xl border px-4 py-3 shadow-xs transition-all duration-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${effectiveStatus === 'PENDING_CHANGES'
                         ? 'bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-amber-500/10 border-amber-300 text-amber-900 shadow-amber-500/5 ring-1 ring-amber-400/40'
                         : effectiveStatus === 'READY'
                             ? 'bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 border-emerald-300 text-emerald-950'
                             : effectiveStatus === 'SYNCING' || effectiveStatus === 'CHECKING'
                                 ? 'bg-gradient-to-r from-blue-50 via-indigo-50 to-blue-50 border-blue-300 text-blue-950'
                                 : 'bg-gradient-to-r from-rose-50 via-red-50 to-rose-50 border-rose-300 text-rose-950'
-                }`}
+                    }`}
             >
                 {/* Khối Thông tin Trạng thái */}
                 <div className="flex items-center gap-3 min-w-0">
                     {/* Icon Cloud với Đèn LED Trạng thái */}
                     <div className="relative shrink-0">
                         <div
-                            className={`w-9 h-9 rounded-xl flex items-center justify-center font-black ${
-                                effectiveStatus === 'PENDING_CHANGES'
+                            className={`w-9 h-9 rounded-xl flex items-center justify-center font-black ${effectiveStatus === 'PENDING_CHANGES'
                                     ? 'bg-amber-100 text-amber-700 border border-amber-300'
                                     : effectiveStatus === 'READY'
                                         ? 'bg-emerald-100 text-emerald-700 border border-emerald-300'
                                         : effectiveStatus === 'SYNCING' || effectiveStatus === 'CHECKING'
                                             ? 'bg-blue-100 text-blue-700 border border-blue-300'
                                             : 'bg-rose-100 text-rose-700 border border-rose-300'
-                            }`}
+                                }`}
                         >
                             {effectiveStatus === 'PENDING_CHANGES' && <AlertCircle className="w-5 h-5 text-amber-600 animate-bounce" />}
                             {effectiveStatus === 'READY' && <Cloud className="w-5 h-5 text-emerald-600" />}
@@ -140,7 +138,7 @@ export default function SupabaseSyncStatusBar({
                             )}
                             {effectiveStatus === 'READY' && (
                                 <>
-                                    Đã kết nối trực tiếp với Supabase • <b>{dictCount}</b> mục từ điển • Bảng điểm siêu thị hoạt động • Cập nhật lúc <b>{lastCheckedTime || 'Vừa xong'}</b>
+                                    Cập nhật lúc <b>{lastCheckedTime || 'Vừa xong'}</b>
                                 </>
                             )}
                             {(effectiveStatus === 'SYNCING' || effectiveStatus === 'CHECKING') && (
@@ -176,13 +174,12 @@ export default function SupabaseSyncStatusBar({
                         type="button"
                         onClick={onCheckConnection}
                         disabled={isSyncing || status === 'CHECKING'}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border transition cursor-pointer disabled:opacity-50 ${
-                            effectiveStatus === 'PENDING_CHANGES'
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border transition cursor-pointer disabled:opacity-50 ${effectiveStatus === 'PENDING_CHANGES'
                                 ? 'bg-white hover:bg-amber-50 text-amber-900 border-amber-300'
                                 : effectiveStatus === 'READY'
                                     ? 'bg-white hover:bg-emerald-100/60 text-emerald-800 border-emerald-300'
                                     : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-300'
-                        }`}
+                            }`}
                         title="Kiểm tra lại trạng thái kết nối với CLOUD"
                     >
                         <RefreshCw className={`w-3.5 h-3.5 ${isSyncing || status === 'CHECKING' ? 'animate-spin text-indigo-600' : ''}`} />

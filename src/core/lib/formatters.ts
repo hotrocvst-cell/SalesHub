@@ -48,7 +48,8 @@ export function getShortStoreName(name: string): string {
     const trimmed = name.trim();
     if (trimmed.toUpperCase().startsWith("TỔNG") || trimmed.toUpperCase().startsWith("TONG")) return "Tổng";
 
-    const cleaned = trimmed.replace(/^\d+\s*-\s*/, '');
+    // Loại bỏ mã số siêu thị ở đầu chuỗi (hỗ trợ cả [111] và 111 - ...)
+    const cleaned = trimmed.replace(/^\[?\d{3,8}\]?\s*[-–—._]?\s*/, '');
     if (cleaned.includes(' - ')) {
         const p = cleaned.split(' - ');
         const prefix = p[0].trim();
@@ -74,7 +75,8 @@ export function formatStoreDisplayName(name: string): string {
         return `Siêu thị [${trimmed}]`;
     }
 
-    const match = trimmed.match(/^(\d{3,8})\s*[-–—._]\s*(.+)$/);
+    // Khớp cả [111] Chuỗi - Địa chỉ lẫn 111 - Chuỗi - Địa chỉ
+    const match = trimmed.match(/^\[?(\d{3,8})\]?\s*[-–—._]?\s*(.+)$/);
     if (match) {
         const code = match[1];
         const rest = match[2].trim();
@@ -91,7 +93,7 @@ export function formatStoreDisplayName(name: string): string {
 // Chuẩn hóa tên siêu thị để kiểm tra quyền
 export function cleanStoreNameForAuth(name: string): string {
     if (!name) return '';
-    return name.trim().replace(/^\d+\s*-\s*/, '').trim();
+    return name.trim().replace(/^\[?\d{3,8}\]?\s*[-–—._]?\s*/, '').trim();
 }
 
 // Kiểm tra quyền siêu thị
@@ -137,22 +139,22 @@ export function isStoreMatch(
 
     // Nếu có danh sách stores từ DB, đối chiếu chính xác theo store code/id
     if (storesList && storesList.length > 0) {
-        const objA = storesList.find(s => s.name === a || (s.code && (a.startsWith(s.code) || a.includes(`(${s.code})`))));
-        const objB = storesList.find(s => s.name === b || (s.code && (b.startsWith(s.code) || b.includes(`(${s.code})`))));
+        const objA = storesList.find(s => s.name === a || (s.code && (a.startsWith(s.code) || a.includes(`(${s.code})`) || a.includes(`[${s.code}]`))));
+        const objB = storesList.find(s => s.name === b || (s.code && (b.startsWith(s.code) || b.includes(`(${s.code})`) || b.includes(`[${s.code}]`))));
         if (objA && objB) {
             return Boolean((objA.id && objA.id === objB.id) || (objA.code && objA.code === objB.code));
         }
         if (objA && !objB) {
-            if (objA.code && (b.startsWith(objA.code) || b.includes(`(${objA.code})`))) return true;
+            if (objA.code && (b.startsWith(objA.code) || b.includes(`(${objA.code})`) || b.includes(`[${objA.code}]`))) return true;
         }
         if (objB && !objA) {
-            if (objB.code && (a.startsWith(objB.code) || a.includes(`(${objB.code})`))) return true;
+            if (objB.code && (a.startsWith(objB.code) || a.includes(`(${objB.code})`) || a.includes(`[${objB.code}]`))) return true;
         }
     }
 
-    // Kiểm tra mã số siêu thị ở đầu chuỗi (ví dụ "10335 - ..." đối chiếu "10335")
-    const codeMatchA = a.match(/^(\d+)/);
-    const codeMatchB = b.match(/^(\d+)/);
+    // Kiểm tra mã số siêu thị ở đầu chuỗi (hỗ trợ cả [111] và 111 - ...)
+    const codeMatchA = a.match(/^\[?(\d{3,8})\]?/);
+    const codeMatchB = b.match(/^\[?(\d{3,8})\]?/);
     if (codeMatchA && codeMatchB && codeMatchA[1] === codeMatchB[1]) {
         return true;
     }
@@ -164,8 +166,8 @@ export function isStoreMatch(
     }
 
     // Loại bỏ mã số đầu chuỗi để đối chiếu phần tên và địa chỉ
-    const cleanA = a.replace(/^\d+\s*-\s*|^\d+\s+/, '').trim().toLowerCase();
-    const cleanB = b.replace(/^\d+\s*-\s*|^\d+\s+/, '').trim().toLowerCase();
+    const cleanA = a.replace(/^\[?\d{3,8}\]?\s*[-–—._]?\s*/, '').trim().toLowerCase();
+    const cleanB = b.replace(/^\[?\d{3,8}\]?\s*[-–—._]?\s*/, '').trim().toLowerCase();
     if (cleanA && cleanB && cleanA === cleanB) return true;
 
     // Đối chiếu theo brand/prefix (ví dụ: AAR vs TGDĐ)
@@ -206,23 +208,28 @@ export function deduplicateStoreNames(
     const result: string[] = [];
 
     const extractStoreCode = (str: string): string => {
-        const m = str.match(/^(\d{3,8})\s*[-–—._]/);
+        const m = str.match(/^\[?(\d{3,8})\]?\s*[-–—._]?/);
         return m ? m[1] : '';
     };
 
     const resolveBestName = (rawName: string): string => {
         if (!rawName) return '';
         const trimmed = rawName.trim();
-        if (extractStoreCode(trimmed)) return trimmed;
+        const code = extractStoreCode(trimmed);
+        if (code) return trimmed;
 
         if (availableStoresList && availableStoresList.length > 0) {
             const matched = availableStoresList.find(s => {
                 const sName = s.name || '';
                 const sShort = s.short_name || '';
-                return isStoreMatch(sName, trimmed) || isStoreMatch(sShort, trimmed);
+                return isStoreMatch(sName, trimmed, availableStoresList) || isStoreMatch(sShort, trimmed, availableStoresList);
             });
-            if (matched && matched.name && extractStoreCode(matched.name)) {
-                return matched.name.trim();
+            if (matched) {
+                const mCode = matched.code || extractStoreCode(matched.name || '');
+                if (mCode) {
+                    const cleanName = (matched.name || trimmed).replace(/^\[?\d{3,8}\]?\s*[-–—._]?\s*/, '');
+                    return `${mCode} - ${cleanName}`;
+                }
             }
         }
 

@@ -479,7 +479,7 @@ export default function CampaignConfigPage() {
                         <span>Cấu Hình Thi Đua & Tính Điểm Hiệu Quả</span>
                     </h1>
                     <p className="text-xs text-slate-500 mt-0.5">
-                        Thiết lập điểm số theo từng siêu thị và quản lý từ điển viết tắt chương trình thi đua
+                        Quản lý viết tắt chương trình thi đua và Cấu hình điểm thi đua
                     </p>
                 </div>
 
@@ -491,12 +491,12 @@ export default function CampaignConfigPage() {
                         disabled={isCheckingCloud}
                         title={`Bấm để kiểm tra lại kết nối Cloud. Lần kiểm tra cuối: ${lastCheckedTime || 'Chưa kiểm tra'}`}
                         className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-2 transition cursor-pointer shadow-2xs ${(hasChanges || hasScoreChanges)
-                                ? 'bg-amber-50 border-amber-300 text-amber-900 hover:bg-amber-100 ring-1 ring-amber-400/50'
-                                : cloudStatus === 'READY'
-                                    ? 'bg-emerald-50 border-emerald-300 text-emerald-900 hover:bg-emerald-100'
-                                    : cloudStatus === 'OFFLINE'
-                                        ? 'bg-rose-50 border-rose-300 text-rose-900 hover:bg-rose-100'
-                                        : 'bg-blue-50 border-blue-300 text-blue-900 hover:bg-blue-100'
+                            ? 'bg-amber-50 border-amber-300 text-amber-900 hover:bg-amber-100 ring-1 ring-amber-400/50'
+                            : cloudStatus === 'READY'
+                                ? 'bg-emerald-50 border-emerald-300 text-emerald-900 hover:bg-emerald-100'
+                                : cloudStatus === 'OFFLINE'
+                                    ? 'bg-rose-50 border-rose-300 text-rose-900 hover:bg-rose-100'
+                                    : 'bg-blue-50 border-blue-300 text-blue-900 hover:bg-blue-100'
                             }`}
                     >
                         <span className="relative flex h-2 w-2">
@@ -535,8 +535,8 @@ export default function CampaignConfigPage() {
                             type="button"
                             onClick={() => setActiveMainTab('store_scores')}
                             className={`px-3.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition cursor-pointer ${activeMainTab === 'store_scores'
-                                    ? 'bg-white text-amber-900 shadow-xs'
-                                    : 'text-slate-600 hover:text-slate-900'
+                                ? 'bg-white text-amber-900 shadow-xs'
+                                : 'text-slate-600 hover:text-slate-900'
                                 }`}
                         >
                             <Award className="w-4 h-4 text-amber-600" />
@@ -547,8 +547,8 @@ export default function CampaignConfigPage() {
                             type="button"
                             onClick={() => setActiveMainTab('dictionary')}
                             className={`px-3.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition cursor-pointer ${activeMainTab === 'dictionary'
-                                    ? 'bg-white text-indigo-900 shadow-xs'
-                                    : 'text-slate-600 hover:text-slate-900'
+                                ? 'bg-white text-indigo-900 shadow-xs'
+                                : 'text-slate-600 hover:text-slate-900'
                                 }`}
                         >
                             <BookOpen className="w-4 h-4 text-indigo-600" />

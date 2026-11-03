@@ -8,6 +8,7 @@ import {
     type EmployeeCampaignTargetItem
 } from '../../core/lib/storage';
 import { getShortStoreName } from '../../core/lib/formatters';
+import { filterCampaignsByMonth } from './utils/campaignMonthHelper';
 import {
     Trophy,
     Save,
@@ -58,7 +59,13 @@ export default function EmployeeCampaignMatrixPage() {
 
         // Chỉ lấy các NHÓM thi đua đang kích hoạt (is_active)
         const activeCamps = (campRes.data || []).filter((c: any) => c.is_active);
-        setCampaigns(activeCamps);
+        const existingTargetKeys = new Set<string>();
+        if (targetRes.success && targetRes.data) {
+            targetRes.data.forEach((row: any) => {
+                if (row.raw_key) existingTargetKeys.add(row.raw_key.trim());
+            });
+        }
+        setCampaigns(filterCampaignsByMonth(activeCamps, selectedMonth, existingTargetKeys));
 
         // Xây dựng ma trận mục tiêu
         const matrix: Record<string, Record<string, number>> = {};

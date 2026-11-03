@@ -1,5 +1,6 @@
 import type { CampaignDictItem } from '../../../core/lib/storage';
 import type { ParsedTargetRow } from './excelHelper';
+import { normalizeToMillion } from '../../../core/lib/formatters';
 
 /**
  * Phân tích chuỗi văn bản copy từ Excel / Google Sheet / Clipboard
@@ -91,7 +92,7 @@ export function parseClipboardTargetText(
 
         results.push({
             employee_id: empId,
-            target_revenue,
+            target_revenue: target_revenue !== undefined ? normalizeToMillion(target_revenue) : undefined,
             campaign_targets
         });
     }

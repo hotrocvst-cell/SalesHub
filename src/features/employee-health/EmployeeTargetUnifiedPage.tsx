@@ -8,8 +8,14 @@ import {
     type EmployeeItem,
     type CampaignDictItem
 } from '../../core/lib/storage';
-import { getShortStoreName } from '../../core/lib/formatters';
+import {
+    getShortStoreName,
+    formatStoreDisplayName,
+    isStoreMatch,
+    normalizeToMillion
+} from '../../core/lib/formatters';
 import { exportUnifiedTargetTemplate, type ParsedTargetRow } from './utils/excelHelper';
+import { filterCampaignsByMonth } from './utils/campaignMonthHelper';
 import UnifiedTargetTable from './components/UnifiedTargetTable';
 import ImportTargetModal from './components/ImportTargetModal';
 import SupabaseSyncStatusBar, { type SyncStatusType } from './components/SupabaseSyncStatusBar';
@@ -68,9 +74,18 @@ export default function EmployeeTargetUnifiedPage() {
 
             if (empRes.success) setEmployees(empRes.data);
 
-            // Lọc các NHÓM thi đua đang active
+            // Thu thập tập hợp các raw_key đã có chỉ tiêu trong tháng được chọn
+            const existingTargetKeys = new Set<string>();
+            if (campTargetRes.success && campTargetRes.data) {
+                campTargetRes.data.forEach((r: any) => {
+                    if (r.raw_key) existingTargetKeys.add(r.raw_key.trim());
+                });
+            }
+
+            // Lọc các NHÓM thi đua đang active VÀ thuộc đúng tháng được chọn
             const activeCamps = (campRes.data || []).filter(c => c.is_active);
-            setCampaigns(activeCamps);
+            const monthCamps = filterCampaignsByMonth(activeCamps, selectedMonth, existingTargetKeys);
+            setCampaigns(monthCamps);
 
             // Map Target Doanh Thu
             const revMap: Record<string, number> = {};
@@ -144,14 +159,24 @@ export default function EmployeeTargetUnifiedPage() {
         setSelectedYear(y);
     };
 
-    // Thống kê số lượng chỉ tiêu hiện tại của tháng
+    // Danh sách nhân viên trong phạm vi đang xem (theo ST hoặc Toàn cụm)
+    const scopeEmployees = useMemo(() => {
+        if (selectedStore === 'all') return employees;
+        return employees.filter(e => {
+            const sName = getShortStoreName(e.store_name);
+            return sName === selectedStore || isStoreMatch(e.store_name, selectedStore);
+        });
+    }, [employees, selectedStore]);
+
+    // Thống kê số lượng chỉ tiêu hiện tại của tháng (theo phạm vi đang chọn: ST hoặc Toàn cụm)
     const targetStats = useMemo(() => {
         let countWithRevenue = 0;
         let totalRevenue = 0;
         let countCampaignTargets = 0;
 
-        employees.forEach(emp => {
-            const rev = revenueTargets[emp.employee_id] || 0;
+        scopeEmployees.forEach(emp => {
+            const rawRev = revenueTargets[emp.employee_id] || 0;
+            const rev = normalizeToMillion(rawRev);
             if (rev > 0) {
                 countWithRevenue++;
                 totalRevenue += rev;
@@ -164,13 +189,18 @@ export default function EmployeeTargetUnifiedPage() {
             }
         });
 
+        const scopeLabel = selectedStore === 'all'
+            ? 'Toàn Cụm'
+            : (formatStoreDisplayName(selectedStore) || selectedStore);
+
         return {
-            totalEmployees: employees.length,
+            totalEmployees: scopeEmployees.length,
             countWithRevenue,
             totalRevenue,
-            countCampaignTargets
+            countCampaignTargets,
+            scopeLabel
         };
-    }, [employees, revenueTargets, campaignTargets]);
+    }, [scopeEmployees, revenueTargets, campaignTargets, selectedStore]);
 
     // Danh sách siêu thị
     const storeList = useMemo(() => {
@@ -198,7 +228,8 @@ export default function EmployeeTargetUnifiedPage() {
 
     // Inline edit handlers
     const handleRevenueChange = (empId: string, val: number) => {
-        setRevenueTargets(prev => ({ ...prev, [empId]: val }));
+        const normalized = normalizeToMillion(val);
+        setRevenueTargets(prev => ({ ...prev, [empId]: normalized }));
         setHasChanges(true);
         setSyncStatus('unsaved');
     };
@@ -244,7 +275,7 @@ export default function EmployeeTargetUnifiedPage() {
             if (exists) {
                 matchCount++;
                 if (item.target_revenue !== undefined) {
-                    newRev[item.employee_id] = item.target_revenue;
+                    newRev[item.employee_id] = normalizeToMillion(item.target_revenue);
                 }
                 if (!newCamp[item.employee_id]) newCamp[item.employee_id] = {};
                 Object.entries(item.campaign_targets).forEach(([k, val]) => {
@@ -468,14 +499,26 @@ export default function EmployeeTargetUnifiedPage() {
                     <span>Đang nạp dữ liệu chỉ tiêu nhân viên...</span>
                 </div>
             ) : (
-                <UnifiedTargetTable
-                    employees={filteredEmployees}
-                    campaigns={campaigns}
-                    revenueTargets={revenueTargets}
-                    campaignTargets={campaignTargets}
-                    onRevenueChange={handleRevenueChange}
-                    onCampaignChange={handleCampaignChange}
-                />
+                <>
+                    {campaigns.length === 0 && (
+                        <div className="bg-amber-50 border border-amber-200/90 rounded-2xl p-4 text-xs text-amber-900 flex items-center justify-between gap-3 shadow-2xs">
+                            <div className="flex items-center gap-2.5">
+                                <span className="text-base">ℹ️</span>
+                                <div>
+                                    <strong className="font-bold">Chưa có cột thi đua chuyên biệt cho Tháng {selectedMonth}/{selectedYear}:</strong> Trong Từ Điển Thi Đua chưa có chương trình nào mang tiền tố <code>T{selectedMonth < 10 ? `0${selectedMonth}` : selectedMonth}</code>. Bạn vẫn có thể giao chỉ tiêu Doanh thu hoặc nạp dữ liệu từ file Excel.
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    <UnifiedTargetTable
+                        employees={filteredEmployees}
+                        campaigns={campaigns}
+                        revenueTargets={revenueTargets}
+                        campaignTargets={campaignTargets}
+                        onRevenueChange={handleRevenueChange}
+                        onCampaignChange={handleCampaignChange}
+                    />
+                </>
             )}
 
             {/* MODAL IMPORT EXCEL / PARSE TEXT */}
