@@ -71,7 +71,7 @@ function getCellValueAsNumber(value: unknown): number {
  * Đọc file Excel dữ liệu tồn kho (.xlsx, .xls)
  * Tự động quét tìm hàng Header chính xác trong 10 dòng đầu tiên
  * Nhận diện chuẩn xác các cột:
- * - Tên siêu thị (không bị nhầm lẫn với SL tồn kho tối thiểu hay Số lượng không bao gồm...)
+ * - Tên ST (không bị nhầm lẫn với SL tồn kho tối thiểu hay Số lượng không bao gồm...)
  * - Mã sản phẩm
  * - Tên sản phẩm
  * - Ngành hàng
@@ -207,7 +207,7 @@ export async function parseInventoryExcel(file: File): Promise<InventoryRawRecor
     }
 
     // Fallback nếu không phát hiện được theo tên (áp dụng thứ tự cột chuẩn của file mẫu MWG):
-    // Cột 1: Tên siêu thị | Cột 2: Mã Model | Cột 3: Mã sản phẩm | Cột 4: Tên sản phẩm | Cột 5: Đơn vị
+    // Cột 1: Tên ST | Cột 2: Mã Model | Cột 3: Mã sản phẩm | Cột 4: Tên sản phẩm | Cột 5: Đơn vị
     // Cột 6: Ngành hàng | Cột 7: Nhóm hàng | Cột 8: Trạng thái | Cột 16: Số lượng có thể bán
     if (colMap.store_name === -1) colMap.store_name = 1;
     if (colMap.model_code === -1) colMap.model_code = 2;
@@ -228,9 +228,9 @@ export async function parseInventoryExcel(file: File): Promise<InventoryRawRecor
         const storeName = getCellValueAsString(row.getCell(colMap.store_name).value);
         const productCode = getCellValueAsString(row.getCell(colMap.product_code).value);
 
-        // Bỏ qua dòng không có tên siêu thị hoặc mã sản phẩm, hoặc dòng tiêu đề lặp lại
+        // Bỏ qua dòng không có tên ST hoặc mã sản phẩm, hoặc dòng tiêu đề lặp lại
         if (!storeName || !productCode) continue;
-        if (storeName === '0' || storeName === 'Tên siêu thị' || productCode === 'Mã sản phẩm') continue;
+        if (storeName === '0' || storeName === 'Tên ST' || productCode === 'Mã sản phẩm') continue;
 
         const productName = getCellValueAsString(row.getCell(colMap.product_name).value);
         const category = getCellValueAsString(row.getCell(colMap.category).value);
@@ -265,11 +265,11 @@ export function generateZaloOverallMessage(
 ): string {
     const validMatches = matches.filter(m => m.hasSource);
     if (validMatches.length === 0) {
-        return `[SALESHUB - XIN HÀNG TỒN KHO]\nST: ${targetStore}\nHiện tại chưa tìm thấy mã hàng thiếu nào có siêu thị đối tác hỗ trợ.`;
+        return `[SALESHUB - XIN HÀNG TỒN KHO]\nST: ${targetStore}\nHiện tại chưa tìm thấy mã hàng thiếu nào có ST đối tác hỗ trợ.`;
     }
 
     let msg = `📦 [ĐỀ XUẤT XIN ĐIỀU CHUYỂN TỒN KHO]\n`;
-    msg += `🏢 Siêu thị xin hàng: ${targetStore}\n`;
+    msg += `🏢 ST xin hàng: ${targetStore}\n`;
     msg += `📅 Ngày đề xuất: ${new Date().toLocaleDateString('vi-VN')}\n`;
     msg += `📊 Tổng số mã thiếu có nguồn: ${validMatches.length} mã\n`;
     msg += `------------------------------------\n`;
@@ -282,12 +282,12 @@ export function generateZaloOverallMessage(
     });
 
     msg += `------------------------------------\n`;
-    msg += `Kính nhờ Quản lý khu vực & Các Siêu thị đối tác hỗ trợ điều chuyển! Trân trọng cảm ơn.`;
+    msg += `Kính nhờ Quản lý khu vực & Các ST đối tác hỗ trợ điều chuyển! Trân trọng cảm ơn.`;
     return msg;
 }
 
 /**
- * Tạo nội dung tin nhắn Zalo gửi riêng cho 1 siêu thị đối tác cụ thể
+ * Tạo nội dung tin nhắn Zalo gửi riêng cho 1 ST đối tác cụ thể
  */
 export function generateZaloStoreSpecificMessage(
     targetStore: string,
@@ -295,9 +295,9 @@ export function generateZaloStoreSpecificMessage(
 ): string {
     let msg = `📦 [XIN CHUYỂN HÀNG TỒN KHO - NỘI BỘ]\n`;
     msg += `Kính gửi: Anh/Chị Quản lý ST ${sourceSupply.store_name}\n`;
-    msg += `Từ: Siêu thị ${targetStore}\n`;
+    msg += `Từ: ST ${targetStore}\n`;
     msg += `Ngày: ${new Date().toLocaleDateString('vi-VN')}\n`;
-    msg += `\nDạ siêu thị em hiện đang hết hàng các mặt hàng sau và thấy siêu thị mình đang có số lượng tồn khả dụng (>= 2). Em xin phép được đề xuất xin chia sẻ điều phối ${sourceSupply.items.length} mã sau ạ:\n`;
+    msg += `\nDạ ST em hiện đang hết hàng các mặt hàng sau và thấy ST mình đang có số lượng tồn khả dụng (>= 2). Em xin phép được đề xuất xin chia sẻ điều phối ${sourceSupply.items.length} mã sau ạ:\n`;
     msg += `------------------------------------\n`;
 
     sourceSupply.items.forEach((item, index) => {
@@ -308,7 +308,7 @@ export function generateZaloStoreSpecificMessage(
     });
 
     msg += `------------------------------------\n`;
-    msg += `Nhờ Anh/Chị xem xét hỗ trợ xuất điều chuyển giúp siêu thị em với ạ. Em xin chân thành cảm ơn!`;
+    msg += `Nhờ Anh/Chị xem xét hỗ trợ xuất điều chuyển giúp ST em với ạ. Em xin chân thành cảm ơn!`;
     return msg;
 }
 
@@ -360,7 +360,7 @@ export async function exportRebalanceToExcel(
         'Nhóm Hàng',
         'Tồn Hiện Tại',
         'SL Cần Xin',
-        'Các Siêu Thị Có Tồn Dư (>= 2)'
+        'Các ST Có Tồn Dư (>= 2)'
     ] : [
         'STT',
         'Mã Sản Phẩm',
@@ -369,7 +369,7 @@ export async function exportRebalanceToExcel(
         'Nhóm Hàng',
         'Tồn Hiện Tại',
         'SL Cần Xin',
-        'Các Siêu Thị Có Tồn Dư (>= 2)'
+        'Các ST Có Tồn Dư (>= 2)'
     ];
 
     const hRow1 = ws1.getRow(3);
@@ -448,9 +448,9 @@ export async function exportRebalanceToExcel(
     ];
 
     // =========================================================================
-    // SHEET 2: THEO SIÊU THỊ ĐỐI TÁC
+    // SHEET 2: THEO ST ĐỐI TÁC
     // =========================================================================
-    const ws2 = workbook.addWorksheet('Theo Siêu Thị Đối Tác', {
+    const ws2 = workbook.addWorksheet('Theo ST Đối Tác', {
         views: [{ state: 'frozen', ySplit: 3 }]
     });
 
@@ -459,21 +459,21 @@ export async function exportRebalanceToExcel(
 
     ws2.mergeCells(`A1:${mergeCol2A}`);
     const titleCell2 = ws2.getCell('A1');
-    titleCell2.value = `DANH SÁCH MÃ HÀNG CÓ THỂ XIN THEO TỪNG SIÊU THỊ ĐỐI TÁC`;
+    titleCell2.value = `DANH SÁCH MÃ HÀNG CÓ THỂ XIN THEO TỪNG ST ĐỐI TÁC`;
     titleCell2.font = { name: 'Calibri', size: 14, bold: true, color: { argb: 'FF065F46' } };
     titleCell2.alignment = { horizontal: 'center', vertical: 'middle' };
     ws2.getRow(1).height = 28;
 
     ws2.mergeCells(`A2:${mergeCol2B}`);
     const subCell2 = ws2.getCell('A2');
-    subCell2.value = `Siêu thị nhận: ${targetStore} | Số siêu thị có thể chia sẻ: ${groupedByStore.length}${hasSales ? ' | Kèm dữ liệu sức bán' : ''}`;
+    subCell2.value = `ST nhận: ${targetStore} | Số ST có thể chia sẻ: ${groupedByStore.length}${hasSales ? ' | Kèm dữ liệu sức bán' : ''}`;
     subCell2.font = { name: 'Calibri', size: 10, italic: true, color: { argb: 'FF475569' } };
     subCell2.alignment = { horizontal: 'center', vertical: 'middle' };
     ws2.getRow(2).height = 18;
 
     const headers2 = hasSales ? [
         'STT',
-        'Siêu Thị Đối Tác (Nguồn)',
+        'ST Đối Tác (Nguồn)',
         'Mã Sản Phẩm',
         'Tên Sản Phẩm',
         'Sức Bán (Máy)',
@@ -482,7 +482,7 @@ export async function exportRebalanceToExcel(
         'SL Đề Xuất Xin'
     ] : [
         'STT',
-        'Siêu Thị Đối Tác (Nguồn)',
+        'ST Đối Tác (Nguồn)',
         'Mã Sản Phẩm',
         'Tên Sản Phẩm',
         'Ngành Hàng',
@@ -572,13 +572,13 @@ export async function exportRebalanceToExcel(
 }
 
 /**
- * Xuất file Excel danh sách xin hàng theo từng siêu thị đối tác (chuẩn 4 cột import ERP):
+ * Xuất file Excel danh sách xin hàng theo từng ST đối tác (chuẩn 4 cột import ERP):
  * Cột 1: Mã sản phẩm
  * Cột 2: Tên sản phẩm (để trống)
  * Cột 3: IMEI (để trống)
  * Cột 4: Số lượng yêu cầu
  *
- * Tên file: "[từ khóa/all]_[tên siêu thị]_[thời gian xuất file].xlsx"
+ * Tên file: "[từ khóa/all]_[tên ST]_[thời gian xuất file].xlsx"
  */
 export async function exportStoreTransferRequestExcel(
     sourceStoreName: string,
@@ -663,7 +663,7 @@ export async function exportStoreTransferRequestExcel(
         });
     });
 
-    // Tạo tên file: "[từ khóa/all]_[tên siêu thị]_[thời gian xuất file].xlsx"
+    // Tạo tên file: "[từ khóa/all]_[tên ST]_[thời gian xuất file].xlsx"
     const now = new Date();
     const pad = (n: number) => String(n).padStart(2, '0');
     const timeStr = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}`;

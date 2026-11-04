@@ -18,7 +18,7 @@ export interface CampaignSummaryData {
     report_date: string;       // "2026-09-26"
     date_display: string;      // "26-09-2026"
     mode_label: string;        // "DỰ KIẾN" | "CHÍNH THỨC"
-    store_name: string;        // Siêu thị hoặc "Toàn Cụm Siêu Thị"
+    store_name: string;        // ST hoặc "Toàn Cụm ST"
     scoring_mode?: 'POINTS' | 'COUNT';
     total_categories: number;  // ví dụ 39
     categories: string[];      // Danh sách tên các ngành hàng thi đua

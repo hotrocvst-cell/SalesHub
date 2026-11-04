@@ -4,8 +4,8 @@ import { getCampaignLabel, cleanBiNumber } from '../../../core/lib/formatters';
 import type { StoreMobileEmulationCardItem } from '../types/ocrTypes';
 
 /**
- * Lưu chỉ tiêu thi đua từ Thẻ Mobile cho 1 siêu thị vào bảng daily_business_records trên Supabase Cloud
- * BẢO LƯU TOÀN VẸN số liệu Doanh thu (DTQĐ, DT Thực, Trả góp, Forecast) đã có của siêu thị trong ngày chốt này.
+ * Lưu chỉ tiêu thi đua từ Thẻ Mobile cho 1 ST vào bảng daily_business_records trên Supabase Cloud
+ * BẢO LƯU TOÀN VẸN số liệu Doanh thu (DTQĐ, DT Thực, Trả góp, Forecast) đã có của ST trong ngày chốt này.
  */
 export async function saveSingleStoreEmulationDailyRecord(
     storeName: string,
@@ -16,7 +16,7 @@ export async function saveSingleStoreEmulationDailyRecord(
     campaignDict: CampaignDictItem[] = []
 ): Promise<{ success: boolean; error?: string }> {
     if (!storeName || !reportDate) {
-        return { success: false, error: 'Thiếu thông tin siêu thị hoặc ngày chốt phiên.' };
+        return { success: false, error: 'Thiếu thông tin ST hoặc ngày chốt phiên.' };
     }
 
     try {
@@ -26,7 +26,7 @@ export async function saveSingleStoreEmulationDailyRecord(
         const month = parseInt(mStr, 10) || (new Date().getMonth() + 1);
         const year = parseInt(yStr, 10) || new Date().getFullYear();
 
-        // 1. Tìm bản ghi hiện có của siêu thị này trong ngày chốt để bảo lưu doanh thu
+        // 1. Tìm bản ghi hiện có của ST này trong ngày chốt để bảo lưu doanh thu
         const { data: existing, error: fetchErr } = await supabase
             .from('daily_business_records')
             .select('*')

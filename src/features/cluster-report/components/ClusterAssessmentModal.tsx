@@ -45,9 +45,9 @@ export default function ClusterAssessmentModal({
     const handleGenerateAiInsights = () => {
         if (rows.length === 0) return;
 
-        // Tìm siêu thị %HT Vượt trội cao nhất
+        // Tìm ST %HT Vượt trội cao nhất
         const topPctHt = [...rows].sort((a, b) => b.pctHtOver - a.pctHtOver)[0];
-        // Tìm siêu thị cần tăng tốc (%HT thấp nhất)
+        // Tìm ST cần tăng tốc (%HT thấp nhất)
         const lowPctHt = [...rows].sort((a, b) => a.pctHtOver - b.pctHtOver)[0];
 
         const hasInstallment = summary.hasInstallmentRate ?? (summary.avgInstallmentRate > 0);

@@ -212,7 +212,7 @@ export default function EmployeeDetailReportPage() {
         showToast(val ? 'Đã bật: Xuất All (kèm Ghi Chú Phân Tích)' : 'Đã chọn: Loại trừ Ghi Chú Phân Tích');
     };
 
-    // State phục vụ xuất ảnh smartphone 16:10 (đơn lẻ & hàng loạt cho tất cả NV theo siêu thị)
+    // State phục vụ xuất ảnh smartphone 16:10 (đơn lẻ & hàng loạt cho tất cả NV theo ST)
     const [batchExport, setBatchExport] = useState<{
         isRunning: boolean;
         current: number;
@@ -241,7 +241,7 @@ export default function EmployeeDetailReportPage() {
     const isLockedToEmployee = isStaffUser && Boolean(currentUser.employee_id);
     const canExportAllEmployees = isAdmin || canConfigure || ['ADMIN', 'QUAN_LY', 'TRUONG_CA'].includes(currentUser.role);
 
-    // Phân quyền siêu thị theo tài khoản người dùng
+    // Phân quyền ST theo tài khoản người dùng
     const { allowedStores, isLockedToSingleStore, canViewAllStores } = useUserStoreFilter(
         stores,
         selectedStore,
@@ -315,7 +315,7 @@ export default function EmployeeDetailReportPage() {
         loadAllData();
     }, [selectedMonth, selectedYear]);
 
-    // 4. DANH SÁCH NHÂN VIÊN THEO PHẠM VI SIÊU THỊ ĐƯỢC CHỌN
+    // 4. DANH SÁCH NHÂN VIÊN THEO PHẠM VI ST ĐƯỢC CHỌN
     const availableEmployees = useMemo(() => {
         let list = employees;
         if (selectedStore !== 'all') {
@@ -359,7 +359,7 @@ export default function EmployeeDetailReportPage() {
         }
     }, [availableEmployees, selectedEmployeeId, currentUser.employee_id, isLockedToEmployee]);
 
-    // Cập nhật URL khi đổi nhân viên hoặc siêu thị
+    // Cập nhật URL khi đổi nhân viên hoặc ST
     const handleSelectEmployee = (empId: string) => {
         setSelectedEmployeeId(empId);
         setSearchParams(prev => {
@@ -407,7 +407,7 @@ export default function EmployeeDetailReportPage() {
 
     const isPointsMode = scoreConfig.scoring_mode === 'POINTS';
 
-    // 6. DANH SÁCH PHIÊN DỮ LIỆU ĐƯỢC LỌC RÀNG BUỘC THEO SIÊU THỊ & NHÂN VIÊN
+    // 6. DANH SÁCH PHIÊN DỮ LIỆU ĐƯỢC LỌC RÀNG BUỘC THEO ST & NHÂN VIÊN
     const availableSessions = useMemo(() => {
         if (!selectedEmployeeId || sessions.length === 0) return [];
         const empId = selectedEmployeeId.trim();
@@ -417,15 +417,15 @@ export default function EmployeeDetailReportPage() {
             // Loại trừ phiên chỉ thuần giờ công nếu đã có các phiên thi đua doanh thu
             if (s.session_type === 'WORK_HOURS') return false;
 
-            // 1. Ràng buộc theo siêu thị (nếu có chọn cụ thể hoặc bị giới hạn quyền)
+            // 1. Ràng buộc theo ST (nếu có chọn cụ thể hoặc bị giới hạn quyền)
             if (selectedStore !== 'all') {
                 const matchStore = isStoreMatch(s.store_name, selectedStore, stores) ||
-                    s.store_name === 'Toàn Cụm Siêu Thị' ||
+                    s.store_name === 'Toàn Cụm ST' ||
                     (currentEmployee && isStoreMatch(s.store_name, currentEmployee.store_name, stores));
                 if (!matchStore) return false;
             } else if (!canViewAllStores && allowedStores.length > 0) {
                 const matchAllowed = allowedStores.some(st => isStoreMatch(s.store_name, st.name, stores)) ||
-                    s.store_name === 'Toàn Cụm Siêu Thị';
+                    s.store_name === 'Toàn Cụm ST';
                 if (!matchAllowed) return false;
             }
 
@@ -438,12 +438,12 @@ export default function EmployeeDetailReportPage() {
             list = sessions.filter(s => {
                 if (selectedStore !== 'all') {
                     const matchStore = isStoreMatch(s.store_name, selectedStore, stores) ||
-                        s.store_name === 'Toàn Cụm Siêu Thị' ||
+                        s.store_name === 'Toàn Cụm ST' ||
                         (currentEmployee && isStoreMatch(s.store_name, currentEmployee.store_name, stores));
                     if (!matchStore) return false;
                 } else if (!canViewAllStores && allowedStores.length > 0) {
                     const matchAllowed = allowedStores.some(st => isStoreMatch(s.store_name, st.name, stores)) ||
-                        s.store_name === 'Toàn Cụm Siêu Thị';
+                        s.store_name === 'Toàn Cụm ST';
                     if (!matchAllowed) return false;
                 }
                 return (s.records || []).some(r => (r.employee_id || '').trim() === empId);
@@ -854,7 +854,7 @@ export default function EmployeeDetailReportPage() {
         return list;
     }, [campaignDetailRows, campaignFilterMode, sortColumn, sortDirection]);
 
-    // 10. TỔNG KẾT KẾT QUẢ TỔNG (THEO ĐIỂM HOẶC SỐ CHƯƠNG TRÌNH ĐẠT TÙY CẤU HÌNH SIÊU THỊ)
+    // 10. TỔNG KẾT KẾT QUẢ TỔNG (THEO ĐIỂM HOẶC SỐ CHƯƠNG TRÌNH ĐẠT TÙY CẤU HÌNH ST)
     const campaignSummaryStats = useMemo(() => {
         const rowsWithTarget = campaignDetailRows.filter(r => r.target > 0);
         const total = rowsWithTarget.length;
@@ -1041,7 +1041,7 @@ export default function EmployeeDetailReportPage() {
         }
     };
 
-    // Xuất ảnh theo chuẩn Screen cho TẤT CẢ nhân viên trong siêu thị được chọn
+    // Xuất ảnh theo chuẩn Screen cho TẤT CẢ nhân viên trong ST được chọn
     const handleBatchExportAllStore = async () => {
         if (!canExportAllEmployees) {
             showToast('⚠️ Bạn không có quyền xuất ảnh báo cáo toàn bộ nhân viên!');
@@ -1049,11 +1049,11 @@ export default function EmployeeDetailReportPage() {
         }
 
         if (availableEmployees.length === 0) {
-            showToast('⚠️ Không có nhân viên nào trong danh sách siêu thị được chọn!');
+            showToast('⚠️ Không có nhân viên nào trong danh sách ST được chọn!');
             return;
         }
 
-        const storeNameDisplay = selectedStore === 'all' ? 'Tất cả siêu thị' : getShortStoreName(selectedStore);
+        const storeNameDisplay = selectedStore === 'all' ? 'Tất cả ST' : getShortStoreName(selectedStore);
         const configDisplay = includeAnalysisSection ? 'Xuất All' : 'Loại trừ Phân Tích';
         const confirmMsg = `Bạn có muốn xuất ảnh báo cáo chuẩn 8K (${configDisplay}) cho toàn bộ ${availableEmployees.length} nhân viên của "${storeNameDisplay}" không?`;
         if (!window.confirm(confirmMsg)) return;
@@ -1222,7 +1222,7 @@ export default function EmployeeDetailReportPage() {
             `2. Với mỗi đơn máy, chủ động tư vấn kèm 2 - 3 món phụ kiện/gia dụng.`,
             `3. Rà soát danh sách nhóm hàng còn thiếu để chủ động giới thiệu khi có lượt khách.`,
             `----------------------------------------`,
-            `🚀 Chúc bạn bứt phá ngoạn mục và dẫn đầu bảng thi đua siêu thị!`
+            `🚀 Chúc bạn bứt phá ngoạn mục và dẫn đầu bảng thi đua ST!`
         ];
 
         return [
@@ -1336,7 +1336,7 @@ export default function EmployeeDetailReportPage() {
                             onClick={handleBatchExportAllStore}
                             disabled={isExporting || batchExport.isRunning}
                             className="px-3.5 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs"
-                            title={`Xuất ảnh báo cáo theo screen chuẩn 8K cho tất cả ${availableEmployees.length} nhân viên trong siêu thị được chọn`}
+                            title={`Xuất ảnh báo cáo theo screen chuẩn 8K cho tất cả ${availableEmployees.length} nhân viên trong ST được chọn`}
                         >
                             {batchExport.isRunning ? (
                                 <Loader2 className="w-4 h-4 animate-spin text-white" />
@@ -1349,9 +1349,9 @@ export default function EmployeeDetailReportPage() {
                 </div>
             </div>
 
-            {/* 2. THANH BỘ LỌC THỜI GIAN, SIÊU THỊ & CHỌN NHÂN VIÊN */}
+            {/* 2. THANH BỘ LỌC THỜI GIAN, ST & CHỌN NHÂN VIÊN */}
             <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-3 text-xs">
-                {/* HÀNG 1: BỘ LỌC SIÊU THỊ RIÊNG LẺ ĐẦU TIÊN (RULE 10 CONVENTION) */}
+                {/* HÀNG 1: BỘ LỌC ST RIÊNG LẺ ĐẦU TIÊN (RULE 10 CONVENTION) */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
                     <div className="flex items-center gap-2">
                         <div className={`flex items-center gap-2 px-3.5 py-2 rounded-xl border text-xs font-bold ${isLockedToSingleStore
@@ -1378,7 +1378,7 @@ export default function EmployeeDetailReportPage() {
                                 }}
                                 className="bg-transparent text-xs font-black outline-hidden cursor-pointer disabled:cursor-not-allowed min-w-[200px] sm:min-w-[260px] truncate"
                             >
-                                {canViewAllStores && <option value="all">🏢 Toàn Cụm Siêu Thị</option>}
+                                {canViewAllStores && <option value="all">🏢 Toàn Cụm ST</option>}
                                 {allowedStores.map(s => (
                                     <option key={s.id || s.name} value={s.name}>
                                         🏪 {getShortStoreName(s.name)}
@@ -1489,7 +1489,7 @@ export default function EmployeeDetailReportPage() {
                         )}
                     </div>
 
-                    {/* Chọn Phiên Dữ Liệu (Ràng buộc Siêu Thị & Nhân Viên) */}
+                    {/* Chọn Phiên Dữ Liệu (Ràng buộc ST & Nhân Viên) */}
                     <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl text-xs font-bold min-w-[220px] max-w-full flex-1 sm:flex-initial">
                         <Layers className="w-4 h-4 text-indigo-600 shrink-0" />
                         <span className="text-slate-500 shrink-0">Phiên:</span>
@@ -1498,13 +1498,13 @@ export default function EmployeeDetailReportPage() {
                             onChange={e => handleSelectSession(e.target.value)}
                             disabled={availableSessions.length === 0}
                             className="bg-transparent text-xs font-bold text-slate-800 outline-hidden cursor-pointer disabled:cursor-not-allowed flex-1 min-w-0 truncate"
-                            title="Chọn phiên cập nhật số liệu cần xem (ràng buộc theo siêu thị và nhân viên)"
+                            title="Chọn phiên cập nhật số liệu cần xem (ràng buộc theo ST và nhân viên)"
                         >
                             {availableSessions.length === 0 ? (
                                 <option value="">Chưa có phiên dữ liệu cho NV này</option>
                             ) : (
                                 availableSessions.map(s => {
-                                    const storeLabel = s.store_name === 'Toàn Cụm Siêu Thị'
+                                    const storeLabel = s.store_name === 'Toàn Cụm ST'
                                         ? 'Toàn Cụm'
                                         : (getShortStoreName(s.store_name) || s.store_name || 'Shop');
                                     const dateLabel = s.report_date ? formatDate(s.report_date) : (s.created_at ? formatDate(s.created_at) : '');
@@ -1538,7 +1538,7 @@ export default function EmployeeDetailReportPage() {
                         </select>
                     </div>
 
-                    {/* Chỉ báo Chế độ Tính Điểm Thi Đua của Siêu Thị */}
+                    {/* Chỉ báo Chế độ Tính Điểm Thi Đua của ST */}
                     <div className={`px-2.5 py-1.5 rounded-xl border text-[11px] font-black flex items-center gap-1.5 ${isPointsMode
                         ? 'bg-indigo-50 border-indigo-200 text-indigo-900'
                         : 'bg-emerald-50 border-emerald-200 text-emerald-900'
@@ -1569,7 +1569,7 @@ export default function EmployeeDetailReportPage() {
                     <div>
                         <div className="font-bold">Chưa có phiên dữ liệu thi đua / doanh thu cho nhân viên này</div>
                         <div className="text-[11px] text-amber-700 mt-0.5">
-                            Nhân viên <strong>{currentEmployee ? cleanEmployeeName(currentEmployee.full_name) : selectedEmployeeId}</strong> ({selectedEmployeeId}) chưa có số liệu trong các phiên của Tháng {selectedMonth}/{selectedYear}. Vui lòng kiểm tra lại siêu thị hoặc cập nhật số liệu phiên tại phân hệ Quản lý Phiên.
+                            Nhân viên <strong>{currentEmployee ? cleanEmployeeName(currentEmployee.full_name) : selectedEmployeeId}</strong> ({selectedEmployeeId}) chưa có số liệu trong các phiên của Tháng {selectedMonth}/{selectedYear}. Vui lòng kiểm tra lại ST hoặc cập nhật số liệu phiên tại phân hệ Quản lý Phiên.
                         </div>
                     </div>
                 </div>
@@ -1626,7 +1626,7 @@ export default function EmployeeDetailReportPage() {
                             </span>
                         </div>
 
-                        {/* Tag bổ sung thông tin Siêu Thị, Chức Danh & Phiên */}
+                        {/* Tag bổ sung thông tin ST, Chức Danh & Phiên */}
                         <div className="mt-3 flex items-center justify-center gap-2 flex-wrap text-[11px] font-semibold text-emerald-100/90">
                             <span className="px-2.5 py-0.5 rounded-full bg-emerald-900/60 border border-emerald-500/40">
                                 🏢 {currentEmployee?.store_name || selectedStore}
@@ -1772,7 +1772,7 @@ export default function EmployeeDetailReportPage() {
                                                 onClick={() => handleSort('pointsWeight')}
                                                 className={`py-2.5 px-0.5 text-center border-r border-emerald-700/80 cursor-pointer hover:bg-emerald-900/50 transition ${sortColumn === 'pointsWeight' ? 'bg-emerald-950 text-amber-300 font-extrabold' : 'bg-emerald-900/60 text-amber-300'
                                                     }`}
-                                                title="Điểm chuẩn quy định theo cấu hình của siêu thị"
+                                                title="Điểm chuẩn quy định theo cấu hình của ST"
                                             >
                                                 <div className="flex items-center justify-center gap-0.5">
                                                     <span>Điểm</span>
@@ -2098,7 +2098,7 @@ export default function EmployeeDetailReportPage() {
                                 Đang Xuất Ảnh Báo Cáo 8K
                             </h3>
                             <p className="text-xs text-slate-500 mt-1 flex items-center justify-center gap-1.5 flex-wrap">
-                                <span>ST: <strong className="text-slate-800">{selectedStore === 'all' ? 'Tất cả siêu thị' : getShortStoreName(selectedStore)}</strong></span>
+                                <span>ST: <strong className="text-slate-800">{selectedStore === 'all' ? 'Tất cả ST' : getShortStoreName(selectedStore)}</strong></span>
                                 <span className="text-slate-300">•</span>
                                 <span>Cấu hình: <strong className="text-indigo-700">{includeAnalysisSection ? 'Xuất All' : 'Loại trừ Phân Tích'}</strong></span>
                             </p>

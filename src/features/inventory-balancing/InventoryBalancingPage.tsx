@@ -77,9 +77,9 @@ export default function InventoryBalancingPage() {
     // Cấu hình lọc nguồn Bước 2 & Bước 3
     const [sourceStoreFilter, setSourceStoreFilter] = useState<string>('');
     const [minSourceQty, setMinSourceQty] = useState<number>(2);
-    // Tỷ lệ % số lượng cần xin theo tồn kho của siêu thị nguồn (mặc định 30%)
+    // Tỷ lệ % số lượng cần xin theo tồn kho của ST nguồn (mặc định 30%)
     const [requestPercent, setRequestPercent] = useState<number>(30);
-    // Danh sách các siêu thị nguồn bị người dùng chủ động xóa bớt / loại trừ
+    // Danh sách các ST nguồn bị người dùng chủ động xóa bớt / loại trừ
     const [excludedStores, setExcludedStores] = useState<string[]>([]);
 
     // Checkbox list Ngành hàng & Nhóm hàng được chọn cho Bước 1 (null nghĩa là mặc định chọn tất cả)
@@ -158,7 +158,7 @@ export default function InventoryBalancingPage() {
         return Array.from(map.values());
     }, [rawRecords]);
 
-    // 3. Danh sách tất cả các siêu thị có trong file
+    // 3. Danh sách tất cả các ST có trong file
     const allFileStores = useMemo(() => {
         const set = new Set<string>();
         rawRecords.forEach(r => {
@@ -167,13 +167,13 @@ export default function InventoryBalancingPage() {
         return Array.from(set).sort();
     }, [rawRecords]);
 
-    // Danh mục siêu thị từ hệ thống (phục vụ chọn trước khi nạp file)
+    // Danh mục ST từ hệ thống (phục vụ chọn trước khi nạp file)
     const [systemStores, setSystemStores] = useState<string[]>([]);
     const [showHistoryModal, setShowHistoryModal] = useState<boolean>(false);
     // Trạng thái phiên xin hàng được nạp khôi phục (phục vụ xem lại khi chưa nạp file Excel mới)
     const [restoredSession, setRestoredSession] = useState<InventoryBalancingSavedConfig | null>(null);
 
-    // 0. Tải danh mục siêu thị hệ thống khi mount
+    // 0. Tải danh mục ST hệ thống khi mount
     useEffect(() => {
         let mounted = true;
         fetchStores().then(res => {
@@ -185,7 +185,7 @@ export default function InventoryBalancingPage() {
         return () => { mounted = false; };
     }, []);
 
-    // Danh sách siêu thị được gán cho tài khoản (accessible_stores hoặc store_name)
+    // Danh sách ST được gán cho tài khoản (accessible_stores hoặc store_name)
     const userAssignedStores = useMemo(() => {
         const assigned = currentUser.accessible_stores && currentUser.accessible_stores.length > 0
             ? currentUser.accessible_stores
@@ -193,9 +193,9 @@ export default function InventoryBalancingPage() {
         return assigned.map(s => s.trim()).filter(Boolean);
     }, [currentUser]);
 
-    // 4. SIÊU THỊ PHỤ TRÁCH (XIN HÀNG): Luôn cho phép chọn siêu thị kể cả trước khi nạp file Excel!
+    // 4. ST PHỤ TRÁCH (XIN HÀNG): Luôn cho phép chọn ST kể cả trước khi nạp file Excel!
     const userAllowedStores = useMemo(() => {
-        // TRƯỜNG HỢP 1: ĐÃ NẠP FILE EXCEL VÀ CÓ DANH SÁCH SIÊU THỊ TRONG FILE
+        // TRƯỜNG HỢP 1: ĐÃ NẠP FILE EXCEL VÀ CÓ DANH SÁCH ST TRONG FILE
         if (allFileStores.length > 0) {
             if (isAdmin) return allFileStores;
 
@@ -210,7 +210,7 @@ export default function InventoryBalancingPage() {
             return allFileStores;
         }
 
-        // TRƯỜNG HỢP 2: KHI CHƯA NẠP FILE EXCEL -> USER VẪN ĐƯỢC CHỌN SIÊU THỊ ĐỂ NẠP CẤU HÌNH & LỆNH ĐÃ LƯU!
+        // TRƯỜNG HỢP 2: KHI CHƯA NẠP FILE EXCEL -> USER VẪN ĐƯỢC CHỌN ST ĐỂ NẠP CẤU HÌNH & LỆNH ĐÃ LƯU!
         if (userAssignedStores.length > 0) {
             return userAssignedStores;
         }
@@ -222,11 +222,11 @@ export default function InventoryBalancingPage() {
         return [];
     }, [allFileStores, isAdmin, userAssignedStores, systemStores]);
 
-    // Thông báo trạng thái siêu thị phụ trách dành cho user
+    // Thông báo trạng thái ST phụ trách dành cho user
     const currentUserStoreNotice = useMemo(() => {
         if (isAdmin) return undefined;
         if (userAssignedStores.length === 0) {
-            return `Tài khoản (${currentUser.full_name || 'Người dùng'}) chưa được gán siêu thị phụ trách nào trong hồ sơ.`;
+            return `Tài khoản (${currentUser.full_name || 'Người dùng'}) chưa được gán ST phụ trách nào trong hồ sơ.`;
         }
         if (allFileStores.length > 0) {
             const hasMatch = allFileStores.some(fileStore =>
@@ -239,7 +239,7 @@ export default function InventoryBalancingPage() {
         return undefined;
     }, [isAdmin, currentUser, userAssignedStores, allFileStores]);
 
-    // Tự động chọn siêu thị đầu tiên trong danh sách được phép
+    // Tự động chọn ST đầu tiên trong danh sách được phép
     useEffect(() => {
         if (userAllowedStores.length > 0) {
             if (!targetStore || !userAllowedStores.includes(targetStore)) {
@@ -253,7 +253,7 @@ export default function InventoryBalancingPage() {
     // 5. Tự động load cấu hình đã lưu khi đổi targetStore
     useEffect(() => {
         if (!targetStore) return;
-        // Reset bộ lọc ngành/nhóm về mặc định khi chuyển sang siêu thị mới
+        // Reset bộ lọc ngành/nhóm về mặc định khi chuyển sang ST mới
         setSelectedCategories(null);
         setSelectedSubCategories(null);
 
@@ -279,14 +279,14 @@ export default function InventoryBalancingPage() {
                 setOrderedItemsMap({});
             }
 
-            // Nạp lại trạng thái loại trừ / giữ lại sản phẩm theo siêu thị
+            // Nạp lại trạng thái loại trừ / giữ lại sản phẩm theo ST
             if (config.excluded_store_item_keys) {
                 setExcludedStoreItemKeys(config.excluded_store_item_keys);
             } else {
                 setExcludedStoreItemKeys({});
             }
 
-            // Nạp lại số lượng tùy chỉnh theo siêu thị
+            // Nạp lại số lượng tùy chỉnh theo ST
             if (config.store_custom_qtys) {
                 setStoreCustomQtyMap(config.store_custom_qtys);
             } else {
@@ -561,7 +561,7 @@ export default function InventoryBalancingPage() {
         }));
     }, [displayShortageItems]);
 
-    // Xử lý loại trừ / khôi phục siêu thị nguồn không muốn xin
+    // Xử lý loại trừ / khôi phục ST nguồn không muốn xin
     const handleToggleExcludeStore = useCallback((storeName: string) => {
         setExcludedStores(prev => {
             if (prev.includes(storeName)) {
@@ -593,7 +593,7 @@ export default function InventoryBalancingPage() {
         });
     }, []);
 
-    // Đánh dấu tất cả sản phẩm của 1 siêu thị nguồn là đã tạo lệnh (hoặc bỏ đánh dấu)
+    // Đánh dấu tất cả sản phẩm của 1 ST nguồn là đã tạo lệnh (hoặc bỏ đánh dấu)
     const handleBatchSetStoreOrdered = useCallback((sourceStore: string, productCodes: string[], isOrdered: boolean) => {
         setOrderedItemsMap(prev => {
             const next = { ...prev };
@@ -610,7 +610,7 @@ export default function InventoryBalancingPage() {
         });
     }, []);
 
-    // Toggle loại trừ hoặc giữ lại sản phẩm cần xin hàng theo siêu thị
+    // Toggle loại trừ hoặc giữ lại sản phẩm cần xin hàng theo ST
     const handleToggleExcludeStoreItem = useCallback((sourceStore: string, productCode: string) => {
         const key = `${sourceStore}__${productCode}`;
         setExcludedStoreItemKeys(prev => ({
@@ -619,7 +619,7 @@ export default function InventoryBalancingPage() {
         }));
     }, []);
 
-    // Điều chỉnh nhanh số lượng cần xin cho từng sản phẩm theo siêu thị
+    // Điều chỉnh nhanh số lượng cần xin cho từng sản phẩm theo ST
     const handleChangeStoreItemQty = useCallback((sourceStore: string, productCode: string, qty: number) => {
         const key = `${sourceStore}__${productCode}`;
         setStoreCustomQtyMap(prev => ({
@@ -628,7 +628,7 @@ export default function InventoryBalancingPage() {
         }));
     }, []);
 
-    // 5. BƯỚC 2: Lọc các siêu thị nguồn có tồn >= minSourceQty & khớp điều kiện chứa tên
+    // 5. BƯỚC 2: Lọc các ST nguồn có tồn >= minSourceQty & khớp điều kiện chứa tên
     const matchingSourceRecords = useMemo(() => {
         if (!targetStore || rawRecords.length === 0) return [];
 
@@ -638,14 +638,14 @@ export default function InventoryBalancingPage() {
             .filter(Boolean);
 
         return rawRecords.filter(r => {
-            // Không lấy siêu thị đang phụ trách
+            // Không lấy ST đang phụ trách
             if (r.store_name === targetStore) return false;
-            // Không lấy siêu thị đã bị người dùng xóa bớt / loại trừ
+            // Không lấy ST đã bị người dùng xóa bớt / loại trừ
             if (excludedStores.includes(r.store_name)) return false;
             // Số lượng có thể bán >= minSourceQty
             if (r.available_qty < minSourceQty) return false;
 
-            // Nếu có điều kiện lọc tên siêu thị (ABC, XYA, 123...)
+            // Nếu có điều kiện lọc tên ST (ABC, XYA, 123...)
             if (tokens.length > 0) {
                 const normStore = normalizeSearchStr(r.store_name);
                 const isMatch = tokens.some(t => normStore.includes(t));
@@ -656,7 +656,7 @@ export default function InventoryBalancingPage() {
         });
     }, [rawRecords, targetStore, minSourceQty, sourceStoreFilter, excludedStores]);
 
-    // Số lượng siêu thị nguồn khớp điều kiện
+    // Số lượng ST nguồn khớp điều kiện
     const matchingSourceStoresCount = useMemo(() => {
         const set = new Set<string>();
         matchingSourceRecords.forEach(r => set.add(r.store_name));
@@ -682,7 +682,7 @@ export default function InventoryBalancingPage() {
         // Ghép nối từng mã sản phẩm cần xin
         const matches: RebalanceMatchItem[] = selectedItems.map(item => {
             const sources = sourceMap.get(item.product_code) || [];
-            // Sắp xếp siêu thị có tồn nhiều nhất lên đầu
+            // Sắp xếp ST có tồn nhiều nhất lên đầu
             const sortedSources = [...sources].sort((a, b) => b.available_qty - a.available_qty);
 
             const sourceStoresList = sortedSources.map(s => {
@@ -715,7 +715,7 @@ export default function InventoryBalancingPage() {
             };
         });
 
-        // Gom nhóm theo siêu thị đối tác (Group by Source Store)
+        // Gom nhóm theo ST đối tác (Group by Source Store)
         const storeGroupMap = new Map<string, StoreGroupedSupply>();
         matches.forEach(m => {
             m.source_stores.forEach(s => {
@@ -743,7 +743,7 @@ export default function InventoryBalancingPage() {
             });
         });
 
-        // Sắp xếp các siêu thị cung cấp được nhiều mã nhất lên đầu
+        // Sắp xếp các ST cung cấp được nhiều mã nhất lên đầu
         const grouped = Array.from(storeGroupMap.values()).sort(
             (a, b) => b.total_matched_products - a.total_matched_products || b.total_available_qty - a.total_available_qty
         );
@@ -760,7 +760,7 @@ export default function InventoryBalancingPage() {
             };
         }
 
-        // Tái hiện danh sách gợi ý & siêu thị đối tác từ restoredSession
+        // Tái hiện danh sách gợi ý & ST đối tác từ restoredSession
         if (restoredSession) {
             const matches: RebalanceMatchItem[] = [];
             const storeGroupMap = new Map<string, StoreGroupedSupply>();
@@ -879,7 +879,7 @@ export default function InventoryBalancingPage() {
             const uniqueProductCodes = Array.from(new Set(records.map(r => r.product_code))).filter(Boolean);
 
             if (uniqueStores.length === 0) {
-                alert(`Đã đọc ${records.length.toLocaleString('vi-VN')} dòng dữ liệu nhưng không phát hiện được cột Tên siêu thị phù hợp trong file "${file.name}".`);
+                alert(`Đã đọc ${records.length.toLocaleString('vi-VN')} dòng dữ liệu nhưng không phát hiện được cột Tên ST phù hợp trong file "${file.name}".`);
             } else {
                 const assigned = currentUser.accessible_stores && currentUser.accessible_stores.length > 0
                     ? currentUser.accessible_stores
@@ -1176,7 +1176,7 @@ export default function InventoryBalancingPage() {
                             </span>
                         </h1>
                         <p className="text-xs text-slate-500">
-                            Lọc sản phẩm thiếu • Tìm siêu thị có tồn kho • Gợi ý xin hàng thông minh
+                            Lọc sản phẩm thiếu • Tìm ST có tồn kho • Gợi ý xin hàng thông minh
                         </p>
                     </div>
                 </div>
@@ -1216,14 +1216,14 @@ export default function InventoryBalancingPage() {
                         ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed'
                         : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200'
                         }`}
-                    title={targetStore ? 'Đồng bộ & lưu dữ liệu ngay lên Cloud' : 'Vui lòng chọn Siêu thị trước khi đồng bộ'}
+                    title={targetStore ? 'Đồng bộ & lưu dữ liệu ngay lên Cloud' : 'Vui lòng chọn ST trước khi đồng bộ'}
                 >
                     <RefreshCw className={`w-3.5 h-3.5 ${isSavingConfig ? 'animate-spin text-emerald-600' : 'text-emerald-600'}`} />
                     <span>{isSavingConfig ? 'Đang đồng bộ...' : 'Đồng bộ ngay'}</span>
                 </button>
             </div>
 
-            {/* THANH BỘ LỌC CỐT LÕI (TUÂN THỦ RULE 10: SIÊU THỊ RIÊNG 1 DÒNG ĐẦU TIÊN) */}
+            {/* THANH BỘ LỌC CỐT LÕI (TUÂN THỦ RULE 10: ST RIÊNG 1 DÒNG ĐẦU TIÊN) */}
             <InventoryBalancingFilterBar
                 storesList={userAllowedStores}
                 targetStore={targetStore}
@@ -1266,11 +1266,11 @@ export default function InventoryBalancingPage() {
                             Chưa nạp dữ liệu tồn kho mới
                         </h3>
                         <p className="text-xs text-slate-500">
-                            Bạn đã có thể chọn Siêu thị phụ trách ở thanh bộ lọc phía trên để xem các lệnh đã lưu, hoặc tải lên file Excel để bắt đầu phân tích.
+                            Bạn đã có thể chọn ST phụ trách ở thanh bộ lọc phía trên để xem các lệnh đã lưu, hoặc tải lên file Excel để bắt đầu phân tích.
                         </p>
                     </div>
 
-                    {/* THẺ TRẠNG THÁI SIÊU THỊ ĐANG CHỌN (NẾU ĐÃ CHỌN KHO) */}
+                    {/* THẺ TRẠNG THÁI ST ĐANG CHỌN (NẾU ĐÃ CHỌN KHO) */}
                     {targetStore && (
                         <div className="bg-gradient-to-r from-blue-50/80 to-indigo-50/80 border border-blue-200 rounded-xl p-4 max-w-lg mx-auto text-left space-y-2.5 shadow-2xs">
                             <div className="flex items-center justify-between gap-2">

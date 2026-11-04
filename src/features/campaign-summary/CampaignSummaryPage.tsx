@@ -80,7 +80,7 @@ export default function CampaignSummaryPage() {
         }
     }, [currentUser?.is_guest]);
 
-    // Phân quyền siêu thị theo tài khoản người dùng
+    // Phân quyền ST theo tài khoản người dùng
     const { allowedStores, isLockedToSingleStore, canViewAllStores } = useUserStoreFilter(
         stores,
         selectedStore,
@@ -162,7 +162,7 @@ export default function CampaignSummaryPage() {
         loadSystemData();
     }, [selectedMonth, selectedYear]);
 
-    // Tự động tải lại danh sách cấn trừ khi đổi siêu thị
+    // Tự động tải lại danh sách cấn trừ khi đổi ST
     useEffect(() => {
         let isMounted = true;
         fetchCampaignOffsets(selectedStore, selectedMonth, selectedYear).then(res => {
@@ -177,7 +177,7 @@ export default function CampaignSummaryPage() {
         return () => { isMounted = false; };
     }, [selectedStore, selectedMonth, selectedYear]);
 
-    // Bản đồ nhân viên -> siêu thị
+    // Bản đồ nhân viên -> ST
     const empStoreMap = useMemo(() => {
         const map: Record<string, string> = {};
         employees.forEach(e => {
@@ -188,15 +188,15 @@ export default function CampaignSummaryPage() {
         return map;
     }, [employees]);
 
-    // Danh sách phiên thi đua phù hợp theo siêu thị đang chọn:
-    // - Khi chọn siêu thị A: hiển thị các phiên của siêu thị A hoặc phiên cụm có chứa nhân viên của siêu thị A
-    // - Khi chọn Toàn cụm: tổng hợp phiên mới nhất của từng siêu thị lên đầu
+    // Danh sách phiên thi đua phù hợp theo ST đang chọn:
+    // - Khi chọn ST A: hiển thị các phiên của ST A hoặc phiên cụm có chứa nhân viên của ST A
+    // - Khi chọn Toàn cụm: tổng hợp phiên mới nhất của từng ST lên đầu
     const availableSessions = useMemo<EmployeeDataSession[]>(() => {
         if (selectedStore === 'all') {
             const storeMap = new Map<string, EmployeeDataSession>();
             sessions.forEach(s => {
                 const st = s.store_name || '';
-                if (st && st !== 'Toàn Cụm Siêu Thị' && !storeMap.has(st)) {
+                if (st && st !== 'Toàn Cụm ST' && !storeMap.has(st)) {
                     storeMap.set(st, s);
                 }
             });
@@ -222,7 +222,7 @@ export default function CampaignSummaryPage() {
                     id: 'all_cluster_latest',
                     session_type: 'REVENUE_CAMPAIGN',
                     session_title: '✨ Toàn cụm: Tổng hợp các phiên mới nhất',
-                    store_name: 'Toàn Cụm Siêu Thị',
+                    store_name: 'Toàn Cụm ST',
                     month: selectedMonth,
                     year: selectedYear,
                     report_date: latestReportDate || getYesterdayDateString(),
@@ -242,10 +242,10 @@ export default function CampaignSummaryPage() {
             return sessions;
         }
 
-        // Lọc: Lấy các phiên của đúng siêu thị được chọn, HOẶC phiên toàn cụm nếu có chứa nhân sự của siêu thị này
+        // Lọc: Lấy các phiên của đúng ST được chọn, HOẶC phiên toàn cụm nếu có chứa nhân sự của ST này
         return sessions.filter(s => {
             if (isStoreMatch(s.store_name, selectedStore, stores)) return true;
-            if (s.store_name === 'Toàn Cụm Siêu Thị' || !s.store_name) {
+            if (s.store_name === 'Toàn Cụm ST' || !s.store_name) {
                 return (s.records || []).some(r => isEmployeeInStore(r.employee_id, selectedStore, empStoreMap, s.store_name, stores));
             }
             return false;
@@ -266,8 +266,8 @@ export default function CampaignSummaryPage() {
         }
     }, [availableSessions]);
 
-    // Xử lý khi người dùng chọn siêu thị khác trên dropdown:
-    // Lập tức chuyển sang phiên mới nhất của siêu thị đó
+    // Xử lý khi người dùng chọn ST khác trên dropdown:
+    // Lập tức chuyển sang phiên mới nhất của ST đó
     const handleStoreChange = (newStore: string) => {
         if (isLockedToSingleStore) return;
         setSelectedStore(newStore);
@@ -275,7 +275,7 @@ export default function CampaignSummaryPage() {
             ? sessions
             : sessions.filter(s => {
                 if (isStoreMatch(s.store_name, newStore, stores)) return true;
-                if (s.store_name === 'Toàn Cụm Siêu Thị' || !s.store_name) {
+                if (s.store_name === 'Toàn Cụm ST' || !s.store_name) {
                     return (s.records || []).some(r => isEmployeeInStore(r.employee_id, newStore, empStoreMap, s.store_name, stores));
                 }
                 return false;
@@ -300,8 +300,8 @@ export default function CampaignSummaryPage() {
     }, [selectedStore, selectedMonth, selectedYear]);
 
     // 2. TÍNH TOÁN DỮ LIỆU BÁO CÁO THI ĐUA TỪ PHIÊN ĐÃ CẬP NHẬT
-    // - Lọc kết quả nhân viên theo siêu thị và chỉ chọn nhân viên có khai báo target
-    // - Tổng số thi đua chỉ tính theo thi đua có target và theo siêu thị
+    // - Lọc kết quả nhân viên theo ST và chỉ chọn nhân viên có khai báo target
+    // - Tổng số thi đua chỉ tính theo thi đua có target và theo ST
     const campaignData = useMemo<CampaignSummaryData | null>(() => {
         if (!activeSession) return null;
 
@@ -635,7 +635,7 @@ export default function CampaignSummaryPage() {
             return [];
         }
         const analysis = generateSmartRemarks(campaignData, campaignDict);
-        const storeLabel = selectedStore === 'all' ? 'Toàn Cụm Siêu Thị' : selectedStore;
+        const storeLabel = selectedStore === 'all' ? 'Toàn Cụm ST' : selectedStore;
 
         // Mẫu 1: Tổng quan tiến độ & Ngành hàng mũi nhọn
         const m1Lines = [
@@ -719,9 +719,9 @@ export default function CampaignSummaryPage() {
                 </div>
             )}
 
-            {/* Thanh công cụ lọc: Tháng/Năm, Siêu Thị, Chọn Phiên, Tìm kiếm, Xuất Excel */}
+            {/* Thanh công cụ lọc: Tháng/Năm, ST, Chọn Phiên, Tìm kiếm, Xuất Excel */}
             <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-3 text-xs">
-                {/* HÀNG 1: BỘ LỌC SIÊU THỊ RIÊNG LẺ ĐẦU TIÊN (RULE 10 CONVENTION) */}
+                {/* HÀNG 1: BỘ LỌC ST RIÊNG LẺ ĐẦU TIÊN (RULE 10 CONVENTION) */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
                     <div className="flex items-center gap-2">
                         <div className={`flex items-center gap-2 px-3.5 py-2 rounded-xl border text-xs font-bold transition-all ${isLockedToSingleStore
@@ -738,14 +738,14 @@ export default function CampaignSummaryPage() {
                                 value={selectedStore}
                                 onChange={e => handleStoreChange(e.target.value)}
                                 disabled={isLockedToSingleStore}
-                                title={isLockedToSingleStore ? 'Tài khoản nhân viên được cố định theo siêu thị đang làm việc' : undefined}
+                                title={isLockedToSingleStore ? 'Tài khoản nhân viên được cố định theo ST đang làm việc' : undefined}
                                 className={`bg-transparent text-xs font-black outline-hidden min-w-[200px] sm:min-w-[260px] ${isLockedToSingleStore
                                     ? 'cursor-not-allowed text-amber-900'
                                     : 'cursor-pointer text-slate-900'
                                     }`}
                             >
                                 {canViewAllStores && (
-                                    <option value="all">🏢 Toàn Cụm Siêu Thị</option>
+                                    <option value="all">🏢 Toàn Cụm ST</option>
                                 )}
                                 {allowedStores.map(s => (
                                     <option key={s.id || s.code} value={s.name}>🏪 {s.name} ({s.code})</option>
@@ -882,7 +882,7 @@ export default function CampaignSummaryPage() {
             </div>
         </div>
 
-            {/* TRƯỜNG HỢP 1: CHƯA CÓ PHIÊN DỮ LIỆU HOẶC KHÔNG CÓ NHÂN VIÊN NÀO CÓ TARGET TẠI SIÊU THỊ NÀY */}
+            {/* TRƯỜNG HỢP 1: CHƯA CÓ PHIÊN DỮ LIỆU HOẶC KHÔNG CÓ NHÂN VIÊN NÀO CÓ TARGET TẠI ST NÀY */}
             {!campaignData || availableSessions.length === 0 || campaignData.rows.length === 0 ? (
                 <div className="bg-white rounded-3xl border border-amber-200 p-12 text-center shadow-xs space-y-4 max-w-3xl mx-auto my-8">
                     <div className="w-14 h-14 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center mx-auto shadow-2xs">
@@ -892,13 +892,13 @@ export default function CampaignSummaryPage() {
                     <div className="space-y-1.5">
                         <h3 className="text-base sm:text-lg font-black text-slate-900">
                             {availableSessions.length === 0
-                                ? `Chưa Có Dữ Liệu Phiên Thi Đua Cho Siêu Thị Này (Tháng ${selectedMonth}/${selectedYear})`
-                                : 'Không Tìm Thấy Nhân Viên Có Khai Báo Target Tại Siêu Thị Này'}
+                                ? `Chưa Có Dữ Liệu Phiên Thi Đua Cho ST Này (Tháng ${selectedMonth}/${selectedYear})`
+                                : 'Không Tìm Thấy Nhân Viên Có Khai Báo Target Tại ST Này'}
                         </h3>
                         <p className="text-xs text-slate-500 max-w-lg mx-auto leading-relaxed">
                             {availableSessions.length === 0
-                                ? `Tại siêu thị "${selectedStore === 'all' ? 'Toàn Cụm' : selectedStore}", chưa có phiên dữ liệu Doanh thu & Thi đua nào được cập nhật cho Tháng ${selectedMonth}/${selectedYear}. Vui lòng vào phân hệ Cập nhật số liệu NV để lưu phiên Doanh thu & Thi đua trước khi xem bảng báo cáo.`
-                                : `Tại siêu thị "${selectedStore === 'all' ? 'Toàn Cụm' : selectedStore}", chưa có nhân sự nào được khai báo chỉ tiêu thi đua (target) cho Tháng ${selectedMonth}/${selectedYear}. Theo quy định, báo cáo chỉ hiển thị nhân sự có khai báo target và tổng thi đua có target.`}
+                                ? `Tại ST "${selectedStore === 'all' ? 'Toàn Cụm' : selectedStore}", chưa có phiên dữ liệu Doanh thu & Thi đua nào được cập nhật cho Tháng ${selectedMonth}/${selectedYear}. Vui lòng vào phân hệ Cập nhật số liệu NV để lưu phiên Doanh thu & Thi đua trước khi xem bảng báo cáo.`
+                                : `Tại ST "${selectedStore === 'all' ? 'Toàn Cụm' : selectedStore}", chưa có nhân sự nào được khai báo chỉ tiêu thi đua (target) cho Tháng ${selectedMonth}/${selectedYear}. Theo quy định, báo cáo chỉ hiển thị nhân sự có khai báo target và tổng thi đua có target.`}
                         </p>
                     </div>
 

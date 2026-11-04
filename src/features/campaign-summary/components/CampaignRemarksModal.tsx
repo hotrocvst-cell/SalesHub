@@ -192,7 +192,7 @@ export default function CampaignRemarksModal({
                 <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3">
                     <span className="text-[11px] text-slate-500 flex items-center gap-1">
                         <MessageSquare className="w-3.5 h-3.5 text-slate-400" />
-                        Đã sẵn sàng để gửi trực tiếp vào Messaging App Siêu thị / Quản lý cụm.
+                        Đã sẵn sàng để gửi trực tiếp vào Messaging App ST / Quản lý cụm.
                     </span>
 
                     <div className="flex items-center gap-2">

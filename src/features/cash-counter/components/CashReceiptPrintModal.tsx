@@ -91,7 +91,7 @@ export const CashReceiptPrintModal: React.FC<CashReceiptPrintModalProps> = ({
             </head>
             <body>
                 <div class="text-center bold" style="font-size: 14px; text-transform: uppercase;">PHIẾU KIỂM QUỸ CA TRỰC</div>
-                <div class="text-center bold" style="font-size: 12px; margin-top: 1px;">${storeName || 'SIÊU THỊ SALES HUB'}</div>
+                <div class="text-center bold" style="font-size: 12px; margin-top: 1px;">${storeName || 'ST SALES HUB'}</div>
                 <div class="text-center" style="font-size: 10px; margin-top: 2px; color: #333;">Thời gian in: ${printTime}</div>
                 
                 <div class="dashed-line"></div>
@@ -243,7 +243,7 @@ export const CashReceiptPrintModal: React.FC<CashReceiptPrintModalProps> = ({
                                 Xem Trước Phiếu In Khổ 80mm
                             </h3>
                             <p className="text-[10px] text-slate-500">
-                                Chuẩn in nhiệt POS 72mm-80mm (Khổ hoá đơn siêu thị)
+                                Chuẩn in nhiệt POS 72mm-80mm (Khổ hoá đơn ST)
                             </p>
                         </div>
                     </div>
@@ -266,7 +266,7 @@ export const CashReceiptPrintModal: React.FC<CashReceiptPrintModalProps> = ({
                             PHIẾU KIỂM QUỸ CA TRỰC
                         </div>
                         <div className="text-center font-bold text-[11px] text-slate-800 mt-0.5">
-                            {storeName || 'SIÊU THỊ SALES HUB'}
+                            {storeName || 'ST SALES HUB'}
                         </div>
                         <div className="text-center text-[10px] text-slate-500 mt-0.5">
                             Ngày in: {printTime}

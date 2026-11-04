@@ -39,7 +39,7 @@ export default function VoucherImportModal({
     presetDescription,
     presetCodes
 }: Props) {
-    // Phạm vi áp dụng: 'CLUSTER' (toàn cụm của user), hoặc tên một siêu thị cụ thể
+    // Phạm vi áp dụng: 'CLUSTER' (toàn cụm của user), hoặc tên một ST cụ thể
     const [scopeType, setScopeType] = useState<string>('CLUSTER');
     const [campaignName, setCampaignName] = useState<string>('');
     const [customCampaign, setCustomCampaign] = useState<string>('');
@@ -130,7 +130,7 @@ export default function VoucherImportModal({
         }
     }, [isOpen, presetCampaignName, presetDenomination, presetDescription, presetCodes, existingCampaigns, autoFillDescription]);
 
-    // Danh sách siêu thị trong cụm của người dùng
+    // Danh sách ST trong cụm của người dùng
     const clusterStoreNames = useMemo(() => {
         if (allowedStores && allowedStores.length > 0) {
             return allowedStores.map(s => s.name);
@@ -225,11 +225,11 @@ export default function VoucherImportModal({
 
         if (scopeType === 'CLUSTER') {
             // Nạp cho Toàn Cụm của Quản lý: Lấy shop đầu tiên làm đại diện và gắn danh sách cả Cụm
-            targetStoreName = clusterStoreNames[0] || 'Toàn Cụm Siêu Thị';
+            targetStoreName = clusterStoreNames[0] || 'Toàn Cụm ST';
             targetClusterStores = clusterStoreNames.length > 0 ? clusterStoreNames : undefined;
         } else if (scopeType === 'ALL_GLOBAL' && isAdmin) {
             // Chỉ dành cho Admin tối cao nạp toàn quốc
-            targetStoreName = 'Toàn Cụm Siêu Thị';
+            targetStoreName = 'Toàn Cụm ST';
             targetClusterStores = undefined;
         } else {
             // Nạp riêng cho 1 shop cụ thể
@@ -335,10 +335,10 @@ export default function VoucherImportModal({
 
                         <p className="text-[10.5px] text-emerald-800 leading-relaxed">
                             {scopeType === 'CLUSTER'
-                                ? `Mã chỉ cấp cho nhân viên thuộc ${clusterStoreNames.length} siêu thị trong cụm của bạn. Các cụm khác hoàn toàn không thể xem hoặc lấy mã.`
+                                ? `Mã chỉ cấp cho nhân viên thuộc ${clusterStoreNames.length} ST trong cụm của bạn. Các cụm khác hoàn toàn không thể xem hoặc lấy mã.`
                                 : scopeType === 'ALL_GLOBAL'
                                     ? 'Mã dùng chung cho toàn bộ nhân viên trên toàn quốc.'
-                                    : `Mã chỉ dành riêng cho nhân viên tại siêu thị ${getShortStoreName(scopeType)}.`}
+                                    : `Mã chỉ dành riêng cho nhân viên tại ST ${getShortStoreName(scopeType)}.`}
                         </p>
                     </div>
 
@@ -698,7 +698,7 @@ export default function VoucherImportModal({
                         )}
 
                         <p className="text-[10px] text-slate-500 mt-1">
-                            * Hệ thống tự động in hoa, xóa khoảng cách thừa và loại trừ các mã đã có trong kho siêu thị.
+                            * Hệ thống tự động in hoa, xóa khoảng cách thừa và loại trừ các mã đã có trong kho ST.
                         </p>
                     </div>
 

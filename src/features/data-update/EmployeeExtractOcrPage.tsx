@@ -1,18 +1,22 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../shared/contexts/AuthContext';
+import { useUserStoreFilter } from '../../shared/hooks/useUserStoreFilter';
 import {
     fetchStores,
     fetchEmployees,
+    fetchCampaignDictionary,
     type StoreItem,
-    type EmployeeItem
+    type EmployeeItem,
+    type CampaignDictItem
 } from '../../core/lib/storage';
 import {
     getYesterdayDateString,
     formatDate,
     formatDateTime,
     formatValue,
-    getShortStoreName
+    getShortStoreName,
+    isStoreMatch
 } from '../../core/lib/formatters';
 import CloudDataSyncStatusBanner from '../../shared/components/report/CloudDataSyncStatusBanner';
 import OcrUploadZone from './components/OcrUploadZone';
@@ -25,6 +29,11 @@ import {
     convertSessionRecordsToOcrItems,
     type EmployeeOcrParsedItem
 } from './services/geminiEmployeeOcrService';
+import {
+    fetchStoreKnownCampaignTargets,
+    type KnownStoreCampaignTarget,
+    type CampaignMappingItem
+} from './services/campaignTargetMappingService';
 import {
     resolveActiveGeminiKey,
     fetchAdminGeminiKeyCloud,
@@ -58,7 +67,8 @@ import {
     X,
     Copy,
     Check,
-    Clock
+    Clock,
+    Lock
 } from 'lucide-react';
 
 export default function EmployeeExtractOcrPage() {
@@ -78,10 +88,24 @@ export default function EmployeeExtractOcrPage() {
         return y.getFullYear();
     });
 
-    // 2. Siêu thị & Danh mục nhân sự
+    // 2. ST & Danh mục nhân sự
     const [stores, setStores] = useState<StoreItem[]>([]);
     const [selectedStore, setSelectedStore] = useState<string>('');
     const [systemEmployees, setSystemEmployees] = useState<EmployeeItem[]>([]);
+
+    // Phân quyền phạm vi ST theo vai trò người dùng (Nhân viên bị khóa shop, Quản lý đa shop, Admin toàn quyền)
+    const { allowedStores, isLockedToSingleStore } = useUserStoreFilter(
+        stores,
+        selectedStore,
+        setSelectedStore
+    );
+
+    // Tự động khởi tạo ST đầu tiên được phân quyền nếu chưa chọn
+    useEffect(() => {
+        if (!selectedStore && allowedStores.length > 0) {
+            setSelectedStore(allowedStores[0].name);
+        }
+    }, [allowedStores, selectedStore]);
 
     // 3. Tab chuyển đổi
     const [activeTab, setActiveTab] = useState<'ocr' | 'manual'>('ocr');
@@ -120,6 +144,11 @@ export default function EmployeeExtractOcrPage() {
     const [isScanningAdditional, setIsScanningAdditional] = useState<boolean>(false);
     const [additionalProgressText, setAdditionalProgressText] = useState<string>('');
 
+    // 10. Dữ liệu chỉ tiêu thi đua đã biết của ST để auto-mapping (...) và danh mục hệ thống
+    const [knownStoreCampaigns, setKnownStoreCampaigns] = useState<KnownStoreCampaignTarget[]>([]);
+    const [campaignDict, setCampaignDict] = useState<CampaignDictItem[]>([]);
+    const [campaignMappings, setCampaignMappings] = useState<CampaignMappingItem[]>([]);
+
     // Người dùng thao tác
     const userDisplayName = useMemo(() => {
         if (currentUser?.full_name) {
@@ -139,9 +168,6 @@ export default function EmployeeExtractOcrPage() {
         fetchStores().then(res => {
             if (res.success && res.data && res.data.length > 0) {
                 setStores(res.data);
-                if (!selectedStore) {
-                    setSelectedStore(res.data[0].name);
-                }
             }
         });
 
@@ -151,12 +177,45 @@ export default function EmployeeExtractOcrPage() {
             }
         });
 
+        fetchCampaignDictionary().then(res => {
+            if (res.success && res.data) {
+                setCampaignDict(res.data);
+            }
+        });
+
         checkSupabaseSessionTable().then(res => {
             setCloudTableReady(res.exists);
         });
     }, []);
 
-    // Tự động kiểm tra xem đã tồn tại phiên dữ liệu cho Siêu thị & Ngày chốt này chưa
+    // Tự động tải chỉ tiêu thi đua đã biết của ST từ daily_business_records khi đổi ST hoặc ngày chốt
+    useEffect(() => {
+        if (!selectedStore) return;
+        fetchStoreKnownCampaignTargets(selectedStore, reportDate, stores).then(targets => {
+            setKnownStoreCampaigns(targets);
+        });
+    }, [selectedStore, reportDate, stores]);
+
+    // Danh bạ nhân viên của ST đang chọn
+    const storeEmployees = useMemo(() => {
+        if (!selectedStore) return [];
+        return systemEmployees.filter(emp => isStoreMatch(emp.store_name, selectedStore, stores));
+    }, [systemEmployees, selectedStore, stores]);
+
+    // Khi đổi ST, tự động tải danh bạ nhân sự mới nhất của ST đó từ Supabase
+    useEffect(() => {
+        if (!selectedStore) return;
+        fetchEmployees(selectedStore).then(res => {
+            if (res.success && res.data && res.data.length > 0) {
+                setSystemEmployees(prev => {
+                    const others = prev.filter(e => !isStoreMatch(e.store_name, selectedStore, stores));
+                    return [...others, ...(res.data || [])];
+                });
+            }
+        });
+    }, [selectedStore, stores]);
+
+    // Tự động kiểm tra xem đã tồn tại phiên dữ liệu cho ST & Ngày chốt này chưa
     useEffect(() => {
         if (!selectedStore || !reportDate) return;
         let isMounted = true;
@@ -209,6 +268,18 @@ export default function EmployeeExtractOcrPage() {
             return;
         }
 
+        if (!selectedStore) {
+            setOcrError('Vui lòng chọn ST trước khi quét nhận diện OCR!');
+            return;
+        }
+
+        // Kiểm tra phân quyền ST
+        const isStorePermitted = allowedStores.some(s => isStoreMatch(s.name, selectedStore, stores));
+        if (!isAdmin && !isStorePermitted) {
+            setOcrError(`Tài khoản của bạn không có quyền cập nhật dữ liệu cho ST [${getShortStoreName(selectedStore)}]!`);
+            return;
+        }
+
         setIsExtracting(true);
         setOcrError('');
         setProgressText('Đang kết nối Gemini Vision...');
@@ -218,12 +289,16 @@ export default function EmployeeExtractOcrPage() {
             const result = await extractAndMergeEmployeeImages(
                 activeKey,
                 { qdFile, realFile, emulationFiles },
-                systemEmployees,
+                storeEmployees.length > 0 ? storeEmployees : systemEmployees,
                 (msg, pct) => {
                     setProgressText(msg);
                     setProgressPercent(pct);
                 },
-                keyInfo.source
+                keyInfo.source,
+                {
+                    knownTargets: knownStoreCampaigns,
+                    campaignDict: campaignDict
+                }
             );
 
             if (!result.success || result.employees.length === 0) {
@@ -236,11 +311,54 @@ export default function EmployeeExtractOcrPage() {
                 setScreenshotTimestamp(result.screenshotTimestamp);
             }
 
-            setEmployeesData(result.employees);
+            if (result.campaignMappings && result.campaignMappings.length > 0) {
+                setCampaignMappings(result.campaignMappings);
+            }
+
+            // CHỈ NHẬP SỐ LIỆU CỦA NHÂN SỰ CÓ TRONG DANH BẠ SIÊU THỊ
+            if (storeEmployees.length === 0) {
+                setOcrError(`ST [${getShortStoreName(selectedStore)}] chưa có nhân sự nào trong danh bạ hệ thống. Vui lòng cập nhật danh bạ ST trước khi nhập số liệu!`);
+                setIsExtracting(false);
+                return;
+            }
+
+            const storeEmpIdSet = new Set(
+                storeEmployees.map(e => String(e.employee_id || '').trim().toLowerCase())
+            );
+            const storeEmpMap = new Map(
+                storeEmployees.map(e => [String(e.employee_id || '').trim().toLowerCase(), e.full_name?.trim() || ''])
+            );
+
+            const matchedEmployees: EmployeeOcrParsedItem[] = [];
+            let excludedCount = 0;
+
+            result.employees.forEach(emp => {
+                const cleanId = String(emp.employeeId || '').trim().toLowerCase();
+                if (storeEmpIdSet.has(cleanId)) {
+                    const officialName = storeEmpMap.get(cleanId);
+                    matchedEmployees.push({
+                        ...emp,
+                        fullName: officialName || emp.fullName
+                    });
+                } else {
+                    excludedCount++;
+                }
+            });
+
+            if (matchedEmployees.length === 0) {
+                setOcrError(`Đã quét nhận diện được ${result.employees.length} dòng nhân sự nhưng KHÔNG có nhân sự nào thuộc danh bạ của ST [${getShortStoreName(selectedStore)}]. Vui lòng kiểm tra lại ảnh chụp đúng ST hoặc cập nhật danh bạ ST!`);
+                setIsExtracting(false);
+                return;
+            }
+
+            setEmployeesData(matchedEmployees);
             setIsQuotaExceeded(false);
             setProgressPercent(100);
-            setProgressText('Trích xuất thành công! Đang chuyển sang bảng rà soát...');
-            showToast(`✅ Đã bóc tách thành công ${result.employees.length} nhân viên!`);
+            setProgressText(`Trích xuất thành công! Đã lọc ${matchedEmployees.length} nhân viên theo danh bạ ST...`);
+            showToast(excludedCount > 0
+                ? `✅ Đã nhập ${matchedEmployees.length} nhân viên theo danh bạ ST (loại bỏ ${excludedCount} nhân sự/dòng ngoài danh bạ)!`
+                : `✅ Đã nhập thành công ${matchedEmployees.length} nhân viên thuộc danh bạ ST!`
+            );
 
             setTimeout(() => {
                 setIsExtracting(false);
@@ -263,7 +381,14 @@ export default function EmployeeExtractOcrPage() {
     // Lưu phiên nhân viên lên Supabase Cloud (Hỗ trợ ghi đè phiên cũ hoặc tạo phiên mới)
     const handleSaveToCloud = async (options?: { overwriteSessionId?: string }) => {
         if (!selectedStore) {
-            showToast('⚠️ Vui lòng chọn Siêu thị trước khi lưu phiên!');
+            showToast('⚠️ Vui lòng chọn ST trước khi lưu phiên!');
+            return;
+        }
+
+        // Kiểm tra phân quyền ST
+        const isStorePermitted = allowedStores.some(s => isStoreMatch(s.name, selectedStore, stores));
+        if (!isAdmin && !isStorePermitted) {
+            showToast(`⛔ Bạn không có quyền lưu dữ liệu cho ST [${getShortStoreName(selectedStore)}]!`);
             return;
         }
 
@@ -272,13 +397,26 @@ export default function EmployeeExtractOcrPage() {
             return;
         }
 
+        // Đảm bảo chỉ lưu nhân sự có trong danh bạ ST
+        let validEmployees = employeesData;
+        if (storeEmployees.length > 0) {
+            const storeEmpIdSet = new Set(
+                storeEmployees.map(e => String(e.employee_id || '').trim().toLowerCase())
+            );
+            validEmployees = employeesData.filter(e => storeEmpIdSet.has(String(e.employeeId || '').trim().toLowerCase()));
+            if (validEmployees.length === 0) {
+                showToast(`⚠️ Không có nhân viên nào thuộc danh bạ của ST ${getShortStoreName(selectedStore)} để lưu!`);
+                return;
+            }
+        }
+
         setIsSaving(true);
         try {
             const storeShortName = getShortStoreName(selectedStore);
-            const totalActual = employeesData.reduce((s, e) => s + (Number(e.revenueReal) || 0), 0);
-            const totalQd = employeesData.reduce((s, e) => s + (Number(e.revenueQd) || 0), 0);
+            const totalActual = validEmployees.reduce((s, e) => s + (Number(e.revenueReal) || 0), 0);
+            const totalQd = validEmployees.reduce((s, e) => s + (Number(e.revenueQd) || 0), 0);
 
-            const sessionRecords = convertOcrItemsToSessionRecords(employeesData, selectedStore);
+            const sessionRecords = convertOcrItemsToSessionRecords(validEmployees, selectedStore);
 
             const sessionPayload = {
                 session_type: 'REVENUE_CAMPAIGN' as const,
@@ -308,8 +446,8 @@ export default function EmployeeExtractOcrPage() {
 
             setExistingSession(res.session);
             showToast(isOverwrite
-                ? `🔄 Đã ghi đè & cập nhật thành công phiên ${sessionRecords.length} nhân viên!`
-                : `🎉 Đã lưu thành công phiên mới ${sessionRecords.length} nhân viên lên Cloud!`
+                ? `🔄 Đã ghi đè & cập nhật thành công phiên ${sessionRecords.length} nhân viên danh bạ ST!`
+                : `🎉 Đã lưu thành công phiên mới ${sessionRecords.length} nhân viên danh bạ ST lên Cloud!`
             );
             setIsSaving(false);
         } catch (err: any) {
@@ -325,10 +463,17 @@ export default function EmployeeExtractOcrPage() {
             showToast('⚠️ Phiên này không có bản ghi nhân viên nào!');
             return;
         }
-        const items = convertSessionRecordsToOcrItems(existingSession.records);
+        let records = existingSession.records;
+        if (storeEmployees.length > 0) {
+            const storeEmpIdSet = new Set(
+                storeEmployees.map(e => String(e.employee_id || '').trim().toLowerCase())
+            );
+            records = records.filter(r => storeEmpIdSet.has(String(r.employee_id || '').trim().toLowerCase()));
+        }
+        const items = convertSessionRecordsToOcrItems(records);
         setEmployeesData(items);
         setActiveTab('manual');
-        showToast(`📥 Đã nạp thành công ${items.length} nhân viên từ phiên ngày ${formatDate(reportDate)}!`);
+        showToast(`📥 Đã nạp thành công ${items.length} nhân viên thuộc danh bạ ST từ phiên ngày ${formatDate(reportDate)}!`);
     };
 
     // Quét bổ sung các ảnh thi đua mới và chèn thêm vào danh sách nhân viên hiện tại
@@ -349,14 +494,34 @@ export default function EmployeeExtractOcrPage() {
                 activeKey,
                 additionalFiles,
                 employeesData,
-                systemEmployees,
+                storeEmployees.length > 0 ? storeEmployees : systemEmployees,
                 (msg) => setAdditionalProgressText(msg),
-                keyInfo.source
+                keyInfo.source,
+                {
+                    knownTargets: knownStoreCampaigns,
+                    campaignDict: campaignDict
+                }
             );
 
             if (result.success && result.employees.length > 0) {
-                setEmployeesData(result.employees);
-                showToast(`🎉 Đã quét & bổ sung thành công ${additionalFiles.length} ảnh thi đua!`);
+                // Chỉ giữ lại nhân sự có trong danh bạ ST
+                const storeEmpIdSet = new Set(
+                    storeEmployees.map(e => String(e.employee_id || '').trim().toLowerCase())
+                );
+                const filteredEmps = storeEmployees.length > 0
+                    ? result.employees.filter(e => storeEmpIdSet.has(String(e.employeeId || '').trim().toLowerCase()))
+                    : result.employees;
+                setEmployeesData(filteredEmps);
+
+                if (result.campaignMappings && result.campaignMappings.length > 0) {
+                    setCampaignMappings(prev => {
+                        const map = new Map(prev.map(m => [m.resolvedName, m]));
+                        result.campaignMappings?.forEach(m => map.set(m.resolvedName, m));
+                        return Array.from(map.values());
+                    });
+                }
+
+                showToast(`🎉 Đã quét & bổ sung thành công ${additionalFiles.length} ảnh thi đua cho nhân sự ST!`);
             } else {
                 showToast('⚠️ Không trích xuất được thêm số liệu từ các ảnh đã chọn.');
             }
@@ -372,6 +537,33 @@ export default function EmployeeExtractOcrPage() {
             setIsScanningAdditional(false);
             setAdditionalProgressText('');
         }
+    };
+
+    // Đổi tên chương trình thi đua đã mapping cho toàn bộ nhân viên
+    const handleRemapCampaign = (oldName: string, newName: string) => {
+        if (!oldName || !newName || oldName === newName) return;
+
+        setEmployeesData(prev => prev.map(emp => {
+            const campaigns = { ...emp.campaigns };
+            if (campaigns[oldName] !== undefined) {
+                campaigns[newName] = campaigns[oldName];
+                delete campaigns[oldName];
+            }
+            const campaignDetails = (emp.campaignDetails || []).map(d =>
+                d.campaignName === oldName
+                    ? { ...d, campaignName: newName, isAutoMatched: false, mappedReason: 'Quản lý chọn thủ công' }
+                    : d
+            );
+            return { ...emp, campaigns, campaignDetails };
+        }));
+
+        setCampaignMappings(prev => prev.map(m =>
+            m.resolvedName === oldName
+                ? { ...m, resolvedName: newName, isAutoMatched: false, mappedReason: 'Quản lý tùy chỉnh thủ công' }
+                : m
+        ));
+
+        showToast(`🔄 Đã đổi tên chỉ tiêu [${oldName}] thành [${newName}] cho toàn bộ nhân viên!`);
     };
 
     const handleCopySql = () => {
@@ -454,23 +646,65 @@ export default function EmployeeExtractOcrPage() {
                 </div>
             </div>
 
-            {/* THANH ĐIỀU KHIỂN & BỘ LỌC (QUY CHUẨN 10: SIÊU THỊ HÀNG ĐẦU TIÊN) */}
+            {/* THANH ĐIỀU KHIỂN & BỘ LỌC (QUY CHUẨN 10: ST HÀNG ĐẦU TIÊN) */}
             <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 sm:p-4 space-y-3">
-                {/* Dòng 1: Chọn Siêu Thị Riêng Biệt */}
+                {/* Dòng 1: Chọn ST Riêng Biệt (Đã phân quyền theo tài khoản) */}
                 <div>
-                    <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1 flex items-center gap-1">
-                        <Store className="w-3.5 h-3.5 text-blue-600" />
-                        <span>Đơn Vị / Siêu Thị Áp Dụng</span>
+                    <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1 flex items-center justify-between gap-1 flex-wrap">
+                        <span className="flex items-center gap-1">
+                            {isLockedToSingleStore ? (
+                                <Lock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                            ) : (
+                                <Store className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                            )}
+                            <span>Đơn Vị / ST Áp Dụng</span>
+                            {isLockedToSingleStore && (
+                                <span className="text-[10px] bg-amber-200/80 text-amber-800 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider ml-1">
+                                    {currentUser?.is_guest ? 'Trải nghiệm' : 'Đã khóa theo tài khoản'}
+                                </span>
+                            )}
+                        </span>
+                        <span className="text-[11px] font-bold text-slate-500 normal-case">
+                            ({storeEmployees.length} nhân sự trong danh bạ ST)
+                        </span>
                     </label>
                     <select
                         value={selectedStore}
                         onChange={(e) => setSelectedStore(e.target.value)}
-                        className="w-full bg-white border border-slate-300 text-slate-800 py-2 px-3 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer shadow-xs"
+                        disabled={isLockedToSingleStore}
+                        className={`w-full bg-white border border-slate-300 text-slate-800 py-2 px-3 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500 shadow-xs ${
+                            isLockedToSingleStore ? 'cursor-not-allowed bg-slate-100 text-slate-600' : 'cursor-pointer'
+                        }`}
                     >
-                        {stores.map(s => (
-                            <option key={s.id || s.code} value={s.name}>{s.name}</option>
+                        {allowedStores.map(s => (
+                            <option key={s.id || s.code} value={s.name}>
+                                🏪 {s.name} {s.code ? `(${s.code})` : ''}
+                            </option>
                         ))}
                     </select>
+
+                    {allowedStores.length === 0 && (
+                        <div className="mt-2 p-2.5 rounded-xl bg-rose-50 border border-rose-300 text-rose-900 text-xs flex items-center gap-1.5">
+                            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                            <span>Tài khoản của bạn chưa được phân quyền phụ trách ST nào. Vui lòng liên hệ Admin để được cấp quyền!</span>
+                        </div>
+                    )}
+
+                    {storeEmployees.length === 0 && allowedStores.length > 0 && (
+                        <div className="mt-2 p-2.5 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 text-xs flex items-center justify-between gap-2 flex-wrap">
+                            <div className="flex items-center gap-1.5">
+                                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                                <span>ST <strong>{getShortStoreName(selectedStore)}</strong> chưa có nhân sự nào trong danh bạ hệ thống.</span>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => navigate('/cau-hinh-sieu-thi-nhan-vien')}
+                                className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-[11px] font-bold shrink-0 transition cursor-pointer"
+                            >
+                                Cập nhật danh bạ ST
+                            </button>
+                        </div>
+                    )}
                 </div>
 
                 {/* Dòng 2: Ngày chốt phiên & Kỳ tháng */}
@@ -547,9 +781,24 @@ export default function EmployeeExtractOcrPage() {
                             </button>
                         </div>
                     ) : (
-                        <div className="flex items-center gap-2 text-xs text-emerald-700 font-semibold py-1">
-                            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                            <span>Chưa có phiên cho ngày {formatDate(reportDate)} tại {getShortStoreName(selectedStore)} • Sẵn sàng tạo phiên mới.</span>
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-3 rounded-xl bg-gradient-to-r from-rose-50 via-orange-50 to-amber-50 border border-rose-300 text-xs shadow-2xs">
+                            <div className="flex items-center gap-2.5">
+                                <span className="p-1.5 rounded-xl bg-rose-600 text-white font-black shadow-xs shrink-0 animate-pulse">
+                                    <AlertCircle className="w-4 h-4" />
+                                </span>
+                                <div>
+                                    <span className="font-extrabold text-rose-950 text-xs sm:text-sm block">
+                                        Chưa có phiên dữ liệu mới nhất cho ngày {formatDate(reportDate)} tại {getShortStoreName(selectedStore)}
+                                    </span>
+                                    <span className="text-[11px] text-rose-800 font-medium block mt-0.5">
+                                        Chưa có số liệu mới nhất được cập nhật lên hệ thống • Vui lòng tải ảnh OCR hoặc nạp số liệu để tạo phiên.
+                                    </span>
+                                </div>
+                            </div>
+                            <span className="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-rose-200/90 text-rose-950 border border-rose-300 self-start sm:self-auto shrink-0 flex items-center gap-1 shadow-2xs">
+                                <span>🚨</span>
+                                <span>Chưa có phiên</span>
+                            </span>
                         </div>
                     )}
                 </div>
@@ -630,6 +879,11 @@ export default function EmployeeExtractOcrPage() {
                     onScanAdditionalEmulation={handleScanAdditionalEmulation}
                     isScanningAdditional={isScanningAdditional}
                     additionalProgressText={additionalProgressText}
+                    storeEmployees={storeEmployees}
+                    campaignMappings={campaignMappings}
+                    knownStoreCampaigns={knownStoreCampaigns}
+                    campaignDict={campaignDict}
+                    onRemapCampaign={handleRemapCampaign}
                 />
             )}
 

@@ -84,7 +84,7 @@ export const AMBER_KEYWORDS: string[] = [
     '1 chỉ vàng',
     'vàng pnj',
     'vàng 9999',
-    'top 1 siêu thị',
+    'top 1 ST',
     'top 1',
     'top 2',
     'top 3',

@@ -53,7 +53,7 @@ export default function XmusicHeroHeader({
                                 <span>Userscript v1.2.0</span>
                             </span>
                             <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                Tiện ích siêu thị
+                                Tiện ích ST
                             </span>
                         </div>
                         <p className="text-xs sm:text-sm text-slate-500 mt-1 line-clamp-2 leading-relaxed">

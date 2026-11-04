@@ -345,7 +345,7 @@ export default function VoucherDeleteCampaignModal({
                                 </span>
                             </h2>
                             <p className="text-xs text-rose-300/80 mt-0.5">
-                                Phạm vi: <strong>{currentStoreName === 'all' ? 'Toàn Cụm Siêu Thị' : currentStoreName}</strong>
+                                Phạm vi: <strong>{currentStoreName === 'all' ? 'Toàn Cụm ST' : currentStoreName}</strong>
                             </p>
                         </div>
                     </div>

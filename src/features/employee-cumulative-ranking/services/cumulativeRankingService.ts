@@ -75,7 +75,7 @@ export function extractEmployeeRevenueQd(rec: any): number {
 }
 
 /**
- * Trích xuất tổng Doanh thu quy đổi (DTQĐ) của siêu thị từ phiên cập nhật.
+ * Trích xuất tổng Doanh thu quy đổi (DTQĐ) của ST từ phiên cập nhật.
  * Ưu tiên total_revenue_qd; nếu không có hoặc bằng 0 thì tính tổng từ records của phiên.
  */
 export function getSessionStoreTotalQd(sess: any): number {
@@ -141,7 +141,7 @@ export async function fetchCumulativeRankingData(params: {
         const firstMonth = monthsYears[0];
         const startOfFirstMonth = `${firstMonth.year}-${String(firstMonth.month).padStart(2, '0')}-01`;
 
-        // 1. TẢI DỮ LIỆU KINH DOANH CHỐT CỦA SIÊU THỊ (daily_business_records - bc tháng)
+        // 1. TẢI DỮ LIỆU KINH DOANH CHỐT CỦA ST (daily_business_records - bc tháng)
         // Lấy từ ngày đầu của tháng đầu tiên để có điểm mốc so sánh nhịp và lũy kế chuẩn
         const { data: businessRecords, error: busError } = await supabase
             .from('daily_business_records')
@@ -195,13 +195,13 @@ export async function fetchCumulativeRankingData(params: {
             }
         }
 
-        // 4. TÍNH TARGET THÁNG CỦA SIÊU THỊ TỪ daily_business_records (NẾU CÓ)
+        // 4. TÍNH TARGET THÁNG CỦA ST TỪ daily_business_records (NẾU CÓ)
         const storeDailyRevenue: Record<string, number> = {};
         dateList.forEach(d => {
             storeDailyRevenue[d] = 0;
         });
 
-        // Nhóm các bản ghi theo từng siêu thị
+        // Nhóm các bản ghi theo từng ST
         const recordsByStore = new Map<string, any[]>();
         (businessRecords || []).forEach(r => {
             if (!r.report_date) return;
@@ -235,7 +235,7 @@ export async function fetchCumulativeRankingData(params: {
 
         // 5. XỬ LÝ SỐ LIỆU TỪNG NHÂN VIÊN TỪ PHIÊN NHÂN VIÊN THEO DOANH THU QUY ĐỔI (DTQĐ)
         // Quy chuẩn tính doanh thu từng ngày: Phiên (ngày n) - Phiên (ngày n-1) theo DTQĐ, tuần tự từng ngày
-        // Nhóm phiên mới nhất theo từng (siêu thị, ngày)
+        // Nhóm phiên mới nhất theo từng (ST, ngày)
         const sessionsByStoreAndDate = new Map<string, Map<string, any>>();
         (sessions || []).forEach(sess => {
             if (!sess.report_date) return;
@@ -392,7 +392,7 @@ export async function fetchCumulativeRankingData(params: {
 
         const sumOfEmployees = Array.from(empMap.values()).reduce((sum, e) => sum + e.cumulativeRevenue, 0);
 
-        // ĐỒNG BỘ SỐ TỔNG VÀ NHỊP NGÀY CỦA SIÊU THỊ THEO DTQĐ (THEO PHƯƠNG PHÁP RevenueTrendPage)
+        // ĐỒNG BỘ SỐ TỔNG VÀ NHỊP NGÀY CỦA ST THEO DTQĐ (THEO PHƯƠNG PHÁP RevenueTrendPage)
         // 1. Tính nhịp DTQĐ từng ngày của từng ST: key = `${date}_${sName}` => dailyPace
         const paceByStoreDate = new Map<string, number>();
 
@@ -424,7 +424,7 @@ export async function fetchCumulativeRankingData(params: {
             });
         });
 
-        // 2. Doanh thu từng ngày của Siêu thị (storeDailyRevenue[d]): Được tính theo lũy kế DTQĐ của siêu thị từng ngày
+        // 2. Doanh thu từng ngày của ST (storeDailyRevenue[d]): Được tính theo lũy kế DTQĐ của ST từng ngày
         dateList.forEach(d => {
             let dayTotal = 0;
             sessionsByStoreAndDate.forEach((_, sName) => {
@@ -433,12 +433,12 @@ export async function fetchCumulativeRankingData(params: {
             storeDailyRevenue[d] = Math.round(dayTotal * 100) / 100;
         });
 
-        // 3. Lũy kế Siêu thị (storeCumulativeRevenue): Bằng tổng DTQĐ lũy kế từng ngày theo siêu thị
+        // 3. Lũy kế ST (storeCumulativeRevenue): Bằng tổng DTQĐ lũy kế từng ngày theo ST
         let storeCumulativeRevenue = Math.round(
             dateList.reduce((sum, d) => sum + (storeDailyRevenue[d] || 0), 0) * 100
         ) / 100;
 
-        // Fallback an toàn: nếu tổng nhịp siêu thị = 0 mà có nhân viên phát sinh DTQĐ
+        // Fallback an toàn: nếu tổng nhịp ST = 0 mà có nhân viên phát sinh DTQĐ
         if (storeCumulativeRevenue === 0 && sumOfEmployees > 0) {
             dateList.forEach(d => {
                 let daySum = 0;

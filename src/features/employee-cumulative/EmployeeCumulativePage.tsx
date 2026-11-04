@@ -44,7 +44,7 @@ export default function EmployeeCumulativePage() {
     const [employees, setEmployees] = useState<EmployeeItem[]>([]);
     const [selectedStore, setSelectedStore] = useState<string>('all');
 
-    // 1. Phân quyền danh sách siêu thị người dùng được phép cập nhật
+    // 1. Phân quyền danh sách ST người dùng được phép cập nhật
     const { allowedStores, isLockedToSingleStore, canViewAllStores } = useUserStoreFilter(
         stores,
         selectedStore,
@@ -87,7 +87,7 @@ export default function EmployeeCumulativePage() {
     const [campaignMatrix, setCampaignMatrix] = useState<Record<string, Record<string, number>>>({});
     const [workHoursMap, setWorkHoursMap] = useState<Record<string, number>>({});
 
-    // State Modal xác nhận siêu thị (Doanh thu & Thi đua) và Giờ công
+    // State Modal xác nhận ST (Doanh thu & Thi đua) và Giờ công
     const [isStoreModalOpen, setIsStoreModalOpen] = useState(false);
     const [isWorkHoursModalOpen, setIsWorkHoursModalOpen] = useState(false);
 
@@ -224,11 +224,11 @@ export default function EmployeeCumulativePage() {
         }
     };
 
-    // Hàm xóa trắng toàn bộ dữ liệu để sẵn sàng nhập siêu thị khác
+    // Hàm xóa trắng toàn bộ dữ liệu để sẵn sàng nhập ST khác
     const handleClearAllForm = () => {
         const hasData = revenueData.length > 0 || campaignBlocks.length > 0 || Object.keys(workHoursMap).length > 0 || rawQdDraft || rawRealDraft;
         if (hasData) {
-            if (!window.confirm('Bạn có chắc chắn muốn xóa trắng dữ liệu để sẵn sàng cập nhật cho siêu thị tiếp theo không?')) {
+            if (!window.confirm('Bạn có chắc chắn muốn xóa trắng dữ liệu để sẵn sàng cập nhật cho ST tiếp theo không?')) {
                 return;
             }
         }
@@ -246,7 +246,7 @@ export default function EmployeeCumulativePage() {
             localStorage.removeItem('saleshub_emp_cum_active_restore');
         } catch (e) { }
         setActiveTab('revenue');
-        showToast('Đã làm mới biểu mẫu, sẵn sàng nhập dữ liệu cho siêu thị tiếp theo!');
+        showToast('Đã làm mới biểu mẫu, sẵn sàng nhập dữ liệu cho ST tiếp theo!');
     };
 
     const handleDiscardCumulativeDraft = () => {
@@ -289,7 +289,7 @@ export default function EmployeeCumulativePage() {
         let storeMsg = '';
         let targetStore = selectedStore;
         if (detectedStoreName) {
-            // Tự động tìm siêu thị tương ứng trong danh sách allowedStores được phân quyền
+            // Tự động tìm ST tương ứng trong danh sách allowedStores được phân quyền
             const matched = allowedStores.find(s =>
                 (s.code && detectedStoreName.toLowerCase().includes(s.code.toLowerCase())) ||
                 detectedStoreName.toLowerCase().includes(s.name.toLowerCase()) ||
@@ -325,13 +325,13 @@ export default function EmployeeCumulativePage() {
         setActiveTab('summary');
     };
 
-    // Tính toán phân bổ giờ công theo từng siêu thị dựa trên danh mục nhân sự
+    // Tính toán phân bổ giờ công theo từng ST dựa trên danh mục nhân sự
     const workHoursStoreBreakdown = useMemo(() => {
         const map: Record<string, { employeeCount: number; hours: number }> = {};
         Object.entries(workHoursMap).forEach(([empId, h]) => {
             if (h <= 0) return;
             const emp = employees.find(e => e.employee_id === empId);
-            const sName = emp?.store_name?.trim() || (selectedStore !== 'all' ? selectedStore : 'Chưa phân siêu thị');
+            const sName = emp?.store_name?.trim() || (selectedStore !== 'all' ? selectedStore : 'Chưa phân ST');
             if (!map[sName]) {
                 map[sName] = { employeeCount: 0, hours: 0 };
             }
@@ -365,13 +365,13 @@ export default function EmployeeCumulativePage() {
         }
         saveDraft({ reportDate: activeReportDate });
 
-        // 1. CHẾ ĐỘ TÁCH RIÊNG THEO TỪNG SIÊU THỊ
+        // 1. CHẾ ĐỘ TÁCH RIÊNG THEO TỪNG ST
         if (scope === 'split_by_store') {
             const storeGroups: Record<string, { empId: string; h: number }[]> = {};
             Object.entries(workHoursMap).forEach(([empId, h]) => {
                 if (h <= 0) return;
                 const emp = employees.find(e => e.employee_id === empId);
-                const sName = emp?.store_name?.trim() || (selectedStore !== 'all' ? selectedStore : 'Toàn Cụm Siêu Thị');
+                const sName = emp?.store_name?.trim() || (selectedStore !== 'all' ? selectedStore : 'Toàn Cụm ST');
                 if (!storeGroups[sName]) storeGroups[sName] = [];
                 storeGroups[sName].push({ empId, h });
             });
@@ -433,14 +433,14 @@ export default function EmployeeCumulativePage() {
                 localStorage.removeItem('saleshub_emp_cum_active_restore');
             } catch (e) { }
             setActiveTab('revenue');
-            showToast(`🎉 Đã tách và lưu thành công ${savedSuccess} phiên giờ công riêng theo từng siêu thị (Ngày chốt: ${formatDate(activeReportDate)}) lên hệ thống & Cloud! Biểu mẫu đã để trống sẵn sàng nhập tiếp.`);
+            showToast(`🎉 Đã tách và lưu thành công ${savedSuccess} phiên giờ công riêng theo từng ST (Ngày chốt: ${formatDate(activeReportDate)}) lên hệ thống & Cloud! Biểu mẫu đã để trống sẵn sàng nhập tiếp.`);
             return;
         }
 
-        // 2. CHẾ ĐỘ LƯU CHO 1 SIÊU THỊ CỤ THỂ HOẶC TOÀN CỤM
+        // 2. CHẾ ĐỘ LƯU CHO 1 ST CỤ THỂ HOẶC TOÀN CỤM
         const targetStore = scope === 'single_store' && selectedStoreName
             ? selectedStoreName
-            : (selectedStore !== 'all' ? selectedStore : (allowedStores[0]?.name || 'Toàn Cụm Siêu Thị'));
+            : (selectedStore !== 'all' ? selectedStore : (allowedStores[0]?.name || 'Toàn Cụm ST'));
 
         const totalHours = Object.values(workHoursMap).reduce((s, h) => s + h, 0);
         const records = Object.entries(workHoursMap).map(([empId, h]) => ({
@@ -486,7 +486,7 @@ export default function EmployeeCumulativePage() {
         } else {
             res = await saveEmployeeDataSession(sessionPayload);
             if (res.success && res.session) {
-                // XÓA TRẮNG DỮ LIỆU ĐỂ SẴN SÀNG CẬP NHẬT TIẾP CHO SIÊU THỊ KHÁC
+                // XÓA TRẮNG DỮ LIỆU ĐỂ SẴN SÀNG CẬP NHẬT TIẾP CHO ST KHÁC
                 setRevenueData([]);
                 setCampaignBlocks([]);
                 setCampaignMatrix({});
@@ -499,7 +499,7 @@ export default function EmployeeCumulativePage() {
                     localStorage.removeItem('saleshub_emp_cum_active_restore');
                 } catch (e) { }
                 setActiveTab('revenue');
-                showToast(`🎉 Đã lưu phiên giờ công [${getShortStoreName(targetStore)}] (Ngày chốt: ${formatDate(activeReportDate)})! Biểu mẫu đã để trống sẵn sàng nhập siêu thị tiếp theo.`);
+                showToast(`🎉 Đã lưu phiên giờ công [${getShortStoreName(targetStore)}] (Ngày chốt: ${formatDate(activeReportDate)})! Biểu mẫu đã để trống sẵn sàng nhập ST tiếp theo.`);
             }
         }
 
@@ -512,7 +512,7 @@ export default function EmployeeCumulativePage() {
         }
     };
 
-    // 4. LƯU DOANH THU & THI ĐUA (Theo siêu thị - HỖ TRỢ CẬP NHẬT PHIÊN ĐANG SỬA HOẶC LƯU MỚI)
+    // 4. LƯU DOANH THU & THI ĐUA (Theo ST - HỖ TRỢ CẬP NHẬT PHIÊN ĐANG SỬA HOẶC LƯU MỚI)
     const handleConfirmStoreSave = async (
         confirmedStoreName: string,
         saveMode: 'update' | 'new' = 'update',
@@ -571,7 +571,7 @@ export default function EmployeeCumulativePage() {
         } else {
             res = await saveEmployeeDataSession(sessionPayload);
             if (res.success && res.session) {
-                // XÓA TRẮNG DỮ LIỆU ĐỂ SẴN SÀNG CẬP NHẬT TIẾP CHO SIÊU THỊ KHÁC
+                // XÓA TRẮNG DỮ LIỆU ĐỂ SẴN SÀNG CẬP NHẬT TIẾP CHO ST KHÁC
                 setRevenueData([]);
                 setCampaignBlocks([]);
                 setCampaignMatrix({});
@@ -584,7 +584,7 @@ export default function EmployeeCumulativePage() {
                     localStorage.removeItem('saleshub_emp_cum_active_restore');
                 } catch (e) { }
                 setActiveTab('revenue');
-                showToast(`🎉 Đã lưu phiên Doanh thu & Thi đua cho siêu thị [${confirmedStoreName}] (Ngày chốt: ${formatDate(activeReportDate)})! Biểu mẫu đã để trống sẵn sàng nhập siêu thị tiếp theo.`);
+                showToast(`🎉 Đã lưu phiên Doanh thu & Thi đua cho ST [${confirmedStoreName}] (Ngày chốt: ${formatDate(activeReportDate)})! Biểu mẫu đã để trống sẵn sàng nhập ST tiếp theo.`);
             }
         }
 
@@ -646,7 +646,7 @@ export default function EmployeeCumulativePage() {
             }));
             setCampaignBlocks(reconstructedCampaignBlocks);
 
-            if (sess.store_name && sess.store_name !== 'Toàn Cụm Siêu Thị') {
+            if (sess.store_name && sess.store_name !== 'Toàn Cụm ST') {
                 setSelectedStore(sess.store_name);
             }
             showToast(`Đã nạp phiên [${sess.session_title}] để chỉnh sửa!`);
@@ -664,7 +664,7 @@ export default function EmployeeCumulativePage() {
         }
     };
 
-    // Lọc danh sách nhân viên theo phân quyền siêu thị của user và siêu thị đang chọn
+    // Lọc danh sách nhân viên theo phân quyền ST của user và ST đang chọn
     const permittedEmployees = useMemo(() => {
         if (isAdmin) return employees;
         const allowedNames = new Set(allowedStores.map(s => s.name));
@@ -693,17 +693,17 @@ export default function EmployeeCumulativePage() {
                             </h1>
                         </div>
                         <p className="text-xs text-slate-500 mt-1">
-                            Doanh thu & Thi đua cập nhật theo Siêu thị (có popup xác nhận). Giờ công nạp hỗn hợp Toàn cụm.
+                            Doanh thu & Thi đua cập nhật theo ST (có popup xác nhận). Giờ công nạp hỗn hợp Toàn cụm.
                         </p>
                     </div>
                 </div>
 
-                {/* HÀNG 1: BỘ LỌC SIÊU THỊ / CỤM (BẮT BUỘC ĐẦU TIÊN & NẰM RIÊNG LẺ 1 DÒNG - RULE 10) */}
+                {/* HÀNG 1: BỘ LỌC ST / CỤM (BẮT BUỘC ĐẦU TIÊN & NẰM RIÊNG LẺ 1 DÒNG - RULE 10) */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-slate-100">
                     <div className="flex items-center gap-2 flex-1">
                         <span className="text-xs font-black text-slate-600 uppercase tracking-wider shrink-0 flex items-center gap-1.5">
                             <Store className="w-4 h-4 text-blue-600" />
-                            Siêu thị / Cụm:
+                            ST / Cụm:
                         </span>
                         <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-300 px-3 py-1.5 rounded-xl min-w-[200px] sm:min-w-[280px] flex-1 max-w-md">
                             <Store className="w-4 h-4 text-blue-600 shrink-0" />
@@ -714,7 +714,7 @@ export default function EmployeeCumulativePage() {
                                 className="bg-transparent text-xs font-bold text-slate-800 outline-none cursor-pointer w-full disabled:cursor-not-allowed"
                             >
                                 {canViewAllStores && (
-                                    <option value="all">🏢 Toàn Cụm Siêu Thị ({allowedStores.length})</option>
+                                    <option value="all">🏢 Toàn Cụm ST ({allowedStores.length})</option>
                                 )}
                                 {allowedStores.map(s => (
                                     <option key={s.id || s.code} value={s.name}>🏪 {s.name} ({s.code})</option>
@@ -733,7 +733,7 @@ export default function EmployeeCumulativePage() {
                             type="button"
                             onClick={handleClearAllForm}
                             className="px-3 py-1.5 rounded-xl border border-rose-200 text-rose-600 hover:bg-rose-50 transition cursor-pointer text-xs font-bold flex items-center gap-1.5 shadow-2xs"
-                            title="Xóa trắng toàn bộ dữ liệu để sẵn sàng cập nhật siêu thị tiếp theo"
+                            title="Xóa trắng toàn bộ dữ liệu để sẵn sàng cập nhật ST tiếp theo"
                         >
                             <RotateCcw className="w-3.5 h-3.5" />
                             <span>Xóa trắng / Nhập ST khác</span>
@@ -1050,7 +1050,7 @@ export default function EmployeeCumulativePage() {
                 />
             )}
 
-            {/* Popup Xác Nhận Tên Siêu Thị Trước Khi Lưu Doanh Thu & Thi Đua */}
+            {/* Popup Xác Nhận Tên ST Trước Khi Lưu Doanh Thu & Thi Đua */}
             <StoreConfirmModal
                 isOpen={isStoreModalOpen}
                 onClose={() => setIsStoreModalOpen(false)}

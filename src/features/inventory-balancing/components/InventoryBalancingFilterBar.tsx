@@ -128,10 +128,10 @@ export default function InventoryBalancingFilterBar({
                 onChange={handleSalesFileChange}
             />
 
-            {/* DÒNG 1 ĐỘC LẬP THEO QUY CHUẨN RULE 10: SIÊU THỊ ĐANG PHỤ TRÁCH ĐẦU TIÊN VÀ RIÊNG LẺ */}
+            {/* DÒNG 1 ĐỘC LẬP THEO QUY CHUẨN RULE 10: ST ĐANG PHỤ TRÁCH ĐẦU TIÊN VÀ RIÊNG LẺ */}
             <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-xs">
                 <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-                    {/* BỘ LỌC SIÊU THỊ PHỤ TRÁCH */}
+                    {/* BỘ LỌC ST PHỤ TRÁCH */}
                     <div className="flex-1 flex flex-col sm:flex-row sm:items-center gap-2">
                         <div className="flex items-center gap-2 shrink-0">
                             <span className="p-2 rounded-lg bg-blue-100 text-blue-700">
@@ -139,7 +139,7 @@ export default function InventoryBalancingFilterBar({
                             </span>
                             <div>
                                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                                    Siêu thị phụ trách (Xin hàng)
+                                    ST phụ trách (Xin hàng)
                                 </label>
                                 <span className="text-[11px] text-slate-500">
                                     {storesList.length > 0 ? (
@@ -149,7 +149,7 @@ export default function InventoryBalancingFilterBar({
                                             {totalRows === 0 && <span className="text-blue-600 font-semibold"> • Chọn để xem cấu hình/lệnh đã lưu</span>}
                                         </span>
                                     ) : (
-                                        totalRows > 0 ? 'Không khớp siêu thị' : 'Chưa có siêu thị phụ trách'
+                                        totalRows > 0 ? 'Không khớp ST' : 'Chưa có ST phụ trách'
                                     )}
                                 </span>
                             </div>
@@ -175,7 +175,7 @@ export default function InventoryBalancingFilterBar({
                                         onChange={(e) => onTargetStoreChange(e.target.value)}
                                         className="w-full h-10 px-3 text-xs sm:text-sm font-semibold rounded-lg border border-slate-300 bg-slate-50 text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                                     >
-                                        <option value="" disabled>-- Chọn siêu thị đang phụ trách --</option>
+                                        <option value="" disabled>-- Chọn ST đang phụ trách --</option>
                                         {filteredStores.map(st => (
                                             <option key={st} value={st}>
                                                 {st}
@@ -187,7 +187,7 @@ export default function InventoryBalancingFilterBar({
                                 <div className="text-xs text-rose-700 bg-rose-50 px-3 py-2 rounded-lg border border-rose-200 flex items-center gap-1.5">
                                     <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
                                     <span>
-                                        {currentUserStoreNotice || `Tài khoản của bạn không được phân quyền phụ trách siêu thị nào trong ${totalFileStoresCount} kho của file này.`}
+                                        {currentUserStoreNotice || `Tài khoản của bạn không được phân quyền phụ trách ST nào trong ${totalFileStoresCount} kho của file này.`}
                                     </span>
                                 </div>
                             ) : (
@@ -380,7 +380,7 @@ export default function InventoryBalancingFilterBar({
                         </div>
                         <div className={`text-[10px] hidden sm:block truncate ${activeStep === 2 ? 'text-blue-100' : 'text-slate-500'
                             }`}>
-                            Khớp <b className="font-bold">{matchingSourcesCount}</b> siêu thị
+                            Khớp <b className="font-bold">{matchingSourcesCount}</b> ST
                         </div>
                     </div>
                 </button>

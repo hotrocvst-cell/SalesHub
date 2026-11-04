@@ -90,7 +90,7 @@ export default function CashCounterPage() {
         setHistory(localRecords);
     }, []);
 
-    // Tự động gán thông tin nhân viên & siêu thị nếu có
+    // Tự động gán thông tin nhân viên & ST nếu có
     useEffect(() => {
         if (!selectedStore && currentUser.store_name) {
             setSelectedStore(currentUser.store_name);
@@ -179,7 +179,7 @@ export default function CashCounterPage() {
         const record: CashAuditRecord = {
             id: Date.now(),
             time: now.toLocaleString('vi-VN'),
-            store_name: selectedStore.trim() || currentUser.store_name || 'Siêu thị',
+            store_name: selectedStore.trim() || currentUser.store_name || 'ST',
             user_code: userNote.trim() || currentUser.employee_id || '',
             note: auditNote.trim() || 'Không có ghi chú',
             target: targetCash,
@@ -239,7 +239,7 @@ export default function CashCounterPage() {
         setPrintModalRecord({
             id: 'current',
             time: new Date().toLocaleString('vi-VN'),
-            store_name: selectedStore.trim() || currentUser.store_name || 'Siêu thị',
+            store_name: selectedStore.trim() || currentUser.store_name || 'ST',
             user_code: userNote.trim() || 'N/A',
             note: auditNote.trim() || 'Không có ghi chú',
             target: targetCash,
@@ -446,7 +446,7 @@ export default function CashCounterPage() {
                         </div>
                     </div>
 
-                    {/* Cột 2: Siêu thị */}
+                    {/* Cột 2: ST */}
                     <div className="space-y-1">
                         <label className="text-[10.5px] font-bold text-slate-600 flex items-center gap-1">
                             <Store className="w-3 h-3 text-indigo-600" />

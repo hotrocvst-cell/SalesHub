@@ -12,7 +12,7 @@ interface Props {
 }
 
 /**
- * Hiển thị nhãn siêu thị kèm mã siêu thị ở đầu để dễ tra cứu
+ * Hiển thị nhãn ST kèm mã ST ở đầu để dễ tra cứu
  * Ví dụ: "[10335] AAR_BRV_VTA - 290 Trương Công Định"
  */
 export function formatStoreWithCode(store: StoreItem | { name: string; code?: string }): string {
@@ -33,7 +33,7 @@ export default function SearchableStoreSelect({
     stores,
     value,
     onChange,
-    placeholder = '-- Nhập tìm kiếm hoặc chọn siêu thị công tác --',
+    placeholder = '-- Nhập tìm kiếm hoặc chọn ST công tác --',
     disabled = false,
     error
 }: Props) {
@@ -42,13 +42,13 @@ export default function SearchableStoreSelect({
     const wrapperRef = useRef<HTMLDivElement>(null);
     const searchInputRef = useRef<HTMLInputElement>(null);
 
-    // Tìm đối tượng siêu thị đang được chọn
+    // Tìm đối tượng ST đang được chọn
     const selectedStore = useMemo(() => {
         if (!value) return null;
         return stores.find(s => s.name === value || s.code === value) || null;
     }, [stores, value]);
 
-    // Lọc danh sách siêu thị theo từ khóa tìm kiếm (theo mã hoặc tên)
+    // Lọc danh sách ST theo từ khóa tìm kiếm (theo mã hoặc tên)
     const filteredStores = useMemo(() => {
         const cleanTerm = searchTerm.trim().toLowerCase();
         if (!cleanTerm) return stores;
@@ -152,7 +152,7 @@ export default function SearchableStoreSelect({
                                 type="text"
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                placeholder="Gõ mã siêu thị (VD: 10335) hoặc tên siêu thị..."
+                                placeholder="Gõ mã ST (VD: 10335) hoặc tên ST..."
                                 className="w-full pl-8 pr-7 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                             {searchTerm && (
@@ -166,7 +166,7 @@ export default function SearchableStoreSelect({
                             )}
                         </div>
                         <div className="text-[10px] text-slate-400 px-1 pt-1 flex justify-between">
-                            <span>Tìm thấy <b>{filteredStores.length}</b> siêu thị</span>
+                            <span>Tìm thấy <b>{filteredStores.length}</b> ST</span>
                             <span>Ưu tiên tìm theo Mã ST ở đầu</span>
                         </div>
                     </div>
@@ -175,7 +175,7 @@ export default function SearchableStoreSelect({
                     <div className="overflow-y-auto max-h-56 divide-y divide-slate-50 p-1">
                         {filteredStores.length === 0 ? (
                             <div className="p-4 text-center text-slate-400 text-xs">
-                                Không tìm thấy siêu thị nào khớp với từ khóa "{searchTerm}"
+                                Không tìm thấy ST nào khớp với từ khóa "{searchTerm}"
                             </div>
                         ) : (
                             filteredStores.map((st) => {

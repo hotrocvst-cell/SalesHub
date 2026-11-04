@@ -156,7 +156,7 @@ export default function CumulativeSummaryTab({
         const ws = wb.addWorksheet('Tong_Hop_Luy_Ke');
 
         const headers = [
-            'Mã NV', 'Họ và tên', 'Siêu thị', 'Số Lượng', 'DT Thực (Tr.đ)', 'DT QĐ (Tr.đ)',
+            'Mã NV', 'Họ và tên', 'ST', 'Số Lượng', 'DT Thực (Tr.đ)', 'DT QĐ (Tr.đ)',
             'DT Trả Góp (Tr.đ)', '% Trả Góp', 'Giờ Công (h)', 'Năng Suất (Tr/h)',
             ...campaignBlocks.map(c => `${c.campaign_name} (${c.unit_type})`)
         ];
@@ -195,7 +195,7 @@ export default function CumulativeSummaryTab({
                     <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
                     <input
                         type="text"
-                        placeholder="Tìm nhân viên, mã số, siêu thị..."
+                        placeholder="Tìm nhân viên, mã số, ST..."
                         value={searchQuery}
                         onChange={e => setSearchQuery(e.target.value)}
                         className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white text-slate-800"
@@ -218,19 +218,19 @@ export default function CumulativeSummaryTab({
                         disabled={isSaving || !hasWorkHours}
                         onClick={onSaveWorkHoursOnly}
                         className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50"
-                        title="Lưu trực tiếp giờ công hỗn hợp cho tất cả siêu thị trong cụm (không cần popup)"
+                        title="Lưu trực tiếp giờ công hỗn hợp cho tất cả ST trong cụm (không cần popup)"
                     >
                         <Clock className="w-4 h-4" />
                         <span>Lưu Giờ Công Toàn Cụm</span>
                     </button>
 
-                    {/* Nút 2: Lưu Doanh Thu & Thi Đua (Theo Siêu Thị - BẬT POPUP XÁC NHẬN) */}
+                    {/* Nút 2: Lưu Doanh Thu & Thi Đua (Theo ST - BẬT POPUP XÁC NHẬN) */}
                     <button
                         type="button"
                         disabled={isSaving || !hasRevenueOrCampaign}
                         onClick={onOpenStoreConfirm}
                         className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50"
-                        title="Bắt buộc xác nhận tên siêu thị trước khi cập nhật doanh thu & thi đua"
+                        title="Bắt buộc xác nhận tên ST trước khi cập nhật doanh thu & thi đua"
                     >
                         <Store className="w-4 h-4" />
                         <span>Lưu DT & Thi Đua (Xác Nhận ST)</span>

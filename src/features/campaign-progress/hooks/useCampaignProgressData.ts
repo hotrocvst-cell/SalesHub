@@ -139,13 +139,13 @@ export function useCampaignProgressData() {
         return map;
     }, [employees]);
 
-    // 2. Danh sách phiên phù hợp theo siêu thị
+    // 2. Danh sách phiên phù hợp theo ST
     const availableSessions = useMemo<EmployeeDataSession[]>(() => {
         if (selectedStore === 'all') {
             const storeMap = new Map<string, EmployeeDataSession>();
             sessions.forEach(s => {
                 const st = s.store_name || '';
-                if (st && st !== 'Toàn Cụm Siêu Thị' && !storeMap.has(st)) {
+                if (st && st !== 'Toàn Cụm ST' && !storeMap.has(st)) {
                     storeMap.set(st, s);
                 }
             });
@@ -171,7 +171,7 @@ export function useCampaignProgressData() {
                     id: 'all_cluster_latest',
                     session_type: 'REVENUE_CAMPAIGN',
                     session_title: '✨ Toàn cụm: Tổng hợp phiên mới nhất',
-                    store_name: 'Toàn Cụm Siêu Thị',
+                    store_name: 'Toàn Cụm ST',
                     month: selectedMonth,
                     year: selectedYear,
                     report_date: latestReportDate || getYesterdayDateString(),
@@ -192,7 +192,7 @@ export function useCampaignProgressData() {
 
         return sessions.filter(s => {
             if (isStoreMatch(s.store_name, selectedStore, stores)) return true;
-            if (s.store_name === 'Toàn Cụm Siêu Thị' || !s.store_name) {
+            if (s.store_name === 'Toàn Cụm ST' || !s.store_name) {
                 const empStoreMap: Record<string, string> = {};
                 Object.entries(empInfoMap).forEach(([k, v]) => { empStoreMap[k] = v.storeName; });
                 return (s.records || []).some(r => isEmployeeInStore(r.employee_id, selectedStore, empStoreMap, s.store_name, stores));
@@ -238,7 +238,7 @@ export function useCampaignProgressData() {
 
         const reportDateStr = activeSession.report_date || '';
 
-        // Lấy các bản ghi kinh doanh (daily_business_records) phù hợp cho siêu thị / cụm
+        // Lấy các bản ghi kinh doanh (daily_business_records) phù hợp cho ST / cụm
         let matchedBusinessRecords: BusinessDayRecord[] = [];
         if (businessRecords.length > 0) {
             if (selectedStore === 'all') {
@@ -259,7 +259,7 @@ export function useCampaignProgressData() {
             }
         }
 
-        // Lọc các bản ghi theo siêu thị
+        // Lọc các bản ghi theo ST
         const filteredRecords = records.filter(r => {
             const empId = (r.employee_id || '').trim();
             if (!empId) return false;
@@ -445,7 +445,7 @@ export function useCampaignProgressData() {
                     }
                 }
 
-                // Thiết lập số liệu tổng: Ưu tiên dữ liệu lũy kế của thi đua đó từ siêu thị
+                // Thiết lập số liệu tổng: Ưu tiên dữ liệu lũy kế của thi đua đó từ ST
                 let totalTarget = 0;
                 let totalActual = 0;
                 let forecastRate = 0;
@@ -455,7 +455,7 @@ export function useCampaignProgressData() {
                     totalActual = Number(storeCampaignActual.toFixed(1));
                     forecastRate = storeCampaignPctDK ?? (totalTarget > 0 ? Math.round(((totalActual / passedDays) * operatingDays) / totalTarget * 100) : 0);
                 } else {
-                    // Fallback: Lấy tổng toàn bộ nhân sự trong phiên của siêu thị (kể cả nhân viên không có target)
+                    // Fallback: Lấy tổng toàn bộ nhân sự trong phiên của ST (kể cả nhân viên không có target)
                     const allStoreActual = filteredRecords.reduce((sum, r) => {
                         let act = 0;
                         if (r.campaigns) {
@@ -511,7 +511,7 @@ export function useCampaignProgressData() {
         return items.sort((a, b) => a.orderIndex - b.orderIndex || a.displayName.localeCompare(b.displayName));
     }, [activeSession, targetsMap, campaignDict, selectedStore, empInfoMap, operatingConfig, stores, businessRecords, campaignOffsets]);
 
-    // Theo dõi thay đổi siêu thị để tự động chọn tất cả nhóm thi đua của siêu thị đó
+    // Theo dõi thay đổi ST để tự động chọn tất cả nhóm thi đua của ST đó
     const prevStoreRef = useRef<string>(selectedStore);
     const storeChangedRef = useRef<boolean>(false);
 
@@ -522,7 +522,7 @@ export function useCampaignProgressData() {
         }
     }, [selectedStore]);
 
-    // Tự động đồng bộ selectedCampaignKeys: nếu user đổi siêu thị hoặc chưa chọn gì -> chọn tất cả
+    // Tự động đồng bộ selectedCampaignKeys: nếu user đổi ST hoặc chưa chọn gì -> chọn tất cả
     useEffect(() => {
         if (allCampaignProgressItems.length > 0) {
             if (storeChangedRef.current) {

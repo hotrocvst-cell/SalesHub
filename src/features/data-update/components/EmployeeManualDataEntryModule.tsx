@@ -17,11 +17,16 @@ import {
     AlertTriangle,
     RotateCcw,
     RefreshCw,
-    UploadCloud
+    UploadCloud,
+    UserCheck,
+    X
 } from 'lucide-react';
 import type { EmployeeOcrParsedItem } from '../services/geminiEmployeeOcrService';
 import { getShortenedEmployeeName, formatValue, formatDate, formatDateTime } from '../../../core/lib/formatters';
 import type { EmployeeDataSession } from '../../employee-cumulative/utils/sessionStorage';
+import type { EmployeeItem, CampaignDictItem } from '../../../core/lib/storage';
+import type { CampaignMappingItem, KnownStoreCampaignTarget } from '../services/campaignTargetMappingService';
+import CampaignMappingReviewBar from './CampaignMappingReviewBar';
 
 interface Props {
     employees: EmployeeOcrParsedItem[];
@@ -36,6 +41,11 @@ interface Props {
     onScanAdditionalEmulation?: (files: File[]) => void;
     isScanningAdditional?: boolean;
     additionalProgressText?: string;
+    storeEmployees?: EmployeeItem[];
+    campaignMappings?: CampaignMappingItem[];
+    knownStoreCampaigns?: KnownStoreCampaignTarget[];
+    campaignDict?: CampaignDictItem[];
+    onRemapCampaign?: (oldName: string, newName: string) => void;
 }
 
 export default function EmployeeManualDataEntryModule({
@@ -50,11 +60,38 @@ export default function EmployeeManualDataEntryModule({
     onRestoreExistingSession,
     onScanAdditionalEmulation,
     isScanningAdditional = false,
-    additionalProgressText = ''
+    additionalProgressText = '',
+    storeEmployees = [],
+    campaignMappings = [],
+    knownStoreCampaigns = [],
+    campaignDict = [],
+    onRemapCampaign
 }: Props) {
     const [searchTerm, setSearchTerm] = useState('');
     const [expandedEmployeeId, setExpandedEmployeeId] = useState<string | null>(null);
     const addEmuInputRef = useRef<HTMLInputElement>(null);
+
+    // Danh sách tên các chương trình đang phát sinh trong phiên
+    const activeCampaignNames = useMemo(() => {
+        const set = new Set<string>();
+        employees.forEach(e => {
+            Object.keys(e.campaigns || {}).forEach(c => set.add(c));
+        });
+        return Array.from(set);
+    }, [employees]);
+
+    // Modal thêm nhân viên từ danh bạ ST
+    const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+    const [selectedEmpToAdd, setSelectedEmpToAdd] = useState<string>('');
+    const [manualEmpIdInput, setManualEmpIdInput] = useState<string>('');
+    const [addError, setAddError] = useState<string>('');
+
+    // Danh sách nhân sự trong danh bạ ST chưa có trong phiên này
+    const availableEmployees = useMemo(() => {
+        if (!storeEmployees || storeEmployees.length === 0) return [];
+        const currentIds = new Set(employees.map(e => String(e.employeeId).trim().toLowerCase()));
+        return storeEmployees.filter(e => !currentIds.has(String(e.employee_id || '').trim().toLowerCase()));
+    }, [storeEmployees, employees]);
 
     // Tính toán chiều rộng chuẩn badge theo Quy chuẩn 11
     const maxIdLength = useMemo(() => {
@@ -124,22 +161,26 @@ export default function EmployeeManualDataEntryModule({
         onChangeEmployees(employees.filter(e => e.employeeId !== empId));
     };
 
-    // Thêm nhân viên mới thủ công
-    const handleAddEmployee = () => {
-        const newId = prompt('Nhập Mã Nhân Viên mới:');
-        if (!newId || !newId.trim()) return;
-        const cleanId = newId.trim();
+    // Thêm nhân viên từ danh bạ ST
+    const handleAddSingleEmployeeFromDirectory = (empId: string) => {
+        setAddError('');
+        const cleanId = empId.trim();
+        if (!cleanId) return;
 
-        if (employees.some(e => e.employeeId === cleanId)) {
-            alert('Mã nhân viên này đã tồn tại trong danh sách!');
+        if (employees.some(e => e.employeeId.toLowerCase() === cleanId.toLowerCase())) {
+            setAddError(`Nhân viên mã [${cleanId}] đã có trong phiên này!`);
             return;
         }
 
-        const newName = prompt('Nhập Họ và Tên nhân viên:') || `Nhân viên ${cleanId}`;
+        const found = storeEmployees.find(e => String(e.employee_id || '').trim().toLowerCase() === cleanId.toLowerCase());
+        if (!found) {
+            setAddError(`Mã [${cleanId}] KHÔNG CÓ TRONG DANH BẠ của ST ${storeName}! Chỉ được nhập nhân sự có trong danh bạ.`);
+            return;
+        }
 
         const newEmp: EmployeeOcrParsedItem = {
-            employeeId: cleanId,
-            fullName: newName.trim(),
+            employeeId: String(found.employee_id).trim(),
+            fullName: found.full_name?.trim() || `Nhân viên ${cleanId}`,
             revenueQd: 0,
             revenueReal: 0,
             installmentReal: 0,
@@ -149,6 +190,37 @@ export default function EmployeeManualDataEntryModule({
         };
 
         onChangeEmployees([newEmp, ...employees]);
+        setSelectedEmpToAdd('');
+        setManualEmpIdInput('');
+        setIsAddModalOpen(false);
+    };
+
+    // Thêm toàn bộ nhân sự còn thiếu trong danh bạ ST vào phiên
+    const handleAddAllMissingEmployees = () => {
+        if (availableEmployees.length === 0) return;
+        if (!window.confirm(`Bạn có chắc muốn thêm toàn bộ ${availableEmployees.length} nhân sự còn thiếu trong danh bạ ST ${storeName} vào phiên này?`)) return;
+
+        const newItems: EmployeeOcrParsedItem[] = availableEmployees.map(e => ({
+            employeeId: String(e.employee_id).trim(),
+            fullName: e.full_name?.trim() || `Nhân viên ${e.employee_id}`,
+            revenueQd: 0,
+            revenueReal: 0,
+            installmentReal: 0,
+            installmentRate: 0,
+            campaigns: {},
+            campaignDetails: []
+        }));
+
+        onChangeEmployees([...newItems, ...employees]);
+        setIsAddModalOpen(false);
+    };
+
+    // Mở modal thêm nhân viên
+    const handleOpenAddModal = () => {
+        setAddError('');
+        setSelectedEmpToAdd(availableEmployees.length > 0 ? String(availableEmployees[0].employee_id).trim() : '');
+        setManualEmpIdInput('');
+        setIsAddModalOpen(true);
     };
 
     // Cập nhật giá trị chương trình thi đua
@@ -203,6 +275,25 @@ export default function EmployeeManualDataEntryModule({
                 </div>
             </div>
 
+            {/* THÔNG BÁO CHƯA CÓ PHIÊN MỚI NHẤT (TONE MÀU NÓNG) */}
+            {!existingSession && !isCheckingExisting && (
+                <div className="bg-gradient-to-r from-rose-50 via-orange-50 to-amber-50 border border-rose-300 rounded-2xl p-3.5 sm:p-4 text-xs shadow-xs space-y-1.5 animate-in fade-in">
+                    <div className="flex items-center gap-2.5">
+                        <span className="p-1.5 rounded-xl bg-rose-600 text-white font-black shadow-xs shrink-0 animate-pulse">
+                            <AlertCircle className="w-4 h-4" />
+                        </span>
+                        <div>
+                            <span className="font-extrabold text-rose-950 text-xs sm:text-sm block">
+                                Chưa Có Phiên Dữ Liệu Ngày {formatDate(reportDate)} Cho ST Này!
+                            </span>
+                            <span className="text-[11px] text-rose-800">
+                                Đơn vị: <strong>{storeName}</strong> • Chưa ghi nhận phiên dữ liệu nào cho ngày này trên Cloud. Vui lòng rà soát danh sách nhân sự bên dưới và bấm nút <strong className="text-rose-950">"LƯU PHIÊN MỚI LÊN CLOUD"</strong> để hoàn tất.
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* CẢNH BÁO TRÙNG PHIÊN KHI ĐÃ CÓ DỮ LIỆU CỦA NGÀY NÀY */}
             {existingSession && (
                 <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-300 rounded-2xl p-3.5 sm:p-4 text-xs shadow-xs space-y-2.5">
@@ -213,7 +304,7 @@ export default function EmployeeManualDataEntryModule({
                             </span>
                             <div>
                                 <span className="font-extrabold text-amber-950 text-xs sm:text-sm block">
-                                    Đã Có Phiên Dữ Liệu Ngày {formatDate(reportDate)} Cho Siêu Thị Này!
+                                    Đã Có Phiên Dữ Liệu Ngày {formatDate(reportDate)} Cho ST Này!
                                 </span>
                                 <span className="text-[11px] text-amber-800">
                                     Tiêu đề: <strong>{existingSession.session_title}</strong>
@@ -246,6 +337,17 @@ export default function EmployeeManualDataEntryModule({
                         💡 <strong>Khuyên dùng:</strong> Hãy bấm nút <span className="font-bold text-indigo-700">"Ghi Đè & Cập Nhật"</span> để cập nhật số liệu mới nhất mà không tạo thêm phiên trùng lặp.
                     </p>
                 </div>
+            )}
+
+            {/* THANH RÀ SOÁT & MAPPING THI ĐUA THEO TARGET ST */}
+            {(campaignMappings.length > 0 || activeCampaignNames.length > 0) && onRemapCampaign && (
+                <CampaignMappingReviewBar
+                    campaignMappings={campaignMappings}
+                    knownStoreCampaigns={knownStoreCampaigns}
+                    campaignDict={campaignDict}
+                    onRemapCampaign={onRemapCampaign}
+                    activeCampaignNames={activeCampaignNames}
+                />
             )}
 
             {/* THANH CÔNG CỤ TÌM KIẾM & NÚT THAO TÁC */}
@@ -293,8 +395,9 @@ export default function EmployeeManualDataEntryModule({
 
                     <button
                         type="button"
-                        onClick={handleAddEmployee}
+                        onClick={handleOpenAddModal}
                         className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+                        title="Thêm nhân viên từ danh bạ ST vào phiên"
                     >
                         <Plus className="w-3.5 h-3.5 text-blue-600" />
                         <span>Thêm NV</span>
@@ -517,10 +620,40 @@ export default function EmployeeManualDataEntryModule({
                                                                                 className="bg-white border border-slate-200 rounded-xl p-2.5 shadow-xs flex items-center justify-between gap-2"
                                                                             >
                                                                                 <div className="min-w-0 flex-1">
-                                                                                    <span className="font-bold text-slate-800 text-xs block truncate" title={cName}>
-                                                                                        {cName}
-                                                                                    </span>
-                                                                                    <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-slate-500">
+                                                                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                                                                        <span className="font-bold text-slate-800 text-xs truncate max-w-[150px] sm:max-w-none" title={cName}>
+                                                                                            {cName}
+                                                                                        </span>
+                                                                                        {detail?.unit && (
+                                                                                            <span className={`text-[9px] font-black px-1 py-0.2 rounded shrink-0 ${
+                                                                                                detail.unit === 'SL' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'
+                                                                                            }`}>
+                                                                                                {detail.unit}
+                                                                                            </span>
+                                                                                        )}
+                                                                                    </div>
+
+                                                                                    <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-slate-500 flex-wrap">
+                                                                                        {detail?.ratioPercent !== undefined && (
+                                                                                            <span className="font-bold text-purple-700 bg-purple-50 px-1 py-0.2 rounded border border-purple-200">
+                                                                                                Tỉ trọng: {detail.ratioPercent}%
+                                                                                            </span>
+                                                                                        )}
+                                                                                        {detail?.storeActual !== undefined && detail.storeActual !== 0 && (
+                                                                                            <span className="text-slate-600">
+                                                                                                ST: <strong className="font-mono">{formatValue(detail.storeActual)}</strong>
+                                                                                            </span>
+                                                                                        )}
+                                                                                        {detail?.storeTarget !== undefined && detail.storeTarget !== 0 && (
+                                                                                            <span className="text-slate-400">
+                                                                                                (Target: {formatValue(detail.storeTarget)})
+                                                                                            </span>
+                                                                                        )}
+                                                                                        {detail?.isAutoMatched && (
+                                                                                            <span className="text-emerald-700 font-bold" title={detail.mappedReason}>
+                                                                                                🟢 Đã khớp
+                                                                                            </span>
+                                                                                        )}
                                                                                         {detail?.rank && (
                                                                                             <span className="font-bold text-blue-600">
                                                                                                 Hạng #{detail.rank}
@@ -561,6 +694,146 @@ export default function EmployeeManualDataEntryModule({
                     </table>
                 </div>
             </div>
+
+            {/* MODAL THÊM NHÂN VIÊN TỪ DANH BẠ ST (CHỈ CHO PHÉP NHÂN SỰ TRONG DANH BẠ ST) */}
+            {isAddModalOpen && (
+                <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+                    <div className="bg-white rounded-3xl max-w-[520px] w-full p-5 sm:p-6 space-y-4 shadow-2xl border border-slate-200">
+                        {/* Header Modal */}
+                        <div className="flex items-start justify-between border-b border-slate-100 pb-3">
+                            <div className="flex items-center gap-2.5">
+                                <span className="p-2 rounded-xl bg-blue-100 text-blue-700 font-bold">
+                                    <UserCheck className="w-5 h-5" />
+                                </span>
+                                <div>
+                                    <h3 className="font-extrabold text-base text-slate-900">
+                                        Thêm Nhân Viên Vào Phiên
+                                    </h3>
+                                    <p className="text-xs text-slate-500 mt-0.5">
+                                        Đơn vị: <strong className="text-blue-700">{storeName}</strong> • Chỉ nhập nhân sự có trong danh bạ ST
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setIsAddModalOpen(false)}
+                                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        {/* Thông báo lỗi nếu có */}
+                        {addError && (
+                            <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2">
+                                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                                <span>{addError}</span>
+                            </div>
+                        )}
+
+                        {storeEmployees.length === 0 ? (
+                            <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs space-y-2">
+                                <p className="font-bold flex items-center gap-1.5">
+                                    <AlertTriangle className="w-4 h-4 text-amber-600" />
+                                    <span>Danh bạ ST {storeName} chưa có nhân sự nào!</span>
+                                </p>
+                                <p className="text-amber-800">
+                                    Hệ thống chỉ cho phép nhập số liệu của nhân sự có trong danh bạ ST. Vui lòng vào trang <strong>Cấu hình ST &amp; Nhân viên</strong> để cập nhật danh bạ nhân sự trước.
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                {/* Cách 1: Chọn từ danh sách nhân sự chưa có */}
+                                <div className="space-y-2">
+                                    <label className="block text-xs font-bold text-slate-700">
+                                        1. Chọn nhân sự từ danh bạ ST ({availableEmployees.length} nhân sự chưa có trong phiên):
+                                    </label>
+                                    {availableEmployees.length > 0 ? (
+                                        <div className="space-y-2">
+                                            <select
+                                                value={selectedEmpToAdd}
+                                                onChange={(e) => setSelectedEmpToAdd(e.target.value)}
+                                                className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                                            >
+                                                {availableEmployees.map(emp => (
+                                                    <option key={emp.employee_id} value={emp.employee_id}>
+                                                        [{emp.employee_id}] {emp.full_name} {emp.job_title ? `• ${emp.job_title}` : ''}
+                                                    </option>
+                                                ))}
+                                            </select>
+
+                                            <div className="flex items-center gap-2 pt-1 flex-wrap">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleAddSingleEmployeeFromDirectory(selectedEmpToAdd)}
+                                                    className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition cursor-pointer"
+                                                >
+                                                    <Plus className="w-3.5 h-3.5" />
+                                                    <span>Thêm nhân viên đã chọn</span>
+                                                </button>
+
+                                                {availableEmployees.length > 1 && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleAddAllMissingEmployees}
+                                                        className="px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+                                                    >
+                                                        <span>Thêm tất cả ({availableEmployees.length} NV)</span>
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <p className="text-xs text-emerald-700 font-bold bg-emerald-50 border border-emerald-200 p-2.5 rounded-xl">
+                                            ✅ Toàn bộ {storeEmployees.length} nhân sự trong danh bạ ST đã có mặt trong phiên này!
+                                        </p>
+                                    )}
+                                </div>
+
+                                {/* Cách 2: Nhập nhanh theo Mã NV (Đối chiếu danh bạ) */}
+                                <div className="space-y-2 pt-3 border-t border-slate-100">
+                                    <label className="block text-xs font-bold text-slate-700">
+                                        2. Hoặc nhập nhanh Mã NV (Hệ thống sẽ đối chiếu danh bạ ST):
+                                    </label>
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="text"
+                                            placeholder="Nhập mã nhân viên..."
+                                            value={manualEmpIdInput}
+                                            onChange={(e) => setManualEmpIdInput(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    handleAddSingleEmployeeFromDirectory(manualEmpIdInput);
+                                                }
+                                            }}
+                                            className="flex-1 bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono font-bold outline-none focus:ring-2 focus:ring-blue-500"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => handleAddSingleEmployeeFromDirectory(manualEmpIdInput)}
+                                            className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold cursor-pointer shrink-0"
+                                        >
+                                            Kiểm tra &amp; Thêm
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Footer Modal */}
+                        <div className="pt-2 border-t border-slate-100 flex justify-end">
+                            <button
+                                type="button"
+                                onClick={() => setIsAddModalOpen(false)}
+                                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer"
+                            >
+                                Đóng
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

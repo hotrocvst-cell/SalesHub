@@ -126,17 +126,17 @@ export default function UserStorePermissionPage() {
         }
     };
 
-    // Toggle chọn/bỏ chọn 1 siêu thị trong modal
+    // Toggle chọn/bỏ chọn 1 ST trong modal
     const handleToggleStore = (storeName: string) => {
         if (!editingUser) return;
 
-        // Nếu là nhân viên: chỉ được chọn đúng 1 siêu thị duy nhất
+        // Nếu là nhân viên: chỉ được chọn đúng 1 ST duy nhất
         if (editingUser.role === 'NHAN_VIEN') {
             setSelectedStoreNames(new Set([storeName]));
             return;
         }
 
-        // Với Quản lý / Trưởng ca: hỗ trợ đa siêu thị
+        // Với Quản lý / Trưởng ca: hỗ trợ đa ST
         setSelectedStoreNames(prev => {
             const next = new Set(prev);
             if (next.has(storeName)) {
@@ -148,17 +148,17 @@ export default function UserStorePermissionPage() {
         });
     };
 
-    // Chọn tất cả siêu thị trong modal
+    // Chọn tất cả ST trong modal
     const handleSelectAllStores = () => {
         setSelectedStoreNames(new Set(stores.map(s => s.name)));
     };
 
-    // Bỏ chọn tất cả siêu thị trong modal
+    // Bỏ chọn tất cả ST trong modal
     const handleClearAllStores = () => {
         setSelectedStoreNames(new Set());
     };
 
-    // Chỉ chọn siêu thị đăng ký gốc
+    // Chỉ chọn ST đăng ký gốc
     const handleSelectOnlyPrimaryStore = () => {
         if (editingUser?.store_name) {
             setSelectedStoreNames(new Set([editingUser.store_name]));
@@ -171,7 +171,7 @@ export default function UserStorePermissionPage() {
         setIsSaving(true);
 
         const storeList = Array.from(selectedStoreNames);
-        // Siêu thị chính: lấy siêu thị đầu tiên được chọn hoặc giữ nguyên
+        // ST chính: lấy ST đầu tiên được chọn hoặc giữ nguyên
         const primaryStore = storeList.length > 0 ? storeList[0] : editingUser.store_name;
 
         const updates: Partial<UserProfile> = {
@@ -191,7 +191,7 @@ export default function UserStorePermissionPage() {
                 });
             }
             const modeText = res.storageMode === 'NATIVE' ? '(Cột JSONB gốc)' : '(Lưu Cloud vĩnh viễn)';
-            showToast(`✅ Đã lưu phân quyền ${storeList.length} siêu thị cho ${editingUser.full_name} lên Supabase ${modeText}!`);
+            showToast(`✅ Đã lưu phân quyền ${storeList.length} ST cho ${editingUser.full_name} lên Supabase ${modeText}!`);
             setEditingUser(null);
         } else {
             showToast(`❌ Lỗi lưu phân quyền: ${res.error || 'Vui lòng thử lại'}`);
@@ -216,10 +216,10 @@ export default function UserStorePermissionPage() {
                 return false;
             }
 
-            // 3. Lọc theo siêu thị cụ thể (user nào đang xem được siêu thị này?)
+            // 3. Lọc theo ST cụ thể (user nào đang xem được ST này?)
             if (storeFilter !== 'ALL') {
                 if (user.role === 'ADMIN') {
-                    // Admin xem được mọi siêu thị -> giữ lại
+                    // Admin xem được mọi ST -> giữ lại
                 } else {
                     const userStores = user.accessible_stores && user.accessible_stores.length > 0
                         ? user.accessible_stores
@@ -259,7 +259,7 @@ export default function UserStorePermissionPage() {
         };
     }, [users, stores]);
 
-    // Lọc danh sách siêu thị trong modal
+    // Lọc danh sách ST trong modal
     const modalFilteredStores = useMemo(() => {
         if (!modalSearchStore.trim()) return stores;
         const q = modalSearchStore.toLowerCase().trim();
@@ -286,10 +286,10 @@ export default function UserStorePermissionPage() {
                             <span>Quản Trị Phạm Vi Dữ Liệu</span>
                         </div>
                         <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
-                            Phân Quyền Xem Siêu Thị
+                            Phân Quyền Xem ST
                         </h1>
                         <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
-                            Theo dõi và cấu hình danh sách siêu thị được phép xem của từng tài khoản. Quản lý / Trưởng ca có thể xem nhiều siêu thị được phân công, Nhân viên chỉ xem đúng siêu thị đã đăng ký.
+                            Theo dõi và cấu hình danh sách ST được phép xem của từng tài khoản. Quản lý / Trưởng ca có thể xem nhiều ST được phân công, Nhân viên chỉ xem đúng ST đã đăng ký.
                         </p>
                     </div>
 
@@ -352,7 +352,7 @@ export default function UserStorePermissionPage() {
                         </div>
                         <p className="text-slate-600 text-[11px] mt-0.5">
                             {hasNativeColumn === true
-                                ? 'Mọi thay đổi phân quyền siêu thị được lưu trực tiếp vào trường accessible_stores trên Supabase.'
+                                ? 'Mọi thay đổi phân quyền ST được lưu trực tiếp vào trường accessible_stores trên Supabase.'
                                 : 'Hệ thống đã tự động kích hoạt chế độ lưu trữ đám mây an toàn trên Supabase. Bạn có thể F5 trang mà không bao giờ bị mất phân quyền.'}
                         </p>
                     </div>
@@ -374,7 +374,7 @@ export default function UserStorePermissionPage() {
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                 <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/80 shadow-xs">
                     <div className="flex items-center justify-between text-slate-500 mb-2">
-                        <span className="text-xs font-bold uppercase tracking-wider">Tổng Siêu Thị</span>
+                        <span className="text-xs font-bold uppercase tracking-wider">Tổng ST</span>
                         <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
                             <Store className="w-4 h-4" />
                         </div>
@@ -382,7 +382,7 @@ export default function UserStorePermissionPage() {
                     <div className="text-2xl sm:text-3xl font-black text-slate-900 font-mono">
                         {stats.totalStores}
                     </div>
-                    <div className="text-[11px] text-slate-400 mt-1">Siêu thị đang hoạt động</div>
+                    <div className="text-[11px] text-slate-400 mt-1">ST đang hoạt động</div>
                 </div>
 
                 <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/80 shadow-xs">
@@ -409,7 +409,7 @@ export default function UserStorePermissionPage() {
                         {stats.totalManagers}
                     </div>
                     <div className="text-[11px] text-amber-800 font-bold mt-1">
-                        {stats.multiStoreManagers} người phụ trách đa siêu thị
+                        {stats.multiStoreManagers} người phụ trách đa ST
                     </div>
                 </div>
 
@@ -438,7 +438,7 @@ export default function UserStorePermissionPage() {
                     <div>
                         <div className="font-extrabold text-blue-950 text-sm">Quy tắc phân quyền hiển thị dữ liệu:</div>
                         <p className="text-blue-800 mt-0.5">
-                            • <b>Admin:</b> Toàn quyền xem mọi siêu thị | • <b>Quản lý / Trưởng ca:</b> Xem các siêu thị được gán trong danh sách | • <b>Nhân viên:</b> Chỉ xem số liệu siêu thị của mình.
+                            • <b>Admin:</b> Toàn quyền xem mọi ST | • <b>Quản lý / Trưởng ca:</b> Xem các ST được gán trong danh sách | • <b>Nhân viên:</b> Chỉ xem số liệu ST của mình.
                         </p>
                     </div>
                 </div>
@@ -479,22 +479,22 @@ export default function UserStorePermissionPage() {
                             >
                                 <option value="ALL">Tất cả vai trò</option>
                                 <option value="ADMIN">Quản trị viên (Admin)</option>
-                                <option value="QUAN_LY">Quản lý Siêu thị</option>
+                                <option value="QUAN_LY">Quản lý ST</option>
                                 <option value="TRUONG_CA">Trưởng Ca</option>
                                 <option value="NHAN_VIEN">Nhân viên</option>
                             </select>
                         </div>
 
-                        {/* Filter by Store (Ai đang xem siêu thị này?) */}
+                        {/* Filter by Store (Ai đang xem ST này?) */}
                         <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-700 max-w-[240px]">
                             <Store className="w-3.5 h-3.5 text-blue-600 shrink-0" />
                             <select
                                 value={storeFilter}
                                 onChange={(e) => setStoreFilter(e.target.value)}
                                 className="bg-transparent outline-none cursor-pointer text-slate-800 truncate"
-                                title="Lọc xem những ai đang được phân quyền xem siêu thị này"
+                                title="Lọc xem những ai đang được phân quyền xem ST này"
                             >
-                                <option value="ALL">Tất cả siêu thị</option>
+                                <option value="ALL">Tất cả ST</option>
                                 {stores.map(s => (
                                     <option key={s.id} value={s.name}>
                                         {s.name}
@@ -512,8 +512,8 @@ export default function UserStorePermissionPage() {
                                 className="bg-transparent outline-none cursor-pointer text-slate-800"
                             >
                                 <option value="ALL">Tất cả phạm vi</option>
-                                <option value="MULTI">Đa siêu thị (&ge; 2 shop)</option>
-                                <option value="SINGLE">1 siêu thị duy nhất</option>
+                                <option value="MULTI">Đa ST (&ge; 2 shop)</option>
+                                <option value="SINGLE">1 ST duy nhất</option>
                             </select>
                         </div>
                     </div>
@@ -549,8 +549,8 @@ export default function UserStorePermissionPage() {
                                 <th className="py-3.5 px-4 w-12 text-center">STT</th>
                                 <th className="py-3.5 px-4 min-w-[200px]">Tài Khoản & Nhân Viên</th>
                                 <th className="py-3.5 px-3 w-36">Vai Trò</th>
-                                <th className="py-3.5 px-3 min-w-[180px]">Siêu Thị Gốc</th>
-                                <th className="py-3.5 px-4 min-w-[280px]">Phạm Vi Siêu Thị Được Xem</th>
+                                <th className="py-3.5 px-3 min-w-[180px]">ST Gốc</th>
+                                <th className="py-3.5 px-4 min-w-[280px]">Phạm Vi ST Được Xem</th>
                                 <th className="py-3.5 px-4 w-28 text-center">Thao Tác</th>
                             </tr>
                         </thead>
@@ -577,7 +577,7 @@ export default function UserStorePermissionPage() {
                                     const isShift = user.role === 'TRUONG_CA';
                                     const isStaff = user.role === 'NHAN_VIEN';
 
-                                    // Danh sách siêu thị user có quyền xem
+                                    // Danh sách ST user có quyền xem
                                     const accessibleList = user.accessible_stores && user.accessible_stores.length > 0
                                         ? user.accessible_stores
                                         : (user.store_name ? [user.store_name] : []);
@@ -637,19 +637,19 @@ export default function UserStorePermissionPage() {
                                                 </span>
                                             </td>
 
-                                            {/* Siêu thị gốc */}
+                                            {/* ST gốc */}
                                             <td className="py-3 px-3">
                                                 <div className="font-semibold text-slate-800 text-xs truncate max-w-[200px]" title={user.store_name}>
                                                     {getShortStoreName(user.store_name) || <span className="text-slate-300 italic">Chưa gán</span>}
                                                 </div>
                                             </td>
 
-                                            {/* Phạm vi siêu thị được xem */}
+                                            {/* Phạm vi ST được xem */}
                                             <td className="py-3 px-4">
                                                 {isAdmin ? (
                                                     <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-gradient-to-r from-purple-500/10 via-indigo-500/10 to-blue-500/10 border border-purple-300 text-purple-900 font-black text-xs shadow-2xs">
                                                         <Sparkles className="w-3.5 h-3.5 text-purple-600" />
-                                                        <span>Toàn quyền (Tất cả {stores.length} siêu thị)</span>
+                                                        <span>Toàn quyền (Tất cả {stores.length} ST)</span>
                                                     </div>
                                                 ) : isStaff ? (
                                                     <div className="flex items-center gap-2">
@@ -669,11 +669,11 @@ export default function UserStorePermissionPage() {
                                                                     ? 'bg-amber-100 text-amber-900 border border-amber-200'
                                                                     : 'bg-blue-100 text-blue-900 border border-blue-200'
                                                             }`}>
-                                                                Phụ trách {accessibleList.length} siêu thị
+                                                                Phụ trách {accessibleList.length} ST
                                                             </span>
                                                         </div>
 
-                                                        {/* Danh sách thẻ tên siêu thị */}
+                                                        {/* Danh sách thẻ tên ST */}
                                                         <div className="flex flex-wrap gap-1 max-w-[340px]">
                                                             {accessibleList.slice(0, 3).map((st, i) => (
                                                                 <span
@@ -700,7 +700,7 @@ export default function UserStorePermissionPage() {
                                                     type="button"
                                                     onClick={() => handleOpenEditModal(user)}
                                                     className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-blue-600 hover:text-white text-slate-700 text-xs font-bold transition flex items-center justify-center gap-1.5 mx-auto cursor-pointer shadow-2xs group"
-                                                    title="Chỉnh sửa danh sách siêu thị được phép xem"
+                                                    title="Chỉnh sửa danh sách ST được phép xem"
                                                 >
                                                     <Edit3 className="w-3.5 h-3.5 text-slate-500 group-hover:text-white transition" />
                                                     <span>Phân quyền</span>
@@ -716,7 +716,7 @@ export default function UserStorePermissionPage() {
             </div>
 
             {/* ========================================================= */}
-            {/* 6. MODAL PHÂN QUYỀN SIÊU THỊ CHO TÀI KHOẢN                */}
+            {/* 6. MODAL PHÂN QUYỀN ST CHO TÀI KHOẢN                */}
             {/* ========================================================= */}
             {editingUser && (
                 <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
@@ -729,7 +729,7 @@ export default function UserStorePermissionPage() {
                                 </div>
                                 <div>
                                     <h3 className="font-black text-base text-slate-900 leading-snug">
-                                        Cấu Hình Phạm Vi Xem Siêu Thị
+                                        Cấu Hình Phạm Vi Xem ST
                                     </h3>
                                     <p className="text-xs text-slate-500">
                                         Tài khoản: <b className="text-slate-800">{editingUser.employee_id ? `${editingUser.employee_id} - ` : ''}{editingUser.full_name}</b> ({ROLE_LABELS[editingUser.role]})
@@ -751,21 +751,21 @@ export default function UserStorePermissionPage() {
                                 <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 text-xs text-amber-900 flex items-start gap-2.5">
                                     <Lock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                                     <div>
-                                        <span className="font-extrabold">Quy định Nhân viên bán hàng:</span> Chỉ được xem dữ liệu của <b>1 siêu thị đăng ký trực tiếp</b>. Chọn siêu thị bên dưới để chuyển đổi nơi làm việc của nhân viên nếu luân chuyển công tác.
+                                        <span className="font-extrabold">Quy định Nhân viên bán hàng:</span> Chỉ được xem dữ liệu của <b>1 ST đăng ký trực tiếp</b>. Chọn ST bên dưới để chuyển đổi nơi làm việc của nhân viên nếu luân chuyển công tác.
                                     </div>
                                 </div>
                             ) : editingUser.role === 'ADMIN' ? (
                                 <div className="bg-purple-50 border border-purple-200 rounded-2xl p-3 text-xs text-purple-900 flex items-start gap-2.5">
                                     <Crown className="w-4 h-4 text-purple-600 shrink-0 mt-0.5" />
                                     <div>
-                                        <span className="font-extrabold">Quy định Quản trị viên (Admin):</span> Mặc định được toàn quyền xem toàn bộ siêu thị và dữ liệu toàn công ty.
+                                        <span className="font-extrabold">Quy định Quản trị viên (Admin):</span> Mặc định được toàn quyền xem toàn bộ ST và dữ liệu toàn công ty.
                                     </div>
                                 </div>
                             ) : (
                                 <div className="bg-blue-50 border border-blue-200 rounded-2xl p-3 text-xs text-blue-900 flex items-start gap-2.5">
                                     <Sparkles className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
                                     <div>
-                                        <span className="font-extrabold">Quản lý / Trưởng ca phụ trách đa ST:</span> Tích chọn một hoặc nhiều siêu thị mà nhân sự này được phép xem báo cáo và điều hành.
+                                        <span className="font-extrabold">Quản lý / Trưởng ca phụ trách đa ST:</span> Tích chọn một hoặc nhiều ST mà nhân sự này được phép xem báo cáo và điều hành.
                                     </div>
                                 </div>
                             )}
@@ -781,7 +781,7 @@ export default function UserStorePermissionPage() {
                                             type="text"
                                             value={modalSearchStore}
                                             onChange={(e) => setModalSearchStore(e.target.value)}
-                                            placeholder="Tìm siêu thị theo tên hoặc mã..."
+                                            placeholder="Tìm ST theo tên hoặc mã..."
                                             className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white text-xs text-slate-800 outline-none focus:ring-1 focus:ring-blue-500"
                                         />
                                     </div>
@@ -808,7 +808,7 @@ export default function UserStorePermissionPage() {
 
                                 <div className="flex items-center justify-between text-[11px] text-slate-500 px-1">
                                     <span>
-                                        Đã chọn: <b className="text-blue-600 font-mono text-xs">{selectedStoreNames.size}</b> / {stores.length} siêu thị
+                                        Đã chọn: <b className="text-blue-600 font-mono text-xs">{selectedStoreNames.size}</b> / {stores.length} ST
                                     </span>
                                     {editingUser.store_name && (
                                         <button
@@ -823,19 +823,19 @@ export default function UserStorePermissionPage() {
                             </div>
                         )}
 
-                        {/* Danh sách lưới siêu thị để tích chọn */}
+                        {/* Danh sách lưới ST để tích chọn */}
                         <div className="flex-1 overflow-y-auto pr-1 space-y-2 scrollbar-thin scrollbar-thumb-slate-200 min-h-[220px]">
                             {editingUser.role === 'ADMIN' ? (
                                 <div className="p-6 text-center text-slate-500 bg-slate-50 rounded-2xl border border-slate-200">
                                     <Crown className="w-10 h-10 text-amber-500 mx-auto mb-2" />
                                     <p className="font-extrabold text-slate-800 text-sm">Tài khoản Quản Trị Viên (Admin)</p>
                                     <p className="text-xs text-slate-500 mt-1">
-                                        Admin luôn có quyền truy cập toàn bộ {stores.length} siêu thị và tất cả các phân hệ dữ liệu trên SalesHub.
+                                        Admin luôn có quyền truy cập toàn bộ {stores.length} ST và tất cả các phân hệ dữ liệu trên SalesHub.
                                     </p>
                                 </div>
                             ) : modalFilteredStores.length === 0 ? (
                                 <div className="py-8 text-center text-slate-400">
-                                    Không tìm thấy siêu thị phù hợp với "{modalSearchStore}"
+                                    Không tìm thấy ST phù hợp với "{modalSearchStore}"
                                 </div>
                             ) : (
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -909,7 +909,7 @@ export default function UserStorePermissionPage() {
                                     ) : (
                                         <>
                                             <Check className="w-4 h-4" />
-                                            <span>Lưu Phân Quyền ({selectedStoreNames.size} siêu thị)</span>
+                                            <span>Lưu Phân Quyền ({selectedStoreNames.size} ST)</span>
                                         </>
                                     )}
                                 </button>

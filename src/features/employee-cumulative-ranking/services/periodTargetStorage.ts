@@ -86,7 +86,7 @@ function normalizeTargetsMap(rawTargets: Record<string, any> | undefined): Recor
 }
 
 /**
- * Tải cấu hình target giai đoạn cho một siêu thị và dải ngày cụ thể
+ * Tải cấu hình target giai đoạn cho một ST và dải ngày cụ thể
  */
 export async function fetchPeriodTarget(
     storeName: string,

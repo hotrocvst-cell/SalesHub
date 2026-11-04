@@ -50,7 +50,7 @@ export default function StoreCampaignScoreTab({
     onSavedSuccess,
     saveTrigger
 }: Props) {
-    // 1. Danh sách siêu thị khả dụng theo phân quyền của user hiện tại
+    // 1. Danh sách ST khả dụng theo phân quyền của user hiện tại
     const allowedStores = useMemo(() => {
         if (isAdmin) return stores;
         const accessible = currentUser?.accessible_stores && currentUser.accessible_stores.length > 0
@@ -61,7 +61,7 @@ export default function StoreCampaignScoreTab({
         return stores.filter(s => accessible.some((acc: string) => isStoreMatch(s.name, acc, stores)));
     }, [stores, currentUser, isAdmin]);
 
-    // Siêu thị đang chọn cấu hình
+    // ST đang chọn cấu hình
     const [selectedStore, setSelectedStore] = useState<string>(() => {
         if (allowedStores.length > 0) return allowedStores[0].name;
         return 'DEFAULT';
@@ -90,7 +90,7 @@ export default function StoreCampaignScoreTab({
         onHasChangesChange?.(val);
     };
 
-    // Nạp cấu hình khi đổi siêu thị
+    // Nạp cấu hình khi đổi ST
     useEffect(() => {
         const cfg = getStoreCampaignScoreConfig(selectedStore);
         setScoringMode(cfg.scoring_mode || 'COUNT');
@@ -136,7 +136,7 @@ export default function StoreCampaignScoreTab({
 
     // Khôi phục về mặc định
     const handleResetToDefault = () => {
-        if (!window.confirm(`Bạn có chắc muốn khôi phục cấu hình điểm của siêu thị "${selectedStore}" về mặc định (1 điểm mỗi mục)?`)) return;
+        if (!window.confirm(`Bạn có chắc muốn khôi phục cấu hình điểm của ST "${selectedStore}" về mặc định (1 điểm mỗi mục)?`)) return;
         setCampaignScores({});
         setScoringMode('COUNT');
         updateHasChanges(true);
@@ -166,7 +166,7 @@ export default function StoreCampaignScoreTab({
             updateHasChanges(false);
             onSavedSuccess?.();
             if (applyToAllMyStores && allowedStores.length > 1) {
-                showToast(`💾 Đã lưu và áp dụng cấu hình điểm cho toàn bộ ${allowedStores.length} siêu thị phụ trách!`);
+                showToast(`💾 Đã lưu và áp dụng cấu hình điểm cho toàn bộ ${allowedStores.length} ST phụ trách!`);
             } else {
                 const sLabel = selectedStore === 'DEFAULT' ? 'Mặc định chung' : getShortStoreName(selectedStore);
                 showToast(`💾 Đã lưu thành công cấu hình điểm cho [${sLabel}]!`);
@@ -222,7 +222,7 @@ export default function StoreCampaignScoreTab({
 
     return (
         <div className="space-y-5 animate-in fade-in duration-200">
-            {/* 1. KHU VỰC CHỌN SIÊU THỊ & CẢNH BÁO */}
+            {/* 1. KHU VỰC CHỌN ST & CẢNH BÁO */}
             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
                     <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-500 text-white flex items-center justify-center shadow-sm shrink-0">
@@ -231,10 +231,10 @@ export default function StoreCampaignScoreTab({
                     <div>
                         <div className="flex items-center gap-2">
                             <span className="text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md uppercase tracking-wider">
-                                Siêu thị áp dụng
+                                ST áp dụng
                             </span>
                             <span className="text-xs text-slate-400 font-medium">
-                                (Tùy chọn cấu hình riêng cho từng siêu thị)
+                                (Tùy chọn cấu hình riêng cho từng ST)
                             </span>
                         </div>
                         <h3 className="text-base font-black text-slate-800 mt-0.5">
@@ -283,7 +283,7 @@ export default function StoreCampaignScoreTab({
                     <div>
                         <h4 className="text-sm font-black text-slate-800 flex items-center gap-2">
                             <SlidersHorizontal className="w-4 h-4 text-indigo-600" />
-                            CHẾ ĐỘ TÍNH HIỆU QUẢ THI ĐUA CỦA SIÊU THỊ
+                            CHẾ ĐỘ TÍNH HIỆU QUẢ THI ĐUA CỦA ST
                         </h4>
                         <p className="text-xs text-slate-500 mt-0.5">
                             Lựa chọn cách hiển thị và tính toán kết quả thi đua nhân viên trên các trang báo cáo hiệu quả
@@ -641,7 +641,7 @@ export default function StoreCampaignScoreTab({
                     </table>
                 </div>
 
-                {/* TUỲ CHỌN SAO CHÉP CHO TẤT CẢ SIÊU THỊ PHỤ TRÁCH & LƯU */}
+                {/* TUỲ CHỌN SAO CHÉP CHO TẤT CẢ ST PHỤ TRÁCH & LƯU */}
                 <div className="pt-2 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <label className="flex items-center gap-2 cursor-pointer select-none">
                         <input
@@ -651,7 +651,7 @@ export default function StoreCampaignScoreTab({
                             className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 border-slate-300 cursor-pointer"
                         />
                         <span className="text-xs font-bold text-slate-700">
-                            Đồng thời áp dụng cấu hình này cho tất cả {allowedStores.length} siêu thị tôi phụ trách
+                            Đồng thời áp dụng cấu hình này cho tất cả {allowedStores.length} ST tôi phụ trách
                         </span>
                     </label>
 

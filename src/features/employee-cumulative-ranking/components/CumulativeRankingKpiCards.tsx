@@ -30,12 +30,12 @@ export default function CumulativeRankingKpiCards({
 
     return (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 mb-4">
-            {/* THẺ 1: DOANH THU LŨY KẾ SIÊU THỊ (SỐ TỔNG CHUẨN THEO BC THÁNG) */}
+            {/* THẺ 1: DOANH THU LŨY KẾ ST (SỐ TỔNG CHUẨN THEO BC THÁNG) */}
             <div className="bg-gradient-to-br from-indigo-900 via-indigo-950 to-slate-900 rounded-2xl p-3 sm:p-3.5 text-white shadow-sm relative overflow-hidden flex flex-col justify-between">
                 <div className="absolute right-0 top-0 translate-x-2 -translate-y-2 w-20 h-20 bg-indigo-500/10 rounded-full blur-xl pointer-events-none" />
                 <div className="flex items-center justify-between gap-1 mb-1.5">
                     <span className="text-[10px] sm:text-[11px] font-bold text-indigo-200 uppercase tracking-wider">
-                        Lũy Kế Siêu Thị (tr)
+                        Lũy Kế ST (tr)
                     </span>
                     <div className="w-6 h-6 rounded-lg bg-indigo-500/20 flex items-center justify-center text-indigo-300">
                         <Store className="w-3.5 h-3.5" />
@@ -49,11 +49,11 @@ export default function CumulativeRankingKpiCards({
                 </div>
             </div>
 
-            {/* THẺ 2: TARGET SIÊU THỊ & % HOÀN THÀNH */}
+            {/* THẺ 2: TARGET ST & % HOÀN THÀNH */}
             <div className="bg-white rounded-2xl p-3 sm:p-3.5 border border-slate-200/90 shadow-2xs flex flex-col justify-between">
                 <div className="flex items-center justify-between gap-1 mb-1.5">
                     <span className="text-[10px] sm:text-[11px] font-bold text-amber-700 uppercase tracking-wider">
-                        Target Siêu Thị (tr)
+                        Target ST (tr)
                     </span>
                     <div className="w-6 h-6 rounded-lg bg-amber-50 flex items-center justify-center text-amber-600">
                         <TargetIcon className="w-3.5 h-3.5" />

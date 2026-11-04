@@ -160,7 +160,7 @@ export default function EmployeeRescueConfigModal({
                                 Cấu Hình Tiêu Chí Cứu & Chế Độ
                             </h3>
                             <p className="text-xs text-indigo-200 font-medium">
-                                Tháng {config.month}/{config.year} • {config.store_name === 'all' ? 'Toàn bộ siêu thị' : config.store_name}
+                                Tháng {config.month}/{config.year} • {config.store_name === 'all' ? 'Toàn bộ ST' : config.store_name}
                             </p>
                         </div>
                     </div>

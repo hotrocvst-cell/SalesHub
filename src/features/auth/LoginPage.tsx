@@ -92,7 +92,7 @@ export default function LoginPage() {
                         SALES<span className="text-blue-400">HUB</span>
                     </h1>
                     <p className="text-xs text-slate-400 font-medium">
-                        Hệ thống điều hành &amp; Quản trị mục tiêu kinh doanh siêu thị
+                        Hệ thống điều hành &amp; Quản trị mục tiêu kinh doanh ST
                     </p>
                 </div>
 

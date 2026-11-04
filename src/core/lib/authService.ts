@@ -98,7 +98,7 @@ ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS guest_expires_at TIMES
 ALTER TABLE public.user_approval_requests ADD COLUMN IF NOT EXISTS department TEXT;
 ALTER TABLE public.employees ADD COLUMN IF NOT EXISTS department TEXT;
 
--- Bảng 2: Yêu cầu xét duyệt tài khoản & siêu thị
+-- Bảng 2: Yêu cầu xét duyệt tài khoản & ST
 CREATE TABLE IF NOT EXISTS public.user_approval_requests (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
@@ -206,7 +206,7 @@ export function parseRawUserProfile(item: any): UserProfile {
         }
     }
 
-    // 3. Nếu vẫn rỗng, mặc định là siêu thị đăng ký gốc
+    // 3. Nếu vẫn rỗng, mặc định là ST đăng ký gốc
     if (accessibleStores.length === 0 && item.store_name) {
         accessibleStores = [item.store_name];
     }
@@ -262,7 +262,7 @@ export const DEMO_USERS: UserProfile[] = [
         phone: '0988776655',
         store_name: 'AAR_BRV_VTA - 290 Trương Công Định',
         role: 'QUAN_LY',
-        role_title: 'Quản lý Siêu thị',
+        role_title: 'Quản lý ST',
         status: 'ACTIVE',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
@@ -502,7 +502,7 @@ export async function createUserProfile(params: {
 
 // ==========================================
 // 3. GỬI YÊU CẦU XÉT DUYỆT ONBOARDING
-// (Chọn Siêu thị + Chọn Role + Gợi ý ST mới)
+// (Chọn ST + Chọn Role + Gợi ý ST mới)
 // ==========================================
 export async function submitOnboardingRequest(params: {
     user: UserProfile;
@@ -519,8 +519,8 @@ export async function submitOnboardingRequest(params: {
         const { user, requested_role, store_name, is_new_store, new_store_code, new_store_address, phone, employee_id, department } = params;
 
         // Phân quyền xét duyệt:
-        // - QL / TC / Siêu thị mới -> Giao ADMIN phê duyệt
-        // - NV vào siêu thị đã có -> Giao Quản lý siêu thị (QL) và Admin cùng nắm
+        // - QL / TC / ST mới -> Giao ADMIN phê duyệt
+        // - NV vào ST đã có -> Giao Quản lý ST (QL) và Admin cùng nắm
         const assigned_approver_role: 'ADMIN' | 'QUAN_LY' = (requested_role === 'NHAN_VIEN' && !is_new_store)
             ? 'QUAN_LY'
             : 'ADMIN';
@@ -599,9 +599,9 @@ export async function submitOnboardingRequest(params: {
 
         const adminNotifId = `notif_adm_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
         const adminTitle = is_new_store
-            ? `Yêu cầu mở Siêu thị mới: ${store_name} (${ROLE_LABELS[requested_role]})`
+            ? `Yêu cầu mở ST mới: ${store_name} (${ROLE_LABELS[requested_role]})`
             : `Yêu cầu tài khoản mới: ${user.full_name} (${ROLE_LABELS[requested_role]} - ${store_name})`;
-        const adminMsg = `${user.full_name} (${user.email}) vừa đăng ký vai trò [${ROLE_LABELS[requested_role]}] tại ${store_name}.${is_new_store ? ' Kèm đề xuất thêm mới siêu thị này.' : ''}`;
+        const adminMsg = `${user.full_name} (${user.email}) vừa đăng ký vai trò [${ROLE_LABELS[requested_role]}] tại ${store_name}.${is_new_store ? ' Kèm đề xuất thêm mới ST này.' : ''}`;
 
         notifications.push({
             id: adminNotifId,
@@ -614,7 +614,7 @@ export async function submitOnboardingRequest(params: {
             created_at: new Date().toISOString()
         });
 
-        // Nếu là NV đăng ký vào siêu thị cụ thể, gửi thêm 1 thông báo cho Quản lý siêu thị
+        // Nếu là NV đăng ký vào ST cụ thể, gửi thêm 1 thông báo cho Quản lý ST
         if (assigned_approver_role === 'QUAN_LY') {
             const qlNotifId = `notif_ql_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
             notifications.push({
@@ -622,7 +622,7 @@ export async function submitOnboardingRequest(params: {
                 target_role: 'QUAN_LY',
                 target_store_name: store_name,
                 title: `Nhân viên mới đăng ký vào ST: ${user.full_name}`,
-                message: `Nhân sự ${user.full_name} (${user.email}) đã đăng ký tài khoản Nhân viên kinh doanh tại siêu thị ${store_name}. Vui lòng xác nhận xét duyệt.`,
+                message: `Nhân sự ${user.full_name} (${user.email}) đã đăng ký tài khoản Nhân viên kinh doanh tại ST ${store_name}. Vui lòng xác nhận xét duyệt.`,
                 type: 'APPROVAL_REQUEST',
                 link_path: '/cau-hinh-sieu-thi-nhan-vien',
                 is_read: false,
@@ -711,7 +711,7 @@ export async function fetchApprovalRequests(filter?: {
         if (filter?.status) {
             query = query.eq('status', filter.status);
         }
-        // NẾU LÀ QUẢN LÝ (QUAN_LY): Chỉ lọc các yêu cầu giao cho Quản lý của siêu thị đó
+        // NẾU LÀ QUẢN LÝ (QUAN_LY): Chỉ lọc các yêu cầu giao cho Quản lý của ST đó
         if (filter?.approverRole === 'QUAN_LY') {
             query = query.eq('assigned_approver_role', 'QUAN_LY');
             if (filter.storeName) {
@@ -745,7 +745,7 @@ export async function fetchApprovalRequests(filter?: {
 
 // ==========================================
 // 5. PHÊ DUYỆT HOẶC TỪ CHỐI YÊU CẦU
-// (Kế thừa dữ liệu siêu thị nếu đổi QL, thêm ST mới, thêm NV)
+// (Kế thừa dữ liệu ST nếu đổi QL, thêm ST mới, thêm NV)
 // ==========================================
 export async function processApprovalRequest(params: {
     requestId: string;
@@ -794,7 +794,7 @@ export async function processApprovalRequest(params: {
             saveLocalProfiles(profiles);
         }
 
-        // 3. NẾU DUYỆT VÀ LÀ SIÊU THỊ MỚI: Tự động tạo Siêu thị trong bảng stores
+        // 3. NẾU DUYỆT VÀ LÀ ST MỚI: Tự động tạo ST trong bảng stores
         if (decision === 'APPROVED' && req.is_new_store) {
             try {
                 await supabase.from('stores').upsert({
@@ -1386,7 +1386,7 @@ export async function adminResetPassword(
 }
 
 /**
- * Admin chỉnh sửa thông tin tài khoản (Họ tên, Vai trò, Siêu thị, SĐT, Trạng thái...)
+ * Admin chỉnh sửa thông tin tài khoản (Họ tên, Vai trò, ST, SĐT, Trạng thái...)
  */
 export async function adminUpdateUserProfile(
     userId: string,
@@ -1815,7 +1815,7 @@ export async function resubmitUserApproval(params: {
             return { success: false, error: 'Vui lòng nhập Họ và tên!' };
         }
         if (!cleanStore) {
-            return { success: false, error: 'Vui lòng chọn Đơn vị Siêu thị làm việc!' };
+            return { success: false, error: 'Vui lòng chọn Đơn vị ST làm việc!' };
         }
 
         // Lấy thông tin user hiện tại
@@ -1890,8 +1890,8 @@ export async function resubmitUserApproval(params: {
         }
 
         // Phân quyền người duyệt:
-        // NV vào siêu thị đã có -> Giao Quản lý siêu thị và Admin
-        // QL / TC / Siêu thị mới -> Giao Admin
+        // NV vào ST đã có -> Giao Quản lý ST và Admin
+        // QL / TC / ST mới -> Giao Admin
         const assigned_approver_role: 'ADMIN' | 'QUAN_LY' = (requested_role === 'NHAN_VIEN' && !is_new_store)
             ? 'QUAN_LY'
             : 'ADMIN';

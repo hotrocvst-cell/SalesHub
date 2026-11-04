@@ -58,10 +58,10 @@ export default function ManualDataEntryModule({
     const [newProgramUnit, setNewProgramUnit] = useState<'DOANH THU' | 'SỐ LƯỢNG'>('DOANH THU');
     const [isCopied, setIsCopied] = useState(false);
 
-    // Siêu thị đang chọn để xem / sửa
+    // ST đang chọn để xem / sửa
     const activeStore = storesData[selectedStoreIndex] || storesData[0];
 
-    // Cập nhật trường Doanh thu của siêu thị đang chọn
+    // Cập nhật trường Doanh thu của ST đang chọn
     const handleUpdateStoreField = (field: keyof StoreReportingData, value: any) => {
         if (!activeStore) return;
         const updated = [...storesData];
@@ -147,12 +147,12 @@ export default function ManualDataEntryModule({
         setNewProgramName('');
     };
 
-    // Thêm 1 siêu thị mới vào danh sách nhập liệu
+    // Thêm 1 ST mới vào danh sách nhập liệu
     const handleAddStore = (storeName: string, storeCode?: string) => {
         if (!storeName.trim()) return;
         const short = getShortStoreName(storeName);
         if (storesData.some(s => s.storeShortName === short)) {
-            alert(`Siêu thị ${short} đã có trong danh sách!`);
+            alert(`ST ${short} đã có trong danh sách!`);
             return;
         }
 
@@ -176,14 +176,14 @@ export default function ManualDataEntryModule({
         setSelectedStoreIndex(next.length - 1);
     };
 
-    // Xóa siêu thị khỏi danh sách
+    // Xóa ST khỏi danh sách
     const handleDeleteStore = (idx: number) => {
         if (storesData.length <= 1) {
-            alert('Cần giữ lại ít nhất 1 siêu thị!');
+            alert('Cần giữ lại ít nhất 1 ST!');
             return;
         }
         const storeToDelete = storesData[idx];
-        if (!window.confirm(`Bạn có chắc chắn muốn xóa siêu thị "${storeToDelete.storeShortName}" không?`)) {
+        if (!window.confirm(`Bạn có chắc chắn muốn xóa ST "${storeToDelete.storeShortName}" không?`)) {
             return;
         }
         const next = storesData.filter((_, i) => i !== idx);
@@ -211,7 +211,7 @@ export default function ManualDataEntryModule({
         setTimeout(() => setIsCopied(false), 2000);
     };
 
-    // Tính toán các tỷ lệ tự động cho siêu thị đang chọn
+    // Tính toán các tỷ lệ tự động cho ST đang chọn
     const activeStats = useMemo(() => {
         if (!activeStore) return { htQd: 0, dkQd: 0, htReal: 0, dkReal: 0, pctQd: 0 };
 
@@ -244,7 +244,7 @@ export default function ManualDataEntryModule({
                     <div className="flex flex-wrap items-center gap-2">
                         <div className="flex items-center gap-1.5 text-xs font-black text-slate-900 uppercase tracking-wide">
                             <Store className="w-4 h-4 text-emerald-600" />
-                            <span>Bảng Nhập Liệu &amp; Đối Soát ({storesData.length} Siêu Thị)</span>
+                            <span>Bảng Nhập Liệu &amp; Đối Soát ({storesData.length} ST)</span>
                         </div>
                         <span className="bg-emerald-50 text-emerald-800 border border-emerald-300 font-mono font-bold text-[11px] px-2.5 py-0.5 rounded-lg flex items-center gap-1">
                             <Calendar className="w-3.5 h-3.5 text-emerald-600" />
@@ -287,7 +287,7 @@ export default function ManualDataEntryModule({
                                 ? 'bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500'
                                 : 'bg-emerald-600 hover:bg-emerald-700'
                             }`}
-                        title={existingRecordCount > 0 ? `Ngày ${formatDate(reportDate)} đã có số liệu ${existingRecordCount} siêu thị, bấm để ghi đè và làm mới số liệu` : ''}
+                        title={existingRecordCount > 0 ? `Ngày ${formatDate(reportDate)} đã có số liệu ${existingRecordCount} ST, bấm để ghi đè và làm mới số liệu` : ''}
                     >
                         {existingRecordCount > 0 ? (
                             <RefreshCw className={`w-3.5 h-3.5 ${isSaving ? 'animate-spin' : ''}`} />
@@ -305,7 +305,7 @@ export default function ManualDataEntryModule({
                 </div>
             </div>
 
-            {/* TAB CHUYỂN ĐỔI SIÊU THỊ & NÚT THÊM SIÊU THỊ */}
+            {/* TAB CHUYỂN ĐỔI ST & NÚT THÊM ST */}
             <div className="flex items-center gap-2 overflow-x-auto pb-1">
                 {storesData.map((st, idx) => (
                     <button
@@ -318,7 +318,7 @@ export default function ManualDataEntryModule({
                             }`}
                     >
                         <Building2 className="w-3.5 h-3.5" />
-                        <span>{st.storeShortName || st.storeRawName || `Siêu thị #${idx + 1}`}</span>
+                        <span>{st.storeShortName || st.storeRawName || `ST #${idx + 1}`}</span>
                         {storesData.length > 1 && (
                             <span
                                 onClick={(e) => {
@@ -326,7 +326,7 @@ export default function ManualDataEntryModule({
                                     handleDeleteStore(idx);
                                 }}
                                 className="hover:text-rose-300 transition p-0.5 rounded"
-                                title="Xóa siêu thị này"
+                                title="Xóa ST này"
                             >
                                 <Trash2 className="w-3 h-3" />
                             </span>
@@ -334,7 +334,7 @@ export default function ManualDataEntryModule({
                     </button>
                 ))}
 
-                {/* Dropdown Thêm Siêu thị mới từ danh mục */}
+                {/* Dropdown Thêm ST mới từ danh mục */}
                 <select
                     onChange={e => {
                         if (e.target.value) {
@@ -346,7 +346,7 @@ export default function ManualDataEntryModule({
                     className="px-2.5 py-2 bg-slate-100 border border-slate-300 rounded-2xl text-xs font-bold text-slate-700 cursor-pointer hover:bg-slate-200 transition shrink-0"
                     defaultValue=""
                 >
-                    <option value="" disabled>+ Thêm Siêu Thị...</option>
+                    <option value="" disabled>+ Thêm ST...</option>
                     {availableStores.map(s => (
                         <option key={s.id || s.code} value={s.name}>
                             {s.name} ({s.code})
@@ -355,13 +355,13 @@ export default function ManualDataEntryModule({
                 </select>
             </div>
 
-            {/* TRẠNG THÁI TRỐNG: CHƯA CÓ SIÊU THỊ NÀO */}
+            {/* TRẠNG THÁI TRỐNG: CHƯA CÓ ST NÀO */}
             {storesData.length === 0 && (
                 <div className="p-6 bg-amber-50/80 border border-amber-200 rounded-2xl text-center space-y-3">
                     <AlertCircle className="w-8 h-8 text-amber-600 mx-auto" />
                     <p className="text-xs font-bold text-amber-900">
-                        Chưa có siêu thị nào trong bảng rà soát tạm thời.
-                        {existingRecordCount > 0 ? ` Ngày ${formatDate(reportDate)} đã có số liệu của ${existingRecordCount} ST trên Cloud.` : ' Vui lòng quét ảnh ở Tab 1 hoặc thêm siêu thị bằng nút bên trên.'}
+                        Chưa có ST nào trong bảng rà soát tạm thời.
+                        {existingRecordCount > 0 ? ` Ngày ${formatDate(reportDate)} đã có số liệu của ${existingRecordCount} ST trên Cloud.` : ' Vui lòng quét ảnh ở Tab 1 hoặc thêm ST bằng nút bên trên.'}
                     </p>
                     {onLoadFromCloud && existingRecordCount > 0 && (
                         <button
@@ -371,7 +371,7 @@ export default function ManualDataEntryModule({
                             className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black inline-flex items-center gap-1.5 shadow-sm transition cursor-pointer"
                         >
                             <RefreshCw className={`w-4 h-4 ${isLoadingExisting ? 'animate-spin' : ''}`} />
-                            <span>Nạp {existingRecordCount} Siêu Thị Từ Cloud Vào Bảng</span>
+                            <span>Nạp {existingRecordCount} ST Từ Cloud Vào Bảng</span>
                         </button>
                     )}
                 </div>
@@ -379,7 +379,7 @@ export default function ManualDataEntryModule({
 
             {activeStore && (
                 <div className="space-y-4 pt-1">
-                    {/* TÊN ĐẦY ĐỦ SIÊU THỊ */}
+                    {/* TÊN ĐẦY ĐỦ ST */}
                     <div className="bg-slate-50/90 border border-slate-200 rounded-2xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div className="space-y-0.5">
                             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">
@@ -493,7 +493,7 @@ export default function ManualDataEntryModule({
                         </div>
                     </div>
 
-                    {/* KHỐI 2: CÁC CHƯƠNG TRÌNH THI ĐUA LŨY KẾ CỦA SIÊU THỊ NÀY */}
+                    {/* KHỐI 2: CÁC CHƯƠNG TRÌNH THI ĐUA LŨY KẾ CỦA ST NÀY */}
                     <div className="border border-slate-200 rounded-2xl p-3.5 space-y-3">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-100">
                             <div className="flex items-center gap-1.5 text-xs font-black text-purple-900 uppercase tracking-wide">
@@ -507,7 +507,7 @@ export default function ManualDataEntryModule({
                                         type="button"
                                         onClick={() => onOpenQuickEmulationModal(activeStore?.storeRawName)}
                                         className="px-2.5 py-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-[11px] font-bold flex items-center gap-1 shadow-2xs transition cursor-pointer"
-                                        title="Nạp nhanh thi đua thẻ mobile cho siêu thị này (hỗ trợ Ctrl+V hoặc kéo thả ảnh)"
+                                        title="Nhập Thi đua cho ST này (hỗ trợ Ctrl+V hoặc kéo thả ảnh)"
                                     >
                                         <Camera className="w-3.5 h-3.5" />
                                         <span>📸 Quét Thẻ Mobile (Ctrl+V)</span>

@@ -74,7 +74,7 @@ export const NAVIGATION_GROUPS: NavGroup[] = [
         bgClass: 'bg-blue-100 text-blue-700',
         items: [
             {
-                name: 'BC Cụm Siêu Thị',
+                name: 'BC Cụm ST',
                 path: '/bao-cao-cum-sieu-thi',
                 icon: Store,
                 badge: '💎 11 Cột'
@@ -271,7 +271,7 @@ export const NAVIGATION_GROUPS: NavGroup[] = [
         bgClass: 'bg-purple-100 text-purple-700',
         items: [
             {
-                name: 'Cấu hình Siêu thị & NV',
+                name: 'Cấu hình ST & NV',
                 path: '/cau-hinh-sieu-thi-nhan-vien',
                 icon: Store,
                 badge: '👑 Boss'
@@ -293,7 +293,7 @@ export const NAVIGATION_GROUPS: NavGroup[] = [
                 badge: '🛡️ Admin'
             },
             {
-                name: 'Phân quyền siêu thị',
+                name: 'Phân quyền ST',
                 path: '/phan-quyen-sieu-thi',
                 icon: Building2,
                 badge: '🏢 Mới'

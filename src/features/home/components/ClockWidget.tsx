@@ -77,7 +77,7 @@ export default function ClockWidget() {
                         {greeting.sub}
                     </p>
 
-                    {/* Huy hiệu thông tin người dùng & Siêu thị */}
+                    {/* Huy hiệu thông tin người dùng & ST */}
                     {isAuthenticated && (
                         <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
                             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-white/10 text-white font-bold backdrop-blur-xs border border-white/15">

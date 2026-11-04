@@ -50,7 +50,7 @@ export function AppRoutes() {
                 <Route element={<MainLayout />}>
                     <Route path="/" element={<Navigate to="/bc-thang/tong-quan" replace />} />
 
-                    {/* Phân hệ Báo Cáo Cụm Siêu Thị (Bảng 11 Cột) */}
+                    {/* Phân hệ Báo Cáo Cụm ST (Bảng 11 Cột) */}
                     <Route path="/bao-cao-cum-sieu-thi" element={<ClusterReportPage />} />
 
                     {/* Phân hệ BC Tháng */}

@@ -53,7 +53,7 @@ export default function RolePermissionModal({ isOpen, onClose, onSuccess }: Prop
         }).catch(err => console.warn('Lỗi tải data trong RolePermissionModal:', err));
     }, [isOpen, isActualAdmin]);
 
-    // Danh sách nhân viên theo siêu thị đang chọn
+    // Danh sách nhân viên theo ST đang chọn
     const filteredEmployees = useMemo(() => {
         const currentStore = impersonationState.store_name || currentUser.store_name;
         if (!currentStore || currentStore === 'all') {
@@ -131,7 +131,7 @@ export default function RolePermissionModal({ isOpen, onClose, onSuccess }: Prop
                         </div>
                         <div>
                             <h3 className="font-extrabold text-base leading-tight">Phân Quyền & Giả Lập Testing</h3>
-                            <p className="text-xs text-blue-200">Kiểm thử vai trò, siêu thị và phân quyền nhân sự</p>
+                            <p className="text-xs text-blue-200">Kiểm thử vai trò, ST và phân quyền nhân sự</p>
                         </div>
                     </div>
                     <button
@@ -143,7 +143,7 @@ export default function RolePermissionModal({ isOpen, onClose, onSuccess }: Prop
                 </div>
 
                 <div className="p-5 space-y-4 overflow-y-auto flex-1">
-                    {/* Thông tin vai trò hiện tại & Siêu thị */}
+                    {/* Thông tin vai trò hiện tại & ST */}
                     <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
                         <div className="flex items-center justify-between">
                             <div>
@@ -173,7 +173,7 @@ export default function RolePermissionModal({ isOpen, onClose, onSuccess }: Prop
 
                         {currentUser.store_name && (
                             <div className="pt-2 border-t border-slate-200 flex items-center justify-between text-xs">
-                                <span className="text-slate-500 font-medium">Siêu thị làm việc:</span>
+                                <span className="text-slate-500 font-medium">ST làm việc:</span>
                                 <span className="font-extrabold text-blue-700 truncate max-w-[240px]">{currentUser.store_name}</span>
                             </div>
                         )}
@@ -256,24 +256,24 @@ export default function RolePermissionModal({ isOpen, onClose, onSuccess }: Prop
                         </div>
                     </div>
 
-                    {/* 2. Chọn Siêu thị & Chọn Nhân viên kiểm thử */}
+                    {/* 2. Chọn ST & Chọn Nhân viên kiểm thử */}
                     <div className="p-3 bg-indigo-50/60 border border-indigo-200 rounded-xl space-y-2.5">
                         <span className="text-xs font-bold text-indigo-950 flex items-center gap-1.5">
                             <FlaskConical className="w-3.5 h-3.5 text-indigo-700" />
-                            <span>2. Mô phỏng Siêu Thị & Nhân Viên kiểm thử:</span>
+                            <span>2. Mô phỏng ST & Nhân Viên kiểm thử:</span>
                         </span>
 
                         <div className="space-y-2">
                             <div>
                                 <label className="text-[11px] font-semibold text-slate-600 block mb-1">
-                                    🏢 Siêu thị kiểm thử:
+                                    🏢 ST kiểm thử:
                                 </label>
                                 <select
                                     value={impersonationState.store_name || currentUser.store_name || ''}
                                     onChange={e => handleStoreSelect(e.target.value)}
                                     className="w-full text-xs font-bold p-2 bg-white border border-slate-200 rounded-lg text-slate-800 outline-hidden focus:ring-2 focus:ring-indigo-500 cursor-pointer"
                                 >
-                                    <option value="">🏢 Mọi siêu thị (Mặc định)</option>
+                                    <option value="">🏢 Mọi ST (Mặc định)</option>
                                     {stores.map(s => (
                                         <option key={s.id || s.name} value={s.name}>
                                             {s.name}

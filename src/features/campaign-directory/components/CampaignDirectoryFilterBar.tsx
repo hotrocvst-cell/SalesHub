@@ -19,7 +19,7 @@ import {
 import type { CampaignOrientation, CampaignCalculationMethod } from '../types';
 
 interface Props {
-    // Siêu thị & Mục tiêu (Mục 10 - GEMINI.md)
+    // ST & Mục tiêu (Mục 10 - GEMINI.md)
     selectedStore: string;
     onSelectStore: (store: string) => void;
     storeOptions: string[];
@@ -94,27 +94,27 @@ export default function CampaignDirectoryFilterBar({
 }: Props) {
     return (
         <div className="bg-white rounded-2xl sm:rounded-3xl border border-slate-200 p-3 sm:p-4 shadow-xs space-y-3 font-avo">
-            {/* DÒNG 1 (QUY CHUẨN MỤC 10 - GEMINI.MD): BỘ LỌC SIÊU THỊ / CỤM NẰM RIÊNG LẺ 1 DÒNG ĐẦU TIÊN KÈM CÔNG CỤ TỰ ĐỘNG CHỌN THEO MỤC TIÊU */}
+            {/* DÒNG 1 (QUY CHUẨN MỤC 10 - GEMINI.MD): BỘ LỌC ST / CỤM NẰM RIÊNG LẺ 1 DÒNG ĐẦU TIÊN KÈM CÔNG CỤ TỰ ĐỘNG CHỌN THEO MỤC TIÊU */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5 pb-2.5 border-b border-slate-100">
                 <div className="flex items-center gap-2 flex-wrap">
-                    {/* Biểu tượng & Nhãn Siêu thị */}
+                    {/* Biểu tượng & Nhãn ST */}
                     <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700 shrink-0">
                         <Store className="w-4 h-4 text-blue-600" />
                         <span className="uppercase tracking-wider text-[11px] font-extrabold text-slate-600">
-                            Siêu thị / Cụm:
+                            ST / Cụm:
                         </span>
                     </div>
 
-                    {/* Selector hoặc Badge Siêu Thị */}
+                    {/* Selector hoặc Badge ST */}
                     {isStoreSelectable ? (
                         <div className="relative">
                             <select
                                 value={selectedStore}
                                 onChange={e => onSelectStore(e.target.value)}
                                 className="appearance-none pl-3 pr-8 py-1.5 bg-blue-50/70 hover:bg-blue-100/70 border border-blue-200 rounded-xl text-xs font-black text-blue-900 cursor-pointer focus:bg-white focus:outline-hidden transition shadow-2xs"
-                                title="Chọn siêu thị để xem và tự động lấy các chương trình có khai báo mục tiêu"
+                                title="Chọn ST để xem và tự động lấy các chương trình có khai báo mục tiêu"
                             >
-                                <option value="all">🌐 Toàn Cụm Siêu Thị</option>
+                                <option value="all">🌐 Toàn Cụm ST</option>
                                 {storeOptions.map(st => (
                                     <option key={st} value={st}>
                                         🏪 {st}
@@ -155,7 +155,7 @@ export default function CampaignDirectoryFilterBar({
                                 ? 'bg-amber-50 text-amber-900 border-amber-300 font-black shadow-2xs'
                                 : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
                         }`}
-                        title="Bật để chỉ hiển thị các chương trình thi đua mà siêu thị này có khai báo chỉ tiêu mục tiêu"
+                        title="Bật để chỉ hiển thị các chương trình thi đua mà ST này có khai báo chỉ tiêu mục tiêu"
                     >
                         <input
                             type="checkbox"

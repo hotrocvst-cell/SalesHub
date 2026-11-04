@@ -38,7 +38,7 @@ export default function AdminTestingBar({ isOpen, onClose }: Props) {
     const [employees, setEmployees] = useState<EmployeeItem[]>([]);
     const [loadingData, setLoadingData] = useState<boolean>(false);
 
-    // Tải danh sách Siêu thị và Nhân viên từ hệ thống để phục vụ giả lập
+    // Tải danh sách ST và Nhân viên từ hệ thống để phục vụ giả lập
     useEffect(() => {
         if (!isActualAdmin) return;
         let isMounted = true;
@@ -66,7 +66,7 @@ export default function AdminTestingBar({ isOpen, onClose }: Props) {
         };
     }, [isActualAdmin]);
 
-    // Danh sách nhân viên được lọc theo siêu thị đang chọn mô phỏng
+    // Danh sách nhân viên được lọc theo ST đang chọn mô phỏng
     const filteredEmployees = useMemo(() => {
         const currentStore = impersonationState.store_name || currentUser.store_name;
         if (!currentStore || currentStore === 'all') {
@@ -79,12 +79,12 @@ export default function AdminTestingBar({ isOpen, onClose }: Props) {
 
     if (!isActualAdmin || !isOpen) return null;
 
-    // Xử lý khi Admin đổi Siêu thị kiểm thử
+    // Xử lý khi Admin đổi ST kiểm thử
     const handleStoreChange = (newStoreName: string) => {
         const storeVal = newStoreName === 'all' || !newStoreName ? undefined : newStoreName;
         setImpersonationStore(storeVal);
 
-        // Nếu nhân viên đang chọn không thuộc siêu thị mới, reset nhân viên để tránh sai lệch dữ liệu
+        // Nếu nhân viên đang chọn không thuộc ST mới, reset nhân viên để tránh sai lệch dữ liệu
         if (storeVal && impersonationState.employee_id) {
             const currentEmp = employees.find(e => e.employee_id === impersonationState.employee_id);
             if (currentEmp && !isStoreMatch(currentEmp.store_name, storeVal, stores)) {
@@ -121,7 +121,7 @@ export default function AdminTestingBar({ isOpen, onClose }: Props) {
                 role: currentUser.role === 'ADMIN' ? inferredRole : undefined
             });
 
-            // Tự động đồng bộ luôn Siêu thị của nhân viên đó nếu chưa khớp
+            // Tự động đồng bộ luôn ST của nhân viên đó nếu chưa khớp
             if (foundEmp.store_name) {
                 setImpersonationStore(foundEmp.store_name);
             }
@@ -157,12 +157,12 @@ export default function AdminTestingBar({ isOpen, onClose }: Props) {
                             )}
                         </div>
                         <p className="text-[10px] text-slate-300 leading-tight hidden sm:block">
-                            Chọn vai trò, siêu thị và nhân viên để kiểm thử giao diện & phân quyền dữ liệu tức thì
+                            Chọn vai trò, ST và nhân viên để kiểm thử giao diện & phân quyền dữ liệu tức thì
                         </p>
                     </div>
                 </div>
 
-                {/* 2. Bộ ba dropdown chọn nhanh: Vai trò, Siêu thị, Nhân viên */}
+                {/* 2. Bộ ba dropdown chọn nhanh: Vai trò, ST, Nhân viên */}
                 <div className="flex flex-wrap items-center gap-2">
                     {/* Chọn Vai trò (Role) */}
                     <div className="flex items-center bg-slate-800/90 border border-slate-700 hover:border-indigo-400 rounded-xl px-2.5 py-1.5 transition">
@@ -184,22 +184,22 @@ export default function AdminTestingBar({ isOpen, onClose }: Props) {
                             title="Chọn vai trò người dùng kiểm thử"
                         >
                             <option value="ADMIN" className="bg-slate-900 text-white">🛡️ Admin (Tối cao)</option>
-                            <option value="QUAN_LY" className="bg-slate-900 text-white">👑 Quản Lý Siêu Thị</option>
+                            <option value="QUAN_LY" className="bg-slate-900 text-white">👑 Quản Lý ST</option>
                             <option value="TRUONG_CA" className="bg-slate-900 text-white">⭐ Trưởng Ca</option>
                             <option value="NHAN_VIEN" className="bg-slate-900 text-white">👤 Nhân Viên Bán Hàng</option>
                         </select>
                     </div>
 
-                    {/* Chọn Siêu thị (Store) */}
+                    {/* Chọn ST (Store) */}
                     <div className="flex items-center bg-slate-800/90 border border-slate-700 hover:border-indigo-400 rounded-xl px-2.5 py-1.5 transition max-w-[220px]">
                         <Store className="w-3.5 h-3.5 text-amber-400 mr-1.5 shrink-0" />
                         <select
                             value={currentStore}
                             onChange={e => handleStoreChange(e.target.value)}
                             className="bg-transparent font-bold text-white text-xs outline-hidden cursor-pointer w-full truncate"
-                            title="Chọn siêu thị kiểm thử"
+                            title="Chọn ST kiểm thử"
                         >
-                            <option value="" className="bg-slate-900 text-white">🏢 Mọi siêu thị (Mặc định)</option>
+                            <option value="" className="bg-slate-900 text-white">🏢 Mọi ST (Mặc định)</option>
                             {stores.map(s => (
                                 <option key={s.id || s.name} value={s.name} className="bg-slate-900 text-white">
                                     {getShortStoreName(s.name)}

@@ -2,11 +2,11 @@
 
 ## 1. NGUYÊN TẮC THIẾT KẾ GIAO DIỆN & TỐI ƯU SMARTPHONE (MOBILE-FIRST UI CONVENTIONS)
 - **NGƯỜI DÙNG MỤC TIÊU LÀ SMARTPHONE (MOBILE-FIRST PERSPECTIVE)**:
-  - Đối tượng sử dụng chính là Quản lý siêu thị, Quản lý khu vực và Nhân viên xem báo cáo và ảnh báo cáo trực tiếp trên điện thoại thông minh (smartphone / Messaging App).
+  - Đối tượng sử dụng chính là Quản lý ST, Quản lý khu vực và Nhân viên xem báo cáo và ảnh báo cáo trực tiếp trên điện thoại thông minh (smartphone / Messaging App).
   - Mọi thiết kế giao diện, thẻ KPI, bảng biểu và tính năng phải đặt trải nghiệm đọc và tương tác trên smartphone làm ưu tiên số 1.
 - **BỐ CỤC TỊNH TIẾN THEO CHIỀU DỌC (VERTICAL PROGRESSION / PORTRAIT FLOW)**:
   - Báo cáo và giao diện phải được cấu trúc tịnh tiến tự nhiên theo trục dọc, tối ưu hóa cho thao tác cuộn (scroll) trên màn hình dọc smartphone.
-  - Tiêu chí thiết kế: Người dùng chỉ cần lướt dọc từ trên xuống dưới là có thể dễ dàng nắm bắt trọn vẹn bức tranh tổng quan của siêu thị/nhân sự/ngành hàng mà không bị rối mắt hay phải xoay ngang màn hình.
+  - Tiêu chí thiết kế: Người dùng chỉ cần lướt dọc từ trên xuống dưới là có thể dễ dàng nắm bắt trọn vẹn bức tranh tổng quan của ST/nhân sự/ngành hàng mà không bị rối mắt hay phải xoay ngang màn hình.
 - **TỐI ƯU HÓA KHÔNG GIAN CHIỀU NGANG & CO GỌN CỘT DỮ LIỆU (HORIZONTAL COMPACTNESS)**:
   - Tuyệt đối không lãng phí không gian chiều ngang. Tối ưu padding, margin của các container để tận dụng tối đa bề ngang hiển thị.
   - **Độ rộng các cột dữ liệu (Column Width Optimization)**:
@@ -64,7 +64,7 @@
   - Tất cả các trang, phân hệ hoặc tính năng mới và cũ có liên quan đến:
     + Cài đặt hệ thống, cấu hình tham số, định lượng, chỉ tiêu thi đua / kinh doanh.
     + Quản lý mã voucher, coupon, khuyến mãi, danh mục nghiệp vụ.
-    + Phân quyền, danh sách tài khoản, thông tin nhân sự và siêu thị.
+    + Phân quyền, danh sách tài khoản, thông tin nhân sự và ST.
     + Nhật ký thao tác, lịch sử cấp phát dữ liệu.
     **BẮT BUỘC PHẢI LIÊN KẾT VÀ LƯU TRỮ TRỰC TIẾP TRÊN SUPABASE (PostgreSQL Cloud)**.
 - **TUYỆT ĐỐI KHÔNG LƯU THUẦN LOCALSTORAGE CHO DỮ LIỆU DÙNG CHUNG**:
@@ -80,7 +80,7 @@
 
 ## 6. QUY CHUẨN ĐƠN VỊ TIỀN TỆ & DOANH THU TOÀN HỆ THỐNG (MILLION-UNIT STANDARD)
 - **ĐỒNG NHẤT ĐƠN VỊ TRIỆU ĐỒNG CHO TẤT CẢ DOANH THU VÀ TARGET**:
-  - Mọi dữ liệu doanh thu (Doanh thu quy đổi, Doanh thu thực, Doanh thu trả góp), chỉ tiêu (Target siêu thị, Target nhân sự) trên toàn bộ hệ thống SalesHub đều được lưu trữ, nhập liệu và tính toán theo đơn vị **TRIỆU ĐỒNG (rút gọn phần triệu)**.
+  - Mọi dữ liệu doanh thu (Doanh thu quy đổi, Doanh thu thực, Doanh thu trả góp), chỉ tiêu (Target ST, Target nhân sự) trên toàn bộ hệ thống SalesHub đều được lưu trữ, nhập liệu và tính toán theo đơn vị **TRIỆU ĐỒNG (rút gọn phần triệu)**.
   - Ví dụ chuẩn:
     + Doanh thu thực tế: `100,000,000 VNĐ` -> Lưu và hiển thị: `100` (hoặc `100 tr`).
     + Target giao: `100,000,000 VNĐ` -> Lưu và hiển thị: `100` (hoặc `100 tr`).
@@ -111,12 +111,12 @@
   - Sử dụng hook chuẩn `useExcelExportPermission(pagePath)` để kiểm soát hiển thị nút Excel trên từng giao diện báo cáo/danh mục.
 
 ## 10. QUY CHUẨN BỐ CỤC BỘ LỌC BÁO CÁO (FILTER BAR CONVENTION - STORE/CLUSTER FIRST ON DEDICATED ROW)
-- **ƯU TIÊN BỘ LỌC SIÊU THỊ / CỤM Ở VỊ TRÍ ĐẦU TIÊN & NẰM RIÊNG LẺ 1 DÒNG (DEDICATED FIRST ROW)**:
+- **ƯU TIÊN BỘ LỌC ST / CỤM Ở VỊ TRÍ ĐẦU TIÊN & NẰM RIÊNG LẺ 1 DÒNG (DEDICATED FIRST ROW)**:
   - Trên tất cả các trang báo cáo, phân hệ hoặc bảng điều khiển có thanh bộ lọc:
-    + Bộ lọc xem theo **Siêu thị / Cụm** (Store / Cluster) **BẮT BUỘC ĐẶT Ở VỊ TRÍ LỰA CHỌN ĐẦU TIÊN VÀ NẰM RIÊNG LẺ TRÊN 1 DÒNG ĐỘC LẬP (DÒNG ĐẦU TIÊN)**.
+    + Bộ lọc xem theo **ST / Cụm** (Store / Cluster) **BẮT BUỘC ĐẶT Ở VỊ TRÍ LỰA CHỌN ĐẦU TIÊN VÀ NẰM RIÊNG LẺ TRÊN 1 DÒNG ĐỘC LẬP (DÒNG ĐẦU TIÊN)**.
     + Có thể kết hợp cùng dòng này với các nút hành động (Làm mới, Xuất ảnh, Xuất Excel nếu được cấp quyền) ở góc phải để tối ưu diện tích.
-    + Sau dòng Siêu thị / Cụm mới đến các tiêu chí bộ lọc khác (Từ ngày - Đến ngày, Lịch tuần, Kỳ tháng, Presets xem nhanh, Chế độ xem, Chỉ tiêu, Tìm kiếm,...).
-  - **Mục đích**: Người dùng (Quản lý khu vực, Quản lý siêu thị, Nhân viên) luôn chủ động xác định đúng phạm vi đơn vị (siêu thị/cụm) mình đang phụ trách trước tiên, trực quan, không bị lẫn với các tiêu chí thời gian hay tùy chọn phức tạp.
+    + Sau dòng ST / Cụm mới đến các tiêu chí bộ lọc khác (Từ ngày - Đến ngày, Lịch tuần, Kỳ tháng, Presets xem nhanh, Chế độ xem, Chỉ tiêu, Tìm kiếm,...).
+  - **Mục đích**: Người dùng (Quản lý khu vực, Quản lý ST, Nhân viên) luôn chủ động xác định đúng phạm vi đơn vị (ST/cụm) mình đang phụ trách trước tiên, trực quan, không bị lẫn với các tiêu chí thời gian hay tùy chọn phức tạp.
 
 ## 11. QUY CHUẨN HIỂN THỊ CỘT NHÂN VIÊN TRONG BẢNG DỮ LIỆU (EMPLOYEE COLUMN STANDARD)
 - **GỘP CHUNG MÃ NV VÀ TÊN NHÂN VIÊN TRÊN CÙNG MỘT CỘT (SINGLE COMBINED COLUMN)**:
@@ -142,7 +142,7 @@
 ## 12. QUY CHUẨN NÚT VÀ MODAL MÃ LỆNH SQL SUPABASE CHỈ KHẢ DỤNG VỚI ADMIN (ADMIN-ONLY SQL ACCESS RULE)
 - **CHỈ HIỂN THỊ NÚT MÃ SQL CHO TÀI KHOẢN ADMIN (ADMIN ONLY)**:
   - Mọi nút bấm, biểu tượng (icon `<Code />`, `<Database />`), hoặc liên kết mở Modal xem/sao chép mã lệnh SQL Supabase (`showSqlModal`, mã DDL `CREATE TABLE`, lệnh kích hoạt Cloud...) trên toàn bộ hệ thống (trên thanh công cụ, trong banner cảnh báo trạng thái lưu trữ, hoặc trong các modal cấu hình) **BẮT BUỘC CHỈ KHẢ DỤNG VÀ CHỈ HIỂN THỊ VỚI TÀI KHOẢN ADMIN** (`isAdmin` hoặc vai trò `ADMIN`).
-  - Các tài khoản người dùng khác (Quản lý khu vực, Quản lý siêu thị, Trưởng ca, Nhân viên) tuyệt đối không nhìn thấy các nút mã SQL này, tránh làm lộ cấu trúc cơ sở dữ liệu và tránh gây nhầm lẫn/hoang mang trong vận hành hàng ngày.
+  - Các tài khoản người dùng khác (Quản lý khu vực, Quản lý ST, Trưởng ca, Nhân viên) tuyệt đối không nhìn thấy các nút mã SQL này, tránh làm lộ cấu trúc cơ sở dữ liệu và tránh gây nhầm lẫn/hoang mang trong vận hành hàng ngày.
   - Điều kiện hiển thị và điều kiện render Modal phải luôn kiểm tra kèm `isAdmin` (ví dụ: `{isAdmin && (<button onClick={() => setShowSqlModal(true)}>...</button>)}` và `{showSqlModal && isAdmin && (<Modal ... />)}`).
 
 ## 13. QUY CHUẨN FONT CHỮ TOÀN HỆ THỐNG (SYSTEM FONT CONVENTIONS)
@@ -152,5 +152,17 @@
 - **NGOẠI LỆ ĐẶC BIỆT DÀNH CHO BẢNG BÁO CÁO & XUẤT ẢNH: FONT UTM-AVO (UTM-AVO EXCEPTION FOR REPORTS)**:
   - Các module, bảng dữ liệu kết quả kinh doanh và vùng xuất ảnh đã được cấu hình font **UTM-Avo** (`.report-table`, `[data-report-table="true"]`, `.font-avo`) **TUYỆT ĐỐI GIỮ NGUYÊN FONT UTM-AVO**.
   - Font UTM-Avo mang tính nhận diện thương hiệu đặc thù cho các báo cáo xuất gửi Messaging App, đảm bảo số liệu kinh doanh hiển thị rõ nét, cân đối và tương thích tuyệt đối khi render canvas/hình ảnh.
+
+## 14. QUY CHUẨN DANH XƯNG & TỪ NGỮ HỆ THỐNG (SYSTEM TERMINOLOGY & NAMING CONVENTIONS)
+- **THAY THẾ TOÀN BỘ TỪ "SIÊU THỊ" BẰNG "ST" (STORE ABBREVIATION STANDARD)**:
+  - Trên toàn bộ giao diện hệ thống SalesHub (tiêu đề trang, thẻ KPI, thanh bộ lọc, modal, bảng biểu, thông báo toast, placeholder, tooltip, nút bấm, tài liệu, báo cáo xuất ảnh):
+    + Tuyệt đối **KHÔNG SỬ DỤNG** từ *"siêu thị"*, *"Siêu thị"*, *"Siêu Thị"*, *"SIÊU THỊ"*.
+    + **BẮT BUỘC THAY THẾ TOÀN BỘ BẰNG "ST"** (ví dụ: *"Cụm ST"*, *"Mã ST"*, *"Tên ST"*, *"Chọn ST"*, *"Phân quyền ST"*, *"QLST"*, *"Toàn Cụm ST"*, *"Thi Đua Từng ST"*).
+  - **Mục đích**: Tối ưu tối đa không gian hiển thị trên màn hình dọc Smartphone (Mobile-First UI), giúp các tiêu đề, thẻ badge và cột số liệu luôn khít khao, không bị tràn dòng hay chiếm diện tích chiều ngang vô nghĩa.
+- **TUYỆT ĐỐI KHÔNG SỬ DỤNG TÊN CÁC THƯƠNG HIỆU / CHUỖI CỤ THỂ (BRAND-NEUTRAL RULE)**:
+  - Tuyệt đối **KHÔNG SỬ DỤNG** các từ ngữ, tên gọi chỉ đích danh các thương hiệu / chuỗi cửa hàng thương mại:
+    + *"Thế giới di động"*, *"Thế Giới Di Động"*, *"Điện máy xanh"*, *"Điện Máy Xanh"*, *"Topzone"*, *"TopZone"*, *"TGDD"*, *"DMX"*, *"BHX"*, *"An Khang"*, *"AVAKids"*, v.v. trong tất cả các văn bản giao diện, thông báo, nhãn danh mục, hướng dẫn hoặc ghi chú của hệ thống.
+  - **Thay thế bằng các định danh trung lập mang tính quy chuẩn**: *"Hệ thống"*, *"Cụm"*, *"ST"*, *"Đơn vị"*, *"Dashboard BI"*, *"Báo cáo kinh doanh"*.
+
 
 

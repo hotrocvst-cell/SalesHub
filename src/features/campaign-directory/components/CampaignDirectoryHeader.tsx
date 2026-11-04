@@ -101,7 +101,7 @@ export default function CampaignDirectoryHeader({
                         Cẩm Nang & Tra Cứu Chương Trình Thi Đua
                     </h1>
                     <p className="text-xs text-slate-500 font-medium">
-                        Tra cứu thể lệ, định hướng, cách tính và các cơ hội khuyến mãi (CTKM) áp dụng cho siêu thị và nhân viên.
+                        Tra cứu thể lệ, định hướng, cách tính và các cơ hội khuyến mãi (CTKM) áp dụng cho ST và nhân viên.
                     </p>
                 </div>
 

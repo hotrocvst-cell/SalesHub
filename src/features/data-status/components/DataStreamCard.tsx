@@ -115,7 +115,7 @@ export default function DataStreamCard({ stream }: DataStreamCardProps) {
                 {/* Độ phủ hoặc Cập nhật */}
                 <div className="p-2 rounded-xl bg-slate-50/80 border border-slate-200/70">
                     <span className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">
-                        {stream.category === 'store' ? 'Độ phủ siêu thị' : 'Thời gian ghi nhận'}
+                        {stream.category === 'store' ? 'Độ phủ ST' : 'Thời gian ghi nhận'}
                     </span>
                     <div className="font-extrabold text-slate-800 truncate">
                         {stream.category === 'store' ? (

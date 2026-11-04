@@ -79,7 +79,7 @@ export default function RealtimeDataUpdateModal({
     const [ocrError, setOcrError] = useState<string>('');
     const [screenshotTimestamp, setScreenshotTimestamp] = useState<string>('');
 
-    // 4. Dữ liệu siêu thị sau trích xuất / nhập tay
+    // 4. Dữ liệu ST sau trích xuất / nhập tay
     const [storesData, setStoresData] = useState<StoreReportingData[]>([]);
     const [isSaving, setIsSaving] = useState<boolean>(false);
     const [modalToast, setModalToast] = useState<string>('');
@@ -147,7 +147,7 @@ export default function RealtimeDataUpdateModal({
                 setIsQuotaExceeded(false);
                 setProgressPercent(100);
                 setProgressText('Trích xuất hoàn tất! Đang chuyển sang bảng rà soát...');
-                showToast(`✅ Đã bóc tách thành công số liệu ${result.stores.length} siêu thị!`);
+                showToast(`✅ Đã bóc tách thành công số liệu ${result.stores.length} ST!`);
                 setTimeout(() => {
                     setIsExtracting(false);
                     setActiveTab('manual');
@@ -184,7 +184,7 @@ export default function RealtimeDataUpdateModal({
     // Lưu phiên Realtime lên Supabase Cloud
     const handleSaveToCloud = async () => {
         if (!storesData || storesData.length === 0) {
-            showToast('⚠️ Chưa có dữ liệu siêu thị để lưu!');
+            showToast('⚠️ Chưa có dữ liệu ST để lưu!');
             return;
         }
 
@@ -197,7 +197,7 @@ export default function RealtimeDataUpdateModal({
                 currentUserName
             );
 
-            // Kiểm tra phân quyền nạp và lưu dữ liệu siêu thị
+            // Kiểm tra phân quyền nạp và lưu dữ liệu ST
             if (!effectiveIsAdmin) {
                 const unauthorizedStores = sessions.filter(s =>
                     !canAccessStore(s.store_name) &&
@@ -205,7 +205,7 @@ export default function RealtimeDataUpdateModal({
                 );
                 if (unauthorizedStores.length > 0) {
                     const unauthorizedNames = unauthorizedStores.map(s => formatStoreDisplayName(s.store_name)).join(', ');
-                    showToast(`❌ Bạn không có quyền nạp/lưu dữ liệu cho các siêu thị: ${unauthorizedNames}. Vui lòng chỉ nạp cho siêu thị bạn được phân quyền phụ trách!`);
+                    showToast(`❌ Bạn không có quyền nạp/lưu dữ liệu cho các ST: ${unauthorizedNames}. Vui lòng chỉ nạp cho ST bạn được phân quyền phụ trách!`);
                     setIsSaving(false);
                     return;
                 }
@@ -223,7 +223,7 @@ export default function RealtimeDataUpdateModal({
                 return;
             }
 
-            showToast(`🎉 Đã lưu thành công phiên Realtime cho ${sessions.length} siêu thị lên Cloud!`);
+            showToast(`🎉 Đã lưu thành công phiên Realtime cho ${sessions.length} ST lên Cloud!`);
             onSavedSuccessfully(sessions);
             setTimeout(() => {
                 setIsSaving(false);
@@ -253,7 +253,7 @@ export default function RealtimeDataUpdateModal({
                                 </span>
                             </h2>
                             <p className="text-xs text-slate-400 mt-0.5">
-                                Mỗi siêu thị lưu duy nhất 1 phiên mới nhất
+                                Mỗi ST lưu duy nhất 1 phiên mới nhất
                             </p>
                         </div>
                     </div>
@@ -374,8 +374,8 @@ export default function RealtimeDataUpdateModal({
                 <div className="bg-slate-50 p-3.5 sm:px-5 border-t border-slate-200 flex items-center justify-between flex-wrap gap-2">
                     <div className="text-xs text-slate-500">
                         {storesData.length > 0
-                            ? `Đã nạp ${storesData.length} siêu thị sẵn sàng đẩy lên Cloud`
-                            : 'Chưa có số liệu siêu thị'}
+                            ? `Đã nạp ${storesData.length} ST sẵn sàng đẩy lên Cloud`
+                            : 'Chưa có số liệu ST'}
                     </div>
 
                     <div className="flex items-center gap-2">

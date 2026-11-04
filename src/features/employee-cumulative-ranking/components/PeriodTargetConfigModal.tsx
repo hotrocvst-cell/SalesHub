@@ -125,11 +125,11 @@ export default function PeriodTargetConfigModal({
         }));
     };
 
-    // Tiện ích: Phân bổ đều từ Target siêu thị
+    // Tiện ích: Phân bổ đều từ Target ST
     const handleDistributeEvenly = () => {
         const storeTargetMillion = parseFloat(storeTargetInMillion) || 0;
         if (storeTargetMillion <= 0 || employees.length === 0) {
-            showToast('⚠️ Vui lòng nhập Target Siêu thị trước khi phân bổ');
+            showToast('⚠️ Vui lòng nhập Target ST trước khi phân bổ');
             return;
         }
 
@@ -291,10 +291,10 @@ export default function PeriodTargetConfigModal({
                             />
                         </div>
 
-                        {/* TARGET SIÊU THỊ TRONG GIAI ĐOẠN */}
+                        {/* TARGET ST TRONG GIAI ĐOẠN */}
                         <div>
                             <label className="block text-[11px] font-bold text-slate-700 mb-1 flex items-center justify-between">
-                                <span>Target Siêu thị (Triệu VNĐ):</span>
+                                <span>Target ST (Triệu VNĐ):</span>
                                 <span className="text-[10px] text-indigo-600 font-medium">
                                     Tổng NV: {totalEmpTargetMillion.toFixed(1)} tr
                                 </span>
@@ -316,7 +316,7 @@ export default function PeriodTargetConfigModal({
                         </div>
                         <div className="text-[11px] text-slate-500 flex items-center gap-1.5 font-medium">
                             <StoreIcon className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                            <span>ST: <strong>{selectedStore === 'all' ? 'Tất cả siêu thị' : selectedStore}</strong></span>
+                            <span>ST: <strong>{selectedStore === 'all' ? 'Tất cả ST' : selectedStore}</strong></span>
                         </div>
                     </div>
 
@@ -421,7 +421,7 @@ export default function PeriodTargetConfigModal({
                                 {employees.length === 0 ? (
                                     <tr>
                                         <td colSpan={3} className="px-3 py-6 text-center text-slate-400 italic">
-                                            Không có danh sách nhân sự của siêu thị này.
+                                            Không có danh sách nhân sự của ST này.
                                         </td>
                                     </tr>
                                 ) : (

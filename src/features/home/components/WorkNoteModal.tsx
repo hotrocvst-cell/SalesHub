@@ -62,7 +62,7 @@ const TASK_TYPE_OPTIONS: Array<{ key: WorkTaskType; label: string; icon: string 
 ];
 
 const TARGET_ROLE_OPTIONS: Array<{ key: TargetRoleScope; label: string; icon: string; desc: string }> = [
-    { key: 'ALL', label: 'Toàn siêu thị (Tất cả)', icon: '👥', desc: 'Mọi nhân sự đều thấy' },
+    { key: 'ALL', label: 'Toàn ST (Tất cả)', icon: '👥', desc: 'Mọi nhân sự đều thấy' },
     { key: 'QL_TC', label: 'Quản lý & Trưởng ca', icon: '⭐', desc: 'Chỉ cấp quản lý & điều hành' },
     { key: 'QUAN_LY', label: 'Chỉ Quản lý (QL)', icon: '👑', desc: 'Bảo mật riêng cấp Quản lý' },
     { key: 'TRUONG_CA', label: 'Chỉ Trưởng ca (TC)', icon: '🛡️', desc: 'Giao việc cho Trưởng ca' },
@@ -510,7 +510,7 @@ export default function WorkNoteModal({
                                 />
                             </div>
 
-                            {/* 7. Phạm vi áp dụng siêu thị & Nút Lưu */}
+                            {/* 7. Phạm vi áp dụng ST & Nút Lưu */}
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-slate-200">
                                 <div className="flex items-center gap-2">
                                     <span className="text-xs font-bold text-slate-600 shrink-0">Áp dụng cho:</span>
@@ -522,7 +522,7 @@ export default function WorkNoteModal({
                                             className="pl-7 pr-4 py-1.5 rounded-xl bg-white border border-slate-300 text-xs font-bold text-slate-800 outline-none cursor-pointer max-w-[240px] truncate"
                                         >
                                             <option value={ALL_ASSIGNED_STORE_KEY}>
-                                                🏢 Toàn nhóm siêu thị phụ trách
+                                                🏢 Toàn nhóm ST phụ trách
                                             </option>
                                             {(currentUser.role === 'ADMIN' ? availableStores.map(s => s.name) : userAccessibleStores).map((storeName) => (
                                                 <option key={storeName} value={storeName}>
@@ -636,7 +636,7 @@ export default function WorkNoteModal({
 
                                             <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1.5 border-t border-slate-100 flex-wrap gap-2">
                                                 <span className="font-bold text-slate-600">
-                                                    🏢 {note.store_name === ALL_ASSIGNED_STORE_KEY ? 'Toàn nhóm siêu thị' : note.store_name}
+                                                    🏢 {note.store_name === ALL_ASSIGNED_STORE_KEY ? 'Toàn nhóm ST' : note.store_name}
                                                 </span>
                                                 <span>Tạo bởi: <b>{note.created_by_name}</b> ({note.created_by_role})</span>
                                             </div>

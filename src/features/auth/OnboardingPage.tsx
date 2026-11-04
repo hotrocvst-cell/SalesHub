@@ -60,7 +60,7 @@ export default function OnboardingPage() {
     const [errorMsg, setErrorMsg] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // Tải danh sách siêu thị đã có
+    // Tải danh sách ST đã có
     useEffect(() => {
         async function loadStores() {
             setIsLoadingStores(true);
@@ -80,13 +80,13 @@ export default function OnboardingPage() {
             return {
                 title: 'Quản trị viên (Admin Hệ Thống)',
                 badge: 'Admin Xét Duyệt',
-                description: 'Yêu cầu mở siêu thị hoặc vai trò Quản lý / Trưởng ca sẽ được gửi đến Admin để kiểm duyệt thẩm quyền và bảo mật.'
+                description: 'Yêu cầu mở ST hoặc vai trò Quản lý / Trưởng ca sẽ được gửi đến Admin để kiểm duyệt thẩm quyền và bảo mật.'
             };
         }
         return {
-            title: `Quản lý Siêu thị (${isNewStore ? newStoreName || 'Siêu thị mới' : selectedStoreName || 'Đã chọn'})`,
+            title: `Quản lý ST (${isNewStore ? newStoreName || 'ST mới' : selectedStoreName || 'Đã chọn'})`,
             badge: 'Quản Lý ST Xét Duyệt',
-            description: `Yêu cầu tài khoản Nhân viên kinh doanh sẽ được gửi trực tiếp đến Quản lý của siêu thị ${isNewStore ? newStoreName : selectedStoreName} để phê duyệt vào đội ngũ.`
+            description: `Yêu cầu tài khoản Nhân viên kinh doanh sẽ được gửi trực tiếp đến Quản lý của ST ${isNewStore ? newStoreName : selectedStoreName} để phê duyệt vào đội ngũ.`
         };
     };
 
@@ -99,12 +99,12 @@ export default function OnboardingPage() {
         const finalStoreName = isNewStore ? newStoreName.trim() : selectedStoreName.trim();
 
         if (!finalStoreName) {
-            setErrorMsg('Vui lòng chọn hoặc nhập tên siêu thị làm việc!');
+            setErrorMsg('Vui lòng chọn hoặc nhập tên ST làm việc!');
             return;
         }
 
         if (isNewStore && !newStoreCode.trim()) {
-            setErrorMsg('Vui lòng nhập Mã siêu thị (ví dụ: 10335, ST_VTA)!');
+            setErrorMsg('Vui lòng nhập Mã ST (ví dụ: 10335, ST_VTA)!');
             return;
         }
 
@@ -164,7 +164,7 @@ export default function OnboardingPage() {
                         Chào mừng, <span className="text-blue-400">{currentUser.full_name}</span>!
                     </h1>
                     <p className="text-xs sm:text-sm text-slate-400 max-w-lg mx-auto">
-                        Vui lòng chọn vai trò mong muốn và siêu thị bạn đang công tác để hệ thống gửi yêu cầu xét duyệt phân quyền.
+                        Vui lòng chọn vai trò mong muốn và ST bạn đang công tác để hệ thống gửi yêu cầu xét duyệt phân quyền.
                     </p>
                 </div>
 
@@ -202,7 +202,7 @@ export default function OnboardingPage() {
                                         {selectedRole === 'QUAN_LY' && <CheckCircle2 className="w-5 h-5 text-amber-600" />}
                                     </div>
                                     <div>
-                                        <div className="font-black text-sm text-slate-900">Quản Lý Siêu Thị</div>
+                                        <div className="font-black text-sm text-slate-900">Quản Lý ST</div>
                                         <div className="text-[11px] text-slate-500 mt-0.5">
                                             Điều hành toàn diện, giao chỉ tiêu &amp; duyệt nhân sự
                                         </div>
@@ -259,11 +259,11 @@ export default function OnboardingPage() {
                             </div>
                         </div>
 
-                        {/* 2. CHỌN SIÊU THỊ HOẶC KHAI BÁO MỚI */}
+                        {/* 2. CHỌN ST HOẶC KHAI BÁO MỚI */}
                         <div className="space-y-3">
                             <div className="flex items-center justify-between">
                                 <label className="block text-xs font-black uppercase tracking-wider text-slate-700">
-                                    2. Đơn vị Siêu thị công tác: <span className="text-rose-500">*</span>
+                                    2. Đơn vị ST công tác: <span className="text-rose-500">*</span>
                                 </label>
 
                                 <button
@@ -274,7 +274,7 @@ export default function OnboardingPage() {
                                     }`}
                                 >
                                     <PlusCircle className="w-4 h-4" />
-                                    <span>{isNewStore ? 'Chọn siêu thị có sẵn' : 'Khai báo siêu thị mới'}</span>
+                                    <span>{isNewStore ? 'Chọn ST có sẵn' : 'Khai báo ST mới'}</span>
                                 </button>
                             </div>
 
@@ -284,18 +284,18 @@ export default function OnboardingPage() {
                                         stores={stores}
                                         value={selectedStoreName}
                                         onChange={setSelectedStoreName}
-                                        placeholder="-- Nhập mã hoặc tên siêu thị để tìm kiếm --"
+                                        placeholder="-- Nhập mã hoặc tên ST để tìm kiếm --"
                                         disabled={isLoadingStores}
                                     />
                                     <p className="text-[11px] text-slate-500">
-                                        💡 Gõ mã siêu thị (ví dụ: 10335) hoặc tên siêu thị để tìm nhanh. Nếu không tìm thấy, bấm <b>"Khai báo siêu thị mới"</b> ở trên.
+                                        💡 Gõ mã ST (ví dụ: 10335) hoặc tên ST để tìm nhanh. Nếu không tìm thấy, bấm <b>"Khai báo ST mới"</b> ở trên.
                                     </p>
                                 </div>
                             ) : (
                                 <div className="p-4 bg-amber-50/60 rounded-2xl border border-amber-200 space-y-3 animate-in fade-in duration-200">
                                     <div className="flex items-center gap-2 text-xs font-bold text-amber-900">
                                         <PlusCircle className="w-4 h-4 text-amber-600" />
-                                        <span>Đề xuất thêm mới siêu thị vào hệ thống:</span>
+                                        <span>Đề xuất thêm mới ST vào hệ thống:</span>
                                     </div>
 
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -315,7 +315,7 @@ export default function OnboardingPage() {
 
                                         <div>
                                             <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                                                Mã siêu thị (ERP/POS): <span className="text-rose-500">*</span>
+                                                Mã ST (ERP/POS): <span className="text-rose-500">*</span>
                                             </label>
                                             <input
                                                 type="text"
@@ -353,7 +353,7 @@ export default function OnboardingPage() {
                                     <div className="space-y-1">
                                         <span className="font-extrabold block">Bảo toàn &amp; Kế thừa dữ liệu ST:</span>
                                         <p className="text-[11px] text-blue-800 leading-relaxed">
-                                            Trong trường hợp siêu thị thay đổi Quản lý, tài khoản mới đăng ký theo siêu thị này sẽ tiếp tục sử dụng trọn vẹn toàn bộ dữ liệu kinh doanh, phiên cập nhật và mục tiêu nhân sự hiện tại của siêu thị.
+                                            Trong trường hợp ST thay đổi Quản lý, tài khoản mới đăng ký theo ST này sẽ tiếp tục sử dụng trọn vẹn toàn bộ dữ liệu kinh doanh, phiên cập nhật và mục tiêu nhân sự hiện tại của ST.
                                         </p>
                                     </div>
                                 </div>

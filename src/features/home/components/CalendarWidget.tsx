@@ -37,7 +37,7 @@ export default function CalendarWidget() {
     // Ref tham chiếu đến vùng hiển thị bảng công việc cần làm để scroll mượt
     const taskSectionRef = useRef<HTMLDivElement | null>(null);
 
-    // 1. Quản lý danh sách Siêu thị
+    // 1. Quản lý danh sách ST
     const [stores, setStores] = useState<StoreItem[]>([]);
     useEffect(() => {
         let isMounted = true;
@@ -49,7 +49,7 @@ export default function CalendarWidget() {
         return () => { isMounted = false; };
     }, []);
 
-    // Danh sách siêu thị người dùng được phân quyền phụ trách
+    // Danh sách ST người dùng được phân quyền phụ trách
     const userAccessibleStores = useMemo<string[]>(() => {
         if (isAdmin) {
             return stores.map(s => s.name);
@@ -60,7 +60,7 @@ export default function CalendarWidget() {
         return currentUser?.store_name ? [currentUser.store_name] : [];
     }, [isAdmin, currentUser, stores]);
 
-    // 2. Siêu thị đang được chọn lọc dữ liệu
+    // 2. ST đang được chọn lọc dữ liệu
     const [selectedStore, setSelectedStore] = useState<string>(() => {
         if (currentUser?.role === 'NHAN_VIEN' && currentUser?.store_name) {
             return currentUser.store_name;

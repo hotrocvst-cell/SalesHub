@@ -3,7 +3,7 @@ import type { VoucherItem } from '../types';
 import { formatDateTime } from '../../../core/lib/formatters';
 
 /**
- * Xuất toàn bộ dữ liệu tồn kho voucher của cụm siêu thị ra file Excel (.xlsx)
+ * Xuất toàn bộ dữ liệu tồn kho voucher của cụm ST ra file Excel (.xlsx)
  * Gồm 2 Sheet:
  * 1. Chi Tiết Mã Voucher: Toàn bộ danh sách mã chi tiết kèm thông tin cấp phát, đơn hàng, HSD
  * 2. Tổng Hợp Tồn Kho: Thống kê số lượng, giá trị theo từng chương trình và mệnh giá
@@ -13,7 +13,7 @@ export async function exportVoucherInventoryToExcel(params: {
     clusterName?: string;
     exportedBy?: string;
 }): Promise<void> {
-    const { vouchers, clusterName = 'Cụm Siêu Thị', exportedBy = 'Quản lý' } = params;
+    const { vouchers, clusterName = 'Cụm ST', exportedBy = 'Quản lý' } = params;
 
     const workbook = new ExcelJS.Workbook();
     workbook.creator = 'SalesHub Analytics';
@@ -59,7 +59,7 @@ export async function exportVoucherInventoryToExcel(params: {
         { header: 'Kho / Cụm Lưu Trữ', key: 'store_name', width: 26 },
         { header: 'Mã NV Nhận', key: 'claimed_by_id', width: 14 },
         { header: 'Tên NV Nhận', key: 'claimed_by_name', width: 22 },
-        { header: 'Siêu Thị Của NV', key: 'claimed_by_store', width: 26 },
+        { header: 'ST Của NV', key: 'claimed_by_store', width: 26 },
         { header: 'Mã Đơn Hàng', key: 'order_id', width: 18 },
         { header: 'Thời Điểm Cấp', key: 'claimed_at', width: 20 },
         { header: 'Thời Điểm Dùng', key: 'used_at', width: 20 },

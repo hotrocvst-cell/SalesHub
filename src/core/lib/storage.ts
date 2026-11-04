@@ -17,7 +17,7 @@ export interface EmployeeItem {
     id?: string;
     employee_id: string;      // Mã nhân viên
     full_name: string;        // Họ và tên
-    store_name: string;       // Tên siêu thị
+    store_name: string;       // Tên ST
     job_title?: string;       // Chức danh / Bộ phận
     role?: string;            // Vai trò: QUAN_LY | TRUONG_CA | NHAN_VIEN (hoặc Quản lý, Trưởng ca, Nhân viên)
     department?: string;      // Bộ phận: AIO, Tư vấn bán hàng, Thu ngân, Kho / Kỹ thuật...
@@ -74,11 +74,11 @@ export function parseEmployeeRoleAndDept(emp: Partial<EmployeeItem>): Normalized
 
 export interface StoreItem {
     id?: string;
-    code: string;             // Mã siêu thị (e.g. 10335, 111)
-    name: string;             // Tên siêu thị
+    code: string;             // Mã ST (e.g. 10335, 111)
+    name: string;             // Tên ST
     short_name?: string;       // Tên rút gọn
     address?: string;         // Địa chỉ
-    brand?: string;           // Thương hiệu (TGDĐ / ĐMX / TopZone / AAR)
+    brand?: string;           // Thương hiệu (Chuỗi)
     is_active?: boolean;      // Trạng thái hoạt động
     created_at?: string;
     updated_at?: string;
@@ -289,7 +289,7 @@ export async function syncBatchDailyRecordsToSupabase(
     try {
         const targetReportDate = records[0]?.reportDate?.trim();
 
-        // Nếu bật chế độ ghi đè: chỉ xóa các bản ghi cũ của các siêu thị đang được ghi đè trong ngày chốt đó
+        // Nếu bật chế độ ghi đè: chỉ xóa các bản ghi cũ của các ST đang được ghi đè trong ngày chốt đó
         if (options?.overwrite && targetReportDate) {
             const storeNamesToOverwrite = Array.from(new Set(records.map(r => r.storeName?.trim()).filter(Boolean)));
             if (storeNamesToOverwrite.length > 0) {
@@ -407,7 +407,7 @@ export async function deleteBusinessRecordById(id: string) {
     }
 }
 
-// 6. Xóa bản ghi theo Siêu thị và Ngày báo cáo
+// 6. Xóa bản ghi theo ST và Ngày báo cáo
 export async function deleteBusinessRecord(storeName: string, reportDate: string) {
     try {
         const { data, error } = await supabase
@@ -490,7 +490,7 @@ export function clearLocalDraft(key: string = DRAFT_STORAGE_KEY): boolean {
 }
 
 // ==========================================
-// 4. PHÂN HỆ NHÂN SỰ & SIÊU THỊ (CRUD HOÀN CHỈNH)
+// 4. PHÂN HỆ NHÂN SỰ & ST (CRUD HOÀN CHỈNH)
 // ==========================================
 
 export async function fetchStores() {

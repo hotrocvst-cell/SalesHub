@@ -78,7 +78,7 @@ export function parseClipboardTargetText(
             if (parts.length === 2 && isNumericString(parts[1])) {
                 target_revenue = parseCleanNumber(parts[1]);
             }
-            // Trường hợp 2: Thứ tự chuẩn giống file mẫu (Mã NV, Tên, Siêu thị, Doanh thu, Camp1, Camp2...)
+            // Trường hợp 2: Thứ tự chuẩn giống file mẫu (Mã NV, Tên, ST, Doanh thu, Camp1, Camp2...)
             else if (parts.length >= 4) {
                 target_revenue = parseCleanNumber(parts[3]);
                 campaigns.forEach((c, cIdx) => {

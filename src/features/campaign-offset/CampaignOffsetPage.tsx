@@ -173,7 +173,7 @@ export default function CampaignOffsetPage() {
         loadAllData();
     }, [selectedStore, selectedMonth, selectedYear]);
 
-    // Danh sách nhân viên khả dụng theo siêu thị & phân quyền
+    // Danh sách nhân viên khả dụng theo ST & phân quyền
     const filteredEmployees = useMemo(() => {
         return employees.filter(emp => {
             const empStore = emp.store_name || '';
@@ -378,7 +378,7 @@ export default function CampaignOffsetPage() {
 
             {/* THANH BỘ LỌC CHUYÊN NGHIỆP */}
             <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-2xs space-y-3" data-html2canvas-ignore="true" data-export-ignore="true">
-                {/* DÒNG 1: SIÊU THỊ / CỤM RIÊNG LẺ (Quy chuẩn 10) & CÁC NÚT HÀNH ĐỘNG */}
+                {/* DÒNG 1: ST / CỤM RIÊNG LẺ (Quy chuẩn 10) & CÁC NÚT HÀNH ĐỘNG */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div className="flex items-center gap-2 flex-1 max-w-md">
                         <div className="w-8 h-8 rounded-lg bg-purple-50 text-purple-700 flex items-center justify-center border border-purple-200 shrink-0">
@@ -389,7 +389,7 @@ export default function CampaignOffsetPage() {
                             onChange={e => setSelectedStore(e.target.value)}
                             className="flex-1 px-3 py-1.5 border border-slate-300 rounded-xl text-xs font-bold text-slate-800 bg-white focus:ring-2 focus:ring-purple-500 focus:outline-hidden"
                         >
-                            <option value="all">Toàn bộ siêu thị ({stores.length} Shop)</option>
+                            <option value="all">Toàn bộ ST ({stores.length} Shop)</option>
                             {stores.map(s => (
                                 <option key={s.id || s.name} value={s.name}>
                                     {getShortStoreName(s.name)}
@@ -531,7 +531,7 @@ export default function CampaignOffsetPage() {
                             BẢNG CÂN ĐỐI & CẤN TRỪ THI ĐUA CUỐI THÁNG
                         </h2>
                         <div className="text-xs text-slate-600 mt-0.5">
-                            ST: <b className="text-purple-800 font-bold">{selectedStore === 'all' ? 'Toàn bộ siêu thị' : selectedStore}</b> • Kỳ: <b className="text-slate-800 font-bold">Tháng {selectedMonth}/{selectedYear}</b>
+                            ST: <b className="text-purple-800 font-bold">{selectedStore === 'all' ? 'Toàn bộ ST' : selectedStore}</b> • Kỳ: <b className="text-slate-800 font-bold">Tháng {selectedMonth}/{selectedYear}</b>
                         </div>
                     </div>
 

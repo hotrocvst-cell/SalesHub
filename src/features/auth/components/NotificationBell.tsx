@@ -129,7 +129,7 @@ export default function NotificationBell() {
                                         {pendingRequests.length} tài khoản chờ bạn duyệt
                                     </div>
                                     <div className="text-[10px] text-amber-700 truncate">
-                                        {currentUser.role === 'ADMIN' ? 'QL, TC & Siêu thị mới' : 'Nhân sự xin gia nhập siêu thị'}
+                                        {currentUser.role === 'ADMIN' ? 'QL, TC & ST mới' : 'Nhân sự xin gia nhập ST'}
                                     </div>
                                 </div>
                             </div>

@@ -12,14 +12,14 @@ export function useUserStoreFilter(
     const { currentUser, isAdmin } = useAuth();
     const isGuest = Boolean(currentUser?.is_guest);
 
-    // Danh sách siêu thị khả dụng theo phân quyền của tài khoản hiện tại
+    // Danh sách ST khả dụng theo phân quyền của tài khoản hiện tại
     const allowedStores = useMemo<StoreItem[]>(() => {
         if (!stores || stores.length === 0) {
             return isGuest ? [getGuestDemoStoreItem()] : [];
         }
         if (isAdmin) return stores;
 
-        // TÀI KHOẢN TRẢI NGHIỆM: CỐ ĐỊNH DUY NHẤT SIÊU THỊ 838679 - DEMO STORE
+        // TÀI KHOẢN TRẢI NGHIỆM: CỐ ĐỊNH DUY NHẤT ST 838679 - DEMO STORE
         if (isGuest) {
             const guestTarget = currentUser.store_name || GUEST_DEMO_STORE;
             const matched = stores.filter(s =>
@@ -33,7 +33,7 @@ export function useUserStoreFilter(
         }
 
         if (currentUser.role === 'NHAN_VIEN') {
-            // Nhân viên: CHỈ ĐƯỢC XEM SIÊU THỊ ĐÃ ĐĂNG KÝ
+            // Nhân viên: CHỈ ĐƯỢC XEM ST ĐÃ ĐĂNG KÝ
             if (!currentUser.store_name) return [];
             const matched = stores.filter(s => isStoreMatch(s.name, currentUser.store_name, stores));
             // Nếu không tìm thấy trong stores list nhưng có store_name thì tạo dummy
@@ -52,7 +52,7 @@ export function useUserStoreFilter(
         return stores.filter(s => accessible.some(acc => isStoreMatch(s.name, acc, stores)));
     }, [stores, currentUser, isAdmin, isGuest]);
 
-    // Tự động kiểm soát selectedStore nếu người dùng không có quyền xem siêu thị hiện tại
+    // Tự động kiểm soát selectedStore nếu người dùng không có quyền xem ST hiện tại
     useEffect(() => {
         if (isAdmin) return; // Admin được xem mọi thứ kể cả 'all'
 

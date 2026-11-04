@@ -65,7 +65,7 @@ export default function SessionHistoryTab({
             const cloudRes = await fetchCloudEmployeeDataSessions(filters);
             if (cloudRes.success) {
                 let data = cloudRes.data;
-                // Nếu người dùng không phải Admin và đang chọn "all", lọc các phiên chỉ thuộc các siêu thị được phân quyền
+                // Nếu người dùng không phải Admin và đang chọn "all", lọc các phiên chỉ thuộc các ST được phân quyền
                 if (!isAdmin && allowedStores.length > 0 && currentStoreName === 'all') {
                     data = data.filter(sess =>
                         allowedStores.some(s => isStoreMatch(s.name, sess.store_name))
@@ -105,7 +105,7 @@ export default function SessionHistoryTab({
         }
     };
 
-    // Lọc theo từ khóa tìm kiếm (tên siêu thị, tiêu đề phiên, ngày chốt)
+    // Lọc theo từ khóa tìm kiếm (tên ST, tiêu đề phiên, ngày chốt)
     const filteredSessions = useMemo(() => {
         if (!searchTerm.trim()) return sessions;
         const q = searchTerm.toLowerCase().trim();
@@ -155,7 +155,7 @@ export default function SessionHistoryTab({
                             type="text"
                             value={searchTerm}
                             onChange={e => setSearchTerm(e.target.value)}
-                            placeholder="Tìm siêu thị, tên phiên..."
+                            placeholder="Tìm ST, tên phiên..."
                             className="pl-8 pr-3 py-1.5 text-xs rounded-xl border border-slate-200 bg-slate-50 text-slate-800 focus:bg-white focus:border-purple-500 outline-hidden transition w-full sm:w-48"
                         />
                     </div>
@@ -242,7 +242,7 @@ export default function SessionHistoryTab({
                                     <th className="px-2.5 py-3 text-center w-12 text-slate-500">STT</th>
                                     <th className="px-3 py-3 w-44 text-slate-700">Thời Gian &amp; Ngày Chốt</th>
                                     <th className="px-3 py-3 w-40 text-slate-700">Loại Phiên</th>
-                                    <th className="px-3 py-3 text-slate-700">Siêu Thị &amp; Tiêu Đề Phiên</th>
+                                    <th className="px-3 py-3 text-slate-700">ST &amp; Tiêu Đề Phiên</th>
                                     <th className="px-3 py-3 text-right w-24 text-slate-700">Nhân Sự</th>
                                     <th className="px-3 py-3 text-right w-36 text-slate-700">Tổng Số Liệu</th>
                                     <th className="px-3 py-3 text-center w-36 text-slate-700">Thao Tác</th>
@@ -292,7 +292,7 @@ export default function SessionHistoryTab({
                                                 </span>
                                             </td>
 
-                                            {/* 4. Siêu Thị & Tiêu Đề Phiên */}
+                                            {/* 4. ST & Tiêu Đề Phiên */}
                                             <td className="px-3 py-2.5">
                                                 <div className="font-extrabold text-xs text-slate-900 flex items-center gap-1.5">
                                                     <Store className="w-3.5 h-3.5 text-slate-400 shrink-0" />

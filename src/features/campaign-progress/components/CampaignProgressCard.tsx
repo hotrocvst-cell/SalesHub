@@ -138,7 +138,7 @@ export default function CampaignProgressCard({ item, reportDateDisplay, storeNam
 
     // 3 Mẫu nhận xét chuẩn tự động cho bảng thi đua này
     const assessmentTemplates = useMemo<AssessmentTemplate[]>(() => {
-        const storeDisplay = storeName === 'all' ? 'Toàn Cụm Siêu Thị' : storeName;
+        const storeDisplay = storeName === 'all' ? 'Toàn Cụm ST' : storeName;
         const sorted = [...(item.employees || [])].sort((a, b) => b.forecastRate - a.forecastRate || b.actual - a.actual);
         const topEmployees = sorted.filter(e => e.isAchieved || e.forecastRate >= 100).slice(0, 3);
         const underperformingEmployees = [...(item.employees || [])]

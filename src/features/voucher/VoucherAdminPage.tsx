@@ -118,7 +118,7 @@ export default function VoucherAdminPage() {
             : (currentUser.store_name ? [currentUser.store_name] : []);
     }, [currentUser]);
 
-    // Phân quyền siêu thị cho quản lý xem số liệu
+    // Phân quyền ST cho quản lý xem số liệu
     const allowedStores = useMemo<StoreItem[]>(() => {
         if (!stores || stores.length === 0) return [];
         if (isAdmin) return stores;
@@ -410,11 +410,11 @@ export default function VoucherAdminPage() {
         }
     };
 
-    // Xuất toàn bộ data tồn kho mã voucher của cụm siêu thị đang phụ trách ra file Excel (.xlsx)
+    // Xuất toàn bộ data tồn kho mã voucher của cụm ST đang phụ trách ra file Excel (.xlsx)
     const handleExportExcel = async () => {
         setIsExportingExcel(true);
         try {
-            // Nạp toàn bộ kho mã của cụm siêu thị đang phụ trách
+            // Nạp toàn bộ kho mã của cụm ST đang phụ trách
             let exportVouchers = vouchers;
             if (selectedStore !== 'all') {
                 exportVouchers = await fetchStoreVouchers(
@@ -432,7 +432,7 @@ export default function VoucherAdminPage() {
 
             const clusterName = selectedStore !== 'all'
                 ? selectedStore
-                : (currentUser.store_name || (accessible.length > 0 ? accessible[0] : 'Toàn Cụm Siêu Thị'));
+                : (currentUser.store_name || (accessible.length > 0 ? accessible[0] : 'Toàn Cụm ST'));
 
             await exportVoucherInventoryToExcel({
                 vouchers: exportVouchers,
@@ -455,7 +455,7 @@ export default function VoucherAdminPage() {
                 <Lock className="w-10 h-10 text-amber-500 mx-auto mb-3" />
                 <h2 className="text-base font-black text-slate-900">Quyền Truy Cập Bị Giới Hạn</h2>
                 <p className="text-xs text-slate-500 mt-2 leading-relaxed">
-                    Phân hệ Quản Lý Kho Voucher chỉ dành riêng cho Quản lý siêu thị, Trưởng ca và Quản trị viên (Admin).
+                    Phân hệ Quản Lý Kho Voucher chỉ dành riêng cho Quản lý ST, Trưởng ca và Quản trị viên (Admin).
                 </p>
             </div>
         );
@@ -612,7 +612,7 @@ export default function VoucherAdminPage() {
                             onClick={handleExportExcel}
                             disabled={isExportingExcel}
                             className="px-3.5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 active:scale-[0.99] text-white text-xs font-black transition cursor-pointer shadow-xs flex items-center gap-1.5 border border-emerald-600 disabled:opacity-60"
-                            title="Xuất toàn bộ data tồn kho mã voucher của cụm siêu thị ra file Excel (.xlsx)"
+                            title="Xuất toàn bộ data tồn kho mã voucher của cụm ST ra file Excel (.xlsx)"
                         >
                             <FileSpreadsheet className={`w-4 h-4 text-emerald-200 ${isExportingExcel ? 'animate-bounce' : ''}`} />
                             <span>{isExportingExcel ? 'Đang xuất Excel...' : 'Xuất Excel'}</span>
@@ -667,7 +667,7 @@ export default function VoucherAdminPage() {
                 />
             </div>
 
-            {/* 2. CHỌN SIÊU THỊ & PHẠM VI DỮ LIỆU */}
+            {/* 2. CHỌN ST & PHẠM VI DỮ LIỆU */}
             <div className="bg-white rounded-2xl p-3 border border-slate-200 shadow-2xs flex items-center justify-between gap-3 text-xs flex-wrap">
                 <div className="flex items-center gap-2">
                     <Store className="w-4 h-4 text-emerald-600 shrink-0" />
@@ -685,7 +685,7 @@ export default function VoucherAdminPage() {
                                 ? '🏢 Toàn Bộ Hệ Thống (Tất Cả Cụm)'
                                 : allowedStores.length > 1
                                     ? `🏢 Toàn Cụm Của Tôi (${allowedStores.length} shop)`
-                                    : '🏢 Kho Siêu Thị Của Tôi'}
+                                    : '🏢 Kho ST Của Tôi'}
                         </option>
                         {allowedStores.map(s => (
                             <option key={s.id || s.name} value={s.name}>

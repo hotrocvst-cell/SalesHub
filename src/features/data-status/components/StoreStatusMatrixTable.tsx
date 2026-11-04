@@ -37,7 +37,7 @@ export default function StoreStatusMatrixTable({ matrix, expectedDate }: StoreSt
         });
 
         if (sortBy === 'score') {
-            result.sort((a, b) => a.readinessScore - b.readinessScore); // Ưu tiên các siêu thị chưa xong lên trước
+            result.sort((a, b) => a.readinessScore - b.readinessScore); // Ưu tiên các ST chưa xong lên trước
         } else {
             result.sort((a, b) => a.storeName.localeCompare(b.storeName));
         }
@@ -45,7 +45,7 @@ export default function StoreStatusMatrixTable({ matrix, expectedDate }: StoreSt
         return result;
     }, [matrix, searchQuery, filterOnlyWarning, sortBy]);
 
-    // Đếm số siêu thị đã hoàn tất 100%
+    // Đếm số ST đã hoàn tất 100%
     const fullyReadyCount = useMemo(() => matrix.filter(r => r.allOk).length, [matrix]);
 
     const renderStatusBadge = (isOk: boolean, dateVal?: string | null, countVal?: number) => {
@@ -81,14 +81,14 @@ export default function StoreStatusMatrixTable({ matrix, expectedDate }: StoreSt
                     <div>
                         <div className="flex items-center gap-2 flex-wrap">
                             <h3 className="font-black text-sm sm:text-base text-white uppercase tracking-tight">
-                                Chi Tiết Siêu Thị
+                                Chi Tiết ST
                             </h3>
                             <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/25 text-emerald-300 border border-emerald-400/40 uppercase tracking-wider">
                                 {fullyReadyCount}/{matrix.length} ST OK
                             </span>
                         </div>
                         <p className="text-[11px] text-slate-300 font-medium">
-                            Rà soát dữ liệu theo từng siêu thị
+                            Rà soát dữ liệu theo từng ST
                         </p>
                     </div>
                 </div>
@@ -101,7 +101,7 @@ export default function StoreStatusMatrixTable({ matrix, expectedDate }: StoreSt
                             type="text"
                             value={searchQuery}
                             onChange={e => setSearchQuery(e.target.value)}
-                            placeholder="Tìm siêu thị..."
+                            placeholder="Tìm ST..."
                             className="w-full pl-8 pr-2.5 py-1.5 text-xs rounded-xl border border-slate-700 bg-slate-800/90 focus:outline-none focus:ring-1 focus:ring-emerald-400 text-white placeholder-slate-400 font-medium shadow-inner"
                         />
                     </div>
@@ -136,7 +136,7 @@ export default function StoreStatusMatrixTable({ matrix, expectedDate }: StoreSt
                     <thead>
                         <tr className="bg-slate-800 text-white border-b-2 border-slate-700 text-[11px] font-black uppercase tracking-wider">
                             <th className="py-2.5 px-3 sticky left-0 bg-slate-800 text-white z-20 min-w-[135px] border-r border-slate-700">
-                                Siêu thị
+                                ST
                             </th>
                             <th className="py-2.5 px-1.5 text-center min-w-[68px] border-r border-slate-700/60">DT ST</th>
                             <th className="py-2.5 px-1.5 text-center min-w-[70px] border-r border-slate-700/60">Thi Đua ST</th>
@@ -151,7 +151,7 @@ export default function StoreStatusMatrixTable({ matrix, expectedDate }: StoreSt
                         {filteredRows.length === 0 ? (
                             <tr>
                                 <td colSpan={8} className="py-8 text-center text-slate-500 font-medium text-xs bg-slate-50">
-                                    Không có siêu thị nào khớp với bộ lọc tìm kiếm
+                                    Không có ST nào khớp với bộ lọc tìm kiếm
                                 </td>
                             </tr>
                         ) : (
@@ -165,7 +165,7 @@ export default function StoreStatusMatrixTable({ matrix, expectedDate }: StoreSt
                                             : 'bg-white hover:bg-emerald-50/40'
                                         }`}
                                 >
-                                    {/* Cột Tên Siêu Thị (Sticky Left Cố Định Có Đổ Bóng Nhẹ) */}
+                                    {/* Cột Tên ST (Sticky Left Cố Định Có Đổ Bóng Nhẹ) */}
                                     <td className="py-2.5 px-3 font-black text-slate-900 sticky left-0 bg-white z-10 whitespace-nowrap border-r border-slate-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)]">
                                         <div className="flex items-center gap-2">
                                             {row.allOk ? (
@@ -179,12 +179,12 @@ export default function StoreStatusMatrixTable({ matrix, expectedDate }: StoreSt
                                         </div>
                                     </td>
 
-                                    {/* DT Siêu thị */}
+                                    {/* DT ST */}
                                     <td className="py-2.5 px-1.5 text-center border-r border-slate-100">
                                         {renderStatusBadge(row.storeRevenueOk, row.storeRevenueDate)}
                                     </td>
 
-                                    {/* Thi đua Siêu thị */}
+                                    {/* Thi đua ST */}
                                     <td className="py-2.5 px-1.5 text-center border-r border-slate-100">
                                         {renderStatusBadge(row.storeEmulationOk, null, row.storeEmulationCount)}
                                     </td>
@@ -233,7 +233,7 @@ export default function StoreStatusMatrixTable({ matrix, expectedDate }: StoreSt
             <div className="p-3 bg-slate-900 text-slate-300 border-t border-slate-800 text-[11px] flex flex-wrap items-center justify-between gap-2.5">
                 <div className="flex items-center gap-2">
                     <span className="text-emerald-400 font-bold">
-                        ✓ Hoàn tất {fullyReadyCount}/{matrix.length} siêu thị ({matrix.length > 0 ? Math.round((fullyReadyCount / matrix.length) * 100) : 0}%)
+                        ✓ Hoàn tất {fullyReadyCount}/{matrix.length} ST ({matrix.length > 0 ? Math.round((fullyReadyCount / matrix.length) * 100) : 0}%)
                     </span>
                     <span className="text-slate-600">•</span>
                     <span>

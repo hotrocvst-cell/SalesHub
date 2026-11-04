@@ -38,20 +38,20 @@ export interface ParsedWorkHoursResult {
 }
 
 /**
- * Bóc tách tên Siêu thị từ chuỗi văn bản thô (nếu người dùng copy toàn bộ màn hình Dashboard)
+ * Bóc tách tên ST từ chuỗi văn bản thô (nếu người dùng copy toàn bộ màn hình Dashboard)
  */
 export function detectStoreFromRawText(rawText: string): string | null {
     if (!rawText || !rawText.trim()) return null;
     const lines = rawText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
     for (let i = 0; i < lines.length; i++) {
-        // Cách 1: Nằm sau chữ "Siêu thị"
-        if (lines[i].toLowerCase() === 'siêu thị' && i + 1 < lines.length) {
+        // Cách 1: Nằm sau chữ "ST"
+        if (lines[i].toLowerCase() === 'ST' && i + 1 < lines.length) {
             const nextL = lines[i + 1].replace(/[×x]/g, '').trim();
             if (nextL.includes(' - ') && !nextL.toLowerCase().includes('quỹ thời gian')) {
                 return nextL;
             }
         }
-        // Cách 2: Dòng trực tiếp có dạng mã siêu thị [10335 - AAR_BRV_VTA - 290 Trương Công Định]
+        // Cách 2: Dòng trực tiếp có dạng mã ST [10335 - AAR_BRV_VTA - 290 Trương Công Định]
         const l = lines[i];
         if (/^\d{3,6}\s*-\s*[A-Z0-9_]{3,}/i.test(l)) {
             const parts = l.split(' - ');
@@ -84,7 +84,7 @@ export function detectStoreFromRawText(rawText: string): string | null {
  * 3. Tự động tính toán % Trả góp = (DT Trả góp thực / DT Thực) * 100 khi có bảng Doanh thu thực.
  */
 
-// Hàm kiểm tra dòng tiêu đề siêu thị để không bị bóc nhầm thành nhân viên
+// Hàm kiểm tra dòng tiêu đề ST để không bị bóc nhầm thành nhân viên
 function isStoreHeader(str: string): boolean {
     if (/^\d{3,6}\s*-\s*[A-Z0-9_]{3,}/i.test(str)) {
         const parts = str.split(' - ');

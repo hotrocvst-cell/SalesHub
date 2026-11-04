@@ -50,7 +50,7 @@ export default function CampaignProgressRemarkModal({
             .filter(e => e.forecastRate < 80)
             .sort((a, b) => a.forecastRate - b.forecastRate || a.actual - b.actual);
 
-        const storeDisplay = storeName === 'all' ? 'Toàn Cụm Siêu Thị' : storeName;
+        const storeDisplay = storeName === 'all' ? 'Toàn Cụm ST' : storeName;
 
         // Sinh nội dung tin nhắn gợi ý
         const lines: string[] = [

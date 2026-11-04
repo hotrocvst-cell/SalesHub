@@ -25,7 +25,7 @@ export const TOP_BOT_CONFIG_KEY = 'saleshub_top_bot_config_v1';
 /**
  * Câu lệnh SQL tạo bảng trên Supabase để lưu trữ cấu hình hoạt động & TOP/BOT
  */
-export const PERFORMANCE_CONFIGS_SQL = `-- 1. Bảng lưu cấu hình hoạt động siêu thị (Giờ mở/đóng cửa, số ngày hoạt động trong tháng)
+export const PERFORMANCE_CONFIGS_SQL = `-- 1. Bảng lưu cấu hình hoạt động ST (Giờ mở/đóng cửa, số ngày hoạt động trong tháng)
 CREATE TABLE IF NOT EXISTS public.store_operating_configs (
     store_name TEXT PRIMARY KEY,
     open_time TEXT DEFAULT '08:00',
@@ -102,7 +102,7 @@ export function getPassedDaysInMonth(month: number, year: number, operatingDays:
 }
 
 /**
- * Lấy cấu hình hoạt động của siêu thị (giờ mở/đóng và số ngày hoạt động trong tháng)
+ * Lấy cấu hình hoạt động của ST (giờ mở/đóng và số ngày hoạt động trong tháng)
  */
 export function getStoreOperatingConfig(
     storeName: string,
@@ -154,7 +154,7 @@ export function getStoreOperatingConfig(
 }
 
 /**
- * Lưu cấu hình hoạt động của siêu thị (Offline-First: Lưu LocalStorage và đồng bộ Supabase Cloud)
+ * Lưu cấu hình hoạt động của ST (Offline-First: Lưu LocalStorage và đồng bộ Supabase Cloud)
  */
 export async function saveStoreOperatingConfig(
     storeName: string,
@@ -235,7 +235,7 @@ export async function saveStoreOperatingConfig(
 }
 
 /**
- * Lấy cấu hình phân loại TOP/BOT theo đích danh siêu thị (nếu không có thì lấy cấu hình chung 'ALL')
+ * Lấy cấu hình phân loại TOP/BOT theo đích danh ST (nếu không có thì lấy cấu hình chung 'ALL')
  */
 export function getTopBotConfig(storeName: string = 'ALL'): TopBotConfig {
     const defaultCfg: TopBotConfig = {
@@ -278,7 +278,7 @@ export function getTopBotConfig(storeName: string = 'ALL'): TopBotConfig {
 }
 
 /**
- * Lưu cấu hình phân loại TOP/BOT theo đích danh siêu thị (Offline-First: Lưu LocalStorage và đồng bộ Supabase Cloud)
+ * Lưu cấu hình phân loại TOP/BOT theo đích danh ST (Offline-First: Lưu LocalStorage và đồng bộ Supabase Cloud)
  */
 export async function saveTopBotConfig(
     storeName: string = 'ALL',

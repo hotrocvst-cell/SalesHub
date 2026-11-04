@@ -172,10 +172,10 @@ export default function AccountConfigTab({ onShowToast }: AccountConfigTabProps)
                     <span>Lưu ý quan trọng về tài khoản XMusicStation</span>
                 </div>
                 <p>
-                    • Tài khoản chuẩn dùng cho các siêu thị trong chuỗi là <code className="font-bold text-slate-800">tgd111</code> với mật khẩu <code className="font-bold text-slate-800">mwg2025</code>.
+                    • Tài khoản chuẩn dùng cho các ST trong chuỗi là <code className="font-bold text-slate-800">tgd111</code> với mật khẩu <code className="font-bold text-slate-800">mwg2025</code>.
                 </p>
                 <p>
-                    • Nếu siêu thị của bạn được cấp tài khoản riêng, bạn có thể nhập vào ô trên rồi nhấn <strong>"Lưu Cấu Hình"</strong> hoặc thay đổi trực tiếp trong Sidebar khi mở trang phát nhạc.
+                    • Nếu ST của bạn được cấp tài khoản riêng, bạn có thể nhập vào ô trên rồi nhấn <strong>"Lưu Cấu Hình"</strong> hoặc thay đổi trực tiếp trong Sidebar khi mở trang phát nhạc.
                 </p>
                 <p>
                     • Nếu bị đăng xuất bất ngờ, hãy bấm vào nút <strong>"Đăng Nhập Lại"</strong> ở tab Cấu Hình trong Sidebar để khôi phục phiên làm việc ngay lập tức mà không cần tải lại trang.

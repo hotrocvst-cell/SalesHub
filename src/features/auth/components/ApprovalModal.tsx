@@ -41,8 +41,8 @@ export default function ApprovalModal({ isOpen, onClose, onUpdated }: Props) {
 
     const loadRequests = async () => {
         setIsLoading(true);
-        // Admin xem toàn bộ yêu cầu trong hệ thống (cả QL, TC, NV, Mở siêu thị mới)
-        // Quản lý chỉ xem các yêu cầu thuộc Siêu thị của mình
+        // Admin xem toàn bộ yêu cầu trong hệ thống (cả QL, TC, NV, Mở ST mới)
+        // Quản lý chỉ xem các yêu cầu thuộc ST của mình
         const data = await fetchApprovalRequests({
             approverRole: currentUser.role === 'ADMIN' ? undefined : 'QUAN_LY',
             storeName: currentUser.role === 'QUAN_LY' ? currentUser.store_name : undefined
@@ -112,7 +112,7 @@ export default function ApprovalModal({ isOpen, onClose, onUpdated }: Props) {
                             </h3>
                             <p className="text-xs text-blue-200">
                                 {currentUser.role === 'ADMIN'
-                                    ? 'Cấp quyền Quản lý Siêu thị, Trưởng ca & Mở Siêu thị mới'
+                                    ? 'Cấp quyền Quản lý ST, Trưởng ca & Mở ST mới'
                                     : `Duyệt Nhân viên gia nhập ST: ${currentUser.store_name}`}
                             </p>
                         </div>
@@ -293,12 +293,12 @@ export default function ApprovalModal({ isOpen, onClose, onUpdated }: Props) {
                                         </div>
                                     </div>
 
-                                    {/* THÔNG TIN SIÊU THỊ & GỢI Ý MỚI */}
+                                    {/* THÔNG TIN ST & GỢI Ý MỚI */}
                                     <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1.5">
                                         <div className="flex items-center justify-between">
                                             <span className="text-slate-500 font-medium flex items-center gap-1.5">
                                                 <Store className="w-3.5 h-3.5 text-blue-600" />
-                                                <span>Siêu thị đăng ký:</span>
+                                                <span>ST đăng ký:</span>
                                             </span>
                                             <span className="font-extrabold text-slate-900">{req.store_name}</span>
                                         </div>
@@ -307,7 +307,7 @@ export default function ApprovalModal({ isOpen, onClose, onUpdated }: Props) {
                                             <div className="mt-1 pt-1.5 border-t border-slate-200/80 text-[11px] text-amber-800 bg-amber-50/60 p-2 rounded-lg border border-amber-200">
                                                 <div className="font-bold flex items-center gap-1">
                                                     <Building2 className="w-3.5 h-3.5 text-amber-600" />
-                                                    <span>Đề xuất thêm mới siêu thị này vào hệ thống:</span>
+                                                    <span>Đề xuất thêm mới ST này vào hệ thống:</span>
                                                 </div>
                                                 <div className="mt-0.5">
                                                     Mã ST: <b>{req.new_store_code || 'Chưa có'}</b> | Địa chỉ: {req.new_store_address || 'Chưa có'}
@@ -320,7 +320,7 @@ export default function ApprovalModal({ isOpen, onClose, onUpdated }: Props) {
                                             <div className="mt-1 pt-1.5 border-t border-slate-200/80 text-[11px] text-blue-800 bg-blue-50/60 p-2 rounded-lg border border-blue-200 flex items-start gap-1.5">
                                                 <Database className="w-3.5 h-3.5 text-blue-600 shrink-0 mt-0.5" />
                                                 <span>
-                                                    <b>Kế thừa dữ liệu:</b> Khi phê duyệt, tài khoản này sẽ tiếp quản quyền Quản lý của siêu thị <b>{req.store_name}</b> và kế thừa trọn vẹn toàn bộ dữ liệu lịch sử hiện có.
+                                                    <b>Kế thừa dữ liệu:</b> Khi phê duyệt, tài khoản này sẽ tiếp quản quyền Quản lý của ST <b>{req.store_name}</b> và kế thừa trọn vẹn toàn bộ dữ liệu lịch sử hiện có.
                                                 </span>
                                             </div>
                                         )}

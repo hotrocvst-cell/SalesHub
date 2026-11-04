@@ -21,7 +21,7 @@ import {
 } from '../../core/lib/guestDemoStoreService';
 
 /**
- * Rút gọn tên siêu thị & Loại bỏ mã số ST:
+ * Rút gọn tên ST & Loại bỏ mã số ST:
  * Ví dụ:
  * - "111 - TGD_BRV_VTA - 290 Trương Công Định"  => "TGD - 290 Trương Công Định"
  * - "1841 - ĐML_CMA_CMA - 155A NGUYỄN TẤT THÀNH" => "ĐML - 155A NGUYỄN TẤT THÀNH"
@@ -34,7 +34,7 @@ export function getCompactStoreName(name: string): string {
     // 1. Tách theo các loại dấu gạch ngang ' - ', ' – ', ' — ', '-'
     const parts = trimmed.split(/\s*[-–—]\s*/).map(p => p.trim()).filter(Boolean);
 
-    // 2. Lọc bỏ các phần thuần số ở đầu hoặc giữa (mã siêu thị như 111, 1841, 1234)
+    // 2. Lọc bỏ các phần thuần số ở đầu hoặc giữa (mã ST như 111, 1841, 1234)
     const nonNumericParts = parts.filter(p => !/^\d+$/.test(p));
 
     if (nonNumericParts.length >= 2) {
@@ -188,7 +188,7 @@ export default function ClusterReportPage() {
         loadAllData();
     }, [selectedMonth, selectedYear]);
 
-    // 2a. Danh sách siêu thị mà user được phân quyền trong kỳ này
+    // 2a. Danh sách ST mà user được phân quyền trong kỳ này
     const accessibleStoreList = useMemo(() => {
         if (isGuest) {
             return [getCompactStoreName(GUEST_DEMO_STORE)];
@@ -236,7 +236,7 @@ export default function ClusterReportPage() {
         }
     }, [isGuest, isLockedToSingleStore, accessibleStoreList, selectedStore, canViewAllStores]);
 
-    // 2b. Danh sách các ngày có dữ liệu trong tháng (đã lọc theo phân quyền siêu thị)
+    // 2b. Danh sách các ngày có dữ liệu trong tháng (đã lọc theo phân quyền ST)
     const availableDates = useMemo(() => {
         const set = new Set<string>();
         records.forEach(r => {
@@ -266,7 +266,7 @@ export default function ClusterReportPage() {
         return availableDates[0] || getYesterdayDateString();
     }, [selectedDate, availableDates]);
 
-    // 3a. Tính toán và chuyển đổi dữ liệu cho tất cả siêu thị trong cụm mà user có quyền truy cập
+    // 3a. Tính toán và chuyển đổi dữ liệu cho tất cả ST trong cụm mà user có quyền truy cập
     const allAccessibleClusterRows = useMemo<ClusterStoreRow[]>(() => {
         if (records.length === 0) return [];
 
@@ -287,7 +287,7 @@ export default function ClusterReportPage() {
         const dateRecords = records.filter(r => r.reportDate === effectiveDate);
         const sourceRecords = dateRecords.length > 0 ? dateRecords : records;
 
-        // Gom nhóm theo từng siêu thị (bỏ qua bản ghi tổng và lọc theo phân quyền user)
+        // Gom nhóm theo từng ST (bỏ qua bản ghi tổng và lọc theo phân quyền user)
         const storeMap = new Map<string, BusinessDayRecord>();
         sourceRecords.forEach(r => {
             if (!r.storeName || /^(tổng|tong)/i.test(r.storeName)) return;
@@ -472,7 +472,7 @@ export default function ClusterReportPage() {
         return rows;
     }, [records, effectiveDate, targetConfigs, globalPaceRate, selectedMonth, selectedYear, isGuest, isAdmin, canAccessStore]);
 
-    // 3b. Bảng dữ liệu hiển thị trên giao diện (đã lọc theo selectedStore nếu user chọn xem 1 siêu thị riêng biệt)
+    // 3b. Bảng dữ liệu hiển thị trên giao diện (đã lọc theo selectedStore nếu user chọn xem 1 ST riêng biệt)
     const clusterRows = useMemo<ClusterStoreRow[]>(() => {
         if (selectedStore === 'all') return allAccessibleClusterRows;
         return allAccessibleClusterRows.filter(r => {
@@ -666,7 +666,7 @@ export default function ClusterReportPage() {
         showToast('💾 Đã tải ảnh báo cáo 8K về thiết bị thành công!');
     };
 
-    // 6. Cấu hình 3 mẫu nhận xét tạo sẵn cho Cụm Siêu Thị
+    // 6. Cấu hình 3 mẫu nhận xét tạo sẵn cho Cụm ST
     const clusterAssessmentTemplates = useMemo<AssessmentTemplate[]>(() => {
         if (clusterRows.length === 0) return [];
         const topPctHt = [...clusterRows].sort((a, b) => b.pctHtOver - a.pctHtOver)[0];
@@ -707,7 +707,7 @@ export default function ClusterReportPage() {
             `• Nhịp ca: Bám sát target từng ca, không để dồn số về cuối ngày.`,
             `• Cơ cấu doanh thu: Tối ưu triệt để DTQĐ các ngành hàng trọng điểm${clusterSummary.hasInstallmentRate ? ` và nâng tỷ lệ trả chậm >${clusterSummary.avgInstallmentRate > 30 ? clusterSummary.avgInstallmentRate.toFixed(0) : '35'}%` : ''}.`,
             `• Quản lý ST: Trực tiếp bám sàn trong khung giờ vàng 18h-21h30 để chốt đơn và hỗ trợ nhân viên.`,
-            `💪 Quyết tâm 100% siêu thị trong cụm cán đích!`
+            `💪 Quyết tâm 100% ST trong cụm cán đích!`
         ];
 
         return [
@@ -740,7 +740,7 @@ export default function ClusterReportPage() {
                     <div>
                         <div className="flex items-center gap-2 flex-wrap">
                             <h1 className="text-base sm:text-lg font-black text-slate-800 tracking-tight">
-                                BÁO CÁO CỤM SIÊU THỊ
+                                BÁO CÁO CỤM ST
                             </h1>
                             <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-indigo-50 text-indigo-700 border border-indigo-200/60 uppercase tracking-wider">
                                 2 BẢNG BÁO CÁO CỤM
@@ -767,7 +767,7 @@ export default function ClusterReportPage() {
                             type="button"
                             onClick={() => setIsTargetModalOpen(true)}
                             className="px-3.5 py-2 rounded-2xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300/80 text-xs font-black flex items-center gap-1.5 shadow-2xs transition cursor-pointer"
-                            title="Tùy biến Target Vượt Trội & Doanh thu TB 3 tháng cho từng siêu thị phụ trách"
+                            title="Tùy biến Target Vượt Trội & Doanh thu TB 3 tháng cho từng ST phụ trách"
                         >
                             <Target className="w-4 h-4 text-amber-600" />
                             <span>CẤU HÌNH TARGET</span>
@@ -803,12 +803,12 @@ export default function ClusterReportPage() {
 
             {/* BỘ LỌC KỲ BÁO CÁO, CHỌN BẢNG & ĐƠN VỊ HIỂN THỊ */}
             <div className="bg-white rounded-2xl p-3.5 border border-slate-200 shadow-2xs space-y-3 text-xs">
-                {/* HÀNG 1: BỘ LỌC SIÊU THỊ / CỤM (BẮT BUỘC ĐẦU TIÊN & NẰM RIÊNG LẺ 1 DÒNG) */}
+                {/* HÀNG 1: BỘ LỌC ST / CỤM (BẮT BUỘC ĐẦU TIÊN & NẰM RIÊNG LẺ 1 DÒNG) */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2.5 border-b border-slate-100">
                     <div className="flex items-center gap-2">
                         <span className="text-xs font-black text-slate-600 uppercase tracking-wider shrink-0 flex items-center gap-1.5">
                             <Store className="w-4 h-4 text-amber-600" />
-                            Siêu thị / Cụm:
+                            ST / Cụm:
                         </span>
                         <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all min-w-[200px] sm:min-w-[280px] ${isLockedToSingleStore
                             ? 'bg-amber-50/90 border-amber-200 text-amber-900 shadow-2xs'
@@ -831,8 +831,8 @@ export default function ClusterReportPage() {
                                 {canViewAllStores && (
                                     <option value="all">
                                         {isAdmin
-                                            ? `🏢 TỔNG TOÀN CỤM (${accessibleStoreList.length} siêu thị)`
-                                            : `🏢 TỔNG CỤM PHỤ TRÁCH (${accessibleStoreList.length} siêu thị)`
+                                            ? `🏢 TỔNG TOÀN CỤM (${accessibleStoreList.length} ST)`
+                                            : `🏢 TỔNG CỤM PHỤ TRÁCH (${accessibleStoreList.length} ST)`
                                         }
                                     </option>
                                 )}
@@ -1065,7 +1065,7 @@ export default function ClusterReportPage() {
                                     <Store className="w-4.5 h-4.5" />
                                 </div>
                                 <h2 className="text-base sm:text-lg font-black tracking-wide uppercase text-white font-avo">
-                                    BÁO CÁO SỨC KHỎE CỤM SIÊU THỊ
+                                    BÁO CÁO SỨC KHỎE CỤM ST
                                 </h2>
                             </div>
                             <p className="text-xs text-slate-300 mt-1 flex items-center gap-2.5 flex-wrap">
@@ -1073,7 +1073,7 @@ export default function ClusterReportPage() {
                                 <span>•</span>
                                 <span>Kỳ: <b className="text-white">Tháng {selectedMonth}/{selectedYear}</b></span>
                                 <span>•</span>
-                                <span>{selectedStore === 'all' ? (isAdmin ? 'Toàn cụm' : 'Cụm phụ trách') : selectedStore}: <b className="text-emerald-400">{clusterRows.length} Siêu thị</b></span>
+                                <span>{selectedStore === 'all' ? (isAdmin ? 'Toàn cụm' : 'Cụm phụ trách') : selectedStore}: <b className="text-emerald-400">{clusterRows.length} ST</b></span>
                             </p>
                         </div>
 
@@ -1118,7 +1118,7 @@ export default function ClusterReportPage() {
                                                 rowSpan={2}
                                                 className="py-3 px-2.5 bg-slate-800 text-white text-center border-r border-slate-700 min-w-[140px] sm:w-60"
                                             >
-                                                SIÊU THỊ
+                                                ST
                                             </th>
                                             <th
                                                 colSpan={3}
@@ -1387,7 +1387,7 @@ export default function ClusterReportPage() {
                                                 rowSpan={2}
                                                 className="py-3 px-2.5 bg-slate-800 text-white text-center border-r border-slate-700 min-w-[140px] sm:w-60"
                                             >
-                                                SIÊU THỊ
+                                                ST
                                             </th>
                                             <th
                                                 rowSpan={2}
@@ -1461,7 +1461,7 @@ export default function ClusterReportPage() {
                                                         key={`b2-${row.storeName}`}
                                                         className="hover:bg-amber-50/20 transition group"
                                                     >
-                                                        {/* 1. SIÊU THỊ */}
+                                                        {/* 1. ST */}
                                                         <td className="py-2.5 px-2.5 border-r border-slate-100">
                                                             <div className="flex items-center gap-1.5">
                                                                 <span className="w-5 h-5 rounded-md bg-slate-100 text-slate-700 border border-slate-200 font-black text-[10px] flex items-center justify-center shrink-0 shadow-2xs">

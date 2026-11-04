@@ -53,7 +53,7 @@ export default function StoreListSection({
     const [closeTime, setCloseTime] = useState('22:00');
     const [operatingDays, setOperatingDays] = useState(30);
 
-    // Bản đồ đếm số lượng nhân viên theo siêu thị
+    // Bản đồ đếm số lượng nhân viên theo ST
     const employeeCountMap = useMemo(() => {
         const counts: Record<string, number> = {};
         employees.forEach(emp => {
@@ -112,7 +112,7 @@ export default function StoreListSection({
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!editingStore?.code?.trim() || !editingStore?.name?.trim()) {
-            setErrorMsg('Vui lòng điền đầy đủ Mã siêu thị và Tên siêu thị!');
+            setErrorMsg('Vui lòng điền đầy đủ Mã ST và Tên ST!');
             return;
         }
         setIsSaving(true);
@@ -136,7 +136,7 @@ export default function StoreListSection({
             setIsModalOpen(false);
             setEditingStore(null);
         } else {
-            setErrorMsg('Lưu thất bại! Mã siêu thị có thể đã tồn tại.');
+            setErrorMsg('Lưu thất bại! Mã ST có thể đã tồn tại.');
         }
     };
 
@@ -146,9 +146,9 @@ export default function StoreListSection({
             return;
         }
         const empCount = employeeCountMap[store.name] || 0;
-        let confirmText = `Bạn có chắc chắn muốn xóa siêu thị [${store.name}]?`;
+        let confirmText = `Bạn có chắc chắn muốn xóa ST [${store.name}]?`;
         if (empCount > 0) {
-            confirmText = `⚠️ Siêu thị [${store.name}] hiện đang có ${empCount} nhân viên. Bạn vẫn muốn xóa siêu thị này?`;
+            confirmText = `⚠️ ST [${store.name}] hiện đang có ${empCount} nhân viên. Bạn vẫn muốn xóa ST này?`;
         }
         if (window.confirm(confirmText)) {
             await onDeleteStore(store.id!, store.name);
@@ -175,7 +175,7 @@ export default function StoreListSection({
                     <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
                     <input
                         type="text"
-                        placeholder="Tìm theo mã, tên siêu thị, địa chỉ..."
+                        placeholder="Tìm theo mã, tên ST, địa chỉ..."
                         value={searchQuery}
                         onChange={e => setSearchQuery(e.target.value)}
                         className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500 text-slate-800"
@@ -190,18 +190,18 @@ export default function StoreListSection({
                             className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer"
                         >
                             <Plus className="w-4 h-4" />
-                            <span>Thêm Siêu Thị Mới</span>
+                            <span>Thêm ST Mới</span>
                         </button>
                     ) : (
                         <span className="text-[11px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl flex items-center gap-1.5">
                             <Store className="w-3.5 h-3.5 text-emerald-600" />
-                            <span>{stores.length} siêu thị phụ trách</span>
+                            <span>{stores.length} ST phụ trách</span>
                         </span>
                     )}
                 </div>
             </div>
 
-            {/* Bảng Danh sách siêu thị */}
+            {/* Bảng Danh sách ST */}
             <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left text-xs border-collapse">
@@ -209,7 +209,7 @@ export default function StoreListSection({
                             <tr>
                                 <th className="py-3 px-4 w-12 text-center">STT</th>
                                 <th className="py-3 px-4 w-28">Mã ST</th>
-                                <th className="py-3 px-4">Tên Siêu Thị</th>
+                                <th className="py-3 px-4">Tên ST</th>
                                 <th className="py-3 px-4">Địa Chỉ</th>
                                 <th className="py-3 px-4 w-28 text-center">Nhân Sự</th>
                                 <th className="py-3 px-4 w-32 text-center">Trạng Thái</th>
@@ -220,7 +220,7 @@ export default function StoreListSection({
                             {filteredStores.length === 0 ? (
                                 <tr>
                                     <td colSpan={7} className="py-8 text-center text-slate-400 font-medium">
-                                        Không tìm thấy siêu thị nào phù hợp.
+                                        Không tìm thấy ST nào phù hợp.
                                     </td>
                                 </tr>
                             ) : (
@@ -283,7 +283,7 @@ export default function StoreListSection({
                                                     <button
                                                         onClick={() => handleOpenEditModal(store)}
                                                         className="p-1.5 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition cursor-pointer"
-                                                        title="Sửa siêu thị"
+                                                        title="Sửa ST"
                                                     >
                                                         <Edit2 className="w-3.5 h-3.5" />
                                                     </button>
@@ -291,7 +291,7 @@ export default function StoreListSection({
                                                         <button
                                                             onClick={() => handleDelete(store)}
                                                             className="p-1.5 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
-                                                            title="Xóa siêu thị"
+                                                            title="Xóa ST"
                                                         >
                                                             <Trash2 className="w-3.5 h-3.5" />
                                                         </button>
@@ -307,7 +307,7 @@ export default function StoreListSection({
                 </div>
             </div>
 
-            {/* Modal Thêm / Sửa siêu thị */}
+            {/* Modal Thêm / Sửa ST */}
             {isModalOpen && editingStore && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
                     <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-200">
@@ -315,7 +315,7 @@ export default function StoreListSection({
                             <div className="flex items-center gap-2">
                                 <Store className="w-5 h-5 text-amber-300" />
                                 <h3 className="font-extrabold text-sm">
-                                    {editingStore.id ? 'Chỉnh Sửa Siêu Thị' : 'Thêm Siêu Thị Mới'}
+                                    {editingStore.id ? 'Chỉnh Sửa ST' : 'Thêm ST Mới'}
                                 </h3>
                             </div>
                             <button
@@ -329,7 +329,7 @@ export default function StoreListSection({
                         <form onSubmit={handleSave} className="p-5 space-y-3.5">
                             <div>
                                 <label className="text-[11px] font-bold text-slate-600 block mb-1">
-                                    Mã Siêu Thị (Code) <span className="text-rose-500">*</span>
+                                    Mã ST (Code) <span className="text-rose-500">*</span>
                                 </label>
                                 <input
                                     type="text"
@@ -343,7 +343,7 @@ export default function StoreListSection({
 
                             <div>
                                 <label className="text-[11px] font-bold text-slate-600 block mb-1">
-                                    Tên Siêu Thị <span className="text-rose-500">*</span>
+                                    Tên ST <span className="text-rose-500">*</span>
                                 </label>
                                 <input
                                     type="text"
@@ -356,7 +356,7 @@ export default function StoreListSection({
                             </div>
 
                             <div>
-                                <label className="text-[11px] font-bold text-slate-600 block mb-1">Địa chỉ siêu thị</label>
+                                <label className="text-[11px] font-bold text-slate-600 block mb-1">Địa chỉ ST</label>
                                 <textarea
                                     rows={2}
                                     placeholder="Số nhà, tên đường, phường xã, quận huyện..."
@@ -447,7 +447,7 @@ export default function StoreListSection({
                                     className="flex-1 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition shadow-xs flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
                                 >
                                     <Save className="w-4 h-4" />
-                                    <span>{isSaving ? 'Đang lưu...' : 'Lưu Siêu Thị'}</span>
+                                    <span>{isSaving ? 'Đang lưu...' : 'Lưu ST'}</span>
                                 </button>
                             </div>
                         </form>

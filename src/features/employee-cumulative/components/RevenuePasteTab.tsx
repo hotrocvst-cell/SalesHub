@@ -47,7 +47,7 @@ export default function RevenuePasteTab({
     const [parsedList, setParsedList] = useState<ParsedEmployeeRevenue[]>(initialData);
     const [detectedStore, setDetectedStore] = useState<string | null>(null);
     const [errorMsg, setErrorMsg] = useState('');
-    // Tiêu chí: Mặc định luôn lọc theo danh sách cấu hình khai báo nhân viên theo siêu thị
+    // Tiêu chí: Mặc định luôn lọc theo danh sách cấu hình khai báo nhân viên theo ST
     const [filterByConfigured, setFilterByConfigured] = useState<boolean>(true);
     const [showExcluded, setShowExcluded] = useState<boolean>(false);
 
@@ -142,7 +142,7 @@ export default function RevenuePasteTab({
         runParse(rawQdText, text);
     };
 
-    // Phân loại nhân viên: Hợp lệ theo cấu hình siêu thị vs Ngoài danh sách cấu hình
+    // Phân loại nhân viên: Hợp lệ theo cấu hình ST vs Ngoài danh sách cấu hình
     const { validList, excludedList } = useMemo(() => {
         if (!filterByConfigured || configuredEmployees.length === 0) {
             return { validList: parsedList, excludedList: [] as ParsedEmployeeRevenue[] };
@@ -238,7 +238,7 @@ export default function RevenuePasteTab({
                 </div>
             </div>
 
-            {/* Thông báo phát hiện siêu thị nếu copy cả trang */}
+            {/* Thông báo phát hiện ST nếu copy cả trang */}
             {detectedStore && (
                 <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-2 text-xs text-emerald-800">
                     <Store className="w-4 h-4 text-emerald-600 shrink-0" />
@@ -256,7 +256,7 @@ export default function RevenuePasteTab({
                         className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer"
                     />
                     <Filter className="w-3.5 h-3.5 text-blue-600" />
-                    <span>Chỉ lọc nhân viên theo danh sách cấu hình khai báo của siêu thị</span>
+                    <span>Chỉ lọc nhân viên theo danh sách cấu hình khai báo của ST</span>
                 </label>
 
                 <div className="flex items-center gap-2 font-mono text-[11px]">
@@ -376,7 +376,7 @@ export default function RevenuePasteTab({
                 </div>
             )}
 
-            {/* Hộp xem chi tiết nhân viên bị loại do không nằm trong cấu hình siêu thị */}
+            {/* Hộp xem chi tiết nhân viên bị loại do không nằm trong cấu hình ST */}
             {showExcluded && excludedList.length > 0 && filterByConfigured && (
                 <div className="bg-amber-50/60 border border-amber-200 rounded-2xl p-3.5 space-y-2">
                     <div className="flex items-center justify-between text-xs text-amber-900 font-bold">
@@ -385,7 +385,7 @@ export default function RevenuePasteTab({
                             Danh sách {excludedList.length} nhân sự bị loại bỏ (không có trong cấu hình ST {currentStoreName})
                         </span>
                         <span className="text-[11px] font-normal text-amber-700">
-                            (Bổ sung nhân sự tại trang Cấu hình siêu thị nếu cần)
+                            (Bổ sung nhân sự tại trang Cấu hình ST nếu cần)
                         </span>
                     </div>
                     <div className="max-h-40 overflow-y-auto divide-y divide-amber-200/60 text-xs">

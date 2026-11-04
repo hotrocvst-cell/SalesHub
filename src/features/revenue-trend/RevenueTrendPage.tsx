@@ -71,7 +71,7 @@ export default function RevenueTrendPage() {
         loadData();
     }, [selectedMonth, selectedYear]);
 
-    // 2. DANH SÁCH SIÊU THỊ ĐỘC LẬP (LOẠI BỎ BẢN GHI TỔNG VÀ LỌC THEO PHÂN QUYỀN USER)
+    // 2. DANH SÁCH ST ĐỘC LẬP (LOẠI BỎ BẢN GHI TỔNG VÀ LỌC THEO PHÂN QUYỀN USER)
     const storeList = useMemo(() => {
         if (isGuest) {
             return [getShortStoreName(GUEST_DEMO_STORE)];
@@ -131,7 +131,7 @@ export default function RevenueTrendPage() {
             if (!r.reportDate) return;
             const sName = getShortStoreName(r.storeName);
 
-            // Chốt chặn phân quyền theo siêu thị phụ trách
+            // Chốt chặn phân quyền theo ST phụ trách
             if (isGuest) {
                 if (!isStoreMatch(r.storeName, GUEST_DEMO_STORE) && !isStoreMatch(r.storeName, '838679')) return;
                 if (!isDemoDateAllowed(r.reportDate)) return;
@@ -148,7 +148,7 @@ export default function RevenueTrendPage() {
 
         storeDateMap.forEach(r => cleanedRecords.push(r));
 
-        // Nhóm bản ghi theo từng siêu thị riêng biệt để tính nhịp từng shop trước
+        // Nhóm bản ghi theo từng ST riêng biệt để tính nhịp từng shop trước
         const recordsByStore: Record<string, BusinessDayRecord[]> = {};
         cleanedRecords.forEach(r => {
             const sName = getShortStoreName(r.storeName);
@@ -208,7 +208,7 @@ export default function RevenueTrendPage() {
             const recordsInDate = groupedByDate[date];
 
             if (selectedStore === 'Tổng') {
-                // Lọc bỏ dòng mang tên Tổng nếu có sẵn và chỉ tính các siêu thị thuộc quyền phụ trách
+                // Lọc bỏ dòng mang tên Tổng nếu có sẵn và chỉ tính các ST thuộc quyền phụ trách
                 const memberStores = recordsInDate.filter(r => {
                     const sName = getShortStoreName(r.storeName);
                     if (sName === 'Tổng' || /^(tổng|tong)/i.test(r.storeName)) return false;
@@ -242,7 +242,7 @@ export default function RevenueTrendPage() {
                     storesCount: targetRecords.length
                 });
             } else {
-                // Xem riêng 1 siêu thị
+                // Xem riêng 1 ST
                 const shopRecord = recordsInDate.find(r => 
                     getShortStoreName(r.storeName) === selectedStore || 
                     isStoreMatch(r.storeName, selectedStore) ||
@@ -353,12 +353,12 @@ export default function RevenueTrendPage() {
                     </div>
                 </div>
 
-                {/* HÀNG 1: BỘ LỌC SIÊU THỊ / CỤM (BẮT BUỘC ĐẦU TIÊN & NẰM RIÊNG LẺ 1 DÒNG) */}
+                {/* HÀNG 1: BỘ LỌC ST / CỤM (BẮT BUỘC ĐẦU TIÊN & NẰM RIÊNG LẺ 1 DÒNG) */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2.5 border-b border-slate-100">
                     <div className="flex items-center gap-2">
                         <span className="text-xs font-black text-slate-600 uppercase tracking-wider shrink-0 flex items-center gap-1.5">
                             <Store className="w-4 h-4 text-indigo-600" />
-                            Siêu thị / Cụm:
+                            ST / Cụm:
                         </span>
                         <div className={`flex items-center gap-1.5 border px-3 py-1.5 rounded-xl min-w-[200px] sm:min-w-[280px] ${isLockedToSingleStore ? 'bg-amber-50/90 border-amber-200 text-amber-900 shadow-2xs' : 'bg-slate-50 border-slate-300'}`}>
                             {isLockedToSingleStore ? (
@@ -370,14 +370,14 @@ export default function RevenueTrendPage() {
                                 value={selectedStore}
                                 onChange={(e) => setSelectedStore(e.target.value)}
                                 disabled={isLockedToSingleStore}
-                                title={isLockedToSingleStore ? (isGuest ? 'Tài khoản trải nghiệm sử dụng dữ liệu siêu thị 838679 - Demo Store' : 'Tài khoản nhân viên được cố định theo siêu thị đã đăng ký') : undefined}
+                                title={isLockedToSingleStore ? (isGuest ? 'Tài khoản trải nghiệm sử dụng dữ liệu ST 838679 - Demo Store' : 'Tài khoản nhân viên được cố định theo ST đã đăng ký') : undefined}
                                 className={`bg-transparent outline-none font-bold text-xs w-full ${isLockedToSingleStore ? 'cursor-not-allowed text-amber-900 font-black' : 'cursor-pointer text-slate-700'}`}
                             >
                                 {canViewAllStores && (
                                     <option value="Tổng">
                                         {isAdmin 
-                                            ? `🏢 TỔNG TOÀN CỤM (${storeList.length} siêu thị)`
-                                            : `🏢 TỔNG CỤM PHỤ TRÁCH (${storeList.length} siêu thị)`
+                                            ? `🏢 TỔNG TOÀN CỤM (${storeList.length} ST)`
+                                            : `🏢 TỔNG CỤM PHỤ TRÁCH (${storeList.length} ST)`
                                         }
                                     </option>
                                 )}
@@ -461,7 +461,7 @@ export default function RevenueTrendPage() {
                                     {formatValue(latestData.revenueActual)}
                                 </p>
                                 <p className="text-[11px] text-slate-400 mt-1">
-                                    Tính đến ngày {formatDate(latestData.reportDate)} ({latestData.storesCount} siêu thị)
+                                    Tính đến ngày {formatDate(latestData.reportDate)} ({latestData.storesCount} ST)
                                 </p>
                             </div>
 

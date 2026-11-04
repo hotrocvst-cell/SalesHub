@@ -1,12 +1,12 @@
 /**
  * Trích xuất chi tiết Doanh thu Quy đổi (DTQĐ) và Doanh thu Thực tế (DT Thực)
- * từ chuỗi dữ liệu thô (rawRevenue) được sao chép từ Dashboard BI TGDD.
+ * từ chuỗi dữ liệu thô (rawRevenue) được sao chép từ Dashboard BI.
  *
- * Cấu trúc cột chuẩn của Dashboard BI TGDD:
+ * Cấu trúc cột chuẩn của Dashboard BI:
  * - Cột 0: SỐ LƯỢNG
  * - Cột 1: DOANH THU QĐ (Doanh thu quy đổi dùng để tính Target, %HT, %DKHT)
  * - Cột 2: % TỈ TRỌNG
- * - Cột 3: DOANH THU (Doanh thu thực tế phát sinh tại siêu thị)
+ * - Cột 3: DOANH THU (Doanh thu thực tế phát sinh tại ST)
  * - Cột 4: TARGET
  * - Cột 5: % HT TARGET
  * - Cột 6: TB 3 THÁNG
@@ -33,7 +33,7 @@ export function extractStoreRevenueDetails(
 
     const lines = rawRevenue.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
 
-    // Xử lý chuỗi riêng lẻ 1 siêu thị (được tạo bởi hệ thống OCR hoặc nhập liệu ngắn)
+    // Xử lý chuỗi riêng lẻ 1 ST (được tạo bởi hệ thống OCR hoặc nhập liệu ngắn)
     if (lines.length <= 6 && (rawRevenue.includes('DTQĐ:') || rawRevenue.includes('DT Thực:') || rawRevenue.includes('DT Thuc:'))) {
         const qdMatch = rawRevenue.match(/DTQĐ:\s*([\d,.]+)/i);
         const realMatch = rawRevenue.match(/DT\s*Th[ựu]c:\s*([\d,.]+)/i);
@@ -61,7 +61,7 @@ export function extractStoreRevenueDetails(
         }
     }
 
-    // 1. Trích xuất mã số siêu thị từ storeName (ví dụ: '111', '10335', ...)
+    // 1. Trích xuất mã số ST từ storeName (ví dụ: '111', '10335', ...)
     const storeIdMatch = storeName.match(/^(\d{3,6})/);
     const targetStoreId = storeIdMatch ? storeIdMatch[1] : '';
 
@@ -81,17 +81,17 @@ export function extractStoreRevenueDetails(
         if (
             line.startsWith('Đơn vị') ||
             line.includes('triệu đồng') ||
-            line.startsWith('Siêu thị') ||
+            line.startsWith('ST') ||
             line.startsWith('SỐ LƯỢNG') ||
             line.startsWith('DOANH THU')
         ) {
             continue;
         }
 
-        // Bỏ qua dòng Tổng nếu đang tìm siêu thị cụ thể
+        // Bỏ qua dòng Tổng nếu đang tìm ST cụ thể
         if (/^(tổng|tong)/i.test(line)) continue;
 
-        // Kiểm tra xem dòng này có phải của siêu thị mục tiêu không
+        // Kiểm tra xem dòng này có phải của ST mục tiêu không
         let isMatch = false;
 
         const lineIdMatch = line.match(/^(\d{3,6})/);

@@ -11,7 +11,7 @@ export interface SystemPagePermission {
     description?: string;
     is_enabled: boolean;
     allowed_roles: UserRole[];
-    allowed_stores?: string[]; // MỚI: Danh sách siêu thị được phép sử dụng (trống hoặc có 'ALL' = Tất cả siêu thị)
+    allowed_stores?: string[]; // MỚI: Danh sách ST được phép sử dụng (trống hoặc có 'ALL' = Tất cả ST)
     order_index: number;
     updated_at?: string;
     // Cấu hình Badge hiển thị trên Sidebar
@@ -92,10 +92,10 @@ const RAW_DEFAULT_PAGE_PERMISSIONS: SystemPagePermission[] = [
     // BÁO CÁO KINH DOANH
     {
         page_key: 'bc_cum_sieu_thi',
-        page_name: 'BC Cụm Siêu Thị',
+        page_name: 'BC Cụm ST',
         path: '/bao-cao-cum-sieu-thi',
         group_title: 'BÁO CÁO KINH DOANH',
-        description: 'Báo cáo sức khỏe cụm siêu thị 11 cột, theo dõi lũy kế doanh thu thực, DTQĐ, target vượt trội và trả chậm',
+        description: 'Báo cáo sức khỏe cụm ST 11 cột, theo dõi lũy kế doanh thu thực, DTQĐ, target vượt trội và trả chậm',
         is_enabled: true,
         allowed_roles: ['ADMIN', 'QUAN_LY', 'TRUONG_CA'],
         order_index: 1,
@@ -221,7 +221,7 @@ const RAW_DEFAULT_PAGE_PERMISSIONS: SystemPagePermission[] = [
         page_name: 'Tiến độ thi đua',
         path: '/tien-do-thi-dua',
         group_title: 'SỨC KHỎE NHÂN VIÊN',
-        description: 'Báo cáo tiến độ hoàn thành các chương trình thi đua theo nhân sự và siêu thị',
+        description: 'Báo cáo tiến độ hoàn thành các chương trình thi đua theo nhân sự và ST',
         is_enabled: true,
         allowed_roles: ['ADMIN', 'QUAN_LY', 'TRUONG_CA', 'NHAN_VIEN'],
         order_index: 7,
@@ -278,7 +278,7 @@ const RAW_DEFAULT_PAGE_PERMISSIONS: SystemPagePermission[] = [
         page_name: 'Trạng Thái Dữ Liệu',
         path: '/trang-thai-du-lieu',
         group_title: 'DỮ LIỆU & PHIÊN LÀM VIỆC',
-        description: 'Tổng hợp trạng thái cập nhật phiên n-1 của dữ liệu doanh thu, thi đua siêu thị và nhân viên',
+        description: 'Tổng hợp trạng thái cập nhật phiên n-1 của dữ liệu doanh thu, thi đua ST và nhân viên',
         is_enabled: true,
         allowed_roles: ['ADMIN', 'QUAN_LY', 'TRUONG_CA', 'NHAN_VIEN'],
         order_index: 6,
@@ -362,7 +362,7 @@ const RAW_DEFAULT_PAGE_PERMISSIONS: SystemPagePermission[] = [
         page_name: 'Quản lý bản ghi ST',
         path: '/quan-ly-du-lieu',
         group_title: 'DỮ LIỆU & PHIÊN LÀM VIỆC',
-        description: 'Tra cứu, lọc và dọn dẹp các bản ghi số liệu siêu thị',
+        description: 'Tra cứu, lọc và dọn dẹp các bản ghi số liệu ST',
         is_enabled: true,
         allowed_roles: ['ADMIN', 'QUAN_LY', 'TRUONG_CA'],
         order_index: 9,
@@ -423,7 +423,7 @@ const RAW_DEFAULT_PAGE_PERMISSIONS: SystemPagePermission[] = [
         page_name: 'Xmusic Playlist',
         path: '/xmusic-playlist',
         group_title: 'TIỆN ÍCH BÁN HÀNG',
-        description: 'Tự động hóa phát nhạc siêu thị XMusicStation, tích hợp Userscript Tampermonkey và danh sách bài hát',
+        description: 'Tự động hóa phát nhạc ST XMusicStation, tích hợp Userscript Tampermonkey và danh sách bài hát',
         is_enabled: true,
         allowed_roles: ['ADMIN', 'QUAN_LY', 'TRUONG_CA', 'NHAN_VIEN'],
         order_index: 12,
@@ -453,7 +453,7 @@ const RAW_DEFAULT_PAGE_PERMISSIONS: SystemPagePermission[] = [
         page_name: 'Cân tồn kho',
         path: '/can-ton-kho',
         group_title: 'TIỆN ÍCH BÁN HÀNG',
-        description: 'Hỗ trợ cân đối tồn kho, lọc sản phẩm thiếu hàng (<1), tìm siêu thị dư hàng (>=2) và tạo danh sách gợi ý xin hàng',
+        description: 'Hỗ trợ cân đối tồn kho, lọc sản phẩm thiếu hàng (<1), tìm ST dư hàng (>=2) và tạo danh sách gợi ý xin hàng',
         is_enabled: true,
         allowed_roles: ['ADMIN', 'QUAN_LY', 'TRUONG_CA', 'NHAN_VIEN'],
         order_index: 14,
@@ -484,10 +484,10 @@ const RAW_DEFAULT_PAGE_PERMISSIONS: SystemPagePermission[] = [
     // HỆ THỐNG & CẤU HÌNH
     {
         page_key: 'cau_hinh_st_nv',
-        page_name: 'Cấu hình Siêu thị & NV',
+        page_name: 'Cấu hình ST & NV',
         path: '/cau-hinh-sieu-thi-nhan-vien',
         group_title: 'HỆ THỐNG & CẤU HÌNH',
-        description: 'Khai báo danh mục siêu thị, nhân sự và phân ca',
+        description: 'Khai báo danh mục ST, nhân sự và phân ca',
         is_enabled: true,
         allowed_roles: ['ADMIN', 'QUAN_LY'],
         order_index: 10,
@@ -501,7 +501,7 @@ const RAW_DEFAULT_PAGE_PERMISSIONS: SystemPagePermission[] = [
         page_name: 'Cấu hình thi đua & tính điểm',
         path: '/cau-hinh-thi-dua',
         group_title: 'HỆ THỐNG & CẤU HÌNH',
-        description: 'Từ điển thi đua và cấu hình tính điểm theo từng siêu thị',
+        description: 'Từ điển thi đua và cấu hình tính điểm theo từng ST',
         is_enabled: true,
         allowed_roles: ['ADMIN', 'QUAN_LY', 'TRUONG_CA'],
         order_index: 11,
@@ -540,10 +540,10 @@ const RAW_DEFAULT_PAGE_PERMISSIONS: SystemPagePermission[] = [
     },
     {
         page_key: 'phan_quyen_sieu_thi',
-        page_name: 'Phân quyền Siêu thị',
+        page_name: 'Phân quyền ST',
         path: '/phan-quyen-sieu-thi',
         group_title: 'HỆ THỐNG & CẤU HÌNH',
-        description: 'Theo dõi & phân quyền danh sách siêu thị được phép xem của các tài khoản',
+        description: 'Theo dõi & phân quyền danh sách ST được phép xem của các tài khoản',
         is_enabled: true,
         allowed_roles: ['ADMIN', 'QUAN_LY'],
         order_index: 14,

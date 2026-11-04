@@ -95,7 +95,7 @@ export default function EmployeeRankingSummaryPage() {
     const [stores, setStores] = useState<StoreItem[]>([]);
     const [selectedStore, setSelectedStore] = useState<string>('all');
 
-    // Phân quyền theo siêu thị
+    // Phân quyền theo ST
     const { allowedStores, isLockedToSingleStore, canViewAllStores } = useUserStoreFilter(
         stores,
         selectedStore,
@@ -288,7 +288,7 @@ export default function EmployeeRankingSummaryPage() {
         loadAllData();
     }, [selectedStore, selectedMonth, selectedYear]);
 
-    // 4. BẢN ĐỒ NHÂN VIÊN -> SIÊU THỊ & MAP DỮ LIỆU TỪ PHIÊN
+    // 4. BẢN ĐỒ NHÂN VIÊN -> ST & MAP DỮ LIỆU TỪ PHIÊN
     const empStoreMap = useMemo(() => {
         const map: Record<string, string> = {};
         employees.forEach(e => {
@@ -335,7 +335,7 @@ export default function EmployeeRankingSummaryPage() {
         const safePassed = Math.max(1, passedDays);
         const safeTotal = Math.max(1, operatingConfig.operatingDays);
 
-        // Danh sách nhân viên thuộc siêu thị được chọn và thỏa mãn phân quyền
+        // Danh sách nhân viên thuộc ST được chọn và thỏa mãn phân quyền
         const targetEmployees = employees.filter(emp => {
             const empStore = empStoreMap[emp.employee_id?.trim()] || emp.store_name || '';
             const isDemo = isGuestDemoStore(empStore) || emp.employee_id?.trim().startsWith('NV838');
@@ -348,7 +348,7 @@ export default function EmployeeRankingSummaryPage() {
                 return false;
             }
 
-            // 2. Lọc theo siêu thị được chọn & phân quyền người dùng
+            // 2. Lọc theo ST được chọn & phân quyền người dùng
             if (selectedStore === 'all') {
                 if (isAdmin) return true;
                 return allowedStores.some(s => isStoreMatch(s.name, empStore, stores));
@@ -379,7 +379,7 @@ export default function EmployeeRankingSummaryPage() {
             const forecastRevenueQd = (revenueQd / safePassed) * safeTotal;
             const forecastRate = revenueTarget > 0 ? (forecastRevenueQd / revenueTarget) * 100 : 0;
 
-            // Dữ liệu thi đua của nhân viên: Tự động tra cứu cấu hình theo đúng siêu thị của NV
+            // Dữ liệu thi đua của nhân viên: Tự động tra cứu cấu hình theo đúng ST của NV
             const scoreCfg = getStoreCampaignScoreConfig(empStore, stores);
             const isPointsMode = scoreCfg.scoring_mode === 'POINTS';
 
@@ -799,7 +799,7 @@ export default function EmployeeRankingSummaryPage() {
                 { header: 'STT', key: 'stt', width: 6 },
                 { header: 'Mã NV', key: 'id', width: 12 },
                 { header: 'Họ và tên', key: 'name', width: 25 },
-                { header: 'Siêu thị', key: 'store', width: 25 },
+                { header: 'ST', key: 'store', width: 25 },
                 { header: 'Chức danh', key: 'title', width: 15 },
                 { header: 'DTQĐ (tr)', key: 'rev_qd', width: 14 },
                 { header: 'Target DT (tr)', key: 'target', width: 14 },
@@ -945,10 +945,10 @@ export default function EmployeeRankingSummaryPage() {
                     </div>
                 </div>
 
-                {/* BỘ LỌC SIÊU THỊ / CỤM RIÊNG LẺ ĐẦU TIÊN (RULE 10 CONVENTION) */}
+                {/* BỘ LỌC ST / CỤM RIÊNG LẺ ĐẦU TIÊN (RULE 10 CONVENTION) */}
                 <div className="mt-3 pt-3 border-t border-slate-100 pb-2.5 border-b">
                     <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">
-                        Siêu Thị / Đơn Vị Phụ Trách
+                        ST / Đơn Vị Phụ Trách
                     </label>
                     <div className="flex items-center gap-2">
                         <select
@@ -957,7 +957,7 @@ export default function EmployeeRankingSummaryPage() {
                             onChange={(e) => setSelectedStore(e.target.value)}
                             className="w-full sm:max-w-md text-xs font-black bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-100 disabled:text-slate-500 cursor-pointer shadow-2xs"
                         >
-                            {canViewAllStores && <option value="all">🏢 Toàn Cụm Siêu Thị</option>}
+                            {canViewAllStores && <option value="all">🏢 Toàn Cụm ST</option>}
                             {allowedStores.map(st => (
                                 <option key={st.id || st.name} value={st.name}>
                                     🏪 {getShortStoreName(st.name)}
@@ -1082,7 +1082,7 @@ export default function EmployeeRankingSummaryPage() {
                 className="max-w-[960px] mx-auto bg-white rounded-3xl p-3 sm:p-5 border border-slate-200 shadow-sm space-y-4 font-avo"
                 style={{ fontFamily: "'UTM Avo', 'UTM-Avo', sans-serif" }}
             >
-                {/* 1. HEADER BÁO CÁO (TÊN SIÊU THỊ, KỲ BÁO CÁO) */}
+                {/* 1. HEADER BÁO CÁO (TÊN ST, KỲ BÁO CÁO) */}
                 <div className="border-b border-slate-100 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div>
                         <div className="text-[11px] font-black uppercase text-indigo-600 tracking-wider flex items-center gap-1.5">
@@ -1090,7 +1090,7 @@ export default function EmployeeRankingSummaryPage() {
                             <span>BÁO CÁO XẾP HẠNG TỔNG HỢP</span>
                         </div>
                         <h2 className="text-base sm:text-xl font-black text-slate-900 tracking-tight mt-0.5">
-                            {selectedStore === 'all' ? 'TOÀN CỤM SIÊU THỊ' : getShortStoreName(selectedStore)}
+                            {selectedStore === 'all' ? 'TOÀN CỤM ST' : getShortStoreName(selectedStore)}
                         </h2>
                     </div>
 
@@ -1101,7 +1101,7 @@ export default function EmployeeRankingSummaryPage() {
                         <div className="px-2.5 py-1 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-900 text-xs font-black">
                             👥 {summary.totalEmployees} Nhân sự
                         </div>
-                        <div className="px-2.5 py-1 rounded-xl bg-purple-50 border border-purple-200 text-purple-900 text-xs font-black" title="Chế độ tính điểm thi đua của siêu thị">
+                        <div className="px-2.5 py-1 rounded-xl bg-purple-50 border border-purple-200 text-purple-900 text-xs font-black" title="Chế độ tính điểm thi đua của ST">
                             🎯 {summary.scoringModeLabel}
                         </div>
                     </div>

@@ -5,6 +5,13 @@ import {
 import { getShortenedEmployeeName, cleanBiNumber } from '../../../core/lib/formatters';
 import type { EmployeeSessionRecord } from '../../employee-cumulative/utils/sessionStorage';
 import type { EmployeeItem } from '../../../core/lib/storage';
+import {
+    resolveCampaignNameByTarget,
+    type KnownStoreCampaignTarget,
+    type CampaignMappingItem
+} from './campaignTargetMappingService';
+
+export type { KnownStoreCampaignTarget, CampaignMappingItem };
 
 function getCachedModel(): string | null {
     try {
@@ -22,9 +29,16 @@ function setCachedModel(model: string): void {
 
 export interface EmployeeOcrCampaignItem {
     campaignName: string;
+    rawCampaignName?: string;
     value: number;
     rank?: number | null;
     badge?: string | null;
+    ratioPercent?: number;
+    storeActual?: number;
+    storeTarget?: number;
+    unit?: string;
+    isAutoMatched?: boolean;
+    mappedReason?: string;
 }
 
 export interface EmployeeOcrParsedItem {
@@ -42,6 +56,7 @@ export interface EmployeeOcrResult {
     success: boolean;
     employees: EmployeeOcrParsedItem[];
     campaignTotals?: Array<{ campaignName: string; totalValue: number }>;
+    campaignMappings?: CampaignMappingItem[];
     reportDate?: string;
     screenshotTimestamp?: string;
     errors?: string[];
@@ -185,23 +200,37 @@ Chỉ trả về JSON thuần, không bọc markdown \`\`\`json.
 
 /**
  * Prompt chuyên biệt cho trích xuất MỘT NHÓM BẢNG THI ĐUA (Emulation Batch)
+ * Hỗ trợ cả 2 định dạng:
+ * 1. Định dạng phân cấp hình cây theo Siêu Thị (BI Smartphone Tree: Chương trình -> Siêu thị -> Nhân viên % tỉ trọng)
+ * 2. Định dạng bảng phẳng truyền thống (Danh sách nhân viên với giá trị trực tiếp)
  */
 function buildEmulationBatchPrompt(): string {
     return `
-Bạn là chuyên gia phân tích dữ liệu thi đua bán lẻ từ ảnh chụp màn hình BI.
-Tôi gửi một nhóm nhỏ các hình ảnh chứa các bảng/khối chương trình thi đua nhân viên (ví dụ: 'T09 - T10 IPHONE 18 series, iPhone Duo', 'T10 - Bảo Hiểm Tổng', 'GIA DỤNG', 'PHỤ KIỆN'...).
-Mỗi ảnh hoặc nửa ảnh có thể chứa một hoặc nhiều khối thi đua xếp dọc nhau.
-Mỗi khối có:
-- Tiêu đề chương trình thi đua (nằm ở hàng đầu tiên của bảng, ví dụ: 'T09 - T10 IPHONE 18 series, iPhone Duo').
-- Dòng TỔNG (có tổng doanh thu hoặc số lượng của chương trình, ví dụ: 14,352.92).
-- Danh sách nhân viên trong bảng: Mã NV, Họ Tên ĐẦY ĐỦ, Doanh thu hoặc Số lượng đạt được, Hạng (rank), Nhãn (badge: TOP/BOTTOM).
+Bạn là chuyên gia phân tích dữ liệu thi đua bán lẻ từ ảnh chụp màn hình BI trên điện thoại thông minh (smartphone).
+Hình ảnh gửi gồm các bảng/khối chương trình thi đua nhân viên theo Siêu Thị (ST).
 
-YÊU CẦU TRÍCH XUẤT:
-1. Nhận diện từng chương trình thi đua và danh sách nhân viên đạt được trong chương trình đó.
-2. DẤU PHẨY ',' LÀ DẤU PHÂN CÁCH HÀNG NGHÌN.
-   - VÍ DỤ: "14,352.92" -> 14352.92; "3,038.70" -> 3038.70; "3,002.13" -> 3002.13; "2,437.00" -> 2437.00; "490.35" -> 490.35; "91.29" -> 91.29; "90.04" -> 90.04; "82.64" -> 82.64.
-3. HỌ TÊN ĐẦY ĐỦ: Bảng thi đua thường có họ tên đầy đủ nhất (ví dụ "260732 - Nguyễn Thị Hồng Loan" -> Mã "260732", Họ tên "Nguyễn Thị Hồng Loan").
-4. LOẠI BỎ DỮ LIỆU DƯ THỪA: Bỏ qua các dòng không phải nhân viên thực tế như 'online - Online - 18001060'. Bỏ qua dòng TỔNG khi liệt kê nhân viên.
+ĐẶC BIỆT CHÚ Ý CẤU TRÚC PHÂN CẤP THEO SIÊU THỊ (HIERARCHICAL TREE FORMAT):
+Bảng có các cột: CHƯƠNG TRÌNH | THỰC HIỆN | TARGET | % DỰ KIẾN HOÀN THÀNH (hoặc % HOÀN THÀNH).
+Cấu trúc các hàng:
+1. HÀNG CHƯƠNG TRÌNH: Bắt đầu bằng tên chương trình (ví dụ: 'T11 - Tai nghe', 'T11 - Sạc dự phòng', 'T11 - Trả chậm...', 'T11 - Bảo hiểm Tổng', 'T11 - VAS', 'T11 - Topzone', 'T11 - Phụ kiện khác IT...', 'T11 - Bảo hiểm Thợ ICT', 'T11 - Loa', 'T11 - Phụ kiện công...', 'T11 - Ví trả sau').
+   - Có huy hiệu đơn vị: '[DT]' (Doanh thu) hoặc '[SL]' (Số lượng).
+   - Cột THỰC HIỆN: Số lũy kế thực hiện ST (ví dụ: -1.93, 3.26, 179.40, 68.37, 92, 1,844.77, 296.22, 149.77, 45.41, 14.40, 10.29, 165.08).
+   - Cột TARGET: Chỉ tiêu (ví dụ: 20.79, 23.79, 1,169.83, 356.05, 484, 10,887.00, 1,718.82, 584.09, 128.48, 32.51, 15.58, 213.60).
+2. HÀNG SIÊU THỊ (ST): Nằm dưới hàng chương trình (thường có dấu '-' hoặc icon, ví dụ: '[-] AAR_BRV_VTA - 290 Trương Công Định...').
+   - Cột THỰC HIỆN và TARGET: Giá trị thực hiện và target của ST này.
+3. HÀNG NHÂN VIÊN: Nằm thụt lề dưới hàng ST.
+   - Cột CHƯƠNG TRÌNH: '<Mã NV> - <Họ và tên nhân viên>' (ví dụ: '22838 - Trần Thị Sáu', '260732 - Nguyễn Thị Hồ...', '27560 - Bùi Minh Lãm', '4614 - Lê Quang Vinh', '267997 - Nguyễn Thùy...', '249041 - Nguyễn Phương...').
+   - Cột THỰC HIỆN: Hiển thị TỶ LỆ TỈ TRỌNG (%) của nhân viên so với ST (ví dụ: '66.9%', '33.4%', '43.3%', '35%', '21.7%', '51%', '30.5%', '100%', '88%', '11.9%...'). Nếu là dấu gạch ngang '-' nghĩa là 0%.
+   - Cột TARGET: thường để trống.
+
+(NGOÀI RA CŨNG HỖ TRỢ BẢNG PHẲNG TRUYỀN THỐNG: Nếu cột THỰC HIỆN của nhân viên ghi số tiền/số lượng trực tiếp không có dấu % thì trích xuất vào directValue).
+
+QUY TẮC BẮT BUỘC:
+1. DẤU PHẨY ',' LÀ DẤU PHÂN CÁCH HÀNG NGHÌN (ví dụ: '1,169.83' -> 1169.83; '1,718.82' -> 1718.82; '10,887.00' -> 10887; '1,844.77' -> 1844.77).
+2. TỈ LỆ TỈ TRỌNG (%): Loại bỏ ký tự '%' và chuyển thành số (ví dụ: '66.9%' -> 66.9; '43.3%' -> 43.3; '100%' -> 100; '-' -> 0).
+3. ĐƠN VỊ: Nhận diện nhãn '[DT]' -> 'DT', '[SL]' -> 'SL'.
+4. TÊN BỊ CẮT NGẮN: Giữ nguyên tên gốc (kể cả có '...' như 'T11 - Trả chậm...').
+5. BỎ QUA HOÀN TOÀN: Dòng 'online - Online - 18001060' và các dòng chữ mờ watermark.
 
 Trả về DUY NHẤT một khối JSON thuần:
 {
@@ -210,14 +239,19 @@ Trả về DUY NHẤT một khối JSON thuần:
   ],
   "campaigns": [
     {
-      "campaignName": string,
+      "programName": string,
+      "unit": "DT" | "SL",
+      "storeName": string,
+      "storeActual": number,
+      "storeTarget": number,
       "employees": [
         {
           "employeeId": string,
           "fullName": string,
-          "value": number,
-          "rank": number,
-          "badge": string
+          "ratioPercent": number | null,
+          "directValue": number | null,
+          "rank": number | null,
+          "badge": string | null
         }
       ]
     }
@@ -322,6 +356,134 @@ async function callGeminiVisionJson(
 }
 
 /**
+ * Xử lý kết quả trả về từ một lô ảnh thi đua (Emulation Chunk Result)
+ * Hỗ trợ bóc tách phân cấp theo Siêu Thị, tính toán giá trị từ % tỉ trọng
+ * và tự động mapping tên thi đua bị cắt ngắn (...) qua Target ST.
+ */
+function processEmulationChunkResult(
+    emuParsed: any,
+    employeeMap: Map<string, EmployeeOcrParsedItem>,
+    allCampaignTotals: Array<{ campaignName: string; totalValue: number }>,
+    detectedMappings: Map<string, CampaignMappingItem>,
+    targetMappingOptions?: {
+        knownTargets?: KnownStoreCampaignTarget[];
+        campaignDict?: Array<{ raw_key: string; display_name: string }>;
+    }
+) {
+    if (!emuParsed) return;
+
+    // 1. Gộp campaignTotals
+    if (Array.isArray(emuParsed.campaignTotals)) {
+        emuParsed.campaignTotals.forEach((ct: any) => {
+            const cName = String(ct.campaignName || '').trim();
+            const val = cleanBiNumber(ct.totalValue);
+            if (cName) {
+                allCampaignTotals.push({ campaignName: cName, totalValue: val });
+            }
+        });
+    }
+
+    // 2. Gộp danh sách nhân viên & thành tích thi đua
+    const campaignsList: any[] = Array.isArray(emuParsed.campaigns) ? emuParsed.campaigns : [];
+    campaignsList.forEach(camp => {
+        const rawName = String(camp.programName || camp.campaignName || '').trim();
+        const storeActual = cleanBiNumber(camp.storeActual || camp.actual || camp.totalValue);
+        const storeTarget = cleanBiNumber(camp.storeTarget || camp.target);
+        const unit = String(camp.unit || 'DT').toUpperCase().includes('SL') ? 'SL' : 'DT';
+
+        // Tự động mapping tên chương trình qua Target ST
+        const mappingRes = resolveCampaignNameByTarget(
+            rawName,
+            storeTarget,
+            storeActual,
+            targetMappingOptions?.knownTargets || [],
+            targetMappingOptions?.campaignDict || []
+        );
+        const resolvedName = mappingRes.resolvedName || rawName;
+
+        if (resolvedName) {
+            detectedMappings.set(resolvedName, {
+                rawName,
+                resolvedName,
+                unit,
+                storeActual,
+                storeTarget,
+                isAutoMatched: mappingRes.isAutoMatched,
+                mappedReason: mappingRes.reason
+            });
+        }
+
+        const emps: any[] = Array.isArray(camp.employees) ? camp.employees : [];
+        emps.forEach(empRow => {
+            const empId = String(empRow.employeeId || '').trim();
+            let fullName = String(empRow.fullName || '').trim();
+            if (!empId || empId === 'online' || fullName.toLowerCase().includes('online - 18001060')) return;
+
+            // Tính giá trị thực hiện của nhân viên
+            let val = 0;
+            let ratioPercent: number | undefined;
+
+            if (empRow.directValue !== undefined && empRow.directValue !== null && cleanBiNumber(empRow.directValue) > 0) {
+                val = cleanBiNumber(empRow.directValue);
+            } else if (empRow.ratioPercent !== undefined && empRow.ratioPercent !== null) {
+                ratioPercent = cleanBiNumber(empRow.ratioPercent);
+                if (ratioPercent > 0 && storeActual !== 0) {
+                    const rawCalculated = storeActual * (ratioPercent / 100);
+                    val = Number(rawCalculated.toFixed(2));
+                }
+            } else if (empRow.value !== undefined && empRow.value !== null) {
+                val = cleanBiNumber(empRow.value);
+            }
+
+            let targetEmp = employeeMap.get(empId);
+            if (!targetEmp) {
+                targetEmp = {
+                    employeeId: empId,
+                    fullName: fullName,
+                    revenueQd: 0,
+                    revenueReal: 0,
+                    installmentReal: 0,
+                    installmentRate: 0,
+                    campaigns: {},
+                    campaignDetails: []
+                };
+                employeeMap.set(empId, targetEmp);
+            } else {
+                if (fullName && (!targetEmp.fullName || targetEmp.fullName.endsWith('...') || targetEmp.fullName.length <= 8)) {
+                    targetEmp.fullName = fullName;
+                }
+            }
+
+            if (resolvedName) {
+                targetEmp.campaigns[resolvedName] = val;
+                targetEmp.campaignDetails = targetEmp.campaignDetails || [];
+
+                const detailItem: EmployeeOcrCampaignItem = {
+                    campaignName: resolvedName,
+                    rawCampaignName: rawName,
+                    value: val,
+                    ratioPercent,
+                    storeActual,
+                    storeTarget,
+                    unit,
+                    rank: empRow.rank ? Number(empRow.rank) : null,
+                    badge: empRow.badge || null,
+                    isAutoMatched: mappingRes.isAutoMatched,
+                    mappedReason: mappingRes.reason
+                };
+
+                const existingIdx = targetEmp.campaignDetails.findIndex(d => d.campaignName === resolvedName);
+                if (existingIdx !== -1) {
+                    targetEmp.campaignDetails[existingIdx] = detailItem;
+                } else {
+                    targetEmp.campaignDetails.push(detailItem);
+                }
+            }
+        });
+    });
+}
+
+/**
  * Trích xuất và hợp nhất toàn bộ các ảnh chụp nhân viên (DT-QĐ, DT-THỰC, THI ĐUA)
  * SỬ DỤNG CƠ CHẾ CHIA NHỎ THEO LÔ (BATCHING CHUNKS CỦA 3 ẢNH) VÀ NÉN ẢNH
  * ĐẢM BẢO XỬ LÝ MƯỢT MÀ KHI NẠP 20 FILE ẢNH THI ĐUA MÀ KHÔNG BỊ ABORT / TIMEOUT.
@@ -335,7 +497,11 @@ export async function extractAndMergeEmployeeImages(
     },
     systemEmployees: EmployeeItem[] = [],
     onProgress?: (status: string, percent: number) => void,
-    keySource: GeminiKeySource = 'ADMIN'
+    keySource: GeminiKeySource = 'ADMIN',
+    targetMappingOptions?: {
+        knownTargets?: KnownStoreCampaignTarget[];
+        campaignDict?: Array<{ raw_key: string; display_name: string }>;
+    }
 ): Promise<EmployeeOcrResult> {
     const { qdFile, realFile, emulationFiles } = files;
     const hasRevenue = Boolean(qdFile || realFile);
@@ -364,6 +530,7 @@ export async function extractAndMergeEmployeeImages(
 
     const employeeMap = new Map<string, EmployeeOcrParsedItem>();
     const allCampaignTotals: Array<{ campaignName: string; totalValue: number }> = [];
+    const detectedMappings = new Map<string, CampaignMappingItem>();
     let detectedTimestamp: string | undefined;
 
     // Chia nhỏ danh sách ảnh thi đua thành các lô (Mỗi lô 3 ảnh)
@@ -453,62 +620,13 @@ export async function extractAndMergeEmployeeImages(
                 (msg) => onProgress?.(`Nhóm thi đua ${cIdx + 1}: ${msg}`, pct)
             );
 
-            // Gộp campaignTotals
-            if (Array.isArray(emuParsed.campaignTotals)) {
-                emuParsed.campaignTotals.forEach((ct: any) => {
-                    const cName = String(ct.campaignName || '').trim();
-                    const val = cleanBiNumber(ct.totalValue);
-                    if (cName) {
-                        allCampaignTotals.push({ campaignName: cName, totalValue: val });
-                    }
-                });
-            }
-
-            // Gộp danh sách nhân viên & thành tích thi đua
-            const campaignsList: any[] = Array.isArray(emuParsed.campaigns) ? emuParsed.campaigns : [];
-            campaignsList.forEach(camp => {
-                const cName = String(camp.campaignName || '').trim();
-                const emps: any[] = Array.isArray(camp.employees) ? camp.employees : [];
-
-                emps.forEach(empRow => {
-                    const empId = String(empRow.employeeId || '').trim();
-                    let fullName = String(empRow.fullName || '').trim();
-                    if (!empId || empId === 'online' || fullName.toLowerCase().includes('online - 18001060')) return;
-
-                    const val = cleanBiNumber(empRow.value);
-                    let targetEmp = employeeMap.get(empId);
-
-                    if (!targetEmp) {
-                        targetEmp = {
-                            employeeId: empId,
-                            fullName: fullName,
-                            revenueQd: 0,
-                            revenueReal: 0,
-                            installmentReal: 0,
-                            installmentRate: 0,
-                            campaigns: {},
-                            campaignDetails: []
-                        };
-                        employeeMap.set(empId, targetEmp);
-                    } else {
-                        // Cập nhật họ tên đầy đủ nhất từ bảng thi đua
-                        if (fullName && (!targetEmp.fullName || targetEmp.fullName.endsWith('...') || targetEmp.fullName.length <= 8)) {
-                            targetEmp.fullName = fullName;
-                        }
-                    }
-
-                    if (cName) {
-                        targetEmp.campaigns[cName] = val;
-                        targetEmp.campaignDetails = targetEmp.campaignDetails || [];
-                        targetEmp.campaignDetails.push({
-                            campaignName: cName,
-                            value: val,
-                            rank: empRow.rank ? Number(empRow.rank) : null,
-                            badge: empRow.badge || null
-                        });
-                    }
-                });
-            });
+            processEmulationChunkResult(
+                emuParsed,
+                employeeMap,
+                allCampaignTotals,
+                detectedMappings,
+                targetMappingOptions
+            );
         } catch (err: any) {
             console.warn(`Lỗi khi quét nhóm thi đua ${cIdx + 1}:`, err);
             // Tiếp tục quét các nhóm thi đua còn lại
@@ -545,6 +663,7 @@ export async function extractAndMergeEmployeeImages(
         success: finalEmployees.length > 0,
         employees: finalEmployees,
         campaignTotals: allCampaignTotals,
+        campaignMappings: Array.from(detectedMappings.values()),
         screenshotTimestamp: detectedTimestamp
     };
 }
@@ -559,7 +678,11 @@ export async function extractAdditionalEmulationImages(
     currentEmployees: EmployeeOcrParsedItem[],
     systemEmployees: EmployeeItem[] = [],
     onProgress?: (status: string, percent: number) => void,
-    keySource: GeminiKeySource = 'ADMIN'
+    keySource: GeminiKeySource = 'ADMIN',
+    targetMappingOptions?: {
+        knownTargets?: KnownStoreCampaignTarget[];
+        campaignDict?: Array<{ raw_key: string; display_name: string }>;
+    }
 ): Promise<EmployeeOcrResult> {
     if (additionalFiles.length === 0) {
         return { success: true, employees: currentEmployees };
@@ -588,6 +711,7 @@ export async function extractAdditionalEmulationImages(
     }
 
     const allCampaignTotals: Array<{ campaignName: string; totalValue: number }> = [];
+    const detectedMappings = new Map<string, CampaignMappingItem>();
 
     for (let cIdx = 0; cIdx < chunks.length; cIdx++) {
         const fromImg = cIdx * CHUNK_SIZE + 1;
@@ -604,65 +728,13 @@ export async function extractAdditionalEmulationImages(
                 keySource
             );
 
-            if (Array.isArray(emuParsed.campaignTotals)) {
-                emuParsed.campaignTotals.forEach((ct: any) => {
-                    const cName = String(ct.campaignName || '').trim();
-                    const val = cleanBiNumber(ct.totalValue);
-                    if (cName) allCampaignTotals.push({ campaignName: cName, totalValue: val });
-                });
-            }
-
-            const campaignsList: any[] = Array.isArray(emuParsed.campaigns) ? emuParsed.campaigns : [];
-            campaignsList.forEach(camp => {
-                const cName = String(camp.campaignName || '').trim();
-                const emps: any[] = Array.isArray(camp.employees) ? camp.employees : [];
-
-                emps.forEach(empRow => {
-                    const empId = String(empRow.employeeId || '').trim();
-                    const fullName = String(empRow.fullName || '').trim();
-                    if (!empId || empId === 'online' || fullName.toLowerCase().includes('online - 18001060')) return;
-
-                    const val = cleanBiNumber(empRow.value);
-                    let targetEmp = employeeMap.get(empId);
-
-                    if (!targetEmp) {
-                        targetEmp = {
-                            employeeId: empId,
-                            fullName: fullName,
-                            revenueQd: 0,
-                            revenueReal: 0,
-                            installmentReal: 0,
-                            installmentRate: 0,
-                            campaigns: {},
-                            campaignDetails: []
-                        };
-                        employeeMap.set(empId, targetEmp);
-                    } else if (fullName && (!targetEmp.fullName || targetEmp.fullName.endsWith('...'))) {
-                        targetEmp.fullName = fullName;
-                    }
-
-                    if (cName) {
-                        targetEmp.campaigns[cName] = val;
-                        targetEmp.campaignDetails = targetEmp.campaignDetails || [];
-                        const existingDetailIdx = targetEmp.campaignDetails.findIndex(d => d.campaignName === cName);
-                        if (existingDetailIdx !== -1) {
-                            targetEmp.campaignDetails[existingDetailIdx] = {
-                                campaignName: cName,
-                                value: val,
-                                rank: empRow.rank ? Number(empRow.rank) : null,
-                                badge: empRow.badge || null
-                            };
-                        } else {
-                            targetEmp.campaignDetails.push({
-                                campaignName: cName,
-                                value: val,
-                                rank: empRow.rank ? Number(empRow.rank) : null,
-                                badge: empRow.badge || null
-                            });
-                        }
-                    }
-                });
-            });
+            processEmulationChunkResult(
+                emuParsed,
+                employeeMap,
+                allCampaignTotals,
+                detectedMappings,
+                targetMappingOptions
+            );
         } catch (err: any) {
             console.warn(`Lỗi khi quét nhóm bổ sung ${cIdx + 1}:`, err);
         }
@@ -673,7 +745,8 @@ export async function extractAdditionalEmulationImages(
     return {
         success: true,
         employees: Array.from(employeeMap.values()),
-        campaignTotals: allCampaignTotals
+        campaignTotals: allCampaignTotals,
+        campaignMappings: Array.from(detectedMappings.values())
     };
 }
 

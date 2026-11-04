@@ -183,7 +183,7 @@ export default function DailyReportPage() {
         setIsLoadingSessions(false);
     };
 
-    // Tải từ điển, danh sách siêu thị và phiên Realtime Cloud khi khởi tạo
+    // Tải từ điển, danh sách ST và phiên Realtime Cloud khi khởi tạo
     useEffect(() => {
         let loadedDict: CampaignDictItem[] = [];
         fetchCampaignDictionary().then(res => {
@@ -209,7 +209,7 @@ export default function DailyReportPage() {
         setRevenueData(parsed.revenueData);
         setRevenueStores(parsed.revenueStores);
         setSessionSummary(parsed.sessionSummary);
-        showToast(`🎉 Đã cập nhật phiên Realtime mới cho ${savedSessions.length} siêu thị từ Cloud!`);
+        showToast(`🎉 Đã cập nhật phiên Realtime mới cho ${savedSessions.length} ST từ Cloud!`);
     };
 
     // Xử lý nút bóc tách
@@ -225,7 +225,7 @@ export default function DailyReportPage() {
         setAllData(emuParsed);
         setRevenueData(revMap);
         setRevenueStores(revList);
-        showToast(`✅ Đã bóc tách ${emuParsed.length} mục thi đua & ${revList.length} siêu thị!`);
+        showToast(`✅ Đã bóc tách ${emuParsed.length} mục thi đua & ${revList.length} ST!`);
     };
 
     // Xóa trắng dữ liệu dán
@@ -245,7 +245,7 @@ export default function DailyReportPage() {
         showToast('Đã làm mới vùng dán số liệu!');
     };
 
-    // Doanh thu siêu thị đang chọn
+    // Doanh thu ST đang chọn
     const currentRevenue = useMemo(() => {
         const isCluster = selectedStore === 'Tổng' || selectedStore === 'all';
         if (isCluster) {
@@ -264,7 +264,7 @@ export default function DailyReportPage() {
         return Object.values(revenueData).some(r => (r.dtTraGop || 0) > 0 || (r.pctTraGop || 0) > 0);
     }, [realRevenueText, revenueData]);
 
-    // Danh sách siêu thị khả dụng (khử trùng lặp và phân quyền theo vai trò)
+    // Danh sách ST khả dụng (khử trùng lặp và phân quyền theo vai trò)
     const storeOptions = useMemo(() => {
         const set = new Set<string>();
         allData.forEach(d => {
@@ -284,12 +284,12 @@ export default function DailyReportPage() {
 
         const deduplicated = deduplicateStoreNames(Array.from(set), availableStores);
 
-        // Với ADMIN: Được xem toàn bộ mọi siêu thị
+        // Với ADMIN: Được xem toàn bộ mọi ST
         if (isAdmin) {
             return deduplicated;
         }
 
-        // Với User KHÔNG PHẢI ADMIN: PHÂN QUYỀN HIỂN THỊ CHỈ XEM SIÊU THỊ PHỤ TRÁCH
+        // Với User KHÔNG PHẢI ADMIN: PHÂN QUYỀN HIỂN THỊ CHỈ XEM ST PHỤ TRÁCH
         return deduplicated.filter(s =>
             canAccessStore(s) ||
             canAccessStore(getShortStoreName(s))
@@ -511,8 +511,8 @@ export default function DailyReportPage() {
                     tableReady={!isTableMissing}
                     tableName="realtime_store_sessions"
                     customMessage={sessionSummary
-                        ? `Phiên Realtime: ${sessionSummary.screenshotTimeStr || (sessionSummary.sessionTime ? new Date(sessionSummary.sessionTime).toLocaleTimeString('vi-VN') : '')} (${sessionSummary.storeCount} siêu thị)`
-                        : 'Bảng realtime_store_sessions (Mỗi siêu thị lưu 1 phiên duy nhất)'
+                        ? `Phiên Realtime: ${sessionSummary.screenshotTimeStr || (sessionSummary.sessionTime ? new Date(sessionSummary.sessionTime).toLocaleTimeString('vi-VN') : '')} (${sessionSummary.storeCount} ST)`
+                        : 'Bảng realtime_store_sessions (Mỗi ST lưu 1 phiên duy nhất)'
                     }
                     compact={true}
                 />
@@ -592,7 +592,7 @@ export default function DailyReportPage() {
             {/* TÙY CHỌN DỰ PHÒNG: VÙNG DÁN VĂN BẢN CŨ (TẠM ẨN THEO YÊU CẦU) */}
             <div className="flex items-center justify-between px-1" data-html2canvas-ignore="true" data-export-ignore="true">
                 <span className="text-[11px] text-slate-500 font-medium">
-                    Phương thức nạp số liệu chính: <strong className="text-blue-700">OCR Hình Ảnh & Nhập Trực Quan</strong>
+                    Phương thức nhập liệu chính: <strong className="text-blue-700">OCR Hình Ảnh</strong>
                 </span>
                 <button
                     type="button"
@@ -620,15 +620,15 @@ export default function DailyReportPage() {
                 />
             )}
 
-            {/* THANH ĐIỀU KHIỂN & BỘ LỌC (QUY CHUẨN 10: SIÊU THỊ NẰM HÀNG ĐẦU TIÊN) */}
+            {/* THANH ĐIỀU KHIỂN & BỘ LỌC (QUY CHUẨN 10: ST NẰM HÀNG ĐẦU TIÊN) */}
             <div className="bg-slate-50/90 border border-slate-200/90 rounded-2xl p-3.5 sm:p-4 space-y-3">
-                {/* Dòng 1: Chọn Siêu Thị & Nút Hành Động */}
+                {/* Dòng 1: Chọn ST & Nút Hành Động */}
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
                     <div className="flex-1">
                         <div className="flex items-center justify-between mb-1 flex-wrap gap-1.5">
                             <label className="text-[11px] font-bold text-slate-600 uppercase flex items-center gap-1">
                                 <Store className="w-3.5 h-3.5 text-blue-600" />
-                                <span>Cụm / Siêu Thị</span>
+                                <span>Cụm / ST</span>
                             </label>
                             <div className="flex items-center gap-1.5 flex-wrap">
                                 <button
@@ -638,13 +638,13 @@ export default function DailyReportPage() {
                                     title="Nạp doanh thu (DTQĐ, DT Thực, Trả góp) và thi đua qua OCR hoặc nhập tay trực quan"
                                 >
                                     <Camera className="w-3 h-3 text-blue-600" />
-                                    <span>📸 Doanh Thu & Thi Đua Cụm</span>
+                                    <span>📸 Nhập theo Cụm</span>
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => setIsQuickEmulationModalOpen(true)}
                                     className="text-[11px] font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded-lg flex items-center gap-1 transition cursor-pointer"
-                                    title="Nạp nhanh thi đua thẻ mobile cho siêu thị (hỗ trợ Ctrl+V hoặc kéo thả ảnh)"
+                                    title="Nhập thi đua cho ST (hỗ trợ Ctrl+V hoặc kéo thả ảnh)"
                                 >
                                     <Sparkles className="w-3 h-3 text-emerald-600" />
                                     <span>📸 Thi Đua Từng ST</span>
@@ -660,7 +660,7 @@ export default function DailyReportPage() {
                                 <option value="Tổng">🏢 TỔNG TOÀN CỤM</option>
                             )}
                             {!isAdmin && storeOptions.length === 0 && (
-                                <option value="" disabled>Chưa được phân quyền siêu thị</option>
+                                <option value="" disabled>Chưa được phân quyền ST</option>
                             )}
                             {storeOptions.map(s => (
                                 <option key={s} value={s}>{formatStoreDisplayName(s)}</option>
@@ -879,7 +879,7 @@ export default function DailyReportPage() {
                 currentUserName={currentUser?.full_name || currentUser?.employee_id || 'ADMIN'}
             />
 
-            {/* MODAL NẠP NHANH THI ĐUA TỪNG SIÊU THỊ (THẺ MOBILE - HỖ TRỢ CTRL+V) */}
+            {/* MODAL NẠP NHANH THI ĐUA TỪNG ST (THẺ MOBILE - HỖ TRỢ CTRL+V) */}
             <QuickStoreEmulationModal
                 isOpen={isQuickEmulationModalOpen}
                 onClose={() => setIsQuickEmulationModalOpen(false)}

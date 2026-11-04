@@ -92,7 +92,7 @@ export function resolveCanonicalCampaign(
 }
 
 /**
- * Kiểm tra nhân viên có thuộc siêu thị được chọn hay không
+ * Kiểm tra nhân viên có thuộc ST được chọn hay không
  */
 export function isEmployeeInStore(
     employeeId: string,
@@ -108,8 +108,8 @@ export function isEmployeeInStore(
         return isStoreMatch(empStore, selectedStore, storesList);
     }
 
-    // Nếu không có trong danh bạ nhân viên, kiểm tra theo siêu thị của phiên
-    if (sessionStoreName && sessionStoreName !== 'Toàn Cụm Siêu Thị') {
+    // Nếu không có trong danh bạ nhân viên, kiểm tra theo ST của phiên
+    if (sessionStoreName && sessionStoreName !== 'Toàn Cụm ST') {
         return isStoreMatch(sessionStoreName, selectedStore, storesList);
     }
 
@@ -118,8 +118,8 @@ export function isEmployeeInStore(
 
 /**
  * Chuyển đổi một phiên dữ liệu đã cập nhật thành Bảng Tổng Hợp Thi Đua Ngành Hàng
- * - Lọc kết quả nhân viên theo siêu thị và CHỈ CHỌN nhân viên có khai báo target
- * - Tổng số thi đua CHỈ TÍNH theo thi đua có target và theo siêu thị
+ * - Lọc kết quả nhân viên theo ST và CHỈ CHỌN nhân viên có khai báo target
+ * - Tổng số thi đua CHỈ TÍNH theo thi đua có target và theo ST
  * - Số liệu mỗi ô là kết quả % Dự Kiến Hoàn Thành (%DKHT)
  * - Tên nhân viên rút gọn: MSNV - Tên NV viết tắt
  * - Thứ hạng sắp xếp giảm dần theo số thi đua dự kiến đạt
@@ -145,7 +145,7 @@ export function buildCampaignSummaryFromSession(
     const applyOffsets = (options?.applyOffsets ?? true) && allOffsets.length > 0;
 
     // 1. Lọc kết quả nhân viên:
-    // (a) Theo siêu thị (nếu có chọn siêu thị cụ thể)
+    // (a) Theo ST (nếu có chọn ST cụ thể)
     // (b) CHỈ CHỌN NHÂN VIÊN CÓ KHAI BÁO TARGET (targetsMap[empId] có ít nhất 1 target > 0)
     const filteredRecords = rawRecords.filter(r => {
         const empId = (r.employee_id || '').trim();
@@ -157,7 +157,7 @@ export function buildCampaignSummaryFromSession(
         const hasTarget = Object.values(empTargets).some(v => Number(v) > 0);
         if (!hasTarget) return false;
 
-        // Lọc theo siêu thị
+        // Lọc theo ST
         if (selectedStore !== 'all') {
             const belongsToStore = isEmployeeInStore(
                 empId,
@@ -173,7 +173,7 @@ export function buildCampaignSummaryFromSession(
     });
 
     // 2. Tổng số thi đua chỉ tính theo thi đua có target và theo ST:
-    // Thu thập các thi đua mà các nhân viên thuộc siêu thị này có target > 0
+    // Thu thập các thi đua mà các nhân viên thuộc ST này có target > 0
     // Chuẩn hóa về canonicalKey để triệt tiêu việc nhân đôi cột khi đổi tên / cập nhật raw_key (ví dụ: Ví trả sau vs T10 - VÍ TRẢ SAU)
     const canonicalCategoriesMap = new Map<string, {
         canonicalKey: string;
@@ -219,7 +219,7 @@ export function buildCampaignSummaryFromSession(
     const safeTotalDays = Math.max(1, operatingDays);
 
     const effectiveStoreName = selectedStore === 'all'
-        ? (session.store_name || 'Toàn Cụm Siêu Thị')
+        ? (session.store_name || 'Toàn Cụm ST')
         : selectedStore;
 
     const baseScoreConfig = getStoreCampaignScoreConfig(effectiveStoreName);
@@ -461,7 +461,7 @@ export function generateSmartRemarks(
             under50Count: c.under50Count
         }));
 
-    // 4. Mẫu tin nhắn Messaging App chuẩn phong cách TGDD/DMX
+    // 4. Mẫu tin nhắn Messaging App chuẩn
     const topNames = topEmployees.map((t, idx) => `   ${idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉'} ${t.name}: dự kiến đạt ${t.achieved} (${t.rate}%)`).join('\n');
     const bottomNames = bottomEmployees.map(b => `   👉 ${b.name}: dự kiến đạt ${b.achieved} (${b.rate}%)`).join('\n');
     const bestCatText = bestCategories.map(c => `   🔥 ${c.name}: ${c.passedCount}/${data.rows.length} bạn hoàn thành (${c.passRate}%)`).join('\n');

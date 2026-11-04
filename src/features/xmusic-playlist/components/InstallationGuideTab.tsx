@@ -70,7 +70,7 @@ export default function InstallationGuideTab({
                                 Tính năng cải tiến nổi bật trong bản Userscript v1.2.0
                             </h3>
                             <span className="text-[10px] font-bold bg-indigo-200/70 text-indigo-800 px-2 py-0.5 rounded-full">
-                                Siêu thị tối ưu
+                                ST tối ưu
                             </span>
                         </div>
                         <ul className="text-xs text-slate-700 mt-2 space-y-1.5 leading-relaxed font-medium">
@@ -258,7 +258,7 @@ export default function InstallationGuideTab({
                             Mở và trải nghiệm trên XMusicStation
                         </h2>
                         <p className="text-xs text-slate-500">
-                            Tận hưởng âm nhạc siêu thị tự động hoàn toàn chỉ với một cú nhấp chuột
+                            Tận hưởng âm nhạc ST tự động hoàn toàn chỉ với một cú nhấp chuột
                         </p>
                     </div>
                 </div>

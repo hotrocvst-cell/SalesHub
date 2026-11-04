@@ -129,7 +129,7 @@ export default function VoucherListTable({
         return Array.from(set).sort((a, b) => a - b);
     }, [vouchers]);
 
-    // Danh sách siêu thị của các nhân viên đã thao tác lấy mã
+    // Danh sách ST của các nhân viên đã thao tác lấy mã
     const storeOptions = useMemo(() => {
         const set = new Set<string>();
         vouchers.forEach(v => {
@@ -405,7 +405,7 @@ export default function VoucherListTable({
                                 type="text"
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                placeholder="Tìm mã, đơn, NV, siêu thị..."
+                                placeholder="Tìm mã, đơn, NV, ST..."
                                 className="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 placeholder:text-slate-400 focus:outline-emerald-600"
                             />
                         </div>
@@ -467,14 +467,14 @@ export default function VoucherListTable({
                             ))}
                         </select>
 
-                        {/* Lọc Siêu thị thao tác của user */}
+                        {/* Lọc ST thao tác của user */}
                         {storeOptions.length > 0 && (
                             <select
                                 value={filterStore}
                                 onChange={(e) => setFilterStore(e.target.value)}
                                 className="bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 cursor-pointer max-w-[170px] truncate"
                             >
-                                <option value="ALL">🏪 Tất cả siêu thị nhận</option>
+                                <option value="ALL">🏪 Tất cả ST nhận</option>
                                 {storeOptions.map(st => (
                                     <option key={st} value={st}>{getShortStoreName(st)}</option>
                                 ))}
@@ -668,7 +668,7 @@ export default function VoucherListTable({
                                 onClick={onExportExcel}
                                 disabled={isExportingExcel}
                                 className="px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 text-xs font-black transition cursor-pointer flex items-center gap-1.5 shadow-2xs disabled:opacity-60"
-                                title="Xuất toàn bộ data tồn kho mã voucher của cụm siêu thị ra file Excel (.xlsx)"
+                                title="Xuất toàn bộ data tồn kho mã voucher của cụm ST ra file Excel (.xlsx)"
                             >
                                 <FileSpreadsheet className={`w-3.5 h-3.5 text-emerald-600 ${isExportingExcel ? 'animate-bounce' : ''}`} />
                                 <span>{isExportingExcel ? 'Đang xuất...' : 'Xuất Excel'}</span>
@@ -899,17 +899,17 @@ export default function VoucherListTable({
                                                             <span className="text-slate-400 font-mono text-[10px]">({item.claimed_by_id})</span>
                                                         </div>
 
-                                                        {/* Tên siêu thị của user thao tác */}
+                                                        {/* Tên ST của user thao tác */}
                                                         {item.claimed_by_store ? (
                                                             <div
                                                                 className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded max-w-[190px] truncate"
-                                                                title={`Siêu thị thao tác: ${item.claimed_by_store}`}
+                                                                title={`ST thao tác: ${item.claimed_by_store}`}
                                                             >
                                                                 <span className="shrink-0">🏪</span>
                                                                 <span className="truncate">{getShortStoreName(item.claimed_by_store)}</span>
                                                             </div>
                                                         ) : (
-                                                            <div className="text-[10px] text-slate-400 italic">Chưa rõ siêu thị</div>
+                                                            <div className="text-[10px] text-slate-400 italic">Chưa rõ ST</div>
                                                         )}
 
                                                         {/* Mã đơn hàng & Thời gian cấp */}
@@ -942,7 +942,7 @@ export default function VoucherListTable({
                                                         {/* Cụm / Kho & Người nạp */}
                                                         <div className="flex items-center gap-1.5 flex-wrap">
                                                             <span className="inline-block text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
-                                                                🏢 {item.store_name === 'Toàn Cụm' || item.store_name === 'Toàn Cụm Siêu Thị' ? 'Kho Toàn Cụm' : getShortStoreName(item.store_name)}
+                                                                🏢 {item.store_name === 'Toàn Cụm' || item.store_name === 'Toàn Cụm ST' ? 'Kho Toàn Cụm' : getShortStoreName(item.store_name)}
                                                             </span>
                                                             {item.created_by && (
                                                                 <div className="text-[10px] text-slate-500 font-medium">

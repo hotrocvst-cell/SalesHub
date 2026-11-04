@@ -55,7 +55,7 @@ export default function RealtimeSessionManagerModal({
         setTimeout(() => setActionMsg(null), 3000);
     };
 
-    // Bắt đầu sửa tên siêu thị
+    // Bắt đầu sửa tên ST
     const handleStartEdit = (currentName: string) => {
         setEditingStoreName(currentName);
         setNewStoreNameInput(currentName);
@@ -68,10 +68,10 @@ export default function RealtimeSessionManagerModal({
         setNewStoreNameInput('');
     };
 
-    // Lưu tên siêu thị mới
+    // Lưu tên ST mới
     const handleSaveNewName = async (oldName: string) => {
         if (!newStoreNameInput.trim()) {
-            showMsg('error', 'Tên siêu thị không được để trống!');
+            showMsg('error', 'Tên ST không được để trống!');
             return;
         }
         if (newStoreNameInput.trim() === oldName.trim()) {
@@ -84,11 +84,11 @@ export default function RealtimeSessionManagerModal({
         setIsProcessing(false);
 
         if (res.success) {
-            showMsg('success', `✅ Đã đổi tên siêu thị thành "${newStoreNameInput.trim()}"!`);
+            showMsg('success', `✅ Đã đổi tên ST thành "${newStoreNameInput.trim()}"!`);
             handleCancelEdit();
             onSessionsUpdated();
         } else {
-            showMsg('error', `❌ Lỗi: ${res.error || 'Không thể đổi tên siêu thị'}`);
+            showMsg('error', `❌ Lỗi: ${res.error || 'Không thể đổi tên ST'}`);
         }
     };
 
@@ -194,14 +194,14 @@ export default function RealtimeSessionManagerModal({
                 <div className="p-3.5 sm:p-4 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shrink-0">
                     <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-xs font-bold text-slate-700">
-                            Tổng số phiên: <strong className="text-blue-700 font-extrabold">{sessions.length}</strong> siêu thị
+                            Tổng số phiên: <strong className="text-blue-700 font-extrabold">{sessions.length}</strong> ST
                         </span>
                         <span className="text-slate-300">•</span>
                         <input
                             type="text"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            placeholder="Tìm theo tên siêu thị, người cập nhật..."
+                            placeholder="Tìm theo tên ST, người cập nhật..."
                             className="bg-white border border-slate-300 text-slate-800 text-xs py-1.5 px-3 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 w-full sm:w-64"
                         />
                     </div>
@@ -267,13 +267,13 @@ export default function RealtimeSessionManagerModal({
                                     }`}
                                 >
                                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                                        {/* THÔNG TIN SIÊU THỊ & PHIÊN */}
+                                        {/* THÔNG TIN ST & PHIÊN */}
                                         <div className="flex-1 space-y-1.5 w-full">
                                             {isEditing ? (
                                                 <div className="space-y-2">
                                                     <label className="text-[11px] font-black uppercase text-blue-700 flex items-center gap-1">
                                                         <Edit3 className="w-3.5 h-3.5" />
-                                                        <span>Sửa Tên Siêu Thị (Chuẩn Hóa):</span>
+                                                        <span>Sửa Tên ST (Chuẩn Hóa):</span>
                                                     </label>
                                                     <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                                                         <input
@@ -386,7 +386,7 @@ export default function RealtimeSessionManagerModal({
                                                             type="button"
                                                             onClick={() => handleStartEdit(sess.store_name)}
                                                             className="px-2.5 py-1.5 bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 border border-slate-200 hover:border-blue-300 rounded-xl text-xs font-bold flex items-center gap-1 transition cursor-pointer"
-                                                            title="Đổi tên / Chuẩn hóa tên siêu thị"
+                                                            title="Đổi tên / Chuẩn hóa tên ST"
                                                         >
                                                             <Edit3 className="w-3.5 h-3.5" />
                                                             <span>Sửa Tên</span>

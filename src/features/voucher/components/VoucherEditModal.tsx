@@ -63,7 +63,7 @@ export default function VoucherEditModal({
     const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
     const [errorMsg, setErrorMsg] = useState<string>('');
 
-    // Danh sách siêu thị trong cụm của người dùng
+    // Danh sách ST trong cụm của người dùng
     const clusterStoreNames = useMemo<string[]>(() => {
         if (allowedStores && allowedStores.length > 0) {
             return allowedStores.map(s => s.name);
@@ -104,7 +104,7 @@ export default function VoucherEditModal({
                 setScopeType('CLUSTER_CUSTOM');
                 setSelectedStoresInCluster(noteClusters);
             }
-        } else if (voucher.store_name === 'Toàn Cụm Siêu Thị' || voucher.store_name === 'Toàn Cụm' || voucher.store_name === 'all') {
+        } else if (voucher.store_name === 'Toàn Cụm ST' || voucher.store_name === 'Toàn Cụm' || voucher.store_name === 'all') {
             if (isAdmin) {
                 setScopeType('GLOBAL');
             } else {
@@ -181,25 +181,25 @@ export default function VoucherEditModal({
         let targetClusterStores: string[] | undefined;
 
         if (scopeType === 'CLUSTER_ALL') {
-            targetStoreName = clusterStoreNames[0] || 'Toàn Cụm Siêu Thị';
+            targetStoreName = clusterStoreNames[0] || 'Toàn Cụm ST';
             targetClusterStores = clusterStoreNames.length > 0 ? clusterStoreNames : undefined;
         } else if (scopeType === 'CLUSTER_CUSTOM') {
             if (selectedStoresInCluster.length === 0) {
-                setErrorMsg('Vui lòng tích chọn ít nhất 1 siêu thị trong cụm được phép sử dụng mã!');
+                setErrorMsg('Vui lòng tích chọn ít nhất 1 ST trong cụm được phép sử dụng mã!');
                 return;
             }
-            targetStoreName = selectedStoresInCluster[0] || 'Toàn Cụm Siêu Thị';
+            targetStoreName = selectedStoresInCluster[0] || 'Toàn Cụm ST';
             targetClusterStores = selectedStoresInCluster;
         } else if (scopeType === 'SINGLE') {
             if (!singleStoreName) {
-                setErrorMsg('Vui lòng chọn siêu thị áp dụng cho mã voucher!');
+                setErrorMsg('Vui lòng chọn ST áp dụng cho mã voucher!');
                 return;
             }
             targetStoreName = singleStoreName;
             targetClusterStores = []; // Xóa tag cụm
         } else {
             // GLOBAL (Admin)
-            targetStoreName = 'Toàn Cụm Siêu Thị';
+            targetStoreName = 'Toàn Cụm ST';
             targetClusterStores = [];
         }
 
@@ -398,7 +398,7 @@ export default function VoucherEditModal({
                         {scopeType === 'CLUSTER_CUSTOM' && (
                             <div className="bg-white rounded-xl p-2.5 border border-emerald-200 space-y-2 mt-2">
                                 <div className="flex items-center justify-between text-[11px] font-bold text-slate-600 border-b border-slate-100 pb-1.5">
-                                    <span>Tích chọn các siêu thị được quyền lấy mã này:</span>
+                                    <span>Tích chọn các ST được quyền lấy mã này:</span>
                                     <button
                                         type="button"
                                         onClick={handleSelectAllStoresInCluster}
@@ -455,11 +455,11 @@ export default function VoucherEditModal({
 
                         <p className="text-[10.5px] text-emerald-900 leading-relaxed">
                             {scopeType === 'CLUSTER_ALL'
-                                ? `Mã được cấp cho toàn bộ nhân viên tại ${clusterStoreNames.length} siêu thị thuộc Cụm của bạn.`
+                                ? `Mã được cấp cho toàn bộ nhân viên tại ${clusterStoreNames.length} ST thuộc Cụm của bạn.`
                                 : scopeType === 'CLUSTER_CUSTOM'
-                                ? `Mã chỉ cấp riêng cho nhân viên tại ${selectedStoresInCluster.length} siêu thị đã tích chọn.`
+                                ? `Mã chỉ cấp riêng cho nhân viên tại ${selectedStoresInCluster.length} ST đã tích chọn.`
                                 : scopeType === 'SINGLE'
-                                ? `Mã chỉ cấp cho nhân viên đang làm việc tại siêu thị ${getShortStoreName(singleStoreName)}.`
+                                ? `Mã chỉ cấp cho nhân viên đang làm việc tại ST ${getShortStoreName(singleStoreName)}.`
                                 : 'Mã dùng chung cho toàn bộ nhân viên trên toàn quốc.'}
                         </p>
                     </div>

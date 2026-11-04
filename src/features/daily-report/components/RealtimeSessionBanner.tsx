@@ -93,7 +93,7 @@ export default function RealtimeSessionBanner({
                             <span>
                                 Cụm/ST: <strong className="text-white">
                                     {!isAdmin
-                                        ? (selectedStore === 'Tổng' ? 'Siêu thị phân quyền' : selectedStore)
+                                        ? (selectedStore === 'Tổng' ? 'ST phân quyền' : selectedStore)
                                         : (selectedStore === 'Tổng' ? 'Toàn Cụm' : selectedStore)
                                     }
                                 </strong>
@@ -101,7 +101,7 @@ export default function RealtimeSessionBanner({
                             <span className="text-slate-500">•</span>
                             <span>
                                 {sessionSummary
-                                    ? `${sessionSummary.storeCount} siêu thị • ${sessionSummary.campaignCount} mục thi đua`
+                                    ? `${sessionSummary.storeCount} ST • ${sessionSummary.campaignCount} mục thi đua`
                                     : 'Chưa có phiên dữ liệu nào trên Cloud'
                                 }
                             </span>
@@ -148,20 +148,20 @@ export default function RealtimeSessionBanner({
                             type="button"
                             onClick={onOpenManagerModal}
                             className="px-3 py-1.5 bg-indigo-600/70 hover:bg-indigo-600 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition border border-indigo-400/40 cursor-pointer shadow-xs"
-                            title="Quản lý, chuẩn hóa tên siêu thị hoặc xóa các phiên Realtime trên Cloud"
+                            title="Quản lý, chuẩn hóa tên ST hoặc xóa các phiên Realtime trên Cloud"
                         >
                             <Settings className="w-3.5 h-3.5 text-indigo-200" />
                             <span>Quản Lý Phiên</span>
                         </button>
                     )}
 
-                    {/* Nút Nạp Nhanh Thi Đua Từng Siêu Thị (Thẻ Mobile) */}
+                    {/* Nút Nạp Nhanh Thi Đua Từng ST (Thẻ Mobile) */}
                     {onOpenQuickEmulationModal && (
                         <button
                             type="button"
                             onClick={onOpenQuickEmulationModal}
                             className="px-3.5 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition shadow-sm border border-emerald-400/40 cursor-pointer"
-                            title="Nạp nhanh thi đua thẻ mobile cho từng siêu thị (hỗ trợ Ctrl+V hoặc kéo thả ảnh)"
+                            title="Nhập Thi đua cho từng ST (hỗ trợ Ctrl+V hoặc kéo thả ảnh)"
                         >
                             <Sparkles className="w-3.5 h-3.5 text-amber-300" />
                             <span>📸 Thi Đua Từng ST</span>
@@ -173,10 +173,10 @@ export default function RealtimeSessionBanner({
                         type="button"
                         onClick={onOpenUpdateModal}
                         className="px-3.5 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition shadow-sm border border-blue-400/30 cursor-pointer"
-                        title={isAdmin ? "Nạp dữ liệu OCR/Nhập tay cả cụm siêu thị (Admin)" : "Nạp doanh thu & thi đua realtime cho siêu thị phụ trách"}
+                        title={isAdmin ? "Nạp dữ liệu OCR/Nhập tay cả cụm ST (Admin)" : "Nạp doanh thu & thi đua realtime cho ST phụ trách"}
                     >
                         <Camera className="w-3.5 h-3.5" />
-                        <span>{isAdmin ? '📸 Nạp Cả Cụm' : '📸 Doanh Thu & Thi Đua Cụm'}</span>
+                        <span>{isAdmin ? '📸 Nạp Cả Cụm' : '📸 Nhập theo Cụm'}</span>
                     </button>
                 </div>
             </div>
@@ -201,7 +201,7 @@ export default function RealtimeSessionBanner({
                         </div>
 
                         <p className="text-xs text-slate-400 leading-relaxed">
-                            Chạy câu lệnh SQL này trong <strong>Supabase SQL Editor</strong> để khởi tạo bảng <code>realtime_store_sessions</code> với ràng buộc <code>UNIQUE(store_name)</code> (mỗi siêu thị chỉ lưu 1 phiên realtime duy nhất).
+                            Chạy câu lệnh SQL này trong <strong>Supabase SQL Editor</strong> để khởi tạo bảng <code>realtime_store_sessions</code> với ràng buộc <code>UNIQUE(store_name)</code> (mỗi ST chỉ lưu 1 phiên realtime duy nhất).
                         </p>
 
                         <pre className="p-3 bg-slate-950 border border-slate-800 rounded-xl text-xs font-mono text-emerald-400 overflow-x-auto max-h-60 leading-relaxed">

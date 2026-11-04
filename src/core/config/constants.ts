@@ -1,4 +1,4 @@
-// Danh sách siêu thị được cấp quyền vận hành hệ thống
+// Danh sách ST được cấp quyền vận hành hệ thống
 export const ALLOWED_STORES = [
     'TGD_BRV_VTA - 290 Trương Công Định',
     'AAR_BRV_VTA - 290 Trương Công Định'

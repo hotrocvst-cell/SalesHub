@@ -164,7 +164,7 @@ export default function EditPageModal({
                                 setPageName(e.target.value);
                                 if (errorMsg) setErrorMsg('');
                             }}
-                            placeholder="Ví dụ: BC Cụm Siêu Thị, Doanh Thu Realtime,..."
+                            placeholder="Ví dụ: BC Cụm ST, Doanh Thu Realtime,..."
                             autoFocus
                             className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 text-xs font-bold text-slate-800 transition outline-hidden"
                         />

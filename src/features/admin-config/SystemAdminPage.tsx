@@ -74,7 +74,7 @@ export default function SystemAdminPage() {
     const [sqlTab, setSqlTab] = useState<'PERMISSIONS' | 'BADGE' | 'AUTH' | 'SESSIONS' | 'CLUSTER' | 'ALL'>('PERMISSIONS');
     const [isCopied, setIsCopied] = useState<boolean>(false);
 
-    // Quản lý phân quyền theo siêu thị cho từng trang
+    // Quản lý phân quyền theo ST cho từng trang
     const [stores, setStores] = useState<StoreItem[]>([]);
     const [selectedPageForStores, setSelectedPageForStores] = useState<SystemPagePermission | null>(null);
     const [isStoreModalOpen, setIsStoreModalOpen] = useState<boolean>(false);
@@ -95,7 +95,7 @@ export default function SystemAdminPage() {
     const [selectedPageForExcel, setSelectedPageForExcel] = useState<SystemPagePermission | null>(null);
     const [isExcelModalOpen, setIsExcelModalOpen] = useState<boolean>(false);
 
-    // Tải danh sách siêu thị từ cơ sở dữ liệu
+    // Tải danh sách ST từ cơ sở dữ liệu
     useEffect(() => {
         fetchStores().then(res => {
             if (res.success && res.data) {
@@ -117,8 +117,8 @@ export default function SystemAdminPage() {
         setHasChanges(true);
         const count = allowedStores?.length || 0;
         showToast(count > 0
-            ? `🏢 Đã giới hạn quyền cho ${count} siêu thị! Nhấn "Lưu lên Cloud" để kích hoạt.`
-            : `🌍 Đã mở quyền cho tất cả siêu thị! Nhấn "Lưu lên Cloud" để kích hoạt.`
+            ? `🏢 Đã giới hạn quyền cho ${count} ST! Nhấn "Lưu lên Cloud" để kích hoạt.`
+            : `🌍 Đã mở quyền cho tất cả ST! Nhấn "Lưu lên Cloud" để kích hoạt.`
         );
     };
 
@@ -515,7 +515,7 @@ export default function SystemAdminPage() {
                         type="button"
                         onClick={() => setIsApprovalModalOpen(true)}
                         className="px-3.5 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-black flex items-center gap-1.5 shadow-sm transition cursor-pointer"
-                        title="Xét duyệt các yêu cầu đăng ký tài khoản & khai báo siêu thị mới"
+                        title="Xét duyệt các yêu cầu đăng ký tài khoản & khai báo ST mới"
                     >
                         <UserCheck className="w-3.5 h-3.5 text-amber-300" />
                         <span>Xét Duyệt Tài Khoản &amp; ST</span>
@@ -866,7 +866,7 @@ export default function SystemAdminPage() {
                                     🎁 TRẢI NGHIỆM
                                 </th>
                                 <th className="py-3 px-3 w-36 text-center bg-violet-50/70 text-violet-900 border-r border-violet-100">
-                                    🏢 PHÂN QUYỀN SIÊU THỊ
+                                    🏢 PHÂN QUYỀN ST
                                 </th>
                                 <th className="py-3 px-3 w-36 text-center bg-emerald-50/70 text-emerald-900 border-r border-emerald-100">
                                     📥 XUẤT EXCEL
@@ -1132,7 +1132,7 @@ export default function SystemAdminPage() {
                                             )}
                                         </td>
 
-                                        {/* Phân Quyền Theo Siêu Thị (Gói Chi Nhánh / Đơn Vị) */}
+                                        {/* Phân Quyền Theo ST (Gói Chi Nhánh / Đơn Vị) */}
                                         <td className="py-3 px-3 text-center bg-violet-50/20 border-r border-violet-100">
                                             {isAdminPage ? (
                                                 <span className="text-slate-300 text-xs font-bold">—</span>
@@ -1151,10 +1151,10 @@ export default function SystemAdminPage() {
                                                                 ? 'bg-slate-100 hover:bg-violet-100 text-slate-700 hover:text-violet-800 border border-slate-200 hover:border-violet-300'
                                                                 : 'bg-violet-600 hover:bg-violet-700 text-white shadow-2xs shadow-violet-200'
                                                                 }`}
-                                                            title={isAll ? 'Đang mở cho tất cả siêu thị (Nhấn để giới hạn)' : `Chỉ định ${count} ST: ${item.allowed_stores?.join(', ')}`}
+                                                            title={isAll ? 'Đang mở cho tất cả ST (Nhấn để giới hạn)' : `Chỉ định ${count} ST: ${item.allowed_stores?.join(', ')}`}
                                                         >
                                                             <Building2 className="w-3 h-3" />
-                                                            <span>{isAll ? 'Tất cả ST' : `${count} Siêu thị`}</span>
+                                                            <span>{isAll ? 'Tất cả ST' : `${count} ST`}</span>
                                                         </button>
                                                     );
                                                 })()
@@ -1376,13 +1376,13 @@ export default function SystemAdminPage() {
                 </div>
             )}
 
-            {/* Modal Xét Duyệt Tài Khoản & Siêu Thị */}
+            {/* Modal Xét Duyệt Tài Khoản & ST */}
             <ApprovalModal
                 isOpen={isApprovalModalOpen}
                 onClose={() => setIsApprovalModalOpen(false)}
             />
 
-            {/* Modal Cấu Hình Phân Quyền Siêu Thị Sử Dụng Trang */}
+            {/* Modal Cấu Hình Phân Quyền ST Sử Dụng Trang */}
             <StorePermissionConfigModal
                 isOpen={isStoreModalOpen}
                 onClose={() => {

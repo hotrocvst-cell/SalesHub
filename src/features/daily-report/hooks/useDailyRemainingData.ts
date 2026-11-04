@@ -144,7 +144,7 @@ export function useDailyRemainingData({
         };
     }, [selectedMonth, selectedYear]);
 
-    // Bản đồ nhân viên -> siêu thị
+    // Bản đồ nhân viên -> ST
     const empStoreMap = useMemo(() => {
         const map: Record<string, string> = {};
         employees.forEach(e => {
@@ -153,7 +153,7 @@ export function useDailyRemainingData({
         return map;
     }, [employees]);
 
-    // Lọc các bản ghi kinh doanh mới nhất theo từng siêu thị
+    // Lọc các bản ghi kinh doanh mới nhất theo từng ST
     const matchedBusinessRecords = useMemo<BusinessDayRecord[]>(() => {
         if (!businessRecords || businessRecords.length === 0) return [];
         const sorted = [...businessRecords].sort((a, b) => b.reportDate.localeCompare(a.reportDate));
@@ -173,7 +173,7 @@ export function useDailyRemainingData({
         }
     }, [businessRecords, selectedStore, stores]);
 
-    // Lọc phiên nhân viên mới nhất của từng siêu thị
+    // Lọc phiên nhân viên mới nhất của từng ST
     const activeSessions = useMemo<EmployeeDataSession[]>(() => {
         const sorted = [...sessions].sort((a, b) => {
             const dateA = a.report_date || a.created_at || '';
@@ -185,7 +185,7 @@ export function useDailyRemainingData({
         if (selectedStore === 'Tổng') {
             sorted.forEach(s => {
                 const st = s.store_name?.trim() || '';
-                if (st && st !== 'Toàn Cụm Siêu Thị' && !storeLatestMap.has(st)) {
+                if (st && st !== 'Toàn Cụm ST' && !storeLatestMap.has(st)) {
                     storeLatestMap.set(st, s);
                 }
             });
@@ -214,10 +214,10 @@ export function useDailyRemainingData({
         }
         const dates = bRecDateStr || Array.from(new Set(activeSessions.map(s => s.report_date).filter(Boolean))).join(', ');
         const totalEmps = activeSessions.reduce((sum, s) => sum + (s.employee_count || (s.records ? s.records.length : 0)), 0);
-        const storeNames = selectedStore === 'Tổng' ? 'Toàn Cụm Siêu Thị' : selectedStore;
+        const storeNames = selectedStore === 'Tổng' ? 'Toàn Cụm ST' : selectedStore;
         return {
             title: matchedBusinessRecords.length > 0
-                ? `Đã kết nối số liệu lũy kế siêu thị (${matchedBusinessRecords.length} đơn vị)`
+                ? `Đã kết nối số liệu lũy kế ST (${matchedBusinessRecords.length} đơn vị)`
                 : `Đã kết nối ${activeSessions.length} phiên lũy kế`,
             detail: `Chốt ngày: ${dates || 'Gần nhất'} • ${storeNames}${totalEmps > 0 ? ` (${totalEmps} nhân sự)` : ''}`,
             isReady: true
@@ -243,7 +243,7 @@ export function useDailyRemainingData({
             source: 'BUSINESS_RECORD' | 'EMPLOYEE_SESSIONS';
         }>();
 
-        // 1. ƯU TIÊN SỐ 1: daily_business_records của siêu thị
+        // 1. ƯU TIÊN SỐ 1: daily_business_records của ST
         if (matchedBusinessRecords.length > 0) {
             matchedBusinessRecords.forEach(br => {
                 if (!br.emulationSummary) return;

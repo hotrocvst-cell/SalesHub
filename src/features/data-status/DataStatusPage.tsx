@@ -76,7 +76,7 @@ export default function DataStatusPage() {
                         <span className="font-extrabold flex items-center gap-1">
                             <span>🔒</span> Phân quyền Nhân viên:
                         </span>
-                        <span>Trạng thái dữ liệu được tự động khóa và lọc hiển thị riêng cho siêu thị</span>
+                        <span>Trạng thái dữ liệu được tự động khóa và lọc hiển thị riêng cho ST</span>
                         <strong className="bg-white px-2 py-0.5 rounded-lg border border-amber-300 text-amber-950 font-black">
                             {currentUser.store_name}
                         </strong>
@@ -89,7 +89,7 @@ export default function DataStatusPage() {
                 {/* 1. Thẻ KPI Tổng hợp Sẵn Sàng Toàn Hệ Thống */}
                 <DataReadinessScoreCard summary={summary} />
 
-                {/* 2. Nhóm Dữ Liệu Doanh Thu & Thi Đua Siêu Thị */}
+                {/* 2. Nhóm Dữ Liệu Doanh Thu & Thi Đua ST */}
                 <div className="space-y-2.5">
                     <div className="flex items-center gap-2 px-1">
                         <Store className="w-4 h-4 text-emerald-600" />
@@ -121,7 +121,7 @@ export default function DataStatusPage() {
                     </div>
                 </div>
 
-                {/* 4. Bảng Ma Trận Sẵn Sàng Từng Siêu Thị */}
+                {/* 4. Bảng Ma Trận Sẵn Sàng Từng ST */}
                 {matrix.length > 0 && (
                     <div className="space-y-2.5 pt-1">
                         <StoreStatusMatrixTable

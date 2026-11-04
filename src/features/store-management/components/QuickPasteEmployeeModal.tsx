@@ -80,7 +80,7 @@ export default function QuickPasteEmployeeModal({
                     // Dòng có: Mã NV, Họ tên, Vai trò
                     role = parts[2].trim() || targetRole;
                 } else if (parts.length >= 4) {
-                    // Dòng có: Mã NV, Họ tên, Siêu thị, Vai trò
+                    // Dòng có: Mã NV, Họ tên, ST, Vai trò
                     const pastedStore = parts[2].trim();
                     const matchedStore = stores.find(s => isStoreMatch(s.name, pastedStore, stores));
                     store = matchedStore ? matchedStore.name : targetStore;
@@ -150,7 +150,7 @@ export default function QuickPasteEmployeeModal({
                         <div>
                             <label className="text-[11px] font-bold text-slate-700 block mb-1 flex items-center gap-1">
                                 <Store className="w-3.5 h-3.5 text-blue-600" />
-                                <span>Siêu thị gán mặc định:</span>
+                                <span>ST gán mặc định:</span>
                             </label>
                             <select
                                 value={targetStore}
@@ -232,7 +232,7 @@ export default function QuickPasteEmployeeModal({
                                             <th className="p-2 border-b w-10 text-center">STT</th>
                                             <th className="p-2 border-b w-24">Mã NV</th>
                                             <th className="p-2 border-b">Họ và Tên</th>
-                                            <th className="p-2 border-b">Siêu Thị</th>
+                                            <th className="p-2 border-b">ST</th>
                                             <th className="p-2 border-b w-36">Vai Trò</th>
                                         </tr>
                                     </thead>

@@ -114,7 +114,7 @@ export interface InventoryBalancingSavedConfig {
     store_custom_qtys?: Record<string, number>; // key: `${source_store}__${product_code}`
     exclude_keywords?: string; // Từ khóa loại trừ sản phẩm trong Bước 1
     snapshot_products?: SnapshotProductItem[]; // Ảnh chụp danh sách sản phẩm hàng thiếu
-    snapshot_matches?: SnapshotSupplyMatch[]; // Ảnh chụp danh sách gợi ý siêu thị nguồn
+    snapshot_matches?: SnapshotSupplyMatch[]; // Ảnh chụp danh sách gợi ý ST nguồn
     raw_records_count?: number; // Tổng số dòng dữ liệu kho tại thời điểm lưu
     sales_velocity_map?: Record<string, ProductSalesVelocity>; // Bản đồ sức bán sản phẩm
     sales_velocity_file_name?: string;

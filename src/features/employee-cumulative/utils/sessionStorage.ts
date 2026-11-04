@@ -129,7 +129,7 @@ export async function fetchCloudEmployeeDataSessions(filters?: EmployeeSessionFi
         const isMonth10Match = (!filters?.month || filters.month === 10) && (!filters?.year || filters.year === 2026);
         const demoSessions = isMonth10Match ? transformDemoSessions(list) : [];
 
-        // Lọc theo tên siêu thị (hỗ trợ so khớp linh hoạt theo mã/tên/cụm)
+        // Lọc theo tên ST (hỗ trợ so khớp linh hoạt theo mã/tên/cụm)
         if (filters?.storeName && filters.storeName !== 'all') {
             const targetStore = filters.storeName.trim();
             if (isGuestDemoStore(targetStore)) {
@@ -140,7 +140,7 @@ export async function fetchCloudEmployeeDataSessions(filters?: EmployeeSessionFi
                 return isStoreMatch(s.store_name, targetStore);
             });
         } else if (filters?.includeDemo) {
-            // Khi không lọc siêu thị hoặc lấy 'all', chỉ gộp demoSessions nếu được yêu cầu rõ
+            // Khi không lọc ST hoặc lấy 'all', chỉ gộp demoSessions nếu được yêu cầu rõ
             if (demoSessions.length > 0) {
                 list = [...list, ...demoSessions];
             }
@@ -377,7 +377,7 @@ export async function saveEmployeeDataSession(
 }
 
 /**
- * Kiểm tra xem đã tồn tại phiên dữ liệu của Siêu thị và Ngày chốt phiên trên Cloud/Local chưa
+ * Kiểm tra xem đã tồn tại phiên dữ liệu của ST và Ngày chốt phiên trên Cloud/Local chưa
  */
 export async function findExistingEmployeeSession(
     storeName: string,
@@ -533,7 +533,7 @@ export async function deleteEmployeeDataSession(sessionId: string): Promise<bool
 }
 
 /**
- * Lấy phiên doanh thu mới nhất của 1 siêu thị trong tháng/năm
+ * Lấy phiên doanh thu mới nhất của 1 ST trong tháng/năm
  */
 export function getLatestStoreRevenueSession(
     storeName: string,

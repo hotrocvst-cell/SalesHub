@@ -23,7 +23,7 @@ export interface ReportDataFreshnessBarProps {
     lastUpdatedAt?: string | Date | null;
     /** Người thực hiện cập nhật */
     lastUpdatedBy?: string | null;
-    /** Tên siêu thị áp dụng */
+    /** Tên ST áp dụng */
     storeName?: string;
     /** Đường dẫn điều hướng để cập nhật số liệu */
     actionUrl?: string;

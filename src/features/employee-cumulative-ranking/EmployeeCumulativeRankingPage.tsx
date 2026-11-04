@@ -41,7 +41,7 @@ export default function EmployeeCumulativeRankingPage() {
     const [stores, setStores] = useState<StoreItem[]>([]);
     const [selectedStore, setSelectedStore] = useState<string>('all');
 
-    // Phân quyền siêu thị
+    // Phân quyền ST
     const { allowedStores, isLockedToSingleStore } = useUserStoreFilter(
         stores,
         selectedStore,
@@ -88,7 +88,7 @@ export default function EmployeeCumulativeRankingPage() {
         setTimeout(() => setToastMessage(''), 3500);
     };
 
-    // 2. TẢI DANH MỤC SIÊU THỊ & NHÂN SỰ
+    // 2. TẢI DANH MỤC ST & NHÂN SỰ
     useEffect(() => {
         fetchStores().then(res => {
             if (res.success && res.data) {
@@ -232,7 +232,7 @@ export default function EmployeeCumulativeRankingPage() {
                 { header: 'Hạng', key: 'rank', width: 8 },
                 { header: 'Mã NV', key: 'id', width: 12 },
                 { header: 'Họ và tên', key: 'name', width: 25 },
-                { header: 'Siêu thị', key: 'store', width: 20 },
+                { header: 'ST', key: 'store', width: 20 },
             ];
 
             if (showTarget) {
@@ -277,11 +277,11 @@ export default function EmployeeCumulativeRankingPage() {
                 worksheet.addRow(rowData);
             });
 
-            // HÀNG TỔNG CỘNG: SỐ TỔNG CỦA SIÊU THỊ
+            // HÀNG TỔNG CỘNG: SỐ TỔNG CỦA ST
             const footerData: any = {
                 rank: 'TỔNG',
-                id: 'SIÊU THỊ',
-                name: 'TỔNG LŨY KẾ SIÊU THỊ',
+                id: 'ST',
+                name: 'TỔNG LŨY KẾ ST',
                 store: summary.storeName,
                 cum_rev: summary.storeCumulativeRevenue,
                 share: '100%'
@@ -339,7 +339,7 @@ export default function EmployeeCumulativeRankingPage() {
             const isShowingDaily = viewMode === 'WITH_DAILY';
 
             // Tính toán độ rộng cơ sở cần thiết để hiển thị 100% tất cả các cột mà không bao giờ bị cắt cụt:
-            // Cột cố định (Hạng + Mã & Tên NV + Siêu thị nếu có + Target nếu có + Lũy kế + %HT + %Đóng góp)
+            // Cột cố định (Hạng + Mã & Tên NV + ST nếu có + Target nếu có + Lũy kế + %HT + %Đóng góp)
             const baseColsWidth = (selectedStore === 'all' ? 110 : 0) + (showTarget ? 160 : 0) + 420;
             const estimatedDailyWidth = isShowingDaily
                 ? baseColsWidth + (summary.dateList.length * 70) + 48
@@ -514,7 +514,7 @@ export default function EmployeeCumulativeRankingPage() {
                             </span>
                         </div>
                         <p className="text-[11px] text-slate-500 font-medium">
-                            Xếp hạng doanh thu nhân viên theo mốc thời gian từ ngày A đến ngày B • Số tổng là Doanh thu lũy kế của Siêu thị
+                            Xếp hạng doanh thu nhân viên theo mốc thời gian từ ngày A đến ngày B • Số tổng là Doanh thu lũy kế của ST
                         </p>
                     </div>
                 </div>
@@ -585,7 +585,7 @@ export default function EmployeeCumulativeRankingPage() {
                 ref={reportRef}
                 className={`mx-auto space-y-4 transition-all ${viewMode === 'WITH_DAILY' ? 'max-w-full md:max-w-6xl xl:max-w-7xl' : 'max-w-[960px]'}`}
             >
-                {/* 1. HEADER NỘI DUNG XUẤT BÁO CÁO (BAO GỒM TIÊU ĐỀ, SIÊU THỊ & GIAI ĐOẠN TÍNH DOANH THU) */}
+                {/* 1. HEADER NỘI DUNG XUẤT BÁO CÁO (BAO GỒM TIÊU ĐỀ, ST & GIAI ĐOẠN TÍNH DOANH THU) */}
                 <div className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3 font-avo">
                     <div className="space-y-1.5">
                         <div className="flex items-center gap-2.5">
@@ -610,7 +610,7 @@ export default function EmployeeCumulativeRankingPage() {
 
                     <div className="flex items-center gap-2 flex-wrap md:justify-end">
                         <span className="text-xs sm:text-sm font-black text-slate-800 bg-slate-100 px-3 py-1 rounded-xl border border-slate-200">
-                            🏪 {selectedStore === 'all' ? 'TOÀN CỤM SIÊU THỊ' : getShortStoreName(selectedStore)}
+                            🏪 {selectedStore === 'all' ? 'TOÀN CỤM ST' : getShortStoreName(selectedStore)}
                         </span>
                         <div className="px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-black flex items-center gap-1.5">
                             👥 <span>{summary.totalEmployeesWithSales} Nhân Viên</span>

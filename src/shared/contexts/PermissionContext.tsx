@@ -168,9 +168,9 @@ export function PermissionProvider({ children }: { children: ReactNode }) {
         // 1. Phân quyền theo vai trò (Role-based): Admin luôn được phép, các vai trò khác theo allowed_roles
         const roleAllowed = Boolean(isAdmin || (page.allowed_roles && currentUser?.role && page.allowed_roles.includes(currentUser.role)));
 
-        // 2. Phân quyền theo siêu thị (Store-based / Branch feature subscription):
-        // Nếu không cấu hình hoặc chứa 'ALL' -> Mở cho tất cả siêu thị.
-        // Ngược lại -> Chỉ mở cho các siêu thị trong danh sách cấu hình.
+        // 2. Phân quyền theo ST (Store-based / Branch feature subscription):
+        // Nếu không cấu hình hoặc chứa 'ALL' -> Mở cho tất cả ST.
+        // Ngược lại -> Chỉ mở cho các ST trong danh sách cấu hình.
         let storeAllowed = true;
         if (!isAdmin && page.allowed_stores && page.allowed_stores.length > 0 && !page.allowed_stores.includes('ALL')) {
             const userStores = [

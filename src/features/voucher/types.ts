@@ -2,7 +2,7 @@ export type VoucherStatus = 'AVAILABLE' | 'CLAIMED' | 'USED' | 'EXPIRED';
 
 export interface VoucherItem {
     id: string;
-    store_name: string;                // Siêu thị sở hữu kho mã
+    store_name: string;                // ST sở hữu kho mã
     campaign_name: string;             // Tên chương trình (VD: "Đồng Hồ & Phụ Kiện", "Gia Dụng",...)
     denomination: number;              // Mệnh giá (VNĐ)
     code: string;                      // Mã voucher thực tế
@@ -13,7 +13,7 @@ export interface VoucherItem {
     claimed_at?: string;               // Thời điểm cấp mã
     claimed_by_id?: string;            // Mã NV được cấp
     claimed_by_name?: string;          // Tên NV được cấp
-    claimed_by_store?: string;         // Siêu thị của NV được cấp (khi lấy mã toàn cụm)
+    claimed_by_store?: string;         // ST của NV được cấp (khi lấy mã toàn cụm)
     order_id?: string;                 // Mã đơn hàng gắn kèm
     used_at?: string;                  // Thời điểm hoàn tất đơn
     note?: string;                     // Ghi chú / Lịch sử reset
@@ -68,7 +68,7 @@ export interface VoucherStockForecast {
 
 export interface VoucherClaimRequest {
     store_name: string;
-    accessible_stores?: string[];      // Danh sách siêu thị trong cụm được phân quyền
+    accessible_stores?: string[];      // Danh sách ST trong cụm được phân quyền
     campaign_name: string;
     denomination: number;
     order_id: string;

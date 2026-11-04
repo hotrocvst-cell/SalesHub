@@ -82,7 +82,7 @@ export default function CumulativeRankingTable({
 
                             {isMultiStore && (
                                 <th className="px-2 py-2.5 text-left min-w-[100px]">
-                                    Siêu thị
+                                    ST
                                 </th>
                             )}
 
@@ -167,7 +167,7 @@ export default function CumulativeRankingTable({
                                             </div>
                                         </td>
 
-                                        {/* SIÊU THỊ */}
+                                        {/* ST */}
                                         {isMultiStore && (
                                             <td className="px-2 py-2 text-slate-600 truncate max-w-[120px]">
                                                 {row.storeName}
@@ -244,7 +244,7 @@ export default function CumulativeRankingTable({
                         )}
                     </tbody>
 
-                    {/* HÀNG SỐ TỔNG (SUMMARY FOOTER): SỐ TỔNG LÀ DỮ LIỆU LŨY KẾ CỦA SIÊU THỊ */}
+                    {/* HÀNG SỐ TỔNG (SUMMARY FOOTER): SỐ TỔNG LÀ DỮ LIỆU LŨY KẾ CỦA ST */}
                     <tfoot>
                         <tr className="bg-slate-900 text-white font-black border-t-2 border-indigo-400">
                             <td className="px-2 py-3 text-center sticky left-0 z-20 bg-slate-900 border-r border-slate-800">
@@ -259,7 +259,7 @@ export default function CumulativeRankingTable({
                                         TỔNG
                                     </span>
                                     <span className="text-xs uppercase tracking-wide">
-                                        Lũy Kế Siêu Thị
+                                        Lũy Kế ST
                                     </span>
                                 </div>
                             </td>
@@ -280,7 +280,7 @@ export default function CumulativeRankingTable({
                                 </td>
                             )}
 
-                            {/* DOANH THU LŨY KẾ CỦA SIÊU THỊ (SỐ TỔNG CHUẨN) */}
+                            {/* DOANH THU LŨY KẾ CỦA ST (SỐ TỔNG CHUẨN) */}
                             <td className="px-2.5 py-3 text-right font-mono text-emerald-300 text-xs sm:text-sm bg-slate-950">
                                 {formatValue(storeCumulativeRevenue)}
                             </td>
@@ -301,7 +301,7 @@ export default function CumulativeRankingTable({
                                 100%
                             </td>
 
-                            {/* CHI TIẾT TỪNG NGÀY CỦA SIÊU THỊ */}
+                            {/* CHI TIẾT TỪNG NGÀY CỦA ST */}
                             {viewMode === 'WITH_DAILY' && dateList.map((d) => {
                                 const dayStoreRev = storeDailyRevenue[d] || 0;
                                 return (

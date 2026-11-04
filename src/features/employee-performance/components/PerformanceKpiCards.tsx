@@ -4,13 +4,14 @@ import { Trophy, Flame, Target, CreditCard } from 'lucide-react';
 
 interface Props {
     summary: StorePerformanceSummary;
+    showWorkHours?: boolean;
 }
 
-export default function PerformanceKpiCards({ summary }: Props) {
+export default function PerformanceKpiCards({ summary, showWorkHours = false }: Props) {
     const { topRevenueEmp, topProductivityEmp, topForecastEmp, topInstallmentEmp } = summary;
 
     return (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+        <div className={`grid grid-cols-1 sm:grid-cols-2 ${showWorkHours ? 'lg:grid-cols-4' : 'lg:grid-cols-3'} gap-3.5`}>
             {/* 1. TOP 1 Doanh Thu Quy Đổi (DTQĐ) */}
             <div className="bg-white rounded-2xl p-4 border border-amber-200/80 bg-gradient-to-br from-amber-50/50 via-white to-amber-50/20 shadow-2xs hover:shadow-xs transition relative">
                 <div className="flex items-center justify-between">
@@ -46,40 +47,42 @@ export default function PerformanceKpiCards({ summary }: Props) {
                 </div>
             </div>
 
-            {/* 2. TOP 1 Năng Suất Giờ Công (DTQĐ/GC) */}
-            <div className="bg-white rounded-2xl p-4 border border-purple-200/80 bg-gradient-to-br from-purple-50/50 via-white to-purple-50/20 shadow-2xs hover:shadow-xs transition relative">
-                <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-purple-900 uppercase tracking-normal flex items-center gap-1.5">
-                        <Flame className="w-4 h-4 text-rose-500 shrink-0" />
-                        <span>Top 1 Năng Suất (DTQĐ/GC)</span>
-                    </span>
-                    <span className="inline-block w-7 h-7 rounded-xl bg-purple-100 text-purple-800 text-center leading-7 text-xs font-bold shadow-2xs">
-                        ⚡
-                    </span>
-                </div>
-
-                <div className="mt-2.5">
-                    <div className="text-base font-bold text-slate-900 leading-normal overflow-visible min-h-[26px] flex items-center" title={topProductivityEmp ? cleanEmployeeName(topProductivityEmp.full_name) : ''}>
-                        {topProductivityEmp ? cleanEmployeeName(topProductivityEmp.full_name) : '—'}
+            {/* 2. TOP 1 Năng Suất Giờ Công (DTQĐ/GC) - Chỉ hiển thị khi bật toggle Giờ công & Năng suất */}
+            {showWorkHours && (
+                <div className="bg-white rounded-2xl p-4 border border-purple-200/80 bg-gradient-to-br from-purple-50/50 via-white to-purple-50/20 shadow-2xs hover:shadow-xs transition relative">
+                    <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-purple-900 uppercase tracking-normal flex items-center gap-1.5">
+                            <Flame className="w-4 h-4 text-rose-500 shrink-0" />
+                            <span>Top 1 Năng Suất (DTQĐ/GC)</span>
+                        </span>
+                        <span className="inline-block w-7 h-7 rounded-xl bg-purple-100 text-purple-800 text-center leading-7 text-xs font-bold shadow-2xs">
+                            ⚡
+                        </span>
                     </div>
-                    <div className="text-xs text-slate-500 font-mono font-medium mt-0.5 leading-normal">
-                        {topProductivityEmp ? `Mã NV: ${topProductivityEmp.employee_id}` : 'Chưa có số liệu'}
+
+                    <div className="mt-2.5">
+                        <div className="text-base font-bold text-slate-900 leading-normal overflow-visible min-h-[26px] flex items-center" title={topProductivityEmp ? cleanEmployeeName(topProductivityEmp.full_name) : ''}>
+                            {topProductivityEmp ? cleanEmployeeName(topProductivityEmp.full_name) : '—'}
+                        </div>
+                        <div className="text-xs text-slate-500 font-mono font-medium mt-0.5 leading-normal">
+                            {topProductivityEmp ? `Mã NV: ${topProductivityEmp.employee_id}` : 'Chưa có số liệu'}
+                        </div>
+                    </div>
+
+                    <div className="mt-3 flex items-center justify-between text-xs pt-2.5 border-t border-purple-100/80 leading-normal">
+                        <span className="text-purple-900/80 font-medium">Năng suất DTQĐ:</span>
+                        <strong className="font-mono text-purple-700 font-bold text-sm">
+                            {topProductivityEmp ? `${topProductivityEmp.productivity_qd_per_hour.toFixed(2)} tr/h` : '0 tr/h'}
+                        </strong>
+                    </div>
+                    <div className="flex items-center justify-between text-[11px] text-slate-500 mt-1 leading-normal">
+                        <span>Tổng giờ công:</span>
+                        <span className="font-mono font-bold text-slate-700">
+                            {topProductivityEmp ? `${topProductivityEmp.work_hours} giờ` : '0 giờ'}
+                        </span>
                     </div>
                 </div>
-
-                <div className="mt-3 flex items-center justify-between text-xs pt-2.5 border-t border-purple-100/80 leading-normal">
-                    <span className="text-purple-900/80 font-medium">Năng suất DTQĐ:</span>
-                    <strong className="font-mono text-purple-700 font-bold text-sm">
-                        {topProductivityEmp ? `${topProductivityEmp.productivity_qd_per_hour.toFixed(2)} tr/h` : '0 tr/h'}
-                    </strong>
-                </div>
-                <div className="flex items-center justify-between text-[11px] text-slate-500 mt-1 leading-normal">
-                    <span>Tổng giờ công:</span>
-                    <span className="font-mono font-bold text-slate-700">
-                        {topProductivityEmp ? `${topProductivityEmp.work_hours} giờ` : '0 giờ'}
-                    </span>
-                </div>
-            </div>
+            )}
 
             {/* 3. TOP 1 Dự Báo Hoành Thành (%DKHT) */}
             <div className="bg-white rounded-2xl p-4 border border-emerald-200/80 bg-gradient-to-br from-emerald-50/50 via-white to-emerald-50/20 shadow-2xs hover:shadow-xs transition relative">

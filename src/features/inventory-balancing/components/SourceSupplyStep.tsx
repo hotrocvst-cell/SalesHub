@@ -51,7 +51,7 @@ export default function SourceSupplyStep({
     onPrevStep,
     onNextStep
 }: SourceSupplyStepProps) {
-    // 1. Danh sách tất cả các siêu thị khác (trừ siêu thị đang phụ trách)
+    // 1. Danh sách tất cả các ST khác (trừ ST đang phụ trách)
     const allOtherStores = useMemo(() => {
         const set = new Set<string>();
         rawRecords.forEach(r => {
@@ -62,7 +62,7 @@ export default function SourceSupplyStep({
         return Array.from(set).sort();
     }, [rawRecords, targetStore]);
 
-    // 2. Trích xuất các tag mã khu vực thường gặp từ tên siêu thị (ví dụ: XMO, LDI, PMY, CDU, BRI, VTA, ĐMSU, ĐMM...)
+    // 2. Trích xuất các tag mã khu vực thường gặp từ tên ST (ví dụ: XMO, LDI, PMY, CDU, BRI, VTA, ĐMSU, ĐMM...)
     const suggestedTags = useMemo(() => {
         const tagSet = new Set<string>();
         allOtherStores.forEach(st => {
@@ -84,7 +84,7 @@ export default function SourceSupplyStep({
             .filter(t => t.length > 0);
     }, [sourceStoreFilter]);
 
-    // 4. Lọc danh sách siêu thị nguồn thỏa điều kiện lọc text
+    // 4. Lọc danh sách ST nguồn thỏa điều kiện lọc text
     const matchingStores = useMemo(() => {
         if (filterTokens.length === 0) {
             return allOtherStores;
@@ -95,7 +95,7 @@ export default function SourceSupplyStep({
         });
     }, [allOtherStores, filterTokens]);
 
-    // 5. Phân chia siêu thị còn hiệu lực (chưa bị xóa) vs siêu thị đã bị xóa/loại trừ
+    // 5. Phân chia ST còn hiệu lực (chưa bị xóa) vs ST đã bị xóa/loại trừ
     const activeMatchingStores = useMemo(() => {
         return matchingStores.filter(st => !excludedStores.includes(st));
     }, [matchingStores, excludedStores]);
@@ -104,7 +104,7 @@ export default function SourceSupplyStep({
         return matchingStores.filter(st => excludedStores.includes(st));
     }, [matchingStores, excludedStores]);
 
-    // 6. Thống kê tổng số lượng sản phẩm có tồn >= minSourceQty tại các siêu thị nguồn CÒN HIỆU LỰC
+    // 6. Thống kê tổng số lượng sản phẩm có tồn >= minSourceQty tại các ST nguồn CÒN HIỆU LỰC
     const sourceStats = useMemo(() => {
         const activeSet = new Set(activeMatchingStores);
         let itemsCount = 0;
@@ -144,11 +144,11 @@ export default function SourceSupplyStep({
                                 Bước 2 / 3
                             </span>
                             <h2 className="text-sm sm:text-base font-extrabold text-slate-800">
-                                Lọc Siêu Thị Nguồn Có Tồn Khả Dụng (≥ {minSourceQty})
+                                Lọc ST Nguồn Có Tồn Khả Dụng (≥ {minSourceQty})
                             </h2>
                         </div>
                         <p className="text-xs text-slate-600 mt-1">
-                            Lọc chỉ lấy dữ liệu Số lượng có thể bán ≥ {minSourceQty} (đã loại trừ siêu thị <span className="font-bold text-slate-800">{targetStore}</span>)
+                            Lọc chỉ lấy dữ liệu Số lượng có thể bán ≥ {minSourceQty} (đã loại trừ ST <span className="font-bold text-slate-800">{targetStore}</span>)
                         </p>
                     </div>
 
@@ -195,10 +195,10 @@ export default function SourceSupplyStep({
                 </div>
             </div>
 
-            {/* BỘ LỌC ĐIỀU KIỆN SIÊU THỊ NGUỒN */}
+            {/* BỘ LỌC ĐIỀU KIỆN ST NGUỒN */}
             <div className="bg-white border border-slate-200 rounded-xl p-3 sm:p-4 shadow-xs space-y-3">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                    {/* NGƯỠNG TỒN TỐI THIỂU CỦA SIÊU THỊ NGUỒN */}
+                    {/* NGƯỠNG TỒN TỐI THIỂU CỦA ST NGUỒN */}
                     <div>
                         <label className="block text-xs font-bold text-slate-700 mb-1">
                             Ngưỡng tồn tối thiểu kho nguồn:
@@ -210,7 +210,7 @@ export default function SourceSupplyStep({
                         >
                             <option value={1}>≥ 1 máy (Có hàng là xin)</option>
                             <option value={2}>≥ 2 máy (Chuẩn: Để lại 1 cho bạn bán)</option>
-                            <option value={3}>≥ 3 máy (Chỉ xin siêu thị có dư nhiều)</option>
+                            <option value={3}>≥ 3 máy (Chỉ xin ST có dư nhiều)</option>
                             <option value={4}>≥ 4 máy</option>
                             <option value={5}>≥ 5 máy</option>
                         </select>
@@ -251,10 +251,10 @@ export default function SourceSupplyStep({
                         </span>
                     </div>
 
-                    {/* Ô NHẬP ĐIỀU KIỆN TÊN SIÊU THỊ (ABC, XYA, 123...) */}
+                    {/* Ô NHẬP ĐIỀU KIỆN TÊN ST (ABC, XYA, 123...) */}
                     <div className="sm:col-span-2 lg:col-span-2">
                         <label className="block text-xs font-bold text-slate-700 mb-1">
-                            Lọc tên siêu thị chứa điều kiện (ABC, XYA, 123...):
+                            Lọc tên ST chứa điều kiện (ABC, XYA, 123...):
                         </label>
                         <div className="relative">
                             <input
@@ -275,7 +275,7 @@ export default function SourceSupplyStep({
                             )}
                         </div>
                         <span className="text-[10px] text-slate-500 mt-1 block">
-                            * Hỗ trợ tìm theo mã siêu thị, huyện/tỉnh, đường. Để trống để lấy toàn bộ.
+                            * Hỗ trợ tìm theo mã ST, huyện/tỉnh, đường. Để trống để lấy toàn bộ.
                         </span>
                     </div>
                 </div>
@@ -310,27 +310,27 @@ export default function SourceSupplyStep({
                 )}
             </div>
 
-            {/* DANH SÁCH CÁC SIÊU THỊ NGUỒN KHỚP ĐIỀU KIỆN (CÓ NÚT XÓA BỚT) */}
+            {/* DANH SÁCH CÁC ST NGUỒN KHỚP ĐIỀU KIỆN (CÓ NÚT XÓA BỚT) */}
             <div className="bg-white border border-slate-200 rounded-xl p-3 sm:p-4 shadow-xs space-y-3">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
                     <div className="flex items-center gap-2">
                         <Building2 className="w-4 h-4 text-emerald-600" />
                         <h3 className="text-xs sm:text-sm font-bold text-slate-800">
-                            Danh sách siêu thị nguồn sẵn sàng xin hàng ({activeMatchingStores.length})
+                            Danh sách ST nguồn sẵn sàng xin hàng ({activeMatchingStores.length})
                         </h3>
                     </div>
                     <span className="text-[11px] text-slate-500">
-                        Bạn có thể bấm nút <b className="text-rose-600">"Xóa bớt"</b> ở từng dòng để loại bỏ siêu thị không muốn qua xin
+                        Bạn có thể bấm nút <b className="text-rose-600">"Xóa bớt"</b> ở từng dòng để loại bỏ ST không muốn qua xin
                     </span>
                 </div>
 
-                {/* DANH SÁCH SIÊU THỊ ĐANG CHỌN */}
+                {/* DANH SÁCH ST ĐANG CHỌN */}
                 <div className="max-h-[380px] overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-lg">
                     {activeMatchingStores.length === 0 ? (
                         <div className="p-8 text-center text-slate-400 text-xs">
                             {matchingStores.length === 0
-                                ? `Không có siêu thị nào khớp với điều kiện lọc "${sourceStoreFilter}". Vui lòng thử từ khóa khác.`
-                                : `Bạn đã xóa hết tất cả ${matchingStores.length} siêu thị khớp bộ lọc. Bấm "Khôi phục lại" bên dưới để sử dụng lại.`
+                                ? `Không có ST nào khớp với điều kiện lọc "${sourceStoreFilter}". Vui lòng thử từ khóa khác.`
+                                : `Bạn đã xóa hết tất cả ${matchingStores.length} ST khớp bộ lọc. Bấm "Khôi phục lại" bên dưới để sử dụng lại.`
                             }
                         </div>
                     ) : (
@@ -349,12 +349,12 @@ export default function SourceSupplyStep({
                                     <span className="hidden sm:inline-block text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
                                         Sẵn sàng đối chiếu
                                     </span>
-                                    {/* Nút xóa bớt siêu thị */}
+                                    {/* Nút xóa bớt ST */}
                                     <button
                                         type="button"
                                         onClick={() => onToggleExcludeStore(st)}
                                         className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-md transition-colors cursor-pointer"
-                                        title="Xóa siêu thị này khỏi danh sách xin hàng"
+                                        title="Xóa ST này khỏi danh sách xin hàng"
                                     >
                                         <Trash2 className="w-3 h-3 text-rose-600" />
                                         <span>Xóa bớt</span>
@@ -365,13 +365,13 @@ export default function SourceSupplyStep({
                     )}
                 </div>
 
-                {/* KHỐI HIỂN THỊ CÁC SIÊU THỊ ĐÃ BỊ XÓA BỚT (CHO PHÉP KHÔI PHỤC) */}
+                {/* KHỐI HIỂN THỊ CÁC ST ĐÃ BỊ XÓA BỚT (CHO PHÉP KHÔI PHỤC) */}
                 {excludedInMatching.length > 0 && (
                     <div className="pt-2 border-t border-slate-100 bg-amber-50/50 rounded-lg p-2.5 border border-amber-200">
                         <div className="flex items-center justify-between mb-2">
                             <span className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
                                 <Ban className="w-3.5 h-3.5 text-amber-700" />
-                                <span>Đã xóa bớt ({excludedInMatching.length} siêu thị không xin hàng):</span>
+                                <span>Đã xóa bớt ({excludedInMatching.length} ST không xin hàng):</span>
                             </span>
                             <button
                                 type="button"
@@ -396,7 +396,7 @@ export default function SourceSupplyStep({
                                         type="button"
                                         onClick={() => onToggleExcludeStore(st)}
                                         className="text-emerald-700 hover:text-emerald-900 font-bold hover:bg-emerald-50 rounded px-1 cursor-pointer"
-                                        title="Khôi phục siêu thị này"
+                                        title="Khôi phục ST này"
                                     >
                                         + Khôi phục
                                     </button>

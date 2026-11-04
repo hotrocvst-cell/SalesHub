@@ -67,7 +67,7 @@ export interface DailyReportSummary {
 
 /**
  * Tính toán & phân loại toàn bộ số liệu báo cáo ngày từ danh sách bóc tách
- * Hỗ trợ lọc theo siêu thị và bổ sung nhân sự đi làm trong ca nhưng chưa có doanh thu
+ * Hỗ trợ lọc theo ST và bổ sung nhân sự đi làm trong ca nhưng chưa có doanh thu
  */
 export function processDailyEmployeeRevenueData(
     rawList: ParsedEmployeeRevenue[],
@@ -98,7 +98,7 @@ export function processDailyEmployeeRevenueData(
     // 1. Lọc bỏ các dòng Online từ danh sách thô
     const nonOnline = rawList.filter(e => !isOnlineEmployee(e));
 
-    // 2. Lọc theo siêu thị (nếu có chọn siêu thị cụ thể)
+    // 2. Lọc theo ST (nếu có chọn ST cụ thể)
     const storeFiltered = nonOnline.filter(e => {
         if (selectedStore === 'all') return true;
         const empId = e.employee_id.trim();
@@ -106,7 +106,7 @@ export function processDailyEmployeeRevenueData(
         if (empStore) {
             return isStoreMatch(empStore, selectedStore, storesList);
         }
-        // Nếu nhân viên chưa có trong danh bạ, kiểm tra theo siêu thị nhận diện được từ báo cáo
+        // Nếu nhân viên chưa có trong danh bạ, kiểm tra theo ST nhận diện được từ báo cáo
         if (detectedStoreName) {
             return isStoreMatch(detectedStoreName, selectedStore, storesList);
         }
@@ -277,7 +277,7 @@ export function processDailyEmployeeRevenueData(
 }
 
 /**
- * Tạo văn bản tin nhắn báo cáo Messaging App chuẩn phong cách TGDD/ĐMX
+ * Tạo văn bản tin nhắn báo cáo Messaging App chuẩn
  */
 export function generateDailyZaloText(
     storeName: string,

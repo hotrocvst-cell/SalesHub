@@ -49,7 +49,7 @@ export default function ClusterTargetConfigModal({
 }: Props) {
     const { currentUser, isAdmin, canAccessStore } = useAuth();
 
-    // Kiểm tra xem user có quyền sửa target của siêu thị cụ thể không
+    // Kiểm tra xem user có quyền sửa target của ST cụ thể không
     const isStoreEditable = (storeName: string): boolean => {
         if (isAdmin) return true;
         return canAccessStore(storeName) || canAccessStore(getCompactStoreName(storeName));
@@ -147,7 +147,7 @@ export default function ClusterTargetConfigModal({
         };
     }, [configMap, rows, selectedPace]);
 
-    // Áp dụng nhịp Target chung (chỉ áp dụng cho các siêu thị trong phạm vi phụ trách của user)
+    // Áp dụng nhịp Target chung (chỉ áp dụng cho các ST trong phạm vi phụ trách của user)
     const handleApplyPaceRateToAll = (pace: number) => {
         setSelectedPace(pace);
         let updatedCount = 0;
@@ -168,7 +168,7 @@ export default function ClusterTargetConfigModal({
             });
             return next;
         });
-        setToastMsg(`⚡ Đã áp dụng nhịp ${pace}% cho ${updatedCount} siêu thị${isAdmin ? '' : ' bạn phụ trách'}!`);
+        setToastMsg(`⚡ Đã áp dụng nhịp ${pace}% cho ${updatedCount} ST${isAdmin ? '' : ' bạn phụ trách'}!`);
         setTimeout(() => setToastMsg(''), 2500);
     };
 
@@ -183,7 +183,7 @@ export default function ClusterTargetConfigModal({
         setCustomPaceInput('');
     };
 
-    // Tùy chỉnh riêng lẻ từng siêu thị (chỉ cho phép nếu user có quyền phụ trách siêu thị này)
+    // Tùy chỉnh riêng lẻ từng ST (chỉ cho phép nếu user có quyền phụ trách ST này)
     const handleItemChange = (storeName: string, field: keyof StoreItemState, value: number) => {
         if (!isAdmin && !isStoreEditable(storeName)) return;
 
@@ -218,7 +218,7 @@ export default function ClusterTargetConfigModal({
         });
     };
 
-    // Lưu cấu hình lên Cloud (chỉ lưu các siêu thị thuộc quyền phụ trách để merge an toàn)
+    // Lưu cấu hình lên Cloud (chỉ lưu các ST thuộc quyền phụ trách để merge an toàn)
     const handleSave = async () => {
         setIsSaving(true);
         const configsToSave: ClusterTargetConfigItem[] = Object.entries(configMap)
@@ -268,11 +268,11 @@ export default function ClusterTargetConfigModal({
                                 </span>
                                 {isAdmin ? (
                                     <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-800 border border-blue-200">
-                                        Toàn cụm ({rows.length} siêu thị)
+                                        Toàn cụm ({rows.length} ST)
                                     </span>
                                 ) : (
                                     <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 text-purple-800 border border-purple-200">
-                                        {currentUser?.role_title || (currentUser?.role === 'QUAN_LY' ? 'Quản lý' : 'Trưởng ca')}: {rows.filter(r => isStoreEditable(r.storeName)).length} siêu thị phụ trách
+                                        {currentUser?.role_title || (currentUser?.role === 'QUAN_LY' ? 'Quản lý' : 'Trưởng ca')}: {rows.filter(r => isStoreEditable(r.storeName)).length} ST phụ trách
                                     </span>
                                 )}
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -282,8 +282,8 @@ export default function ClusterTargetConfigModal({
                             </div>
                             <p className="text-[11px] text-slate-500 mt-0.5">
                                 {isAdmin
-                                    ? 'Tùy chỉnh Target Vượt Trội chung hoặc riêng lẻ cho toàn bộ siêu thị trong cụm.'
-                                    : `Tùy chỉnh Target Vượt Trội cho các siêu thị trong phạm vi bạn phụ trách (${currentUser?.store_name || 'được phân quyền'}).`
+                                    ? 'Tùy chỉnh Target Vượt Trội chung hoặc riêng lẻ cho toàn bộ ST trong cụm.'
+                                    : `Tùy chỉnh Target Vượt Trội cho các ST trong phạm vi bạn phụ trách (${currentUser?.store_name || 'được phân quyền'}).`
                                 }
                             </p>
                         </div>
@@ -356,7 +356,7 @@ export default function ClusterTargetConfigModal({
                                 type="button"
                                 onClick={handleApplyCustomPace}
                                 className="px-2.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1"
-                                title="Áp dụng mức % nhịp này cho tất cả siêu thị"
+                                title="Áp dụng mức % nhịp này cho tất cả ST"
                             >
                                 <Zap className="w-3.5 h-3.5" />
                                 <span>Áp Dụng</span>
@@ -372,7 +372,7 @@ export default function ClusterTargetConfigModal({
                     )}
                 </div>
 
-                {/* 3. BẢNG DANH SÁCH SIÊU THỊ & TÙY CHỈNH TỪNG CỘT */}
+                {/* 3. BẢNG DANH SÁCH ST & TÙY CHỈNH TỪNG CỘT */}
                 <div className="p-3 sm:p-5 overflow-y-auto flex-1">
                     <div className="rounded-2xl border border-slate-200 overflow-hidden shadow-2xs bg-white">
                         <table className="w-full text-xs text-left border-collapse">
@@ -383,7 +383,7 @@ export default function ClusterTargetConfigModal({
                                         STT
                                     </th>
                                     <th className="py-2.5 px-3 border-r border-slate-200 min-w-[180px]">
-                                        SIÊU THỊ
+                                        ST
                                     </th>
                                     <th className="py-2.5 px-2.5 text-right border-r border-slate-200 w-28 bg-slate-100 text-slate-800">
                                         <div className="flex items-center justify-end gap-1">
@@ -408,7 +408,7 @@ export default function ClusterTargetConfigModal({
                                 {rows.length === 0 ? (
                                     <tr>
                                         <td colSpan={5} className="py-8 text-center text-slate-400 italic">
-                                            Không có dữ liệu siêu thị trong kỳ báo cáo này.
+                                            Không có dữ liệu ST trong kỳ báo cáo này.
                                         </td>
                                     </tr>
                                 ) : (
@@ -435,14 +435,14 @@ export default function ClusterTargetConfigModal({
                                                     </span>
                                                 </td>
 
-                                                {/* SIÊU THỊ */}
+                                                {/* ST */}
                                                 <td className="py-2 px-3 border-r border-slate-100">
                                                     <div className="flex items-center gap-1.5">
                                                         <div className="font-black text-slate-900 text-xs truncate" title={row.storeName}>
                                                             {shortName}
                                                         </div>
                                                         {!canEdit && (
-                                                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded bg-slate-100 text-slate-500 text-[9px] font-bold border border-slate-200 shrink-0" title="Chỉ đọc (Không thuộc siêu thị phụ trách của bạn)">
+                                                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded bg-slate-100 text-slate-500 text-[9px] font-bold border border-slate-200 shrink-0" title="Chỉ đọc (Không thuộc ST phụ trách của bạn)">
                                                                 <Lock className="w-2.5 h-2.5" />
                                                                 <span>Khóa</span>
                                                             </span>
@@ -479,7 +479,7 @@ export default function ClusterTargetConfigModal({
                                                                     : 'border-slate-200 group-hover:border-amber-300 text-slate-800 bg-white border'
                                                                 }`}
                                                             placeholder="100"
-                                                            title={!canEdit ? 'Chỉ quản lý phụ trách siêu thị này hoặc Admin mới có quyền điều chỉnh' : undefined}
+                                                            title={!canEdit ? 'Chỉ quản lý phụ trách ST này hoặc Admin mới có quyền điều chỉnh' : undefined}
                                                         />
                                                         <span className="text-[11px] font-bold text-slate-400">%</span>
                                                     </div>
@@ -498,7 +498,7 @@ export default function ClusterTargetConfigModal({
                                                             : 'bg-white border border-slate-200 group-hover:border-orange-300 focus:border-orange-500 text-orange-900'
                                                             }`}
                                                         placeholder="0.000"
-                                                        title={!canEdit ? 'Chỉ quản lý phụ trách siêu thị này hoặc Admin mới có quyền điều chỉnh' : undefined}
+                                                        title={!canEdit ? 'Chỉ quản lý phụ trách ST này hoặc Admin mới có quyền điều chỉnh' : undefined}
                                                     />
                                                 </td>
                                             </tr>
@@ -511,7 +511,7 @@ export default function ClusterTargetConfigModal({
                             <tfoot>
                                 <tr className="bg-slate-100 text-slate-900 font-black text-xs border-t-2 border-slate-300">
                                     <td colSpan={2} className="py-2.5 px-3 text-left uppercase tracking-wider border-r border-slate-200">
-                                        TỔNG CỤM ({totals.count} SIÊU THỊ)
+                                        TỔNG CỤM ({totals.count} ST)
                                     </td>
                                     <td className="py-2.5 px-2.5 text-right font-black text-blue-950 border-r border-slate-200">
                                         {totals.sumBase.toFixed(3)}

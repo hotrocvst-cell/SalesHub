@@ -114,7 +114,7 @@ export default function VoucherRuleConfigModal({
                 {/* Body */}
                 <div className="p-4 sm:p-5 space-y-3.5">
                     <p className="text-xs text-slate-600">
-                        Chọn quy tắc tự động lựa chọn mã voucher khi nhân viên siêu thị yêu cầu cấp mã trong kho:
+                        Chọn quy tắc tự động lựa chọn mã voucher khi nhân viên ST yêu cầu cấp mã trong kho:
                     </p>
 
                     <div className="space-y-2.5">

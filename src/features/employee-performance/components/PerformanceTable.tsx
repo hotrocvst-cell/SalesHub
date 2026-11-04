@@ -6,11 +6,13 @@ interface Props {
     rows: EmployeePerformanceRow[];
     showStoreName?: boolean;
     onSelectEmployee?: (emp: EmployeePerformanceRow) => void;
+    showWorkHours?: boolean;
 }
 
 export default function PerformanceTable({
     rows,
-    onSelectEmployee
+    onSelectEmployee,
+    showWorkHours = false
 }: Props) {
     // Chiều rộng badge mã nhân viên tự động thích ứng theo mã dài nhất trong bảng để thẳng cột thẳng lề
     const maxIdLength = useMemo(() => {
@@ -22,7 +24,7 @@ export default function PerformanceTable({
         return (
             <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-400 space-y-2">
                 <p className="font-bold text-sm text-slate-600">Không tìm thấy dữ liệu nhân viên nào theo điều kiện lọc.</p>
-                <p className="text-xs text-slate-400">Vui lòng kiểm tra lại siêu thị, tháng báo cáo hoặc từ khóa tìm kiếm.</p>
+                <p className="text-xs text-slate-400">Vui lòng kiểm tra lại ST, tháng báo cáo hoặc từ khóa tìm kiếm.</p>
             </div>
         );
     }
@@ -72,7 +74,7 @@ export default function PerformanceTable({
     return (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden font-avo">
             <div className="overflow-x-auto max-h-[750px] overflow-y-auto">
-                <table className="w-full text-left text-xs border-collapse font-avo report-table min-w-[1380px]">
+                <table className={`w-full text-left text-xs border-collapse font-avo report-table ${showWorkHours ? 'min-w-[1380px]' : 'min-w-[1200px]'}`}>
                     {/* Header chuẩn 1 dòng duy nhất, không thông tin diễn giải, tối ưu viết tắt */}
                     <thead className="bg-slate-900 text-white font-extrabold uppercase tracking-normal text-[11px] sticky top-0 z-20 shadow-xs whitespace-nowrap">
                         <tr>
@@ -100,11 +102,15 @@ export default function PerformanceTable({
                             {/* 8. %QĐ */}
                             <th className="py-3 px-3 text-center align-middle min-w-[85px] border-r border-slate-800" title="Tỷ lệ quy đổi: ((DTQĐ - DT Thực) / DT Thực) * 100">%QĐ</th>
 
-                            {/* 9. Giờ công */}
-                            <th className="py-3 px-3 text-right align-middle min-w-[85px] border-r border-slate-800">Giờ công</th>
+                            {/* 9. Giờ công - Ẩn/hiện theo toggle */}
+                            {showWorkHours && (
+                                <th className="py-3 px-3 text-right align-middle min-w-[85px] border-r border-slate-800">Giờ công</th>
+                            )}
 
-                            {/* 10. DTQĐ/GC */}
-                            <th className="py-3 px-3 text-center align-middle min-w-[95px] bg-purple-950/80 text-purple-200 border-r border-purple-900" title="Năng suất lao động: Lũy kế DTQĐ / Giờ công">DTQĐ/GC</th>
+                            {/* 10. DTQĐ/GC - Ẩn/hiện theo toggle */}
+                            {showWorkHours && (
+                                <th className="py-3 px-3 text-center align-middle min-w-[95px] bg-purple-950/80 text-purple-200 border-r border-purple-900" title="Năng suất lao động: Lũy kế DTQĐ / Giờ công">DTQĐ/GC</th>
+                            )}
 
                             {/* 11. % Trả chậm */}
                             <th className="py-3 px-3 text-center align-middle min-w-[100px] border-r border-slate-800" title="Tỷ lệ doanh thu trả chậm: DT Trả chậm / DT Thực">% Trả chậm</th>
@@ -192,19 +198,23 @@ export default function PerformanceTable({
                                         </span>
                                     </td>
 
-                                    {/* 9. Giờ công */}
-                                    <td className="py-2.5 px-3 text-right align-middle font-mono font-bold text-xs text-slate-700 border-r border-slate-100 whitespace-nowrap">
-                                        {row.work_hours > 0 ? `${row.work_hours.toLocaleString('vi-VN')}h` : '—'}
-                                    </td>
+                                    {/* 9. Giờ công - Ẩn/hiện theo toggle */}
+                                    {showWorkHours && (
+                                        <td className="py-2.5 px-3 text-right align-middle font-mono font-bold text-xs text-slate-700 border-r border-slate-100 whitespace-nowrap">
+                                            {row.work_hours > 0 ? `${row.work_hours.toLocaleString('vi-VN')}h` : '—'}
+                                        </td>
+                                    )}
 
-                                    {/* 10. DTQĐ/GC */}
-                                    <td className="py-2.5 px-3 text-center align-middle font-mono border-r border-slate-100 bg-purple-50/20 whitespace-nowrap">
-                                        <span className="inline-block px-2.5 py-0.5 rounded-md bg-purple-100 text-purple-950 font-mono font-bold text-xs text-center border border-purple-200/80 shadow-2xs leading-normal">
-                                            {row.productivity_qd_per_hour > 0
-                                                ? `${row.productivity_qd_per_hour.toFixed(2)}`
-                                                : '—'}
-                                        </span>
-                                    </td>
+                                    {/* 10. DTQĐ/GC - Ẩn/hiện theo toggle */}
+                                    {showWorkHours && (
+                                        <td className="py-2.5 px-3 text-center align-middle font-mono border-r border-slate-100 bg-purple-50/20 whitespace-nowrap">
+                                            <span className="inline-block px-2.5 py-0.5 rounded-md bg-purple-100 text-purple-950 font-mono font-bold text-xs text-center border border-purple-200/80 shadow-2xs leading-normal">
+                                                {row.productivity_qd_per_hour > 0
+                                                    ? `${row.productivity_qd_per_hour.toFixed(2)}`
+                                                    : '—'}
+                                            </span>
+                                        </td>
+                                    )}
 
                                     {/* 11. % Trả chậm (HIGHLIGHT ĐỎ NẾU DƯỚI 35%) */}
                                     <td className={`py-2.5 px-3 text-center align-middle font-mono border-r border-slate-100 whitespace-nowrap ${

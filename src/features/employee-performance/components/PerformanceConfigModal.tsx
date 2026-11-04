@@ -62,7 +62,7 @@ export default function PerformanceConfigModal({
     const [defaultDays, setDefaultDays] = useState<number>(30);
     const [applyToAllStores, setApplyToAllStores] = useState<boolean>(true);
 
-    // State Cấu hình TOP/BOT theo đích danh siêu thị
+    // State Cấu hình TOP/BOT theo đích danh ST
     const [topBotMode, setTopBotMode] = useState<'PERCENT' | 'COUNT'>('PERCENT');
     const [topValue, setTopValue] = useState<number>(20);
     const [botValue, setBotValue] = useState<number>(20);
@@ -171,7 +171,7 @@ export default function PerformanceConfigModal({
         return { topCount, botCount, midCount };
     }, [totalEmployees, topBotMode, topValue, botValue]);
 
-    // Xử lý lưu (Đồng thời LocalStorage và Supabase Cloud theo đích danh siêu thị)
+    // Xử lý lưu (Đồng thời LocalStorage và Supabase Cloud theo đích danh ST)
     const handleSave = async () => {
         setIsSaving(true);
         const allStoreNames = stores.map(s => s.name);
@@ -193,7 +193,7 @@ export default function PerformanceConfigModal({
             userName
         );
 
-        // 2. Lưu cấu hình TOP/BOT theo đích danh siêu thị
+        // 2. Lưu cấu hình TOP/BOT theo đích danh ST
         await saveTopBotConfig(
             targetStoreKey,
             {
@@ -323,10 +323,10 @@ export default function PerformanceConfigModal({
                     {/* TAB 1: THỜI GIAN & SỐ NGÀY HOẠT ĐỘNG CỦA SHOP */}
                     {activeTab === 'operating' && (
                         <div className="space-y-4">
-                            {/* Chọn siêu thị áp dụng */}
+                            {/* Chọn ST áp dụng */}
                             <div>
                                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                                    Siêu thị cần cấu hình:
+                                    ST cần cấu hình:
                                 </label>
                                 <div className="flex items-center gap-2">
                                     <Store className="w-4 h-4 text-slate-400 shrink-0" />
@@ -335,7 +335,7 @@ export default function PerformanceConfigModal({
                                         onChange={e => handleStoreChange(e.target.value)}
                                         className="w-full text-xs font-bold text-slate-800 bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl outline-hidden focus:border-blue-600 focus:ring-2 focus:ring-blue-500/20"
                                     >
-                                        <option value="all">🏢 Toàn Cụm Siêu Thị (Áp dụng chung)</option>
+                                        <option value="all">🏢 Toàn Cụm ST (Áp dụng chung)</option>
                                         {stores.map(s => (
                                             <option key={s.id || s.code} value={s.name}>
                                                 {s.name} ({s.code})
@@ -383,7 +383,7 @@ export default function PerformanceConfigModal({
                                     </div>
                                 </div>
                                 <p className="text-[11px] text-slate-500">
-                                    Ví dụ: Siêu thị mở từ <strong>08:00</strong> sáng đến <strong>22:00</strong> tối = 14 tiếng phục vụ khách hàng.
+                                    Ví dụ: ST mở từ <strong>08:00</strong> sáng đến <strong>22:00</strong> tối = 14 tiếng phục vụ khách hàng.
                                 </p>
                             </div>
 
@@ -392,7 +392,7 @@ export default function PerformanceConfigModal({
                                 <div className="flex items-center justify-between">
                                     <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
                                         <Calendar className="w-4 h-4 text-amber-600" />
-                                        <span>Số ngày siêu thị hoạt động (Tháng {month}/{year})</span>
+                                        <span>Số ngày ST hoạt động (Tháng {month}/{year})</span>
                                     </span>
                                     <span className="text-[11px] text-slate-500">
                                         Lịch chuẩn: <strong className="text-slate-800">{defaultDays} ngày</strong>
@@ -414,7 +414,7 @@ export default function PerformanceConfigModal({
                                 </div>
 
                                 <p className="text-[11px] text-slate-500">
-                                    💡 <em>Ghi chú của Boss:</em> Mặc định là số ngày trong tháng ({defaultDays} ngày). Nếu siêu thị có ngày đóng cửa sửa chữa hoặc nghỉ lễ, Boss điều chỉnh tay số ngày này để hệ thống tính toán <strong>% Dự báo hoàn thành (%DKHT)</strong> chuẩn xác nhất.
+                                    💡 <em>Ghi chú của Boss:</em> Mặc định là số ngày trong tháng ({defaultDays} ngày). Nếu ST có ngày đóng cửa sửa chữa hoặc nghỉ lễ, Boss điều chỉnh tay số ngày này để hệ thống tính toán <strong>% Dự báo hoàn thành (%DKHT)</strong> chuẩn xác nhất.
                                 </p>
                             </div>
 
@@ -436,12 +436,12 @@ export default function PerformanceConfigModal({
                     {/* TAB 2: CẤU HÌNH ĐÁNH GIÁ TOP / BOT */}
                     {activeTab === 'topbot' && (
                         <div className="space-y-4">
-                            {/* Chọn đích danh siêu thị cần cấu hình TOP/BOT */}
+                            {/* Chọn đích danh ST cần cấu hình TOP/BOT */}
                             <div className="bg-amber-50/70 p-3.5 rounded-2xl border border-amber-200 space-y-2">
                                 <div className="flex items-center justify-between flex-wrap gap-2">
                                     <label className="block text-xs font-bold text-amber-950 flex items-center gap-1.5">
                                         <Store className="w-4 h-4 text-amber-600" />
-                                        <span>Siêu thị cần cấu hình tiêu chuẩn TOP / BOT:</span>
+                                        <span>ST cần cấu hình tiêu chuẩn TOP / BOT:</span>
                                     </label>
                                     <span className="text-[11px] font-extrabold text-amber-800 bg-white border border-amber-300 px-2.5 py-0.5 rounded-lg shadow-2xs">
                                         {selectedStore === 'all' ? '🌐 Cấu hình chung mặc định' : `🏢 Đích danh: ${selectedStore}`}
@@ -452,7 +452,7 @@ export default function PerformanceConfigModal({
                                     onChange={e => handleStoreChange(e.target.value)}
                                     className="w-full text-xs font-bold text-slate-800 bg-white border border-amber-300 px-3 py-2 rounded-xl outline-hidden focus:border-amber-600 cursor-pointer shadow-2xs"
                                 >
-                                    <option value="all">🌐 Toàn bộ cụm siêu thị (Cấu hình chung mặc định)</option>
+                                    <option value="all">🌐 Toàn bộ cụm ST (Cấu hình chung mặc định)</option>
                                     {stores.map(s => (
                                         <option key={s.id || s.name} value={s.name}>
                                             🏢 {s.name}
@@ -460,7 +460,7 @@ export default function PerformanceConfigModal({
                                     ))}
                                 </select>
                                 <p className="text-[11px] text-amber-900/80 leading-relaxed">
-                                    💡 <strong>Cấu hình theo đích danh ST:</strong> Mỗi siêu thị có thể áp dụng tỷ lệ % hoặc số lượng TOP/BOT độc lập để phù hợp với quân số thực tế của shop.
+                                    💡 <strong>Cấu hình theo đích danh ST:</strong> Mỗi ST có thể áp dụng tỷ lệ % hoặc số lượng TOP/BOT độc lập để phù hợp với quân số thực tế của shop.
                                 </p>
                             </div>
 

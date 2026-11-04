@@ -166,6 +166,13 @@ export default function CampaignConfigPage() {
         loadData();
     }, []);
 
+    // Đảm bảo chỉ tài khoản Admin mới có thể truy cập tab từ điển viết tắt
+    useEffect(() => {
+        if (!isAdmin && activeMainTab === 'dictionary') {
+            setActiveMainTab('store_scores');
+        }
+    }, [isAdmin, activeMainTab]);
+
     // Danh sách đã lọc và sắp xếp
     const filteredAndSortedList = useMemo(() => {
         // 1. Lọc theo tìm kiếm và trạng thái
@@ -240,6 +247,10 @@ export default function CampaignConfigPage() {
 
     // Thêm dòng mới thủ công
     const handleAddNewRow = () => {
+        if (!isAdmin) {
+            showToast('⚠️ Chức năng từ điển viết tắt chỉ khả dụng với tài khoản Quản trị viên (Admin)!');
+            return;
+        }
         const newRow = {
             id: `temp_${Date.now()}`,
             raw_key: '',
@@ -256,6 +267,10 @@ export default function CampaignConfigPage() {
 
     // Đánh lại số thứ tự tự động 1, 2, 3... theo danh sách đang sắp xếp
     const handleAutoReindex = () => {
+        if (!isAdmin) {
+            showToast('⚠️ Chức năng từ điển viết tắt chỉ khả dụng với tài khoản Quản trị viên (Admin)!');
+            return;
+        }
         if (filteredAndSortedList.length === 0) return;
         if (!window.confirm(`Bạn có muốn đánh lại số thứ tự (từ 1 đến ${filteredAndSortedList.length}) theo danh sách đang hiển thị trên bảng?`)) return;
 
@@ -279,6 +294,7 @@ export default function CampaignConfigPage() {
 
     // Cập nhật trường dữ liệu trên bảng
     const handleFieldChange = (id: string, field: string, val: any) => {
+        if (!isAdmin) return;
         setCampaignList(prev => prev.map(item => {
             if (item.id === id) {
                 return { ...item, [field]: val };
@@ -290,6 +306,10 @@ export default function CampaignConfigPage() {
 
     // Lưu theo đợt
     const handleBatchSave = async () => {
+        if (!isAdmin) {
+            showToast('⚠️ Chỉ Quản trị viên (Admin) mới có quyền lưu từ điển viết tắt!');
+            return;
+        }
         for (const item of campaignList) {
             if (!item.raw_key || !item.raw_key.trim()) {
                 showToast('⚠️ Vui lòng nhập đầy đủ Mã gốc (Raw Key)!');
@@ -336,6 +356,11 @@ export default function CampaignConfigPage() {
 
     // Khi người dùng bấm nút Xóa ở dòng thi đua
     const handleDeleteClick = async (item: any) => {
+        if (!isAdmin) {
+            showToast('⚠️ Chỉ Quản trị viên (Admin) mới có quyền xóa mục từ điển!');
+            return;
+        }
+
         if (item.isNew || String(item.id).startsWith('temp_')) {
             setCampaignList(prev => prev.filter(x => x.id !== item.id));
             showToast('🗑️ Đã xóa dòng nháp mới tạo!');
@@ -362,6 +387,7 @@ export default function CampaignConfigPage() {
 
     // Thực hiện Tạm ẩn (Soft Archive) từ Modal
     const handleConfirmArchive = async () => {
+        if (!isAdmin) return;
         const item = deleteModalState.item;
         if (!item) return;
 
@@ -379,6 +405,7 @@ export default function CampaignConfigPage() {
 
     // Thực hiện Xóa vĩnh viễn (Force Cascade Delete) từ Modal
     const handleConfirmForceDelete = async () => {
+        if (!isAdmin) return;
         const item = deleteModalState.item;
         if (!item) return;
 
@@ -396,6 +423,11 @@ export default function CampaignConfigPage() {
 
     // Dán danh sách nhanh từ Excel
     const handleProcessPastedData = async () => {
+        if (!isAdmin) {
+            showToast('⚠️ Chỉ Quản trị viên (Admin) mới có quyền nhập dữ liệu từ điển!');
+            return;
+        }
+
         if (!pasteRawText.trim()) return;
 
         const lines = pasteRawText.split('\n').map(l => l.trim()).filter(Boolean);
@@ -438,7 +470,7 @@ export default function CampaignConfigPage() {
         setIsSyncingAll(true);
         try {
             let didSave = false;
-            if (hasChanges) {
+            if (hasChanges && isAdmin) {
                 await handleBatchSave();
                 didSave = true;
             }
@@ -462,6 +494,7 @@ export default function CampaignConfigPage() {
 
     const countActive = campaignList.filter(x => x.is_active).length;
     const countInactive = campaignList.filter(x => !x.is_active).length;
+    const hasPendingChanges = (isAdmin && hasChanges) || hasScoreChanges;
 
     return (
         <div className="p-4 sm:p-6 space-y-5 max-w-[1300px] mx-auto w-full">
@@ -479,7 +512,9 @@ export default function CampaignConfigPage() {
                         <span>Cấu Hình Thi Đua & Tính Điểm Hiệu Quả</span>
                     </h1>
                     <p className="text-xs text-slate-500 mt-0.5">
-                        Quản lý viết tắt chương trình thi đua và Cấu hình điểm thi đua
+                        {isAdmin
+                            ? 'Quản lý viết tắt chương trình thi đua và Cấu hình điểm thi đua'
+                            : 'Cấu hình điểm thi đua theo ST phụ trách'}
                     </p>
                 </div>
 
@@ -490,7 +525,7 @@ export default function CampaignConfigPage() {
                         onClick={handleCheckCloudConnection}
                         disabled={isCheckingCloud}
                         title={`Bấm để kiểm tra lại kết nối Cloud. Lần kiểm tra cuối: ${lastCheckedTime || 'Chưa kiểm tra'}`}
-                        className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-2 transition cursor-pointer shadow-2xs ${(hasChanges || hasScoreChanges)
+                        className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-2 transition cursor-pointer shadow-2xs ${hasPendingChanges
                             ? 'bg-amber-50 border-amber-300 text-amber-900 hover:bg-amber-100 ring-1 ring-amber-400/50'
                             : cloudStatus === 'READY'
                                 ? 'bg-emerald-50 border-emerald-300 text-emerald-900 hover:bg-emerald-100'
@@ -500,7 +535,7 @@ export default function CampaignConfigPage() {
                             }`}
                     >
                         <span className="relative flex h-2 w-2">
-                            {(hasChanges || hasScoreChanges) ? (
+                            {hasPendingChanges ? (
                                 <>
                                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
                                     <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
@@ -519,7 +554,7 @@ export default function CampaignConfigPage() {
                         <span>
                             {isCheckingCloud
                                 ? 'Đang kiểm tra...'
-                                : (hasChanges || hasScoreChanges)
+                                : hasPendingChanges
                                     ? 'Có thay đổi chưa lưu'
                                     : cloudStatus === 'READY'
                                         ? 'Cloud: Sẵn sàng'
@@ -540,20 +575,23 @@ export default function CampaignConfigPage() {
                                 }`}
                         >
                             <Award className="w-4 h-4 text-amber-600" />
-                            <span>🎯 Điểm thi đua Siêu thị</span>
+                            <span>🎯 Điểm thi đua ST</span>
                         </button>
 
-                        <button
-                            type="button"
-                            onClick={() => setActiveMainTab('dictionary')}
-                            className={`px-3.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition cursor-pointer ${activeMainTab === 'dictionary'
-                                ? 'bg-white text-indigo-900 shadow-xs'
-                                : 'text-slate-600 hover:text-slate-900'
-                                }`}
-                        >
-                            <BookOpen className="w-4 h-4 text-indigo-600" />
-                            <span>📖 Từ điển viết tắt ({campaignList.length})</span>
-                        </button>
+                        {isAdmin && (
+                            <button
+                                type="button"
+                                onClick={() => setActiveMainTab('dictionary')}
+                                className={`px-3.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition cursor-pointer ${activeMainTab === 'dictionary'
+                                    ? 'bg-white text-indigo-900 shadow-xs'
+                                    : 'text-slate-600 hover:text-slate-900'
+                                    }`}
+                            >
+                                <BookOpen className="w-4 h-4 text-indigo-600" />
+                                <span>📖 Từ điển viết tắt ({campaignList.length})</span>
+                                <span className="text-[9px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded font-black tracking-wider uppercase ml-0.5">Admin</span>
+                            </button>
+                        )}
                     </div>
                 </div>
             </div>
@@ -562,7 +600,7 @@ export default function CampaignConfigPage() {
             <SupabaseSyncStatusBar
                 status={cloudStatus}
                 lastCheckedTime={lastCheckedTime}
-                hasDictChanges={hasChanges}
+                hasDictChanges={isAdmin ? hasChanges : false}
                 hasScoreChanges={hasScoreChanges}
                 isSyncing={isCheckingCloud || isSyncingAll}
                 dictCount={dictCloudCount || campaignList.length}
@@ -574,22 +612,7 @@ export default function CampaignConfigPage() {
             />
 
             {/* NỘI DUNG THEO TAB */}
-            {activeMainTab === 'store_scores' ? (
-                <StoreCampaignScoreTab
-                    campaigns={campaignList}
-                    stores={stores}
-                    currentUser={currentUser}
-                    isAdmin={isAdmin}
-                    canAccessStore={canAccessStore}
-                    showToast={showToast}
-                    onHasChangesChange={setHasScoreChanges}
-                    onSavedSuccess={() => {
-                        setHasScoreChanges(false);
-                        handleCheckCloudConnection();
-                    }}
-                    saveTrigger={saveScoreTrigger}
-                />
-            ) : (
+            {activeMainTab === 'dictionary' && isAdmin ? (
                 <div className="space-y-5 animate-in fade-in duration-200">
                     {/* Header phụ của Từ điển thi đua */}
                     <div className="flex items-center justify-between gap-3 flex-wrap bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
@@ -974,10 +997,25 @@ export default function CampaignConfigPage() {
                         </div>
                     </div>
                 </div>
+            ) : (
+                <StoreCampaignScoreTab
+                    campaigns={campaignList}
+                    stores={stores}
+                    currentUser={currentUser}
+                    isAdmin={isAdmin}
+                    canAccessStore={canAccessStore}
+                    showToast={showToast}
+                    onHasChangesChange={setHasScoreChanges}
+                    onSavedSuccess={() => {
+                        setHasScoreChanges(false);
+                        handleCheckCloudConnection();
+                    }}
+                    saveTrigger={saveScoreTrigger}
+                />
             )}
 
-            {/* MODAL XÓA THÔNG MINH (SMART DELETE / ARCHIVE MODAL) */}
-            {deleteModalState.isOpen && deleteModalState.item && (
+            {/* MODAL XÓA THÔNG MINH (SMART DELETE / ARCHIVE MODAL) - CHỈ ADMIN */}
+            {isAdmin && deleteModalState.isOpen && deleteModalState.item && (
                 <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
                     <div className="bg-white rounded-3xl max-w-[560px] w-full p-6 space-y-5 shadow-2xl border border-slate-200">
                         {/* Header Modal */}
@@ -1128,8 +1166,8 @@ export default function CampaignConfigPage() {
                 </div>
             )}
 
-            {/* Modal dán danh sách nhanh */}
-            {isPasteModalOpen && (
+            {/* Modal dán danh sách nhanh - CHỈ ADMIN */}
+            {isAdmin && isPasteModalOpen && (
                 <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
                     <div className="bg-white rounded-2xl max-w-[600px] w-full p-5 space-y-4 shadow-2xl border border-slate-200">
                         <div className="flex items-center justify-between border-b border-slate-200 pb-3">

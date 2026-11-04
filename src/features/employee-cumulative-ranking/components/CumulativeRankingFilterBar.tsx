@@ -101,9 +101,9 @@ export default function CumulativeRankingFilterBar({
 }: CumulativeRankingFilterBarProps) {
     return (
         <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-3 sm:p-4 mb-4">
-            {/* HÀNG 1: BỘ LỌC SIÊU THỊ / CỤM ĐẶT ĐẦU TIÊN RIÊNG LẺ 1 DÒNG (RULE 10 CONVENTION) */}
+            {/* HÀNG 1: BỘ LỌC ST / CỤM ĐẶT ĐẦU TIÊN RIÊNG LẺ 1 DÒNG (RULE 10 CONVENTION) */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
-                {/* BỘ LỌC SIÊU THỊ / CỤM Ở VỊ TRÍ ĐẦU TIÊN */}
+                {/* BỘ LỌC ST / CỤM Ở VỊ TRÍ ĐẦU TIÊN */}
                 <div className="flex items-center gap-2">
                     <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 hover:border-blue-400 px-3 py-2 rounded-xl text-xs transition-all shadow-2xs">
                         <StoreIcon className="w-4 h-4 text-blue-600 shrink-0" />
@@ -114,7 +114,7 @@ export default function CumulativeRankingFilterBar({
                             onChange={(e) => onStoreChange(e.target.value)}
                             className="bg-transparent font-black text-slate-900 text-xs focus:outline-hidden cursor-pointer disabled:cursor-not-allowed min-w-[180px] sm:min-w-[240px]"
                         >
-                            <option value="all">🏢 Tất cả siêu thị</option>
+                            <option value="all">🏢 Tất cả ST</option>
                             {storesList.map((s, idx) => (
                                 <option key={idx} value={s.name}>
                                     🏪 {s.short_name || s.name}

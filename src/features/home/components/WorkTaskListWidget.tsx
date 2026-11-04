@@ -251,7 +251,7 @@ export default function WorkTaskListWidget({
                     )}
                 </div>
 
-                {/* Bộ lọc Siêu thị */}
+                {/* Bộ lọc ST */}
                 <div className="flex items-center justify-between gap-2 text-xs pt-1 flex-wrap">
                     <span className="font-extrabold text-slate-700 flex items-center gap-1.5">
                         <FileText className="w-3.5 h-3.5 text-blue-600" />
@@ -260,7 +260,7 @@ export default function WorkTaskListWidget({
 
                     {isStaff ? (
                         <span className="text-[11px] font-bold text-slate-600 bg-slate-50 px-2 py-0.5 rounded-md border border-slate-200">
-                            🏢 {currentUser?.store_name || 'Siêu thị của bạn'}
+                            🏢 {currentUser?.store_name || 'ST của bạn'}
                         </span>
                     ) : (
                         <div className="flex items-center gap-1">
@@ -448,7 +448,7 @@ export default function WorkTaskListWidget({
                                     {/* Footer chi tiết */}
                                     <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1 border-t border-slate-100 flex-wrap gap-1">
                                         <span className="truncate max-w-[150px] font-bold text-slate-500">
-                                            {note.store_name === ALL_ASSIGNED_STORE_KEY ? '🏢 Toàn nhóm siêu thị' : `📍 ${note.store_name}`}
+                                            {note.store_name === ALL_ASSIGNED_STORE_KEY ? '🏢 Toàn nhóm ST' : `📍 ${note.store_name}`}
                                         </span>
                                         <span>Tạo bởi: <b>{note.created_by_name}</b></span>
                                     </div>

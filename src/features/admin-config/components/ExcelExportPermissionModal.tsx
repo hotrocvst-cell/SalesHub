@@ -45,8 +45,8 @@ const ROLES_LIST: RoleConfigItem[] = [
     },
     {
         role: 'QUAN_LY',
-        title: 'Quản Lý (QL Siêu Thị / Cụm)',
-        description: 'Cho phép xuất dữ liệu trong phạm vi siêu thị hoặc cụm đang phụ trách',
+        title: 'Quản Lý (QL ST / Cụm)',
+        description: 'Cho phép xuất dữ liệu trong phạm vi ST hoặc cụm đang phụ trách',
         icon: Briefcase,
         color: 'text-indigo-700',
         bgColor: 'bg-indigo-50',

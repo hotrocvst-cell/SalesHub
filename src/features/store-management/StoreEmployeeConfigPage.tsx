@@ -58,8 +58,8 @@ export default function StoreEmployeeConfigPage() {
             setStores(storesRes.data);
         } else {
             hasErr = true;
-            setCloudError('Không thể tải danh sách siêu thị từ CLOUD');
-            showToast('⚠️ Không thể tải danh sách siêu thị!');
+            setCloudError('Không thể tải danh sách ST từ CLOUD');
+            showToast('⚠️ Không thể tải danh sách ST!');
         }
 
         if (empsRes.success) {
@@ -80,7 +80,7 @@ export default function StoreEmployeeConfigPage() {
         loadData();
     }, []);
 
-    // Danh sách tên siêu thị được phân quyền cho tài khoản hiện tại
+    // Danh sách tên ST được phân quyền cho tài khoản hiện tại
     const userAccessibleList = useMemo<string[]>(() => {
         if (isAdmin) return [];
         if (currentUser.accessible_stores && currentUser.accessible_stores.length > 0) {
@@ -89,7 +89,7 @@ export default function StoreEmployeeConfigPage() {
         return currentUser.store_name ? [currentUser.store_name] : [];
     }, [currentUser, isAdmin]);
 
-    // Danh sách đối tượng siêu thị (StoreItem) thuộc thẩm quyền của user
+    // Danh sách đối tượng ST (StoreItem) thuộc thẩm quyền của user
     const allowedStores = useMemo<StoreItem[]>(() => {
         if (!stores || stores.length === 0) return [];
         if (isAdmin) return stores;
@@ -97,7 +97,7 @@ export default function StoreEmployeeConfigPage() {
         return stores.filter(s => userAccessibleList.some(acc => isStoreMatch(s.name, acc, stores)));
     }, [stores, userAccessibleList, isAdmin]);
 
-    // Danh sách nhân viên thuộc các siêu thị mà user được phân quyền phụ trách
+    // Danh sách nhân viên thuộc các ST mà user được phân quyền phụ trách
     const allowedEmployees = useMemo<EmployeeItem[]>(() => {
         if (!employees || employees.length === 0) return [];
         if (isAdmin) return employees;
@@ -111,44 +111,44 @@ export default function StoreEmployeeConfigPage() {
         });
     }, [employees, allowedStores, userAccessibleList, isAdmin, stores]);
 
-    // Lưu / Cập nhật Siêu thị
+    // Lưu / Cập nhật ST
     const handleSaveStore = async (store: Partial<StoreItem>): Promise<boolean> => {
         if (!canConfigure || !isManager) {
             setIsRoleModalOpen(true);
             return false;
         }
-        // Ràng buộc bảo mật: User không phải Admin chỉ được chỉnh sửa siêu thị thuộc quyền quản lý
+        // Ràng buộc bảo mật: User không phải Admin chỉ được chỉnh sửa ST thuộc quyền quản lý
         if (!isAdmin && store.name) {
             const isPermitted = allowedStores.some(s => isStoreMatch(s.name, store.name!, stores)) ||
                                 userAccessibleList.some(acc => isStoreMatch(acc, store.name!, stores));
             if (!isPermitted) {
-                showToast('⚠️ Bạn không có quyền chỉnh sửa siêu thị nằm ngoài phạm vi phụ trách!');
+                showToast('⚠️ Bạn không có quyền chỉnh sửa ST nằm ngoài phạm vi phụ trách!');
                 return false;
             }
         }
         const res = await upsertStore(store);
         if (res.success) {
-            showToast('✅ Đã lưu thông tin siêu thị thành công!');
+            showToast('✅ Đã lưu thông tin ST thành công!');
             await loadData();
             return true;
         }
         return false;
     };
 
-    // Xóa Siêu thị
+    // Xóa ST
     const handleDeleteStore = async (id: string, name: string): Promise<boolean> => {
-        // Ràng buộc bảo mật: Chỉ ADMIN mới được phép xóa siêu thị khỏi cơ sở dữ liệu
+        // Ràng buộc bảo mật: Chỉ ADMIN mới được phép xóa ST khỏi cơ sở dữ liệu
         if (!isAdmin) {
-            showToast('⚠️ Chỉ Quản trị viên (ADMIN) mới có quyền xóa siêu thị khỏi hệ thống!');
+            showToast('⚠️ Chỉ Quản trị viên (ADMIN) mới có quyền xóa ST khỏi hệ thống!');
             return false;
         }
         const res = await deleteStoreById(id);
         if (res.success) {
-            showToast(`🗑️ Đã xóa siêu thị [${name}] thành công!`);
+            showToast(`🗑️ Đã xóa ST [${name}] thành công!`);
             await loadData();
             return true;
         }
-        showToast('❌ Không thể xóa siêu thị! Vui lòng thử lại.');
+        showToast('❌ Không thể xóa ST! Vui lòng thử lại.');
         return false;
     };
 
@@ -162,12 +162,12 @@ export default function StoreEmployeeConfigPage() {
             }
             return false;
         }
-        // Ràng buộc bảo mật: User không phải Admin chỉ được chỉnh sửa nhân sự thuộc siêu thị mình quản lý
+        // Ràng buộc bảo mật: User không phải Admin chỉ được chỉnh sửa nhân sự thuộc ST mình quản lý
         if (!isAdmin && emp.store_name) {
             const isPermitted = allowedStores.some(s => isStoreMatch(s.name, emp.store_name!, stores)) ||
                                 userAccessibleList.some(acc => isStoreMatch(acc, emp.store_name!, stores));
             if (!isPermitted) {
-                showToast('⚠️ Bạn không có quyền quản lý nhân sự tại siêu thị nằm ngoài phạm vi phụ trách!');
+                showToast('⚠️ Bạn không có quyền quản lý nhân sự tại ST nằm ngoài phạm vi phụ trách!');
                 return false;
             }
         }
@@ -190,14 +190,14 @@ export default function StoreEmployeeConfigPage() {
             }
             return false;
         }
-        // Ràng buộc bảo mật: User không phải Admin chỉ được xóa nhân sự thuộc siêu thị mình quản lý
+        // Ràng buộc bảo mật: User không phải Admin chỉ được xóa nhân sự thuộc ST mình quản lý
         if (!isAdmin) {
             const targetEmp = employees.find(e => e.id === id);
             if (targetEmp && targetEmp.store_name) {
                 const isPermitted = allowedStores.some(s => isStoreMatch(s.name, targetEmp.store_name, stores)) ||
                                     userAccessibleList.some(acc => isStoreMatch(acc, targetEmp.store_name, stores));
                 if (!isPermitted) {
-                    showToast('⚠️ Bạn không có quyền xóa nhân sự tại siêu thị nằm ngoài phạm vi phụ trách!');
+                    showToast('⚠️ Bạn không có quyền xóa nhân sự tại ST nằm ngoài phạm vi phụ trách!');
                     return false;
                 }
             }
@@ -228,11 +228,11 @@ export default function StoreEmployeeConfigPage() {
                             <Store className="w-5 h-5" />
                         </span>
                         <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-                            Cấu Hình Siêu Thị & Nhân Sự
+                            Cấu Hình ST & Nhân Sự
                         </h1>
                     </div>
                     <p className="text-xs text-slate-500 mt-1">
-                        Quản trị danh mục siêu thị trong cụm và danh sách nhân sự phụ trách theo từng cửa hàng.
+                        Quản trị danh mục ST trong cụm và danh sách nhân sự phụ trách theo từng cửa hàng.
                     </p>
                 </div>
 
@@ -309,7 +309,7 @@ export default function StoreEmployeeConfigPage() {
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                             <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                         </span>
-                        <span><b>CLOUD:</b> Đã đồng bộ trực tuyến ({stores.length} siêu thị, {employees.length} nhân sự trên đám mây).</span>
+                        <span><b>CLOUD:</b> Đã đồng bộ trực tuyến ({stores.length} ST, {employees.length} nhân sự trên đám mây).</span>
                     </div>
                     <button
                         type="button"
@@ -322,12 +322,12 @@ export default function StoreEmployeeConfigPage() {
                 </div>
             )}
 
-            {/* BANNER PHẠM VI SIÊU THỊ PHỤ TRÁCH CỦA TÀI KHOẢN */}
+            {/* BANNER PHẠM VI ST PHỤ TRÁCH CỦA TÀI KHOẢN */}
             {isAdmin ? (
                 <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl px-3.5 py-2 flex items-center justify-between text-xs text-blue-900 shadow-2xs">
                     <div className="flex items-center gap-2 font-medium">
                         <span className="p-1 rounded-md bg-blue-100 text-blue-700">👑</span>
-                        <span><b>Phạm vi quản trị:</b> Toàn hệ thống ({stores.length} siêu thị, {employees.length} nhân sự).</span>
+                        <span><b>Phạm vi quản trị:</b> Toàn hệ thống ({stores.length} ST, {employees.length} nhân sự).</span>
                     </div>
                     <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-blue-200/70 text-blue-800">
                         Admin Toàn Quyền
@@ -338,18 +338,18 @@ export default function StoreEmployeeConfigPage() {
                     <div className="flex items-center gap-2 font-medium">
                         <span className="p-1 rounded-md bg-emerald-100 text-emerald-700">🏢</span>
                         <span>
-                            <b>Phạm vi phụ trách:</b> {allowedStores.length} siêu thị ({allowedStores.map(s => s.name).join(', ')}) • {allowedEmployees.length} nhân sự.
+                            <b>Phạm vi phụ trách:</b> {allowedStores.length} ST ({allowedStores.map(s => s.name).join(', ')}) • {allowedEmployees.length} nhân sự.
                         </span>
                     </div>
                     <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-200/70 text-emerald-800 self-start sm:self-auto shrink-0">
-                        🔒 Đã khóa theo siêu thị phụ trách
+                        🔒 Đã khóa theo ST phụ trách
                     </span>
                 </div>
             ) : (
                 <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-300 rounded-xl px-3.5 py-2.5 flex items-center gap-2 text-xs text-amber-900 shadow-2xs">
                     <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
                     <div>
-                        <b>Chưa gán siêu thị phụ trách:</b> Tài khoản của bạn ({currentUser.employee_id || currentUser.full_name}) chưa được cấu hình siêu thị quản lý. Vui lòng liên hệ Quản trị viên để được phân quyền tại mục <b>Quản Trị Hệ Thống</b>.
+                        <b>Chưa gán ST phụ trách:</b> Tài khoản của bạn ({currentUser.employee_id || currentUser.full_name}) chưa được cấu hình ST quản lý. Vui lòng liên hệ Quản trị viên để được phân quyền tại mục <b>Quản Trị Hệ Thống</b>.
                     </div>
                 </div>
             )}
@@ -365,7 +365,7 @@ export default function StoreEmployeeConfigPage() {
                     }`}
                 >
                     <Store className="w-4 h-4" />
-                    <span>Danh Sách Siêu Thị</span>
+                    <span>Danh Sách ST</span>
                     <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-slate-100 text-slate-700">
                         {allowedStores.length}
                     </span>

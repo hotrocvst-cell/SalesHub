@@ -125,7 +125,7 @@ export default function VoucherCleanModal({
                                 Làm Sạch Dữ Liệu Tồn Kho Coupon
                             </h3>
                             <p className="text-[11px] text-slate-500 font-medium">
-                                Phạm vi: <strong>{currentStoreName === 'all' ? 'Toàn Cụm Siêu Thị' : getShortStoreName(currentStoreName)}</strong>
+                                Phạm vi: <strong>{currentStoreName === 'all' ? 'Toàn Cụm ST' : getShortStoreName(currentStoreName)}</strong>
                             </p>
                         </div>
                     </div>

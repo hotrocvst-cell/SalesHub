@@ -32,7 +32,7 @@ export default function ProtectedRoute({ path, children }: Props) {
         return <Navigate to="/dang-nhap" replace />;
     }
 
-    // 2. Kiểm tra Onboarding (Yêu cầu 2: Chưa chọn siêu thị và vai trò)
+    // 2. Kiểm tra Onboarding (Yêu cầu 2: Chưa chọn ST và vai trò)
     if (currentUser.status === 'PENDING_ONBOARDING') {
         return <Navigate to="/onboarding" replace />;
     }
@@ -126,17 +126,17 @@ export default function ProtectedRoute({ path, children }: Props) {
         );
     }
 
-    // 5b. Nếu tính năng này chưa được kích hoạt cho siêu thị của người dùng (phân quyền theo siêu thị / gói chi nhánh)
+    // 5b. Nếu tính năng này chưa được kích hoạt cho ST của người dùng (phân quyền theo ST / gói chi nhánh)
     if (!access.storeAllowed) {
         const pageName = access.page?.page_name || 'Phân hệ này';
-        const userStore = currentUser?.store_name || 'Chưa gán siêu thị';
+        const userStore = currentUser?.store_name || 'Chưa gán ST';
         return (
             <UnauthorizedAccessView
-                title="Tính Năng Chưa Kích Hoạt Cho Siêu Thị"
-                badgeText="Giới Hạn Theo Siêu Thị / Chi Nhánh"
+                title="Tính Năng Chưa Kích Hoạt Cho ST"
+                badgeText="Giới Hạn Theo ST / Chi Nhánh"
                 pageName={pageName}
                 path={path}
-                message={`Tính năng [${pageName}] hiện chưa được mở quyền sử dụng cho đơn vị [${userStore}]. Vui lòng liên hệ Quản trị viên (Admin) để kích hoạt gói tính năng này cho siêu thị.`}
+                message={`Tính năng [${pageName}] hiện chưa được mở quyền sử dụng cho đơn vị [${userStore}]. Vui lòng liên hệ Quản trị viên (Admin) để kích hoạt gói tính năng này cho ST.`}
                 countdownSeconds={5}
                 homePath="/"
             />

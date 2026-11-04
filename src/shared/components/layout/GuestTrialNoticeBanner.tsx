@@ -108,7 +108,7 @@ export default function GuestTrialNoticeBanner() {
                                     Đặc quyền khi tham gia gói Premium:
                                 </div>
                                 <ul className="space-y-1.5 text-slate-600 pl-5 list-disc">
-                                    <li>Thời gian sử dụng <b>không giới hạn</b> cho toàn bộ nhân sự siêu thị.</li>
+                                    <li>Thời gian sử dụng <b>không giới hạn</b> cho toàn bộ nhân sự ST.</li>
                                     <li>Báo cáo doanh thu &amp; sản lượng <b>Realtime 100%</b> tự động.</li>
                                     <li>Tự động xếp hạng hiệu quả, vinh danh Top 30% và nhắc nhở tăng tốc.</li>
                                     <li>Hỗ trợ kỹ thuật 24/7 &amp; đồng bộ dữ liệu thời gian thực trên Supabase Cloud.</li>

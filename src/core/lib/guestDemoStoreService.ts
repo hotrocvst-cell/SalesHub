@@ -2,12 +2,12 @@ import type { StoreItem, EmployeeItem, BusinessDayRecord } from './storage';
 import type { EmployeeDataSession } from '../../features/employee-cumulative/utils/sessionStorage';
 import { isStoreMatch } from './formatters';
 
-// Định danh siêu thị mẫu dành riêng cho tài khoản trải nghiệm
+// Định danh ST mẫu dành riêng cho tài khoản trải nghiệm
 export const GUEST_DEMO_STORE = '838679 - Demo Store';
 export const GUEST_DEMO_STORE_CODE = '838679';
 export const GUEST_DEMO_STORE_NAME = 'Demo Store';
 
-// Siêu thị nguồn và phạm vi dữ liệu phiên mẫu
+// ST nguồn và phạm vi dữ liệu phiên mẫu
 export const GUEST_SOURCE_STORE = '10335 - AAR_BRV_VTA - 290 Trương Công Định';
 export const GUEST_SOURCE_CODE = '10335';
 export const GUEST_DEMO_START_DATE = '2026-10-01';
@@ -30,7 +30,7 @@ export const DEMO_EMPLOYEE_MAPPINGS: DemoEmployeeMapping[] = [
         demoId: 'NV83801',
         demoName: 'Nguyễn Minh Anh',
         demoShortName: 'Minh Anh',
-        jobTitle: 'Quản Lý Siêu Thị'
+        jobTitle: 'Quản Lý ST'
     },
     {
         originalId: '27560',
@@ -85,7 +85,7 @@ const EXTRA_DEMO_NAMES = [
 ];
 
 /**
- * Kiểm tra xem một chuỗi tên/mã siêu thị có phải là siêu thị Demo Store hay không
+ * Kiểm tra xem một chuỗi tên/mã ST có phải là ST Demo Store hay không
  */
 export function isGuestDemoStore(storeName?: string): boolean {
     if (!storeName) return false;
@@ -94,7 +94,7 @@ export function isGuestDemoStore(storeName?: string): boolean {
 }
 
 /**
- * Lấy đối tượng StoreItem chuẩn cho siêu thị 838679 - Demo Store
+ * Lấy đối tượng StoreItem chuẩn cho ST 838679 - Demo Store
  */
 export function getGuestDemoStoreItem(): StoreItem {
     return {
@@ -166,7 +166,7 @@ export function mapToDemoEmployee(originalEmpId?: string, originalName?: string)
 }
 
 /**
- * Lấy danh sách nhân viên của siêu thị 838679 - Demo Store
+ * Lấy danh sách nhân viên của ST 838679 - Demo Store
  */
 export function getGuestDemoEmployees(): EmployeeItem[] {
     return DEMO_EMPLOYEE_MAPPINGS.map(m => ({

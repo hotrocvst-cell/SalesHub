@@ -45,7 +45,7 @@ export default function AccountLookupPage() {
                         <ul className="list-disc pl-4 space-y-1 text-[11px] text-blue-700">
                             <li>Xem thông tin đơn vị và cấp phê duyệt của bạn</li>
                             <li>Xem lý do từ chối cụ thể nếu hồ sơ chưa đạt</li>
-                            <li>Dễ dàng sửa lại thông tin cá nhân/siêu thị và gửi duyệt lại</li>
+                            <li>Dễ dàng sửa lại thông tin cá nhân/ST và gửi duyệt lại</li>
                         </ul>
                     </div>
 

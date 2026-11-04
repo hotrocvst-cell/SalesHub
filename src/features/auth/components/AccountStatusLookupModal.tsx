@@ -62,7 +62,7 @@ export default function AccountStatusLookupModal({
     const [editRole, setEditRole] = useState<UserRole>('NHAN_VIEN');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // Danh sách siêu thị cho ô chọn
+    // Danh sách ST cho ô chọn
     const [stores, setStores] = useState<StoreItem[]>([]);
 
     useEffect(() => {
@@ -120,7 +120,7 @@ export default function AccountStatusLookupModal({
             return;
         }
         if (!editStoreName.trim()) {
-            setErrorMsg('Vui lòng chọn Đơn vị Siêu thị làm việc');
+            setErrorMsg('Vui lòng chọn Đơn vị ST làm việc');
             return;
         }
 
@@ -294,7 +294,7 @@ export default function AccountStatusLookupModal({
                                 <div className="flex justify-between items-center py-1 border-b border-slate-200/60">
                                     <span className="text-slate-500">Đơn vị ST:</span>
                                     <span className="font-bold text-slate-800 text-right max-w-[280px] truncate">
-                                        {user.store_name || '(Chưa gán siêu thị)'}
+                                        {user.store_name || '(Chưa gán ST)'}
                                     </span>
                                 </div>
                                 <div className="flex justify-between items-center py-1 border-b border-slate-200/60">
@@ -349,13 +349,13 @@ export default function AccountStatusLookupModal({
 
                                 <div>
                                     <label className="block text-xs font-bold text-slate-700 mb-1">
-                                        Đơn vị Siêu thị làm việc: <span className="text-rose-500">*</span>
+                                        Đơn vị ST làm việc: <span className="text-rose-500">*</span>
                                     </label>
                                     <SearchableStoreSelect
                                         stores={stores}
                                         value={editStoreName}
                                         onChange={setEditStoreName}
-                                        placeholder="-- Nhập tìm kiếm hoặc chọn siêu thị công tác --"
+                                        placeholder="-- Nhập tìm kiếm hoặc chọn ST công tác --"
                                     />
                                 </div>
 

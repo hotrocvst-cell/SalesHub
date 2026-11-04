@@ -203,7 +203,7 @@ export default function GeminiApiKeyModal({
                             }`}
                         >
                             <ShieldCheck className="w-4 h-4" />
-                            <span>1. Key Quản Trị Hệ Thống (Toàn Siêu Thị)</span>
+                            <span>1. Key Quản Trị Hệ Thống (Toàn ST)</span>
                         </button>
                         <button
                             onClick={() => { setActiveTab('USER_KEY'); setTestResult(null); }}
@@ -235,7 +235,7 @@ export default function GeminiApiKeyModal({
                             <div className="bg-blue-50 border border-blue-200 rounded-2xl p-3.5 text-blue-900 space-y-1">
                                 <div className="font-extrabold flex items-center gap-1.5">
                                     <ShieldCheck className="w-4 h-4 text-blue-600" />
-                                    <span>Key Quản Trị Hệ Thống (Mặc Định Toàn Bộ Siêu Thị)</span>
+                                    <span>Key Quản Trị Hệ Thống (Mặc Định Toàn Bộ ST)</span>
                                 </div>
                                 <p className="text-[11px] text-blue-700 leading-relaxed">
                                     Key này được lưu trên <strong>Supabase Cloud</strong>. Mọi quản lý và nhân viên khi vào trang OCR sẽ tự động sử dụng Key này mà không cần phải tự tạo hay cấu hình API Key.

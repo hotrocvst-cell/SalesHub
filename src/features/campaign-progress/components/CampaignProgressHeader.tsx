@@ -105,7 +105,7 @@ export default function CampaignProgressHeader({
                 </div>
             </div>
 
-            {/* Hàng 2: Bộ lọc Siêu thị riêng lẻ đầu tiên (Rule 10 Convention) */}
+            {/* Hàng 2: Bộ lọc ST riêng lẻ đầu tiên (Rule 10 Convention) */}
             <div className="pt-1 pb-2.5 border-b border-slate-100 flex items-center justify-between gap-3">
                 <div className={`flex items-center gap-2 border rounded-xl px-3 py-1.5 transition-all w-full sm:w-auto ${isLockedToSingleStore
                     ? 'bg-amber-50/90 border-amber-200 text-amber-900 shadow-2xs'
@@ -121,14 +121,14 @@ export default function CampaignProgressHeader({
                         value={selectedStore}
                         onChange={(e) => setSelectedStore(e.target.value)}
                         disabled={isLockedToSingleStore}
-                        title={isLockedToSingleStore ? 'Tài khoản nhân viên được cố định theo siêu thị đang làm việc' : undefined}
+                        title={isLockedToSingleStore ? 'Tài khoản nhân viên được cố định theo ST đang làm việc' : undefined}
                         className={`bg-transparent font-black text-xs focus:outline-none min-w-[200px] sm:min-w-[260px] truncate ${isLockedToSingleStore
                             ? 'cursor-not-allowed text-amber-900'
                             : 'cursor-pointer text-slate-900'
                             }`}
                     >
                         {canViewAllStores && (
-                            <option value="all">🏢 Toàn Cụm Siêu Thị</option>
+                            <option value="all">🏢 Toàn Cụm ST</option>
                         )}
                         {allowedStores.map(s => (
                             <option key={s.id || s.name} value={s.name}>
@@ -187,7 +187,7 @@ export default function CampaignProgressHeader({
                             <option value="">Chưa có phiên dữ liệu thi đua</option>
                         ) : (
                             sessions.map(s => {
-                                const storeLabel = s.store_name === 'Toàn Cụm Siêu Thị'
+                                const storeLabel = s.store_name === 'Toàn Cụm ST'
                                     ? 'Toàn Cụm'
                                     : (getShortStoreName(s.store_name) || s.store_name || 'Shop');
                                 const dateLabel = s.report_date ? formatDate(s.report_date) : (s.created_at ? formatDate(s.created_at) : '');

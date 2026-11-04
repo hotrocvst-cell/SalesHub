@@ -103,11 +103,11 @@ export default function DataReadinessScoreCard({ summary }: DataReadinessScoreCa
                     </div>
                 </div>
 
-                {/* Cột 3: Trạng thái chi tiết siêu thị */}
+                {/* Cột 3: Trạng thái chi tiết ST */}
                 <div className="sm:col-span-1 p-3 rounded-xl bg-white/5 border border-white/10 backdrop-blur-sm flex flex-col justify-center text-xs">
-                    <span className="text-[11px] text-slate-300 font-medium">Độ phủ siêu thị</span>
+                    <span className="text-[11px] text-slate-300 font-medium">Độ phủ ST</span>
                     <div className="mt-1 flex items-center justify-between">
-                        <span className="text-slate-400">Siêu thị đạt 100% OK:</span>
+                        <span className="text-slate-400">ST đạt 100% OK:</span>
                         <span className="font-bold text-white font-mono">
                             {fullyReadyStores}/{totalStores} ST
                         </span>

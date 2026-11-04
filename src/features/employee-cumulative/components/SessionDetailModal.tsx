@@ -99,7 +99,7 @@ export default function SessionDetailModal({ session, onClose, onRestore }: Prop
                 {/* Chi tiết Meta Info */}
                 <div className="px-6 py-3 bg-white border-b border-slate-100 grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
                     <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                        <span className="text-slate-400 block text-[10px] font-bold uppercase">Siêu thị</span>
+                        <span className="text-slate-400 block text-[10px] font-bold uppercase">ST</span>
                         <strong className="text-slate-800 line-clamp-1">{session.store_name}</strong>
                     </div>
                     <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">

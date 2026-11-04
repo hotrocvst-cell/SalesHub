@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS public.employee_campaign_offsets (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Tạo Index tăng tốc truy vấn theo Siêu thị và Kỳ tháng/năm
+-- Tạo Index tăng tốc truy vấn theo ST và Kỳ tháng/năm
 CREATE INDEX IF NOT EXISTS idx_employee_campaign_offsets_store_period 
 ON public.employee_campaign_offsets(store_name, month, year);
 

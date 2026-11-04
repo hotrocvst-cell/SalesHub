@@ -63,7 +63,7 @@ export default function RebalanceSessionHistoryModal({
         }
     }, [allSessions, targetStore]);
 
-    // Danh sách các siêu thị duy nhất có phiên lưu trữ
+    // Danh sách các ST duy nhất có phiên lưu trữ
     const distinctStores = useMemo(() => {
         const set = new Set<string>();
         allSessions.forEach(s => {
@@ -128,7 +128,7 @@ export default function RebalanceSessionHistoryModal({
                             onChange={(e) => setFilterStore(e.target.value)}
                             className="h-8 px-2.5 rounded-lg border border-slate-300 bg-white text-slate-800 font-bold text-xs max-w-xs truncate"
                         >
-                            <option value="ALL">-- Tất cả siêu thị ({allSessions.length} phiên) --</option>
+                            <option value="ALL">-- Tất cả ST ({allSessions.length} phiên) --</option>
                             {distinctStores.map(st => {
                                 const isCurrent = targetStore && isStoreMatch(st, targetStore);
                                 const count = allSessions.filter(s => isStoreMatch(s.target_store, st)).length;
@@ -167,7 +167,7 @@ export default function RebalanceSessionHistoryModal({
                             <span className="font-bold text-slate-600">
                                 {filterStore === 'ALL'
                                     ? 'Chưa có phiên lưu trữ nào trên hệ thống.'
-                                    : `Không có phiên lưu trữ nào khớp với siêu thị "${filterStore}".`}
+                                    : `Không có phiên lưu trữ nào khớp với ST "${filterStore}".`}
                             </span>
                             {filterStore !== 'ALL' && (
                                 <button
@@ -175,7 +175,7 @@ export default function RebalanceSessionHistoryModal({
                                     onClick={() => setFilterStore('ALL')}
                                     className="mt-1 px-3 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg font-bold hover:bg-blue-100 cursor-pointer text-xs"
                                 >
-                                    Xem tất cả các siêu thị khác ({allSessions.length} phiên)
+                                    Xem tất cả các ST khác ({allSessions.length} phiên)
                                 </button>
                             )}
                         </div>

@@ -248,7 +248,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         };
     }, [rawUser, isActualAdmin, impersonationState]);
 
-    // Danh sách siêu thị được phép xem của tài khoản hiện tại
+    // Danh sách ST được phép xem của tài khoản hiện tại
     const accessibleStores = useMemo<string[]>(() => {
         if (!currentUser || !currentUser.id) return [];
         if (currentUser.is_guest) {
@@ -261,7 +261,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return currentUser.store_name ? [currentUser.store_name] : [];
     }, [currentUser]);
 
-    // Kiểm tra xem user hiện tại có quyền xem một siêu thị cụ thể không
+    // Kiểm tra xem user hiện tại có quyền xem một ST cụ thể không
     const canAccessStore = useCallback((storeName: string): boolean => {
         if (!currentUser) return false;
         if (currentUser.is_guest) {
@@ -553,7 +553,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 status: initialStatus
             });
 
-            // 3. Nếu đã chọn siêu thị (hoặc khai báo mới), tự động gửi luôn yêu cầu xét duyệt + thông báo đến Admin / QL
+            // 3. Nếu đã chọn ST (hoặc khai báo mới), tự động gửi luôn yêu cầu xét duyệt + thông báo đến Admin / QL
             if (chosenStore) {
                 await submitOnboardingRequest({
                     user: profile,
@@ -567,12 +567,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     employee_id: params.employee_id
                 });
             } else {
-                // Nếu chưa chọn siêu thị, vẫn gửi 1 thông báo cho Admin biết có tài khoản mới đăng ký
+                // Nếu chưa chọn ST, vẫn gửi 1 thông báo cho Admin biết có tài khoản mới đăng ký
                 await submitOnboardingRequest({
                     user: profile,
                     requested_role: chosenRole,
                     department: resolvedDept,
-                    store_name: 'Chưa gắn siêu thị (Chờ Onboard)',
+                    store_name: 'Chưa gắn ST (Chờ Onboard)',
                     is_new_store: false,
                     phone: params.phone,
                     employee_id: params.employee_id

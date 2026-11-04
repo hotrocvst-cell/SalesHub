@@ -18,7 +18,7 @@ export interface PeriodTargetConfig {
     storeName: string;
     fromDate: string; // YYYY-MM-DD
     toDate: string;   // YYYY-MM-DD
-    storeTarget: number; // Target của cả siêu thị trong giai đoạn (Triệu đồng)
+    storeTarget: number; // Target của cả ST trong giai đoạn (Triệu đồng)
     targets: Record<string, number>; // { [employee_id]: target_in_million (Triệu đồng) }
     isCloudStored?: boolean; // True nếu đã lưu trên Supabase Cloud, False nếu chỉ có ở LocalStorage
     createdAt?: string;
@@ -40,7 +40,7 @@ export interface EmployeeCumulativeRankingRow {
     cumulativeQty: number; // Tổng số lượng trong kỳ
     cumulativeInstallment: number; // Tổng trả góp trong kỳ (Triệu đồng)
     completionRate: number; // %HT = (cumulativeRevenue / target) * 100 (nếu target > 0)
-    storeShareRate: number; // % Tỷ trọng đóng góp vào doanh thu siêu thị
+    storeShareRate: number; // % Tỷ trọng đóng góp vào doanh thu ST
     activeDaysCount: number; // Số ngày có phát sinh doanh thu
 }
 
@@ -50,11 +50,11 @@ export interface StoreCumulativeSummary {
     toDate: string;
     dateList: string[]; // Danh sách các ngày trong khoảng [fromDate .. toDate] (YYYY-MM-DD)
     
-    // DỮ LIỆU LŨY KẾ CỐT LÕI CỦA SIÊU THỊ (KHÔNG PHẢI TỔNG CỘNG CÁC DÒNG NHÂN VIÊN)
-    storeCumulativeRevenue: number; // Doanh thu lũy kế chốt của siêu thị trong kỳ (Triệu đồng)
-    storeDailyRevenue: Record<string, number>; // Doanh thu từng ngày của siêu thị { [YYYY-MM-DD]: number } (Triệu đồng)
-    storeTarget: number; // Target siêu thị trong kỳ (Triệu đồng)
-    storeCompletionRate: number; // %HT của siêu thị
+    // DỮ LIỆU LŨY KẾ CỐT LÕI CỦA ST (KHÔNG PHẢI TỔNG CỘNG CÁC DÒNG NHÂN VIÊN)
+    storeCumulativeRevenue: number; // Doanh thu lũy kế chốt của ST trong kỳ (Triệu đồng)
+    storeDailyRevenue: Record<string, number>; // Doanh thu từng ngày của ST { [YYYY-MM-DD]: number } (Triệu đồng)
+    storeTarget: number; // Target ST trong kỳ (Triệu đồng)
+    storeCompletionRate: number; // %HT của ST
     targetSource?: 'PERIOD' | 'MONTH' | 'NONE';
     activePeriodTitle?: string; // Tên cấu hình giai đoạn nếu đang kích hoạt
     activePeriodConfig?: PeriodTargetConfig | null; // Cấu hình giai đoạn chi tiết

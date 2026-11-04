@@ -185,7 +185,7 @@ export default function VoucherResetModal({
                                 {foundVoucher.claimed_by_store && (
                                     <div className="col-span-2 flex items-center gap-1.5 text-emerald-800 bg-emerald-50 p-2 rounded-xl border border-emerald-200">
                                         <Store className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                                        <span>Siêu thị của NV: <strong>{getShortStoreName(foundVoucher.claimed_by_store)}</strong></span>
+                                        <span>ST của NV: <strong>{getShortStoreName(foundVoucher.claimed_by_store)}</strong></span>
                                     </div>
                                 )}
                                 {foundVoucher.order_id && (

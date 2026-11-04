@@ -64,7 +64,7 @@ export default function EmployeePerformanceReportPage() {
     const [stores, setStores] = useState<StoreItem[]>([]);
     const [selectedStore, setSelectedStore] = useState<string>('all');
 
-    // Phân quyền siêu thị theo tài khoản người dùng
+    // Phân quyền ST theo tài khoản người dùng
     const { allowedStores, isLockedToSingleStore, canViewAllStores } = useUserStoreFilter(
         stores,
         selectedStore,
@@ -79,6 +79,16 @@ export default function EmployeePerformanceReportPage() {
 
     // Mặc định sắp xếp theo % Dự kiến hoàn thành (%DKHT)
     const [sortBy, setSortBy] = useState<string>('FORECAST_RATE_DESC');
+
+    // Toggle ẩn / hiện thông tin giờ công và năng suất (Mặc định: Ẩn)
+    const [showWorkHours, setShowWorkHours] = useState<boolean>(false);
+
+    // Tự động chuyển tiêu chí sắp xếp về mặc định nếu đang xếp theo giờ công/năng suất mà bị tắt toggle
+    useEffect(() => {
+        if (!showWorkHours && (sortBy === 'PROD_QD_DESC' || sortBy === 'WORK_HOURS_DESC')) {
+            setSortBy('FORECAST_RATE_DESC');
+        }
+    }, [showWorkHours, sortBy]);
 
     const [employees, setEmployees] = useState<EmployeeItem[]>([]);
     const [revenueTargets, setRevenueTargets] = useState<Record<string, number>>({});
@@ -96,7 +106,7 @@ export default function EmployeePerformanceReportPage() {
         setTimeout(() => setToastMessage(''), 3500);
     };
 
-    // Cấu hình hoạt động shop & TOP/BOT theo đích danh siêu thị
+    // Cấu hình hoạt động shop & TOP/BOT theo đích danh ST
     const [operatingConfig, setOperatingConfig] = useState(() =>
         getStoreOperatingConfig(selectedStore === 'all' ? 'ALL' : selectedStore, selectedMonth, selectedYear)
     );
@@ -317,12 +327,12 @@ export default function EmployeePerformanceReportPage() {
             };
         });
 
-        // Áp dụng đánh giá TOP / BOT & gán thứ hạng Rank chuẩn xác theo đích danh siêu thị
+        // Áp dụng đánh giá TOP / BOT & gán thứ hạng Rank chuẩn xác theo đích danh ST
         if (selectedStore !== 'all') {
             const targetCfg = getTopBotConfig(selectedStore);
             return applyTopBotEvaluation(rawList, targetCfg);
         } else {
-            // Khi xem Toàn bộ cụm: phân loại TOP/BOT theo cấu hình đích danh của từng siêu thị
+            // Khi xem Toàn bộ cụm: phân loại TOP/BOT theo cấu hình đích danh của từng ST
             const storeGroups: Record<string, typeof rawList> = {};
             rawList.forEach(item => {
                 const sName = item.store_name || 'Khác';
@@ -446,33 +456,43 @@ export default function EmployeePerformanceReportPage() {
         });
     }, [performanceRows, sortBy, searchQuery, topBotFilter, paceFilter]);
 
-    // 5. XUẤT BÁO CÁO EXCEL ĐỦ 12 CỘT CHUẨN
+    // 5. XUẤT BÁO CÁO EXCEL (ĐỒNG BỘ CỘT THEO TOGGLE HIỂN THỊ)
     const handleExportExcel = async () => {
         const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet('Hiệu Quả Nhân Viên');
 
-        worksheet.columns = [
+        const excelColumns: any[] = [
             { header: 'Hạng', key: 'rank', width: 8 },
             { header: 'Mã NV', key: 'emp_id', width: 14 },
             { header: 'Họ và Tên', key: 'name', width: 25 },
             { header: 'Tên Rút Gọn', key: 'short_name', width: 18 },
-            { header: 'Siêu Thị', key: 'store', width: 28 },
+            { header: 'ST', key: 'store', width: 28 },
             { header: 'Chức Danh', key: 'role', width: 18 },
             { header: 'DT Thực (tr)', key: 'actual', width: 16 },
             { header: 'DTQĐ (tr)', key: 'rev_qd', width: 16 },
             { header: 'Target (tr)', key: 'target', width: 16 },
             { header: '%HT Real', key: 'pct_real', width: 14 },
             { header: '%DKHT', key: 'pct_forecast', width: 14 },
-            { header: '%QĐ', key: 'exchange', width: 14 },
-            { header: 'Giờ Công (h)', key: 'hours', width: 14 },
-            { header: 'DTQĐ / GC (tr/h)', key: 'prod_qd', width: 16 },
+            { header: '%QĐ', key: 'exchange', width: 14 }
+        ];
+
+        if (showWorkHours) {
+            excelColumns.push(
+                { header: 'Giờ Công (h)', key: 'hours', width: 14 },
+                { header: 'DTQĐ / GC (tr/h)', key: 'prod_qd', width: 16 }
+            );
+        }
+
+        excelColumns.push(
             { header: 'DT Trả Chậm (tr)', key: 'dt_tg', width: 16 },
             { header: '% Trả Chậm', key: 'pct_tg', width: 14 },
             { header: 'Đánh Giá', key: 'top_bot', width: 18 }
-        ];
+        );
+
+        worksheet.columns = excelColumns;
 
         filteredRows.forEach(r => {
-            worksheet.addRow({
+            const rowData: any = {
                 rank: r.rank,
                 emp_id: r.employee_id,
                 name: r.full_name,
@@ -484,13 +504,19 @@ export default function EmployeePerformanceReportPage() {
                 target: r.revenue_target,
                 pct_real: `${r.completion_rate}%`,
                 pct_forecast: `${r.forecast_completion_rate}%`,
-                exchange: `${r.exchange_rate > 0 ? '+' : ''}${r.exchange_rate}%`,
-                hours: r.work_hours,
-                prod_qd: r.productivity_qd_per_hour,
-                dt_tg: r.installment_revenue,
-                pct_tg: `${r.installment_rate}%`,
-                top_bot: r.top_bot_label
-            });
+                exchange: `${r.exchange_rate > 0 ? '+' : ''}${r.exchange_rate}%`
+            };
+
+            if (showWorkHours) {
+                rowData.hours = r.work_hours;
+                rowData.prod_qd = r.productivity_qd_per_hour;
+            }
+
+            rowData.dt_tg = r.installment_revenue;
+            rowData.pct_tg = `${r.installment_rate}%`;
+            rowData.top_bot = r.top_bot_label;
+
+            worksheet.addRow(rowData);
         });
 
         const buffer = await workbook.xlsx.writeBuffer();
@@ -516,9 +542,10 @@ export default function EmployeePerformanceReportPage() {
         const tableElement = targetElement.querySelector('table');
 
         // Đo đạc chiều rộng thực tế của bảng để không bao giờ bị cắt cột ở bên phải
-        // Bảng 12 cột cần ít nhất 1460px; cộng thêm padding 48px -> tối thiểu 1520px
+        // Bảng 12 cột (có giờ công) cần tối thiểu 1520px; Bảng 10 cột (ẩn giờ công) cần khoảng 1260px
+        const minAutoWidth = showWorkHours ? 1520 : 1260;
         const tableScrollWidth = tableElement ? tableElement.scrollWidth : 0;
-        const contentWidth = Math.max(tableScrollWidth + 64, targetElement.scrollWidth + 64, 1520);
+        const contentWidth = Math.max(tableScrollWidth + 64, targetElement.scrollWidth + 64, minAutoWidth);
 
         // Tính toán tỷ lệ scale chuẩn 8K với Auto-Safety Clamp bảo vệ bộ nhớ Canvas
         const scale = calculate8KScale(targetElement, contentWidth);
@@ -635,7 +662,7 @@ export default function EmployeePerformanceReportPage() {
                 banner.style.justifyContent = 'space-between';
                 banner.style.boxShadow = '0 6px 16px rgba(0, 0, 0, 0.18)';
 
-                const storeLabel = selectedStore === 'all' ? 'Toàn Cụm Siêu Thị' : selectedStore;
+                const storeLabel = selectedStore === 'all' ? 'Toàn Cụm ST' : selectedStore;
                 const currentTimeStr = new Date().toLocaleString('vi-VN', {
                     day: '2-digit',
                     month: '2-digit',
@@ -851,7 +878,7 @@ export default function EmployeePerformanceReportPage() {
 
             {/* Thanh Bộ Lọc & Tìm Kiếm & Sắp Xếp */}
             <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-3 text-xs">
-                {/* HÀNG 1: BỘ LỌC SIÊU THỊ RIÊNG LẺ ĐẦU TIÊN (RULE 10 CONVENTION) */}
+                {/* HÀNG 1: BỘ LỌC ST RIÊNG LẺ ĐẦU TIÊN (RULE 10 CONVENTION) */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
                     <div className="flex items-center gap-2">
                         <div className={`flex items-center gap-2 px-3.5 py-2 rounded-xl border text-xs font-bold transition-all ${isLockedToSingleStore
@@ -868,14 +895,14 @@ export default function EmployeePerformanceReportPage() {
                                 value={selectedStore}
                                 onChange={e => setSelectedStore(e.target.value)}
                                 disabled={isLockedToSingleStore}
-                                title={currentUser?.is_guest ? 'Tài khoản trải nghiệm sử dụng dữ liệu siêu thị 10335 - AAR_BRV_VTA - 290 Trương Công Định' : (isLockedToSingleStore ? 'Tài khoản nhân viên được cố định theo siêu thị đã đăng ký' : undefined)}
-                                className={`bg-transparent text-xs font-black outline-hidden min-w-[200px] sm:min-w-[260px] ${isLockedToSingleStore
+                                title={currentUser?.is_guest ? 'Tài khoản trải nghiệm sử dụng dữ liệu ST 10335 - AAR_BRV_VTA - 290 Trương Công Định' : (isLockedToSingleStore ? 'Tài khoản nhân viên được cố định theo ST đã đăng ký' : undefined)}
+                                className={`bg-transparent text-xs font-black outline-none min-w-[200px] sm:min-w-[260px] ${isLockedToSingleStore
                                     ? 'cursor-not-allowed text-amber-900'
                                     : 'cursor-pointer text-slate-900'
                                     }`}
                             >
                                 {canViewAllStores && (
-                                    <option value="all">🏢 Toàn Cụm Siêu Thị</option>
+                                    <option value="all">🏢 Toàn Cụm ST</option>
                                 )}
                                 {allowedStores.map(s => (
                                     <option key={s.id || s.code} value={s.name}>🏪 {s.name} ({s.code})</option>
@@ -914,7 +941,7 @@ export default function EmployeePerformanceReportPage() {
                             <select
                                 value={selectedMonth}
                                 onChange={e => setSelectedMonth(Number(e.target.value))}
-                                className="bg-transparent text-xs font-bold text-slate-800 outline-hidden cursor-pointer"
+                                className="bg-transparent text-xs font-bold text-slate-800 outline-none cursor-pointer"
                             >
                                 {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
                                     <option key={m} value={m}>Tháng {m}</option>
@@ -924,7 +951,7 @@ export default function EmployeePerformanceReportPage() {
                             <select
                                 value={selectedYear}
                                 onChange={e => setSelectedYear(Number(e.target.value))}
-                                className="bg-transparent text-xs font-bold text-slate-800 outline-hidden cursor-pointer"
+                                className="bg-transparent text-xs font-bold text-slate-800 outline-none cursor-pointer"
                             >
                                 {[2025, 2026, 2027].map(y => (
                                     <option key={y} value={y}>{y}</option>
@@ -939,15 +966,19 @@ export default function EmployeePerformanceReportPage() {
                             <select
                                 value={sortBy}
                                 onChange={e => setSortBy(e.target.value)}
-                                className="bg-transparent text-xs font-extrabold text-amber-950 outline-hidden cursor-pointer"
+                                className="bg-transparent text-xs font-extrabold text-amber-950 outline-none cursor-pointer"
                             >
                                 <option value="FORECAST_RATE_DESC">🎯 %DKHT Dự Báo (Cao ➔ Thấp) [Mặc định]</option>
                                 <option value="FORECAST_RATE_ASC">🎯 %DKHT Dự Báo (Thấp ➔ Cao)</option>
                                 <option value="REVENUE_QD_DESC">💎 Lũy kế DTQĐ (Cao ➔ Thấp)</option>
                                 <option value="REVENUE_ACTUAL_DESC">💵 Lũy kế DT Thực (Cao ➔ Thấp)</option>
                                 <option value="COMPLETION_RATE_DESC">📊 %HT Real (Cao ➔ Thấp)</option>
-                                <option value="PROD_QD_DESC">⚡ DTQĐ/GC Năng Suất (Cao ➔ Thấp)</option>
-                                <option value="WORK_HOURS_DESC">⏰ Giờ công (Cao ➔ Thấp)</option>
+                                {showWorkHours && (
+                                    <>
+                                        <option value="PROD_QD_DESC">⚡ DTQĐ/GC Năng Suất (Cao ➔ Thấp)</option>
+                                        <option value="WORK_HOURS_DESC">⏰ Giờ công (Cao ➔ Thấp)</option>
+                                    </>
+                                )}
                                 <option value="INSTALLMENT_RATE_DESC">💳 % Trả chậm (Cao ➔ Thấp)</option>
                                 <option value="RANK_ASC">🥇 Thứ hạng (#1 ➔ #N)</option>
                             </select>
@@ -959,7 +990,7 @@ export default function EmployeePerformanceReportPage() {
                             <select
                                 value={topBotFilter}
                                 onChange={e => setTopBotFilter(e.target.value)}
-                                className="bg-transparent text-xs font-bold text-slate-800 outline-hidden cursor-pointer"
+                                className="bg-transparent text-xs font-bold text-slate-800 outline-none cursor-pointer"
                             >
                                 <option value="all">Tất cả thứ hạng</option>
                                 <option value="TOP">🏆 Chỉ xem nhóm TOP</option>
@@ -974,7 +1005,7 @@ export default function EmployeePerformanceReportPage() {
                             <select
                                 value={paceFilter}
                                 onChange={e => setPaceFilter(e.target.value)}
-                                className="bg-transparent text-xs font-bold text-slate-800 outline-hidden cursor-pointer"
+                                className="bg-transparent text-xs font-bold text-slate-800 outline-none cursor-pointer"
                             >
                                 <option value="all">Tất cả nhịp độ</option>
                                 <option value="EXCEED">Vượt nhịp (≥100%)</option>
@@ -983,6 +1014,41 @@ export default function EmployeePerformanceReportPage() {
                                 <option value="CRITICAL">Báo động (&lt;50%)</option>
                             </select>
                         </div>
+
+                        {/* 5. Toggle Ẩn / Hiện Giờ Công & Năng Suất (Mặc định: Ẩn) */}
+                        <button
+                            type="button"
+                            onClick={() => setShowWorkHours(prev => !prev)}
+                            className={`inline-flex items-center gap-2 border px-3 py-1.5 rounded-xl transition-all cursor-pointer shadow-xs select-none shrink-0 ${
+                                showWorkHours 
+                                    ? 'bg-blue-50/90 hover:bg-blue-100/90 border-blue-400 text-blue-950 shadow-blue-100' 
+                                    : 'bg-slate-50 hover:bg-slate-100/90 border-slate-300 text-slate-700 hover:border-slate-400'
+                            }`}
+                            title={showWorkHours ? 'Đang hiện giờ công & năng suất (Bấm để ẩn)' : 'Đang ẩn giờ công & năng suất (Bấm để hiển thị)'}
+                        >
+                            <Clock className={`w-4 h-4 shrink-0 transition-colors ${showWorkHours ? 'text-blue-600' : 'text-slate-400'}`} />
+                            <span className="text-xs font-bold whitespace-nowrap">
+                                Giờ công &amp; Năng suất:
+                            </span>
+
+                            {/* Cụm Switch Toggle thiết kế chuẩn (không dùng absolute/after lệch vị trí) */}
+                            <div className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-200 ease-in-out p-0.5 ${
+                                showWorkHours ? 'bg-blue-600' : 'bg-slate-300'
+                            }`}>
+                                <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-xs transition-transform duration-200 ease-in-out ${
+                                    showWorkHours ? 'translate-x-4' : 'translate-x-0'
+                                }`} />
+                            </div>
+
+                            {/* Badge Hiện / Ẩn rõ nét */}
+                            <span className={`text-[10px] font-black uppercase px-1.5 py-0.5 rounded transition-colors shrink-0 ${
+                                showWorkHours 
+                                    ? 'bg-blue-600 text-white shadow-xs' 
+                                    : 'bg-slate-200 text-slate-600'
+                            }`}>
+                                {showWorkHours ? 'Hiện' : 'Ẩn'}
+                            </span>
+                        </button>
                     </div>
 
                     <div className="flex items-center gap-2">
@@ -993,7 +1059,7 @@ export default function EmployeePerformanceReportPage() {
                                 placeholder="Tìm nhân viên / mã NV..."
                                 value={searchQuery}
                                 onChange={e => setSearchQuery(e.target.value)}
-                                className="bg-transparent text-xs outline-hidden w-full text-slate-800 placeholder-slate-400"
+                                className="bg-transparent text-xs outline-none w-full text-slate-800 placeholder-slate-400"
                             />
                         </div>
 
@@ -1024,13 +1090,14 @@ export default function EmployeePerformanceReportPage() {
                     canUpdate={canManage}
                 />
 
-                {/* 4 Thẻ Vinh Danh Thành Tích Cá Nhân Xuất Sắc */}
-                <PerformanceKpiCards summary={summary} />
+                {/* Thẻ Vinh Danh Thành Tích Cá Nhân Xuất Sắc (Thẻ năng suất ẩn/hiện theo toggle) */}
+                <PerformanceKpiCards summary={summary} showWorkHours={showWorkHours} />
 
-                {/* Bảng Xếp Hạng & Năng Suất Chi Tiết (1 dòng header, tên rút gọn, highlight trả chậm < 35%) */}
+                {/* Bảng Xếp Hạng & Năng Suất Chi Tiết (1 dòng header, tên rút gọn, highlight trả chậm < 35%, ẩn/hiện giờ công theo toggle) */}
                 <PerformanceTable
                     rows={filteredRows}
                     showStoreName={selectedStore === 'all'}
+                    showWorkHours={showWorkHours}
                     onSelectEmployee={(emp) => {
                         const targetStore = emp.store_name || (selectedStore !== 'all' ? selectedStore : '');
                         navigate(`/chi-tiet-nhan-vien?emp=${emp.employee_id}&month=${selectedMonth}&year=${selectedYear}&store=${encodeURIComponent(targetStore)}`);

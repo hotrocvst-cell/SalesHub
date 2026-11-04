@@ -275,7 +275,7 @@ export default function WorkHoursPasteTab({ onApply, initialHoursMap = {} }: Pro
                                     <th className="p-2.5 text-center w-12 border-b">STT</th>
                                     <th className="p-2.5 w-24 border-b">Mã NV</th>
                                     <th className="p-2.5 border-b">Họ và tên</th>
-                                    <th className="p-2.5 border-b">Siêu thị</th>
+                                    <th className="p-2.5 border-b">ST</th>
                                     <th className="p-2.5 text-center border-b">Số Ca Làm</th>
                                     <th className="p-2.5 text-right border-b w-36">Tổng Giờ Công (Giờ)</th>
                                 </tr>

@@ -88,9 +88,9 @@ export default function DataStatusHeader({
             {/* Phân cách nhẹ nhàng */}
             <div className="h-px bg-slate-100" />
 
-            {/* Hàng 2: Bộ lọc Tháng/Năm, Siêu thị & Ngày kiểm tra */}
+            {/* Hàng 2: Bộ lọc Tháng/Năm, ST & Ngày kiểm tra */}
             <div className="flex flex-wrap items-center justify-between gap-2.5 pt-0.5">
-                {/* Bộ lọc Siêu thị */}
+                {/* Bộ lọc ST */}
                 <div className="flex items-center gap-2 flex-wrap">
                     <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border transition-all ${
                         isLockedToSingleStore
@@ -107,7 +107,7 @@ export default function DataStatusHeader({
                             value={selectedStore}
                             onChange={e => onSelectStore(e.target.value)}
                             disabled={isLockedToSingleStore}
-                            title={isLockedToSingleStore ? 'Tài khoản nhân viên được cố định theo siêu thị đã đăng ký' : undefined}
+                            title={isLockedToSingleStore ? 'Tài khoản nhân viên được cố định theo ST đã đăng ký' : undefined}
                             className={`bg-transparent text-xs font-bold focus:outline-none ${
                                 isLockedToSingleStore
                                     ? 'cursor-not-allowed text-amber-950 font-black'

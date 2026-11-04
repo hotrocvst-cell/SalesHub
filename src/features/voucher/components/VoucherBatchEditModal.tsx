@@ -86,7 +86,7 @@ export default function VoucherBatchEditModal({
     const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
     const [errorMsg, setErrorMsg] = useState<string>('');
 
-    // Danh sách siêu thị trong cụm của người dùng
+    // Danh sách ST trong cụm của người dùng
     const clusterStoreNames = useMemo<string[]>(() => {
         if (allowedStores && allowedStores.length > 0) {
             return allowedStores.map(s => s.name);
@@ -164,24 +164,24 @@ export default function VoucherBatchEditModal({
         // 1. Cập nhật cụm/kho
         if (applyScope) {
             if (scopeType === 'CLUSTER_ALL') {
-                updates.store_name = clusterStoreNames[0] || 'Toàn Cụm Siêu Thị';
+                updates.store_name = clusterStoreNames[0] || 'Toàn Cụm ST';
                 updates.cluster_stores = clusterStoreNames;
             } else if (scopeType === 'CLUSTER_CUSTOM') {
                 if (selectedStoresInCluster.length === 0) {
-                    setErrorMsg('Vui lòng tích chọn ít nhất 1 siêu thị trong cụm!');
+                    setErrorMsg('Vui lòng tích chọn ít nhất 1 ST trong cụm!');
                     return;
                 }
-                updates.store_name = selectedStoresInCluster[0] || 'Toàn Cụm Siêu Thị';
+                updates.store_name = selectedStoresInCluster[0] || 'Toàn Cụm ST';
                 updates.cluster_stores = selectedStoresInCluster;
             } else if (scopeType === 'SINGLE') {
                 if (!singleStoreName) {
-                    setErrorMsg('Vui lòng chọn siêu thị áp dụng!');
+                    setErrorMsg('Vui lòng chọn ST áp dụng!');
                     return;
                 }
                 updates.store_name = singleStoreName;
                 updates.cluster_stores = []; // Xóa tag cụm
             } else {
-                updates.store_name = 'Toàn Cụm Siêu Thị';
+                updates.store_name = 'Toàn Cụm ST';
                 updates.cluster_stores = [];
             }
         }
@@ -397,7 +397,7 @@ export default function VoucherBatchEditModal({
                                 {scopeType === 'CLUSTER_CUSTOM' && (
                                     <div className="bg-white rounded-xl p-2.5 border border-emerald-200 space-y-2 mt-2">
                                         <div className="flex items-center justify-between text-[11px] font-bold text-slate-600 border-b border-slate-100 pb-1.5">
-                                            <span>Chọn các siêu thị được quyền lấy {selectedVouchers.length} mã này:</span>
+                                            <span>Chọn các ST được quyền lấy {selectedVouchers.length} mã này:</span>
                                             <button
                                                 type="button"
                                                 onClick={handleSelectAllStoresInCluster}

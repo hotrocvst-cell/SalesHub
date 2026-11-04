@@ -19,7 +19,7 @@ export type WorkTaskRecurrence =
     | 'MONTHLY_LUNAR'; // Lặp lại hàng tháng (vào ngày âm X: mùng 2, 16, 1, 15)
 
 export type TargetRoleScope =
-    | 'ALL'            // Toàn siêu thị / Mọi người
+    | 'ALL'            // Toàn ST / Mọi người
     | 'QL_TC'          // Quản lý & Trưởng ca
     | 'QUAN_LY'        // Chỉ Quản lý
     | 'TRUONG_CA'      // Chỉ Trưởng ca
@@ -27,13 +27,13 @@ export type TargetRoleScope =
 
 export interface DailyWorkNote {
     id: string;
-    store_name: string;              // Tên siêu thị cụ thể hoặc '__ALL_ASSIGNED__' (Toàn nhóm siêu thị phụ trách)
+    store_name: string;              // Tên ST cụ thể hoặc '__ALL_ASSIGNED__' (Toàn nhóm ST phụ trách)
     date_key: string;                // YYYY-MM-DD (ngày bắt đầu)
     end_date_key?: string;           // YYYY-MM-DD (ngày kết thúc nếu công việc nhiều ngày)
     title: string;                   // Tiêu đề ghi chú / công việc (hiển thị trên lịch tổng)
     content?: string;                // Nội dung chi tiết ghi chú / công việc cần làm
     task_type?: WorkTaskType;        // Loại công việc/sự kiện
-    target_roles?: TargetRoleScope;  // Người nhận / đối tượng xem (QL/TC/NV/Toàn siêu thị)
+    target_roles?: TargetRoleScope;  // Người nhận / đối tượng xem (QL/TC/NV/Toàn ST)
     recurrence?: WorkTaskRecurrence; // Công việc có lặp lại không
     recurrence_value?: number;       // Giá trị lặp lại (thứ mấy trong tuần, hoặc ngày âm mấy)
     priority?: 'NORMAL' | 'HIGH' | 'URGENT'; // Mức độ ưu tiên
@@ -133,7 +133,7 @@ export const DEFAULT_SYSTEM_EVENTS: CalendarSystemEvent[] = [
     }
 ];
 
-export const DAILY_WORK_NOTES_SQL = `-- Bảng lưu trữ Ghi chú & Công việc cần làm theo ngày và siêu thị phụ trách
+export const DAILY_WORK_NOTES_SQL = `-- Bảng lưu trữ Ghi chú & Công việc cần làm theo ngày và ST phụ trách
 CREATE TABLE IF NOT EXISTS public.daily_work_targets (
     id TEXT PRIMARY KEY,
     store_name TEXT NOT NULL,
@@ -161,7 +161,7 @@ DROP POLICY IF EXISTS "daily_work_targets_all_policy" ON public.daily_work_targe
 CREATE POLICY "daily_work_targets_all_policy" 
 ON public.daily_work_targets FOR ALL USING (true) WITH CHECK (true);
 
--- Đánh index tăng tốc truy vấn theo ngày và siêu thị
+-- Đánh index tăng tốc truy vấn theo ngày và ST
 CREATE INDEX IF NOT EXISTS idx_daily_work_targets_date ON public.daily_work_targets(date_key);
 CREATE INDEX IF NOT EXISTS idx_daily_work_targets_store ON public.daily_work_targets(store_name);
 `;
@@ -604,7 +604,7 @@ export function isUserAllowedToViewTask(
 }
 
 /**
- * Lọc danh sách công việc theo ngày được chọn & Nhóm siêu thị đang phụ trách & Vai trò người dùng
+ * Lọc danh sách công việc theo ngày được chọn & Nhóm ST đang phụ trách & Vai trò người dùng
  */
 export function filterNotesForView(
     notes: DailyWorkNote[],
@@ -625,7 +625,7 @@ export function filterNotesForView(
     // 2. Lọc theo vai trò người nhận (target_roles)
     const roleFiltered = dateNotes.filter(t => isUserAllowedToViewTask(t, userRole));
 
-    // 3. Lọc theo phạm vi siêu thị
+    // 3. Lọc theo phạm vi ST
     if (userRole === 'NHAN_VIEN') {
         const myStore = currentUserStoreName?.trim() || '';
         return roleFiltered.filter(t => {

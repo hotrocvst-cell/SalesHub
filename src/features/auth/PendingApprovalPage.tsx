@@ -115,7 +115,7 @@ export default function PendingApprovalPage() {
     const isApproved = (currentUser.status as string) === 'ACTIVE';
     const isRejected = currentUser.status === 'REJECTED';
     const approverText = (currentUser.role === 'NHAN_VIEN' && !requestDetails?.is_new_store)
-        ? `Quản lý Siêu thị (${currentUser.store_name || 'Đã đăng ký'})`
+        ? `Quản lý ST (${currentUser.store_name || 'Đã đăng ký'})`
         : 'Quản trị viên Hệ Thống (Admin)';
 
     const handleSaveAndResubmit = async (e: React.FormEvent) => {
@@ -126,7 +126,7 @@ export default function PendingApprovalPage() {
             return;
         }
         if (!editStoreName.trim()) {
-            setErrorMsg('Vui lòng chọn Đơn vị Siêu thị làm việc!');
+            setErrorMsg('Vui lòng chọn Đơn vị ST làm việc!');
             return;
         }
 
@@ -261,7 +261,7 @@ export default function PendingApprovalPage() {
                             </div>
 
                             <div className="flex justify-between">
-                                <span className="text-slate-500 font-medium">Siêu thị làm việc:</span>
+                                <span className="text-slate-500 font-medium">ST làm việc:</span>
                                 <span className="font-bold text-slate-800 text-right max-w-[200px] truncate">
                                     {currentUser.store_name || 'Chưa thiết lập'}
                                 </span>
@@ -318,13 +318,13 @@ export default function PendingApprovalPage() {
 
                             <div>
                                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                                    Đơn vị Siêu thị công tác: <span className="text-rose-500">*</span>
+                                    Đơn vị ST công tác: <span className="text-rose-500">*</span>
                                 </label>
                                 <SearchableStoreSelect
                                     stores={stores}
                                     value={editStoreName}
                                     onChange={setEditStoreName}
-                                    placeholder="-- Nhập mã hoặc tên siêu thị để tìm kiếm --"
+                                    placeholder="-- Nhập mã hoặc tên ST để tìm kiếm --"
                                 />
                             </div>
 

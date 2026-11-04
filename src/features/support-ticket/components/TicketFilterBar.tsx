@@ -64,17 +64,17 @@ export default function TicketFilterBar({
 
     return (
         <div className="bg-white rounded-xl border border-slate-200/80 shadow-xs p-3 space-y-2.5">
-            {/* DÒNG 1: QUY CHUẨN 10 - BỘ LỌC SIÊU THỊ / CỤM RIÊNG LẺ Ở VỊ TRÍ ĐẦU TIÊN KẾT HỢP NÚT HÀNH ĐỘNG */}
+            {/* DÒNG 1: QUY CHUẨN 10 - BỘ LỌC ST / CỤM RIÊNG LẺ Ở VỊ TRÍ ĐẦU TIÊN KẾT HỢP NÚT HÀNH ĐỘNG */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2.5 border-b border-slate-100">
                 {/* Store / Cluster Selector */}
                 <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <span className="text-xs font-bold text-slate-500 shrink-0">📍 Siêu thị / Đơn vị:</span>
+                    <span className="text-xs font-bold text-slate-500 shrink-0">📍 ST / Đơn vị:</span>
                     <select
                         value={selectedStore}
                         onChange={(e) => onSelectStore(e.target.value)}
                         className="w-full sm:max-w-xs text-xs font-bold text-slate-800 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all cursor-pointer truncate"
                     >
-                        <option value="ALL">🏢 Toàn hệ thống (Tất cả siêu thị)</option>
+                        <option value="ALL">🏢 Toàn hệ thống (Tất cả ST)</option>
                         {storeOptions.map(store => (
                             <option key={store} value={store}>
                                 {getShortStoreName(store)}

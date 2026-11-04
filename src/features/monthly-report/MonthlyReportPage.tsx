@@ -117,7 +117,7 @@ export default function MonthlyReportPage() {
         setSelectedDate("latest");
     }, [selectedMonth, selectedYear]);
 
-    // 2. DANH SÁCH SIÊU THỊ THÀNH VIÊN ĐỘC LẬP
+    // 2. DANH SÁCH ST THÀNH VIÊN ĐỘC LẬP
     const allStoreList = useMemo(() => {
         const s = new Set<string>();
         records.forEach(r => {
@@ -140,7 +140,7 @@ export default function MonthlyReportPage() {
         }
     }, [isGuest, selectedMonth, selectedYear]);
 
-    // Lọc siêu thị theo phân quyền tài khoản (Nhân viên chỉ xem shop mình, Quản lý/Trưởng ca xem các shop được phân quyền)
+    // Lọc ST theo phân quyền tài khoản (Nhân viên chỉ xem shop mình, Quản lý/Trưởng ca xem các shop được phân quyền)
     const storeList = useMemo(() => {
         if (isGuest) {
             return [getShortStoreName(GUEST_DEMO_STORE)];
@@ -165,7 +165,7 @@ export default function MonthlyReportPage() {
     const isLockedToSingleStore = (!isAdmin && isStaff) || isGuest;
     const canViewAllStores = !isGuest && (isAdmin || (!isStaff && storeList.length > 1));
 
-    // Tự động điều chỉnh siêu thị được chọn cho nhân viên hoặc quản lý hoặc tài khoản trải nghiệm
+    // Tự động điều chỉnh ST được chọn cho nhân viên hoặc quản lý hoặc tài khoản trải nghiệm
     useEffect(() => {
         if (isAdmin) return;
 
@@ -198,7 +198,7 @@ export default function MonthlyReportPage() {
         }
     }, [currentUser, isAdmin, isGuest, storeList, selectedStore, canViewAllStores]);
 
-    // 3. DANH SÁCH NGÀY BÁO CÁO CÓ SỐ LIỆU PHÙ HỢP THEO PHẠM VI SIÊU THỊ ĐANG XEM
+    // 3. DANH SÁCH NGÀY BÁO CÁO CÓ SỐ LIỆU PHÙ HỢP THEO PHẠM VI ST ĐANG XEM
     const availableDates = useMemo(() => {
         let storeRecords = records;
         if (isGuest) {
@@ -259,8 +259,8 @@ export default function MonthlyReportPage() {
             const installmentRate = totalActual > 0 ? (totalInstallment / totalActual * 100) : 0;
 
             const clusterLabel = isAdmin
-                ? `TỔNG TOÀN CỤM (${targetList.length} SIÊU THỊ)`
-                : `TỔNG CỤM PHỤ TRÁCH (${targetList.length} SIÊU THỊ)`;
+                ? `TỔNG TOÀN CỤM (${targetList.length} ST)`
+                : `TỔNG CỤM PHỤ TRÁCH (${targetList.length} ST)`;
 
             return {
                 storeName: clusterLabel,
@@ -289,7 +289,7 @@ export default function MonthlyReportPage() {
         return singleStore || null;
     }, [recordsInActiveDay, activeReportDate, selectedStore, selectedMonth, selectedYear, isAdmin, canAccessStore, isGuest]);
 
-    // 7. BÓC TÁCH DANH SÁCH THI ĐUA (HIỂN THỊ ĐẦY ĐỦ TÊN SIÊU THỊ KHI XEM CỤM)
+    // 7. BÓC TÁCH DANH SÁCH THI ĐUA (HIỂN THỊ ĐẦY ĐỦ TÊN ST KHI XEM CỤM)
     const emulationRowList = useMemo<EmulationRowItem[]>(() => {
         if (!activeReportDate || recordsInActiveDay.length === 0) return [];
 
@@ -735,12 +735,12 @@ export default function MonthlyReportPage() {
                     </div>
                 </div>
 
-                {/* HÀNG 1: BỘ LỌC SIÊU THỊ / CỤM (BẮT BUỘC ĐẦU TIÊN & NẰM RIÊNG LẺ 1 DÒNG) */}
+                {/* HÀNG 1: BỘ LỌC ST / CỤM (BẮT BUỘC ĐẦU TIÊN & NẰM RIÊNG LẺ 1 DÒNG) */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2.5 border-b border-slate-100">
                     <div className="flex items-center gap-2">
                         <span className="text-xs font-black text-slate-600 uppercase tracking-wider shrink-0 flex items-center gap-1.5">
                             <Store className="w-4 h-4 text-amber-600" />
-                            Siêu thị / Cụm:
+                            ST / Cụm:
                         </span>
                         <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all min-w-[200px] sm:min-w-[280px] ${isLockedToSingleStore
                             ? 'bg-amber-50/90 border-amber-200 text-amber-900 shadow-2xs'
@@ -758,7 +758,7 @@ export default function MonthlyReportPage() {
                                     setSelectedDate("latest");
                                 }}
                                 disabled={isLockedToSingleStore}
-                                title={isLockedToSingleStore ? 'Tài khoản nhân viên được cố định theo siêu thị đã đăng ký' : undefined}
+                                title={isLockedToSingleStore ? 'Tài khoản nhân viên được cố định theo ST đã đăng ký' : undefined}
                                 className={`bg-transparent outline-none font-bold w-full ${isLockedToSingleStore
                                     ? 'cursor-not-allowed text-amber-900 font-black'
                                     : 'cursor-pointer text-slate-700'
@@ -767,8 +767,8 @@ export default function MonthlyReportPage() {
                                 {canViewAllStores && (
                                     <option value="all">
                                         {isAdmin
-                                            ? `🏢 TỔNG TOÀN CỤM (${allStoreList.length} siêu thị)`
-                                            : `🏢 TỔNG CỤM PHỤ TRÁCH (${storeList.length} siêu thị)`
+                                            ? `🏢 TỔNG TOÀN CỤM (${allStoreList.length} ST)`
+                                            : `🏢 TỔNG CỤM PHỤ TRÁCH (${storeList.length} ST)`
                                         }
                                     </option>
                                 )}
@@ -862,7 +862,7 @@ export default function MonthlyReportPage() {
                             Chưa có dữ liệu kinh doanh
                         </h3>
                         <p className="text-xs text-slate-500 leading-relaxed">
-                            Tháng <b>{selectedMonth}/{selectedYear}</b> {selectedStore !== 'all' ? `của siêu thị ${selectedStore}` : ''} chưa được ghi nhận bản ghi thực tế nào trên hệ thống.
+                            Tháng <b>{selectedMonth}/{selectedYear}</b> {selectedStore !== 'all' ? `của ST ${selectedStore}` : ''} chưa được ghi nhận bản ghi thực tế nào trên hệ thống.
                         </p>
                         <p className="text-xs font-bold text-indigo-600 pt-1">
                             👉 Vui lòng nhập dữ liệu doanh thu / thi đua từ màn hình Cập Nhật để xem báo cáo!
@@ -1046,7 +1046,7 @@ export default function MonthlyReportPage() {
                                             <option value="pctHT-asc">% Hoàn thành (%HT) tăng dần</option>
                                             <option value="remaining-desc">Mục tiêu còn lại giảm dần</option>
                                             <option value="remaining-asc">Mục tiêu còn lại tăng dần</option>
-                                            {isAllMode && <option value="store-asc">Sắp xếp theo Siêu Thị</option>}
+                                            {isAllMode && <option value="store-asc">Sắp xếp theo ST</option>}
                                             <option value="name-asc">Sắp xếp theo Tên Thi Đua</option>
                                         </select>
                                     </div>
@@ -1060,7 +1060,7 @@ export default function MonthlyReportPage() {
                                         <tr>
                                             <th className="py-2 px-1.5 text-center w-9 whitespace-nowrap">#</th>
                                             {isAllMode && (
-                                                <th className="py-2 px-2 text-left whitespace-nowrap">Siêu Thị</th>
+                                                <th className="py-2 px-2 text-left whitespace-nowrap">ST</th>
                                             )}
                                             <th className="py-2 px-2.5 text-left">Thi đua</th>
                                             <th className="py-2 px-2 text-right whitespace-nowrap">Target</th>

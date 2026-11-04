@@ -86,7 +86,7 @@ export default function EmployeeCampaignMatrixPage() {
         loadData();
     }, [selectedMonth, selectedYear]);
 
-    // Danh sách siêu thị trong cụm
+    // Danh sách ST trong cụm
     const storeList = useMemo(() => {
         const s = new Set<string>();
         employees.forEach(e => {
@@ -246,7 +246,7 @@ export default function EmployeeCampaignMatrixPage() {
                     <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
                     <input
                         type="text"
-                        placeholder="Tìm theo Mã NV, Họ Tên hoặc Siêu thị..."
+                        placeholder="Tìm theo Mã NV, Họ Tên hoặc ST..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-medium outline-none focus:ring-2 focus:ring-indigo-500"
@@ -259,7 +259,7 @@ export default function EmployeeCampaignMatrixPage() {
                         onChange={(e) => setSelectedStore(e.target.value)}
                         className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
                     >
-                        <option value="all">🏪 Tất cả siêu thị ({storeList.length})</option>
+                        <option value="all">🏪 Tất cả ST ({storeList.length})</option>
                         {storeList.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                 </div>
@@ -295,7 +295,7 @@ export default function EmployeeCampaignMatrixPage() {
                                 <th className="py-3 px-3 w-10 text-center bg-slate-100 sticky left-0 z-20">#</th>
                                 <th className="py-3 px-3 w-24 bg-slate-100 sticky left-10 z-20">MÃ NV</th>
                                 <th className="py-3 px-3 w-40 bg-slate-100 sticky left-34 z-20">HỌ VÀ TÊN</th>
-                                <th className="py-3 px-3 w-44">SIÊU THỊ</th>
+                                <th className="py-3 px-3 w-44">ST</th>
 
                                 {/* CÁC CỘT THI ĐUA ĐỘNG TỪ TỪ ĐIỂN */}
                                 {campaigns.map(c => (

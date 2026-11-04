@@ -7,7 +7,7 @@
   Agent phải phản hồi bằng một bản kế hoạch tổng quan tinh gọn gồm các đầu mục lớn:
   1. **Mục tiêu & Nghiệp vụ cốt lõi**: Xác định trang giải quyết bài toán gì, ai sử dụng, luồng thao tác chính.
   2. **Bố cục Giao diện (Mobile-First UI Layout)**:
-     - Header & Bộ lọc (ưu tiên Siêu thị/Cụm ở dòng đầu theo Quy chuẩn 10).
+     - Header & Bộ lọc (ưu tiên ST/Cụm ở dòng đầu theo Quy chuẩn 10).
      - Thẻ KPI tổng quan theo chiều dọc.
      - Bảng biểu chi tiết (gộp cột Nhân viên chuẩn hóa, font số sắc nét).
   3. **Mô hình Dữ liệu & Lưu trữ Supabase (100% Cloud-First)**:
@@ -33,6 +33,6 @@
   - Các vai trò khác (`QUAN_LY`, `TRUONG_CA`, `NHAN_VIEN`) mặc định chưa được truy cập và không nhìn thấy mục menu trên Sidebar.
 - **MỤC ĐÍCH**:
   - Đảm bảo tính năng mới luôn trải qua giai đoạn kiểm thử nội bộ (Internal Beta/Sandbox).
-  - Tránh ảnh hưởng hoặc gây nhầm lẫn cho người dùng cuối (Quản lý siêu thị, nhân viên) khi tính năng còn đang hoàn thiện hoặc chưa có dữ liệu chính thức.
+  - Tránh ảnh hưởng hoặc gây nhầm lẫn cho người dùng cuối (Quản lý ST, nhân viên) khi tính năng còn đang hoàn thiện hoặc chưa có dữ liệu chính thức.
 - **CẤP QUYỀN MỞ RỘNG**:
   - Khi tính năng đã vận hành ổn định, dữ liệu Supabase được kiểm chứng và có chỉ đạo cụ thể từ Boss, Agent mới tiến hành mở rộng danh sách `allowed_roles`.

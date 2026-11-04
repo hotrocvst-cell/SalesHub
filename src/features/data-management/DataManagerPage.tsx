@@ -85,7 +85,7 @@ export default function DataManagementPage() {
         }
     };
 
-    // Danh sách siêu thị có trong dữ liệu
+    // Danh sách ST có trong dữ liệu
     const storeList = useMemo(() => {
         const set = new Set<string>();
         records.forEach(r => {
@@ -155,7 +155,7 @@ export default function DataManagementPage() {
         const worksheet = workbook.addWorksheet('DanhSachBaoCao');
 
         worksheet.columns = [
-            { header: 'Siêu Thị', key: 'storeName', width: 28 },
+            { header: 'ST', key: 'storeName', width: 28 },
             { header: 'Dữ liệu ngày', key: 'reportDate', width: 14 },
             { header: 'Tháng', key: 'month', width: 10 },
             { header: 'Năm', key: 'year', width: 10 },
@@ -281,7 +281,7 @@ export default function DataManagementPage() {
                     <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
                     <input
                         type="text"
-                        placeholder="Tìm theo tên siêu thị hoặc ngày (dd/mm/yyyy)..."
+                        placeholder="Tìm theo tên ST hoặc ngày (dd/mm/yyyy)..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-medium outline-none focus:ring-2 focus:ring-indigo-500"
@@ -294,7 +294,7 @@ export default function DataManagementPage() {
                         onChange={(e) => setSelectedStore(e.target.value)}
                         className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
                     >
-                        <option value="all">🏪 Tất cả siêu thị ({storeList.length})</option>
+                        <option value="all">🏪 Tất cả ST ({storeList.length})</option>
                         {storeList.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                 </div>
@@ -318,7 +318,7 @@ export default function DataManagementPage() {
                         <thead className="bg-slate-100 text-slate-600 uppercase text-[10px] font-black tracking-wider sticky top-0 z-10 border-b border-slate-200">
                             <tr>
                                 <th className="py-3 px-3 text-center w-10">#</th>
-                                <th className="py-3 px-3">Siêu Thị</th>
+                                <th className="py-3 px-3">ST</th>
                                 <th className="py-3 px-3">Dữ liệu ngày</th>
                                 <th className="py-3 px-3 text-right">DT Lũy kế</th>
                                 <th className="py-3 px-3 text-right">Target</th>
@@ -490,7 +490,7 @@ export default function DataManagementPage() {
                         <div>
                             <h3 className="font-black text-sm text-slate-800 uppercase">Xác Nhận Xóa Dữ Liệu?</h3>
                             <p className="text-xs text-slate-500 mt-1">
-                                Bạn có chắc chắn muốn xóa bản ghi ngày <b>{formatDate(deleteTarget.reportDate)}</b> của siêu thị <b>{getShortStoreName(deleteTarget.storeName)}</b>?
+                                Bạn có chắc chắn muốn xóa bản ghi ngày <b>{formatDate(deleteTarget.reportDate)}</b> của ST <b>{getShortStoreName(deleteTarget.storeName)}</b>?
                             </p>
                             <p className="text-[11px] text-red-500 font-semibold mt-1">
                                 * Hành động này sẽ xóa vĩnh viễn trên Cloud.

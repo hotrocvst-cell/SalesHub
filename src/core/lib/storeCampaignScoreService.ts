@@ -4,7 +4,7 @@ import { isStoreMatch, getShortStoreName } from './formatters';
 export type CampaignScoringMode = 'POINTS' | 'COUNT';
 
 export interface StoreCampaignScoreConfig {
-    store_name: string;                      // Tên siêu thị (viết tắt hoặc đầy đủ), hoặc 'DEFAULT'
+    store_name: string;                      // Tên ST (viết tắt hoặc đầy đủ), hoặc 'DEFAULT'
     scoring_mode: CampaignScoringMode;       // 'POINTS': Tính điểm đạt / tổng điểm; 'COUNT': Chỉ tính đạt / không đạt
     campaign_scores: Record<string, number>; // key: raw_key hoặc canonicalKey -> số điểm (ví dụ: 1, 2, 0.5,...)
     updated_at?: string;
@@ -14,7 +14,7 @@ export interface StoreCampaignScoreConfig {
 const LOCAL_STORAGE_KEY = 'saleshub_store_campaign_scores_v1';
 
 /**
- * Lấy toàn bộ bản đồ cấu hình điểm thi đua của các siêu thị từ LocalStorage
+ * Lấy toàn bộ bản đồ cấu hình điểm thi đua của các ST từ LocalStorage
  */
 export function getAllStoreCampaignScoreConfigs(): Record<string, StoreCampaignScoreConfig> {
     try {
@@ -29,7 +29,7 @@ export function getAllStoreCampaignScoreConfigs(): Record<string, StoreCampaignS
 }
 
 /**
- * Lấy cấu hình tính điểm của 1 siêu thị cụ thể
+ * Lấy cấu hình tính điểm của 1 ST cụ thể
  * Tự động đối chiếu thông minh qua isStoreMatch và fallback về DEFAULT
  */
 export function getStoreCampaignScoreConfig(
@@ -88,7 +88,7 @@ export function getStoreCampaignScoreConfig(
 }
 
 /**
- * Lấy số điểm quy định của một chương trình thi đua cụ thể theo cấu hình siêu thị
+ * Lấy số điểm quy định của một chương trình thi đua cụ thể theo cấu hình ST
  * Mặc định trả về 1 điểm nếu chưa gán điểm hoặc điểm <= 0
  */
 export function getCampaignPoints(
@@ -131,7 +131,7 @@ export function calculateCampaignScore(
 }
 
 /**
- * Lưu cấu hình tính điểm thi đua cho 1 siêu thị (hoặc nhiều siêu thị phụ trách)
+ * Lưu cấu hình tính điểm thi đua cho 1 ST (hoặc nhiều ST phụ trách)
  * Đồng thời đồng bộ xuống LocalStorage và đẩy lên Cloud Supabase (nếu bảng tồn tại)
  */
 export async function saveStoreCampaignScoreConfig(

@@ -82,7 +82,7 @@ export default function RebalanceSuggestionView({
     reportCaptureRef,
     salesVelocityMap
 }: RebalanceSuggestionViewProps) {
-    // Chế độ xem: 'product' (Theo Sản Phẩm) | 'store' (Theo Siêu Thị Đối Tác)
+    // Chế độ xem: 'product' (Theo Sản Phẩm) | 'store' (Theo ST Đối Tác)
     const [viewMode, setViewMode] = useState<'product' | 'store'>('product');
     const [copiedAll, setCopiedAll] = useState<boolean>(false);
     const [copiedStoreMap, setCopiedStoreMap] = useState<Record<string, boolean>>({});
@@ -90,7 +90,7 @@ export default function RebalanceSuggestionView({
     const [filterOnlyHasSource, setFilterOnlyHasSource] = useState<boolean>(true);
     // Bộ lọc chỉ mã có sức bán
     const [filterOnlyHasSales, setFilterOnlyHasSales] = useState<boolean>(false);
-    // Hai input tìm kiếm lọc song song: theo sản phẩm và theo siêu thị
+    // Hai input tìm kiếm lọc song song: theo sản phẩm và theo ST
     const [searchProductKeyword, setSearchProductKeyword] = useState<string>('');
     const [searchStoreKeyword, setSearchStoreKeyword] = useState<string>('');
     // Bộ lọc trạng thái lệnh khi xem theo ST: 'ALL' (Tất cả) | 'UNORDERED' (Chưa tạo lệnh - Ẩn đã tạo) | 'ORDERED' (Đã tạo lệnh)
@@ -120,7 +120,7 @@ export default function RebalanceSuggestionView({
         };
     }, [matches, groupedByStore]);
 
-    // Lọc theo tùy chọn chỉ xem có nguồn & text tìm kiếm sản phẩm / siêu thị
+    // Lọc theo tùy chọn chỉ xem có nguồn & text tìm kiếm sản phẩm / ST
     const displayedMatches = useMemo(() => {
         let list = filterOnlyHasSource ? matches.filter(m => m.hasSource) : matches;
 
@@ -153,7 +153,7 @@ export default function RebalanceSuggestionView({
         return list;
     }, [matches, filterOnlyHasSource, searchProductKeyword, searchStoreKeyword, filterOnlyHasSales, salesVelocityMap]);
 
-    // Lọc danh sách theo siêu thị đối tác, từ khóa tìm kiếm (SP & Siêu thị hoạt động song song) và trạng thái tạo lệnh
+    // Lọc danh sách theo ST đối tác, từ khóa tìm kiếm (SP & ST hoạt động song song) và trạng thái tạo lệnh
     // Khi đang xem theo ST: Danh sách sản phẩm bên trong được sắp xếp theo tên sản phẩm A-Z
     const displayedGroupedByStore = useMemo(() => {
         const pKw = (searchProductKeyword || '').toLowerCase().trim();
@@ -162,13 +162,13 @@ export default function RebalanceSuggestionView({
         return groupedByStore
             .map(g => {
                 if (!g) return null;
-                // 1. Lọc theo tên siêu thị đối tác (nếu có nhập)
+                // 1. Lọc theo tên ST đối tác (nếu có nhập)
                 if (sKw) {
                     const matchStore = (g.store_name || '').toLowerCase().includes(sKw);
                     if (!matchStore) return null;
                 }
 
-                // 2. Lọc các sản phẩm trong siêu thị này khớp với từ khóa sản phẩm (nếu có nhập)
+                // 2. Lọc các sản phẩm trong ST này khớp với từ khóa sản phẩm (nếu có nhập)
                 let items = g.items || [];
                 if (pKw) {
                     items = items.filter(item =>
@@ -240,7 +240,7 @@ export default function RebalanceSuggestionView({
         }
     };
 
-    // Sao chép tin Zalo cho riêng 1 siêu thị đối tác
+    // Sao chép tin Zalo cho riêng 1 ST đối tác
     const handleCopyStoreZalo = async (supply: StoreGroupedSupply) => {
         const text = generateZaloStoreSpecificMessage(targetStore, supply);
         try {
@@ -254,7 +254,7 @@ export default function RebalanceSuggestionView({
         }
     };
 
-    // Xuất file Excel danh sách xin hàng theo từng siêu thị (4 cột chuẩn ERP: Mã SP, Tên SP, IMEI, SL yêu cầu)
+    // Xuất file Excel danh sách xin hàng theo từng ST (4 cột chuẩn ERP: Mã SP, Tên SP, IMEI, SL yêu cầu)
     // Tự động loại trừ các mã sản phẩm người dùng đã bấm 'Loại trừ' và áp dụng số lượng đã chỉnh sửa
     const [exportingStore, setExportingStore] = useState<string | null>(null);
     const handleExportStoreExcel = async (storeSupply: StoreGroupedSupply) => {
@@ -273,7 +273,7 @@ export default function RebalanceSuggestionView({
                 });
 
             if (validItems.length === 0) {
-                alert(`Tất cả sản phẩm của siêu thị "${storeSupply.store_name}" đang bị loại trừ. Vui lòng giữ lại ít nhất 1 sản phẩm để xuất file Excel.`);
+                alert(`Tất cả sản phẩm của ST "${storeSupply.store_name}" đang bị loại trừ. Vui lòng giữ lại ít nhất 1 sản phẩm để xuất file Excel.`);
                 return;
             }
 
@@ -317,7 +317,7 @@ export default function RebalanceSuggestionView({
                                 </h2>
                             </div>
                             <p className="text-xs text-slate-500 mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                                <span>Siêu thị xin: <b className="text-blue-700 font-bold">{targetStore || 'Chưa chọn'}</b></span>
+                                <span>ST xin: <b className="text-blue-700 font-bold">{targetStore || 'Chưa chọn'}</b></span>
                                 <span className="text-slate-300">•</span>
                                 <span>Điều kiện tồn nguồn: <span className="font-semibold text-slate-700">≥ {minSourceQty} máy</span></span>
                                 <span className="text-slate-300">•</span>
@@ -382,7 +382,7 @@ export default function RebalanceSuggestionView({
                                         await handleExportStoreExcel(displayedGroupedByStore[0]);
                                         return;
                                     }
-                                    if (confirm(`Bạn có muốn xuất lần lượt ${displayedGroupedByStore.length} file Excel xin hàng cho các siêu thị đang hiển thị?`)) {
+                                    if (confirm(`Bạn có muốn xuất lần lượt ${displayedGroupedByStore.length} file Excel xin hàng cho các ST đang hiển thị?`)) {
                                         for (const s of displayedGroupedByStore) {
                                             await handleExportStoreExcel(s);
                                             await new Promise(r => setTimeout(r, 250));
@@ -390,7 +390,7 @@ export default function RebalanceSuggestionView({
                                     }
                                 }}
                                 className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl shadow-xs transition-colors cursor-pointer"
-                                title="Xuất file Excel xin hàng (4 cột ERP) theo từng siêu thị đối tác"
+                                title="Xuất file Excel xin hàng (4 cột ERP) theo từng ST đối tác"
                             >
                                 <FileSpreadsheet className="w-4 h-4 text-blue-600" />
                                 <span>Xuất Excel theo ST {displayedGroupedByStore.length === 1 ? `(${displayedGroupedByStore[0].store_name.split('-')[0].trim()})` : `(${displayedGroupedByStore.length} ST)`}</span>
@@ -444,7 +444,7 @@ export default function RebalanceSuggestionView({
                             }`}
                         >
                             <Store className="w-4 h-4" />
-                            <span>Theo Siêu Thị Đối Tác</span>
+                            <span>Theo ST Đối Tác</span>
                             <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold ${
                                 viewMode === 'store' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'
                             }`}>
@@ -490,7 +490,7 @@ export default function RebalanceSuggestionView({
                     )}
                 </div>
 
-                {/* HÀNG 3: THANH TÌM KIẾM SẢN PHẨM / SIÊU THỊ & BỘ LỌC CHIP NHANH */}
+                {/* HÀNG 3: THANH TÌM KIẾM SẢN PHẨM / ST & BỘ LỌC CHIP NHANH */}
                 <div className="flex flex-wrap items-center gap-2.5 pt-3 border-t border-slate-100">
                     {/* 1. INPUT LỌC THEO TÊN / MÃ SẢN PHẨM */}
                     <div className="relative flex-1 min-w-[240px]">
@@ -514,7 +514,7 @@ export default function RebalanceSuggestionView({
                         )}
                     </div>
 
-                    {/* 2. INPUT LỌC THEO TÊN SIÊU THỊ ĐỐI TÁC (KHI XEM THEO SIÊU THỊ) */}
+                    {/* 2. INPUT LỌC THEO TÊN ST ĐỐI TÁC (KHI XEM THEO ST) */}
                     {viewMode === 'store' && (
                         <div className="relative flex-1 min-w-[240px]">
                             <Store className="w-4 h-4 text-emerald-600 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -522,7 +522,7 @@ export default function RebalanceSuggestionView({
                                 type="text"
                                 value={searchStoreKeyword}
                                 onChange={(e) => setSearchStoreKeyword(e.target.value)}
-                                placeholder="Tìm theo tên siêu thị đối tác..."
+                                placeholder="Tìm theo tên ST đối tác..."
                                 className="w-full pl-9 pr-8 py-2 text-xs rounded-xl border border-emerald-300 bg-emerald-50/40 text-emerald-950 placeholder:text-emerald-700/60 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-emerald-500 font-medium shadow-2xs transition-all"
                             />
                             {searchStoreKeyword && (
@@ -530,7 +530,7 @@ export default function RebalanceSuggestionView({
                                     type="button"
                                     onClick={() => setSearchStoreKeyword('')}
                                     className="absolute right-2.5 top-1/2 -translate-y-1/2 text-emerald-600 hover:text-emerald-800 p-0.5 cursor-pointer"
-                                    title="Xóa tìm siêu thị"
+                                    title="Xóa tìm ST"
                                 >
                                     <X className="w-3.5 h-3.5" />
                                 </button>
@@ -568,7 +568,7 @@ export default function RebalanceSuggestionView({
                     )}
                 </div>
 
-                {/* HÀNG 4 (KHI XEM THEO SIÊU THỊ): BỘ LỌC TRẠNG THÁI LỆNH ĐÃ TẠO */}
+                {/* HÀNG 4 (KHI XEM THEO ST): BỘ LỌC TRẠNG THÁI LỆNH ĐÃ TẠO */}
                 {viewMode === 'store' && (
                     <div className="flex flex-wrap items-center justify-between gap-2.5 pt-3 border-t border-slate-100">
                         <div className="flex flex-wrap items-center gap-2">
@@ -596,7 +596,7 @@ export default function RebalanceSuggestionView({
                                             ? 'bg-amber-500 text-white shadow-2xs'
                                             : 'text-amber-800 hover:text-amber-900 hover:bg-amber-100/60'
                                     }`}
-                                    title="Chỉ hiển thị các siêu thị còn mặt hàng chưa tạo lệnh"
+                                    title="Chỉ hiển thị các ST còn mặt hàng chưa tạo lệnh"
                                 >
                                     <span>Chưa tạo lệnh (Ẩn đã tạo)</span>
                                 </button>
@@ -639,8 +639,8 @@ export default function RebalanceSuggestionView({
                         <span>
                             Đang lọc: {searchProductKeyword && <span>Sản phẩm <b>"{searchProductKeyword}"</b> </span>}
                             {searchProductKeyword && searchStoreKeyword && <span>• </span>}
-                            {searchStoreKeyword && <span>Siêu thị <b>"{searchStoreKeyword}"</b> </span>}
-                            • Khớp <b>{displayedMatches.length}</b> sản phẩm / <b>{displayedGroupedByStore.length}</b> siêu thị
+                            {searchStoreKeyword && <span>ST <b>"{searchStoreKeyword}"</b> </span>}
+                            • Khớp <b>{displayedMatches.length}</b> sản phẩm / <b>{displayedGroupedByStore.length}</b> ST
                         </span>
                         <button
                             type="button"
@@ -667,10 +667,10 @@ export default function RebalanceSuggestionView({
                                 SalesHub Inventory Balancing
                             </div>
                             <h1 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
-                                GỢI Ý XIN CHUYỂN TỒN KHO SIÊU THỊ
+                                GỢI Ý XIN CHUYỂN TỒN KHO ST
                             </h1>
                             <div className="text-xs text-slate-600 mt-0.5 flex flex-wrap items-center gap-2">
-                                <span>Siêu thị đề xuất xin: <b className="text-blue-700 font-bold">{targetStore}</b></span>
+                                <span>ST đề xuất xin: <b className="text-blue-700 font-bold">{targetStore}</b></span>
                                 {totalOrderedPairs > 0 && (
                                     <span className="inline-flex items-center gap-1 text-[10px] bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded-full font-bold">
                                         <CheckCircle2 className="w-3 h-3 text-emerald-600" />
@@ -709,7 +709,7 @@ export default function RebalanceSuggestionView({
                         </div>
 
                         <div className="bg-blue-50 p-2.5 rounded-lg border border-blue-200">
-                            <div className="text-[10px] font-bold text-blue-700 uppercase">Siêu thị có thể hỗ trợ</div>
+                            <div className="text-[10px] font-bold text-blue-700 uppercase">ST có thể hỗ trợ</div>
                             <div className="text-base sm:text-lg font-black text-blue-700">
                                 {stats.partnerStoresCount} <span className="text-xs font-normal text-blue-600">ST</span>
                             </div>
@@ -740,7 +740,7 @@ export default function RebalanceSuggestionView({
                             displayedMatches.map((item, idx) => {
                                 const vel = salesVelocityMap ? getProductSalesVelocity(salesVelocityMap, item.product_code, item.product_name) : null;
 
-                                // Tính số lượng và số siêu thị đã tạo lệnh xin cho sản phẩm này
+                                // Tính số lượng và số ST đã tạo lệnh xin cho sản phẩm này
                                 const orderedSources = item.source_stores.filter(source => {
                                     const orderKey = `${source.store_name}__${item.product_code}`;
                                     return Boolean(orderedItemsMap?.[orderKey]?.is_ordered) && !excludedStoreItemKeys?.[orderKey];
@@ -859,14 +859,14 @@ export default function RebalanceSuggestionView({
                                         </div>
                                     </div>
 
-                                    {/* DANH SÁCH SIÊU THỊ CÓ NGUỒN DƯ */}
+                                    {/* DANH SÁCH ST CÓ NGUỒN DƯ */}
                                     <div className="mt-2.5 pt-2 border-t border-slate-100 pl-6">
                                         <div className="text-[11px] font-bold text-slate-700 mb-1.5 flex flex-wrap items-center justify-between gap-1.5">
                                             {item.hasSource ? (
                                                 <>
                                                     <span className="flex items-center gap-1.5">
                                                         <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                                                        <span>Có <b>{item.source_stores.length}</b> siêu thị đang có sẵn hàng (≥ {minSourceQty}):</span>
+                                                        <span>Có <b>{item.source_stores.length}</b> ST đang có sẵn hàng (≥ {minSourceQty}):</span>
                                                     </span>
                                                     {totalOrderedQty > 0 && (
                                                         <span className="text-[11px] font-bold text-emerald-800 bg-emerald-100/70 border border-emerald-200 px-2 py-0.5 rounded-md">
@@ -877,7 +877,7 @@ export default function RebalanceSuggestionView({
                                             ) : (
                                                 <div className="flex items-center gap-1.5">
                                                     <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
-                                                    <span className="text-amber-800 font-semibold">Chưa tìm thấy siêu thị đối tác nào có tồn ≥ {minSourceQty}</span>
+                                                    <span className="text-amber-800 font-semibold">Chưa tìm thấy ST đối tác nào có tồn ≥ {minSourceQty}</span>
                                                 </div>
                                             )}
                                         </div>
@@ -899,7 +899,7 @@ export default function RebalanceSuggestionView({
                                                                     ? 'bg-emerald-600 text-white border-emerald-700 shadow-2xs font-semibold'
                                                                     : 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100 hover:border-emerald-300'
                                                             }`}
-                                                            title={isOrdered ? 'Đã tạo lệnh xin từ siêu thị này! Bấm để bỏ chọn' : `Bấm để đánh dấu đã tạo lệnh xin ${qtyToRequest} máy từ "${source.store_name}"`}
+                                                            title={isOrdered ? 'Đã tạo lệnh xin từ ST này! Bấm để bỏ chọn' : `Bấm để đánh dấu đã tạo lệnh xin ${qtyToRequest} máy từ "${source.store_name}"`}
                                                         >
                                                             <span className="font-medium text-[11px] truncate max-w-[260px]" title={source.store_name}>
                                                                 {source.store_name}
@@ -927,14 +927,14 @@ export default function RebalanceSuggestionView({
                 </div>
                 )}
 
-                {/* 2. CHẾ ĐỘ: THEO SIÊU THỊ ĐỐI TÁC */}
+                {/* 2. CHẾ ĐỘ: THEO ST ĐỐI TÁC */}
                 {viewMode === 'store' && (
                     <div className="space-y-3">
                         {displayedGroupedByStore.length === 0 ? (
                             <div className="p-8 text-center text-slate-400 text-xs">
                                 {hasAnySearch
-                                    ? `Không tìm thấy siêu thị hoặc sản phẩm nào khớp với bộ lọc (${searchDisplayLabel}).`
-                                    : 'Chưa có siêu thị đối tác nào có sẵn các mặt hàng thiếu của bạn.'
+                                    ? `Không tìm thấy ST hoặc sản phẩm nào khớp với bộ lọc (${searchDisplayLabel}).`
+                                    : 'Chưa có ST đối tác nào có sẵn các mặt hàng thiếu của bạn.'
                                 }
                             </div>
                         ) : (
@@ -1008,7 +1008,7 @@ export default function RebalanceSuggestionView({
                                                                 ? 'bg-emerald-100 text-emerald-800 border-emerald-300 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-300'
                                                                 : 'bg-slate-50 text-slate-700 border-slate-300 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-300'
                                                         }`}
-                                                        title={isAllOrdered ? 'Hủy đánh dấu tất cả mặt hàng của siêu thị này' : 'Đánh dấu đã tạo lệnh xin tất cả mặt hàng của siêu thị này'}
+                                                        title={isAllOrdered ? 'Hủy đánh dấu tất cả mặt hàng của ST này' : 'Đánh dấu đã tạo lệnh xin tất cả mặt hàng của ST này'}
                                                     >
                                                         <CheckCheck className="w-3.5 h-3.5" />
                                                         <span>{isAllOrdered ? 'Đã xin cả ST (Bỏ)' : 'Đã tạo lệnh cả ST'}</span>
@@ -1032,7 +1032,7 @@ export default function RebalanceSuggestionView({
                                                     type="button"
                                                     onClick={() => handleCopyStoreZalo(storeSupply)}
                                                     className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors cursor-pointer"
-                                                    title="Sao chép tin nhắn Zalo gửi riêng cho Quản lý siêu thị này"
+                                                    title="Sao chép tin nhắn Zalo gửi riêng cho Quản lý ST này"
                                                 >
                                                     {copiedStoreMap[storeSupply.store_name] ? (
                                                         <>
@@ -1049,7 +1049,7 @@ export default function RebalanceSuggestionView({
                                             </div>
                                         </div>
 
-                                        {/* DANH SÁCH MÃ SẢN PHẨM MÀ SIÊU THỊ ĐÓ CÓ */}
+                                        {/* DANH SÁCH MÃ SẢN PHẨM MÀ ST ĐÓ CÓ */}
                                         <div className="mt-2.5 divide-y divide-slate-100">
                                             {storeSupply.items.map((item) => {
                                                 const orderKey = `${storeSupply.store_name}__${item.product_code}`;
@@ -1127,7 +1127,7 @@ export default function RebalanceSuggestionView({
                                                                         ? 'bg-slate-100 border-slate-200 text-slate-400'
                                                                         : 'bg-blue-50/90 border-blue-200 text-blue-900 focus-within:ring-2 focus-within:ring-blue-400'
                                                                 }`}
-                                                                title={`Nhập nhanh số lượng cần xin từ siêu thị này (Tồn sẵn: ${item.available_qty})`}
+                                                                title={`Nhập nhanh số lượng cần xin từ ST này (Tồn sẵn: ${item.available_qty})`}
                                                             >
                                                                 <span className="text-[10px] font-bold whitespace-nowrap">Xin:</span>
                                                                 <input

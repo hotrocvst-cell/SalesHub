@@ -36,7 +36,7 @@ export function calculateDataStatus(input: StatusCalculationInput): {
         selectedYear
     } = input;
 
-    // Lọc danh sách siêu thị áp dụng
+    // Lọc danh sách ST áp dụng
     const activeStores = stores.filter(s => s.is_active !== false);
     const applicableStores = targetStore === 'all'
         ? activeStores
@@ -44,8 +44,8 @@ export function calculateDataStatus(input: StatusCalculationInput): {
 
     const totalStoreCount = applicableStores.length || 1;
 
-    // 1. DOANH THU LŨY KẾ SIÊU THỊ
-    // Lọc các bản ghi khớp với tháng/năm và siêu thị được chọn
+    // 1. DOANH THU LŨY KẾ ST
+    // Lọc các bản ghi khớp với tháng/năm và ST được chọn
     const storeRecords = records.filter(r => {
         if (targetStore !== 'all') {
             if (!isStoreMatch(r.storeName, targetStore, stores)) return false;
@@ -75,8 +75,8 @@ export function calculateDataStatus(input: StatusCalculationInput): {
 
     const storeRevenueStream: DataStreamStatus = {
         id: 'store_revenue',
-        title: 'Siêu Thị - Doanh Thu Lũy Kế',
-        shortTitle: 'DT Siêu thị LK',
+        title: 'ST - Doanh Thu Lũy Kế',
+        shortTitle: 'DT ST LK',
         category: 'store',
         isOk: isStoreRevenueOk,
         statusText: isStoreRevenueOk ? 'OK' : (latestStoreRevenueDate ? 'CHẬM PHIÊN' : 'CHƯA CÓ DỮ LIỆU'),
@@ -88,7 +88,7 @@ export function calculateDataStatus(input: StatusCalculationInput): {
         storeCoveredCount: storeRevenueStoresCovered,
         totalStoreCount,
         coveragePercent: Math.round((storeRevenueStoresCovered / totalStoreCount) * 100),
-        description: 'Dữ liệu doanh thu lũy kế của siêu thị',
+        description: 'Dữ liệu doanh thu lũy kế của ST',
         warningMessage: isStoreRevenueOk
             ? undefined
             : latestStoreRevenueDate
@@ -98,7 +98,7 @@ export function calculateDataStatus(input: StatusCalculationInput): {
         actionLabel: 'Cập nhật số liệu LK'
     };
 
-    // 2. TIẾN ĐỘ THI ĐUA NGÀNH HÀNG SIÊU THỊ
+    // 2. TIẾN ĐỘ THI ĐUA NGÀNH HÀNG ST
     const emulationRecords = storeRecords.filter(r => r.emulationSummary && Object.keys(r.emulationSummary).length > 0);
     const emulationDates = Array.from(new Set(emulationRecords.map(r => r.reportDate))).sort();
     const latestEmulationDate = emulationDates.length > 0 ? emulationDates[emulationDates.length - 1] : null;
@@ -114,8 +114,8 @@ export function calculateDataStatus(input: StatusCalculationInput): {
 
     const storeEmulationStream: DataStreamStatus = {
         id: 'store_emulation',
-        title: 'Siêu Thị - Lũy Kế Thi Đua',
-        shortTitle: 'Thi đua Siêu thị LK',
+        title: 'ST - Lũy Kế Thi Đua',
+        shortTitle: 'Thi đua ST LK',
         category: 'store',
         isOk: isStoreEmulationOk,
         statusText: isStoreEmulationOk ? 'OK' : (latestEmulationDate ? 'CHẬM PHIÊN' : 'CHƯA CÓ DỮ LIỆU'),
@@ -126,12 +126,12 @@ export function calculateDataStatus(input: StatusCalculationInput): {
         storeCoveredCount: emulationStoresCovered,
         totalStoreCount,
         coveragePercent: Math.round((emulationStoresCovered / totalStoreCount) * 100),
-        description: 'Dữ liệu lũy kế thi đua các ngành hàng của siêu thị',
+        description: 'Dữ liệu lũy kế thi đua các ngành hàng của ST',
         warningMessage: isStoreEmulationOk
             ? undefined
             : latestEmulationDate
                 ? `Số liệu thi đua mới nhất ngày ${latestEmulationDate}. Chưa nạp thi đua ngày ${expectedDate} (n-1).`
-                : `Chưa có số liệu thi đua ngành hàng của siêu thị trong tháng ${selectedMonth}/${selectedYear}.`,
+                : `Chưa có số liệu thi đua ngành hàng của ST trong tháng ${selectedMonth}/${selectedYear}.`,
         actionUrl: '/cap-nhat',
         actionLabel: 'Nạp thi đua ST'
     };
@@ -300,8 +300,8 @@ export function calculateDataStatus(input: StatusCalculationInput): {
         (s.session_type === 'WORK_HOURS' || (s.records && s.records.some(r => (r.work_hours || 0) > 0)))
     );
 
-    // Hàm kiểm tra 1 session có chứa dữ liệu giờ công của 1 siêu thị cụ thể hay không
-    // (Hỗ trợ cả trường hợp session lưu theo tên siêu thị riêng HOẶC session Toàn Cụm có chứa nhân viên của siêu thị đó)
+    // Hàm kiểm tra 1 session có chứa dữ liệu giờ công của 1 ST cụ thể hay không
+    // (Hỗ trợ cả trường hợp session lưu theo tên ST riêng HOẶC session Toàn Cụm có chứa nhân viên của ST đó)
     const sessionHasStoreWorkHours = (s: EmployeeDataSession, sName: string, sEmpIds: Set<string>): boolean => {
         if (isStoreMatch(s.store_name, sName, stores)) {
             return true;
@@ -315,7 +315,7 @@ export function calculateDataStatus(input: StatusCalculationInput): {
         return false;
     };
 
-    // Phiên liên quan đến phạm vi đang chọn (Toàn Cụm hoặc siêu thị cụ thể)
+    // Phiên liên quan đến phạm vi đang chọn (Toàn Cụm hoặc ST cụ thể)
     const relevantHoursSessions = targetStore === 'all'
         ? monthHoursSessions
         : monthHoursSessions.filter(s => {
@@ -327,7 +327,7 @@ export function calculateDataStatus(input: StatusCalculationInput): {
     const hoursSessionDates = Array.from(new Set(relevantHoursSessions.map(s => s.report_date))).filter(Boolean).sort();
     const latestHoursDate = hoursSessionDates.length > 0 ? hoursSessionDates[hoursSessionDates.length - 1] : null;
 
-    // Kiểm tra siêu thị nào trong applicableStores đã có dữ liệu giờ công ngày n-1 (expectedDate)
+    // Kiểm tra ST nào trong applicableStores đã có dữ liệu giờ công ngày n-1 (expectedDate)
     const n1HoursSessions = monthHoursSessions.filter(s => s.report_date === expectedDate);
     const storesWithHours = applicableStores.filter(store => {
         const storeEmps = employees.filter(e => isStoreMatch(e.store_name, store.name, stores) && e.is_active !== false);
@@ -364,7 +364,7 @@ export function calculateDataStatus(input: StatusCalculationInput): {
             ? undefined
             : latestHoursDate
                 ? `Phiên giờ công gần nhất ngày ${latestHoursDate}. Cần nạp phiên ngày ${expectedDate} (n-1).`
-                : `Chưa có phiên giờ công nào cho ${targetStore !== 'all' ? targetStore : 'các siêu thị'} trong tháng ${selectedMonth}/${selectedYear}.`,
+                : `Chưa có phiên giờ công nào cho ${targetStore !== 'all' ? targetStore : 'các ST'} trong tháng ${selectedMonth}/${selectedYear}.`,
         actionUrl: '/cap-nhat-luy-ke-nhan-vien',
         actionLabel: 'Nạp giờ công'
     };
@@ -378,17 +378,17 @@ export function calculateDataStatus(input: StatusCalculationInput): {
         workHoursStream
     ];
 
-    // TÍNH BẢNG MA TRẬN THEO TỪNG SIÊU THỊ
+    // TÍNH BẢNG MA TRẬN THEO TỪNG ST
     const matrix: StoreMatrixRow[] = applicableStores.map(store => {
         const storeName = store.name;
 
-        // 1. DT Siêu thị
+        // 1. DT ST
         const sRevRecords = records.filter(r => isStoreMatch(r.storeName, storeName, stores) && r.month === selectedMonth && r.year === selectedYear);
         const sRevDates = Array.from(new Set(sRevRecords.map(r => r.reportDate))).sort();
         const sRevLatestDate = sRevDates[sRevDates.length - 1] || null;
         const storeRevenueOk = sRevLatestDate === expectedDate;
 
-        // 2. Thi đua Siêu thị
+        // 2. Thi đua ST
         const sEmuRecords = sRevRecords.filter(r => r.emulationSummary && Object.keys(r.emulationSummary).length > 0);
         const sEmuDates = Array.from(new Set(sEmuRecords.map(r => r.reportDate))).sort();
         const storeEmulationOk = sEmuDates.includes(expectedDate);

@@ -68,7 +68,7 @@ export default function StoreConfirmModal({
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!selectedStore || selectedStore === 'all') {
-            setErrorMsg('Vui lòng chọn đích danh một siêu thị cụ thể!');
+            setErrorMsg('Vui lòng chọn đích danh một ST cụ thể!');
             return;
         }
         if (!selectedReportDate) {
@@ -89,8 +89,8 @@ export default function StoreConfirmModal({
                             <Store className="w-5 h-5 text-amber-300" />
                         </div>
                         <div>
-                            <h3 className="font-extrabold text-base leading-tight">Xác Nhận Siêu Thị Cập Nhật</h3>
-                            <p className="text-xs text-blue-200">Lũy kế Doanh thu & Thi đua áp dụng theo từng siêu thị</p>
+                            <h3 className="font-extrabold text-base leading-tight">Xác Nhận ST Cập Nhật</h3>
+                            <p className="text-xs text-blue-200">Lũy kế Doanh thu & Thi đua áp dụng theo từng ST</p>
                         </div>
                     </div>
                     <button
@@ -168,15 +168,15 @@ export default function StoreConfirmModal({
                         <div>
                             <span className="font-bold block">Quy chuẩn dữ liệu ST:</span>
                             <span>
-                                Báo cáo Doanh thu và Thi đua được xuất theo từng siêu thị riêng biệt. Vui lòng xác nhận chính xác siêu thị đích trước khi lưu.
+                                Báo cáo Doanh thu và Thi đua được xuất theo từng ST riêng biệt. Vui lòng xác nhận chính xác ST đích trước khi lưu.
                             </span>
                         </div>
                     </div>
 
-                    {/* Lựa chọn siêu thị */}
+                    {/* Lựa chọn ST */}
                     <div>
                         <label className="text-xs font-bold text-slate-700 block mb-1.5">
-                            Tên siêu thị được cập nhật số liệu: <span className="text-rose-500">*</span>
+                            Tên ST được cập nhật số liệu: <span className="text-rose-500">*</span>
                         </label>
                         <select
                             value={selectedStore}

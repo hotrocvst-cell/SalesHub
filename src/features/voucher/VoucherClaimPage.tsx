@@ -48,7 +48,7 @@ export default function VoucherClaimPage() {
     const [isReturning, setIsReturning] = useState<boolean>(false);
     const [campaignStatuses, setCampaignStatuses] = useState<Record<string, VoucherCampaignStatusConfig>>({});
 
-    const userStoreName = currentUser.store_name || 'Toàn Cụm Siêu Thị';
+    const userStoreName = currentUser.store_name || 'Toàn Cụm ST';
     const accessibleStores = useMemo(() => {
         if (currentUser.accessible_stores && currentUser.accessible_stores.length > 0) {
             return currentUser.accessible_stores;
@@ -385,7 +385,7 @@ export default function VoucherClaimPage() {
                             ) : campaignSummaries.length === 0 ? (
                                 <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl text-center space-y-2">
                                     <div className="text-slate-500 font-bold text-xs">
-                                        Chưa có chương trình nào nạp mã khả dụng cho siêu thị này.
+                                        Chưa có chương trình nào nạp mã khả dụng cho ST này.
                                     </div>
                                     <button
                                         type="button"

@@ -99,7 +99,7 @@ export function useUserStoreCampaignFilter(
     // Checkbox "Chỉ xem thi đua có mục tiêu của shop"
     const [onlyShowStoreTargets, setOnlyShowStoreTargets] = useState<boolean>(false);
 
-    // Xác định siêu thị mặc định của user
+    // Xác định ST mặc định của user
     const defaultUserStore = useMemo(() => {
         if (currentUser?.store_name && currentUser.store_name.trim()) {
             return currentUser.store_name.trim();
@@ -119,7 +119,7 @@ export function useUserStoreCampaignFilter(
         }
     }, [defaultUserStore, isAdmin]);
 
-    // 1. Tải dữ liệu siêu thị, từ điển và báo cáo lũy kế tháng
+    // 1. Tải dữ liệu ST, từ điển và báo cáo lũy kế tháng
     useEffect(() => {
         let isMounted = true;
         const loadInitialData = async () => {
@@ -169,7 +169,7 @@ export function useUserStoreCampaignFilter(
         return () => { isMounted = false; };
     }, []);
 
-    // 2. Danh sách các lựa chọn siêu thị cho dropdown
+    // 2. Danh sách các lựa chọn ST cho dropdown
     const storeOptions = useMemo(() => {
         const set = new Set<string>();
 
@@ -189,7 +189,7 @@ export function useUserStoreCampaignFilter(
             }
         });
 
-        // Nếu là tài khoản trải nghiệm, chỉ xem siêu thị 10335
+        // Nếu là tài khoản trải nghiệm, chỉ xem ST 10335
         if (currentUser?.is_guest) {
             return [defaultUserStore || '10335 - AAR_BRV_VTA - 290 Trương Công Định'];
         }
@@ -211,7 +211,7 @@ export function useUserStoreCampaignFilter(
         return list;
     }, [stores, businessRecords, currentUser, defaultUserStore, isAdmin]);
 
-    // Quyền đổi siêu thị (Chỉ Quản lý, Trưởng ca hoặc Admin, không áp dụng cho tài khoản trải nghiệm)
+    // Quyền đổi ST (Chỉ Quản lý, Trưởng ca hoặc Admin, không áp dụng cho tài khoản trải nghiệm)
     const isStoreSelectable = !currentUser?.is_guest && (isAdmin || (currentUser?.role !== 'NHAN_VIEN' && storeOptions.length > 1));
 
     // 3. Trích xuất danh sách các mục tiêu thi đua có target > 0 của selectedStore từ báo cáo lũy kế tháng
@@ -261,7 +261,7 @@ export function useUserStoreCampaignFilter(
     const storeTargetNames = useMemo(() => storeTargetTerms.map(t => t.label || t.raw), [storeTargetTerms]);
     const storeTargetsCount = storeTargetTerms.length;
 
-    // 4. So khớp danh sách chương trình trong cẩm nang với các mục tiêu của siêu thị
+    // 4. So khớp danh sách chương trình trong cẩm nang với các mục tiêu của ST
     const matchedProgramIds = useMemo<string[]>(() => {
         if (storeTargetTerms.length === 0 || programs.length === 0) return [];
 

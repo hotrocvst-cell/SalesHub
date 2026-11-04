@@ -101,7 +101,7 @@ export default function OcrUploadZone({
                                 : keySource === 'USER'
                                     ? '👤 Key Cá Nhân (Ưu tiên)'
                                     : keySource === 'ADMIN'
-                                        ? '🛡️ Key Hệ Thống (Admin)'
+                                        ? '🛡️ API Key'
                                         : '🟡 Cần Cài Gemini API Key'}
                         </span>
                     </button>
@@ -234,14 +234,14 @@ export default function OcrUploadZone({
                         <div className="flex items-center justify-between">
                             <span className="text-xs font-black text-purple-900 uppercase tracking-wide flex items-center gap-1.5">
                                 <Layers className="w-3.5 h-3.5 text-purple-600" />
-                                <span>3. Thi đua Realtime</span>
+                                <span>3. Thi đua</span>
                             </span>
                             <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-purple-100 text-purple-800 font-mono">
                                 {emulationFiles.length} ảnh
                             </span>
                         </div>
-                        <p className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-lg mt-1 font-medium">
-                            📱 Cần nạp thi đua từng ST? Sử dụng nút <strong>"📸 Thi Đua Từng ST"</strong> ở thanh Banner.
+                        <p className="text-[10px] text-purple-800 bg-purple-50/80 border border-purple-200 px-2 py-1 rounded-lg mt-1 font-medium leading-relaxed">
+                            📱 <strong>Ảnh thi đua theo ST:</strong> AI tự động tính số liệu NV từ % tỉ trọng &amp; mapping tên đầy đủ qua Target ST.
                         </p>
                         {emulationFiles.length >= 4 && (
                             <span className="text-[10px] text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md font-bold block mt-1">
@@ -315,7 +315,7 @@ export default function OcrUploadZone({
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
                     <div className="text-[11px] text-slate-500">
                         {canExtract
-                            ? '✨ Sẵn sàng trích xuất. Nhấn nút để AI quét số liệu và hợp nhất theo từng cá nhân / siêu thị.'
+                            ? '✨ Sẵn sàng trích xuất. Nhấn nút để AI quét số liệu và hợp nhất theo từng cá nhân / ST.'
                             : '💡 Mẹo: Ảnh ghép/cuộn chứa cả 2 bảng DT-QĐ và DT-THỰC chỉ cần nạp vào 1 trong 2 ô, AI sẽ tự động phân tích cả 2.'}
                     </div>
 

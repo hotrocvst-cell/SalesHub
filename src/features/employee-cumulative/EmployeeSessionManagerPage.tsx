@@ -312,12 +312,12 @@ export default function EmployeeSessionManagerPage() {
 
             {/* Thanh Bộ Lọc */}
             <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-3 text-xs">
-                {/* HÀNG 1: BỘ LỌC SIÊU THỊ / CỤM (BẮT BUỘC ĐẦU TIÊN & NẰM RIÊNG LẺ 1 DÒNG) */}
+                {/* HÀNG 1: BỘ LỌC ST / CỤM (BẮT BUỘC ĐẦU TIÊN & NẰM RIÊNG LẺ 1 DÒNG) */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2.5 border-b border-slate-100">
                     <div className="flex items-center gap-2">
                         <span className="text-xs font-black text-slate-600 uppercase tracking-wider shrink-0 flex items-center gap-1.5">
                             <Store className="w-4 h-4 text-purple-600" />
-                            Siêu thị / Cụm:
+                            ST / Cụm:
                         </span>
                         <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-300 px-3 py-1.5 rounded-xl min-w-[200px] sm:min-w-[280px]">
                             <Store className="w-4 h-4 text-purple-600 shrink-0" />
@@ -326,7 +326,7 @@ export default function EmployeeSessionManagerPage() {
                                 onChange={e => setSelectedStore(e.target.value)}
                                 className="bg-transparent text-xs font-bold text-slate-800 outline-none cursor-pointer w-full"
                             >
-                                <option value="all">🏢 Tất Cả Siêu Thị</option>
+                                <option value="all">🏢 Tất Cả ST</option>
                                 {stores.map(s => (
                                     <option key={s.id || s.code} value={s.name}>{s.name} ({s.code})</option>
                                 ))}
@@ -423,7 +423,7 @@ export default function EmployeeSessionManagerPage() {
                                 <th className="p-3 text-center w-12">STT</th>
                                 <th className="p-3 w-40">Thời Gian Cập Nhật</th>
                                 <th className="p-3 w-40">Loại Phiên</th>
-                                <th className="p-3">Tên Phiên & Siêu Thị</th>
+                                <th className="p-3">Tên Phiên & ST</th>
                                 <th className="p-3 text-right">Số Nhân Sự</th>
                                 <th className="p-3 text-right">Tổng Số Liệu</th>
                                 <th className="p-3 text-center w-36">Thao Tác</th>

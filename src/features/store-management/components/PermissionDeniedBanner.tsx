@@ -24,7 +24,7 @@ export default function PermissionDeniedBanner({ onOpenRoleModal }: Props) {
                         </span>
                     </div>
                     <p className="text-xs text-amber-800/90 mt-0.5">
-                        Chỉ <span className="font-bold underline">Quản lý</span> hoặc <span className="font-bold underline">Trưởng Ca</span> mới có quyền thêm, sửa, xóa siêu thị và nhân sự.
+                        Chỉ <span className="font-bold underline">Quản lý</span> hoặc <span className="font-bold underline">Trưởng Ca</span> mới có quyền thêm, sửa, xóa ST và nhân sự.
                     </p>
                 </div>
             </div>

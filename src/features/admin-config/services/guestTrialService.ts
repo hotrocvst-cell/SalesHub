@@ -232,9 +232,9 @@ export async function fetchGuestAccounts(): Promise<UserProfile[]> {
         return isGuestFlag || isGuestEmail || isGuestName;
     });
 
-    // Chuẩn hóa siêu thị trải nghiệm: đảm bảo luôn trỏ về 838679 - Demo Store
+    // Chuẩn hóa ST trải nghiệm: đảm bảo luôn trỏ về 838679 - Demo Store
     guests.forEach(u => {
-        if (!u.store_name || !u.store_name.includes('838679') || u.store_name.includes('10335') || u.store_name === 'Siêu thị Mẫu SalesHub') {
+        if (!u.store_name || !u.store_name.includes('838679') || u.store_name.includes('10335') || u.store_name === 'ST Mẫu SalesHub') {
             u.store_name = GUEST_DEFAULT_STORE;
             u.accessible_stores = [GUEST_DEFAULT_STORE];
         }
@@ -420,7 +420,7 @@ export function generateTrialShareMessage(user: UserProfile, customPass?: string
     const remaining = calculateRemainingDays(user.guest_expires_at);
 
     return `🌟 KÍNH MỜI QUÝ KHÁCH TRẢI NGHIỆM HỆ THỐNG SALES HUB 🌟
-Hệ thống điều hành & quản trị mục tiêu kinh doanh siêu thị số 1 hiện nay!
+Hệ thống điều hành & quản trị mục tiêu kinh doanh ST số 1 hiện nay!
 
 🔐 THÔNG TIN ĐĂNG NHẬP TRẢI NGHIỆM:
 • Đường dẫn đăng nhập: ${origin}/dang-nhap
@@ -429,7 +429,7 @@ Hệ thống điều hành & quản trị mục tiêu kinh doanh siêu thị s�
 • Hạn trải nghiệm: Đến hết ${remaining.formattedDate} (${remaining.label})
 
 💎 CÁC TÍNH NĂNG VƯỢT TRỘI QUÝ KHÁCH CÓ THỂ KHÁM PHÁ:
-✅ Báo cáo cụm siêu thị & Báo cáo doanh thu Realtime trong ngày
+✅ Báo cáo cụm ST & Báo cáo doanh thu Realtime trong ngày
 ✅ Theo dõi tiến độ lũy kế tháng & dự kiến hoàn thành mục tiêu
 ✅ Xếp hạng doanh thu nhân viên & Top thi đua tự động
 ✅ Bảng đếm tiền & bàn giao ca thu ngân tiện lợi

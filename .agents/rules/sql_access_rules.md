@@ -3,7 +3,7 @@
 ## 1. NGUYÊN TẮC CỐT LÕI: CHỈ KHẢ DỤNG CHO QUẢN TRỊ VIÊN (ADMIN-ONLY)
 - **Bảo mật và Tối ưu trải nghiệm**:
   - Mã lệnh cơ sở dữ liệu (`CREATE TABLE`, `ALTER TABLE`, RLS Policies, DDL Schema) là thông tin kỹ thuật hạ tầng nhạy cảm.
-  - Các tài khoản nghiệp vụ thông thường (Nhân viên, Trưởng ca, Quản lý siêu thị, Quản lý khu vực) không cần và không được phép thao tác trực tiếp với mã SQL này.
+  - Các tài khoản nghiệp vụ thông thường (Nhân viên, Trưởng ca, Quản lý ST, Quản lý khu vực) không cần và không được phép thao tác trực tiếp với mã SQL này.
   - Mục đích: Tránh gây hoang mang, nhầm lẫn trong vận hành bán hàng hàng ngày và phòng ngừa rò rỉ cấu trúc cơ sở dữ liệu.
 
 ---
@@ -43,5 +43,5 @@
   - Banner đồng bộ Cloud dùng chung (`CloudDataSyncStatusBanner.tsx`)
   - Modal cấu hình Target giai đoạn (`PeriodTargetConfigModal.tsx`)
   - Modal cấu hình Hiệu quả nhân viên (`PerformanceConfigModal.tsx`)
-  - Trang phân quyền siêu thị / tài khoản (`UserStorePermissionPage.tsx`)
+  - Trang phân quyền ST / tài khoản (`UserStorePermissionPage.tsx`)
   - Bất kỳ phân hệ mới nào phát triển trong tương lai có chứa mã SQL DDL Supabase.

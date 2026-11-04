@@ -143,7 +143,7 @@ export default function EmployeeRankingTable({
                             <th
                                 onClick={() => onSort('EMULATION_RATE')}
                                 className="py-2 px-2 text-center bg-purple-50 text-purple-900 border-r border-purple-100 w-28 cursor-pointer hover:bg-purple-100 transition select-none group"
-                                title="Tiến độ dự kiến thi đua (theo điểm số hoặc số nhóm đạt, tùy cấu hình siêu thị)"
+                                title="Tiến độ dự kiến thi đua (theo điểm số hoặc số nhóm đạt, tùy cấu hình ST)"
                             >
                                 <span>DỰ KIẾN</span>
                                 {renderSortIcon('EMULATION_RATE')}

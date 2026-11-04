@@ -957,13 +957,13 @@ function buildFormatGuideSheet(workbook: ExcelJS.Workbook): void {
             category: 'Phối hợp đa định dạng',
             syntax: '**[red]Nội dung[/red]**',
             description: 'Lồng ghép in đậm, màu sắc và highlight cùng lúc để tạo thẻ chuyên nghiệp.',
-            example: '**Thưởng nóng [red]200.000đ[/red]** khi đạt [hl]Top 1 Siêu Thị[/hl]',
+            example: '**Thưởng nóng [red]200.000đ[/red]** khi đạt [hl]Top 1 ST[/hl]',
             preview: {
                 richText: [
                     { text: 'Thưởng nóng ', font: { name: 'Arial', size: 10, bold: true } },
                     { text: '200.000đ', font: { name: 'Arial', size: 10, bold: true, color: { argb: 'FFE11D48' } } },
                     { text: ' khi đạt ', font: { name: 'Arial', size: 10 } },
-                    { text: 'Top 1 Siêu Thị', font: { name: 'Arial', size: 10, bold: true, color: { argb: 'FFD97706' } } }
+                    { text: 'Top 1 ST', font: { name: 'Arial', size: 10, bold: true, color: { argb: 'FFD97706' } } }
                 ]
             },
             notes: 'Đóng đúng cặp thẻ lồng nhau'

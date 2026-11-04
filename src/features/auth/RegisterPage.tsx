@@ -72,7 +72,7 @@ export default function RegisterPage() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isLookupModalOpen, setIsLookupModalOpen] = useState(false);
 
-    // Tải danh sách siêu thị & nhân sự đã khai báo trong hệ thống
+    // Tải danh sách ST & nhân sự đã khai báo trong hệ thống
     useEffect(() => {
         async function loadInitialData() {
             setIsLoadingStores(true);
@@ -82,7 +82,7 @@ export default function RegisterPage() {
             ]);
             if (storesRes.success && storesRes.data.length > 0) {
                 setStores(storesRes.data);
-                // Giữ selectedStoreName rỗng để user tự chủ động tìm kiếm và chọn đúng siêu thị
+                // Giữ selectedStoreName rỗng để user tự chủ động tìm kiếm và chọn đúng ST
             }
             if (empsRes.success && empsRes.data.length > 0) {
                 setEmployees(empsRes.data);
@@ -92,7 +92,7 @@ export default function RegisterPage() {
         loadInitialData();
     }, []);
 
-    // Nhận diện nhân sự đã có sẵn trong hệ thống siêu thị
+    // Nhận diện nhân sự đã có sẵn trong hệ thống ST
     const matchedEmployee = useMemo(() => {
         const cleanId = employeeId.trim().toLowerCase();
         if (!cleanId || cleanId.length < 2) return null;
@@ -149,12 +149,12 @@ export default function RegisterPage() {
         const finalStoreName = isNewStore ? newStoreName.trim() : selectedStoreName.trim();
 
         if (!finalStoreName) {
-            setErrorMsg('Vui lòng chọn hoặc nhập tên siêu thị bạn đang công tác!');
+            setErrorMsg('Vui lòng chọn hoặc nhập tên ST bạn đang công tác!');
             return;
         }
 
         if (isNewStore && !newStoreCode.trim()) {
-            setErrorMsg('Vui lòng nhập Mã siêu thị (ERP / POS)!');
+            setErrorMsg('Vui lòng nhập Mã ST (ERP / POS)!');
             return;
         }
 
@@ -190,11 +190,11 @@ export default function RegisterPage() {
     const approverInfo = role === 'NHAN_VIEN' && !isNewStore
         ? {
             badge: 'Quản Lý ST & Admin Phê Duyệt',
-            text: `Yêu cầu gia nhập sẽ được gửi đến Quản lý siêu thị [${selectedStoreName || 'đã chọn'}] và Quản trị viên (Admin) để xét duyệt.`
+            text: `Yêu cầu gia nhập sẽ được gửi đến Quản lý ST [${selectedStoreName || 'đã chọn'}] và Quản trị viên (Admin) để xét duyệt.`
         }
         : {
             badge: 'Admin Hệ Thống Phê Duyệt',
-            text: 'Yêu cầu chức danh Quản lý / Trưởng ca hoặc Mở siêu thị mới sẽ được gửi trực tiếp tới Quản trị viên (Admin) để xét duyệt phân quyền.'
+            text: 'Yêu cầu chức danh Quản lý / Trưởng ca hoặc Mở ST mới sẽ được gửi trực tiếp tới Quản trị viên (Admin) để xét duyệt phân quyền.'
         };
 
     return (
@@ -286,7 +286,7 @@ export default function RegisterPage() {
                                 </div>
                                 {matchedEmployee && (
                                     <p className="text-[10px] text-emerald-700 mt-1 font-medium">
-                                        🔒 Họ tên đã được khóa cố định theo hồ sơ siêu thị đã lưu: <b>{matchedEmployee.full_name}</b> (#{matchedEmployee.employee_id}) • ST: <b>{matchedEmployee.store_name}</b>.
+                                        🔒 Họ tên đã được khóa cố định theo hồ sơ ST đã lưu: <b>{matchedEmployee.full_name}</b> (#{matchedEmployee.employee_id}) • ST: <b>{matchedEmployee.store_name}</b>.
                                     </p>
                                 )}
                             </div>
@@ -382,14 +382,14 @@ export default function RegisterPage() {
                                 type="submit"
                                 className="w-full mt-3 py-3 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-black uppercase tracking-wider shadow-lg shadow-blue-500/25 transition flex items-center justify-center gap-2 cursor-pointer"
                             >
-                                <span>Tiếp Tục: Chọn Siêu Thị &amp; Vai Trò</span>
+                                <span>Tiếp Tục: Chọn ST &amp; Vai Trò</span>
                                 <ChevronRight className="w-4 h-4" />
                             </button>
                         </form>
                     )}
 
                     {/* ========================================================= */}
-                    {/* BƯỚC 2: CHỌN VAI TRÒ & SIÊU THỊ                           */}
+                    {/* BƯỚC 2: CHỌN VAI TRÒ & ST                           */}
                     {/* ========================================================= */}
                     {step === 2 && (
                         <form onSubmit={handleCompleteRegistration} className="space-y-5 animate-in fade-in duration-150">
@@ -416,9 +416,9 @@ export default function RegisterPage() {
                                             {role === 'QUAN_LY' && <CheckCircle2 className="w-4 h-4 text-amber-600" />}
                                         </div>
                                         <div>
-                                            <div className="font-black text-xs text-slate-900">Quản Lý Siêu Thị</div>
+                                            <div className="font-black text-xs text-slate-900">Quản Lý ST</div>
                                             <div className="text-[10px] text-slate-500 mt-0.5">
-                                                Toàn quyền siêu thị &amp; duyệt nhân sự
+                                                Toàn quyền ST &amp; duyệt nhân sự
                                             </div>
                                         </div>
                                     </button>
@@ -479,11 +479,11 @@ export default function RegisterPage() {
                                 )}
                             </div>
 
-                            {/* 2. CHỌN SIÊU THỊ */}
+                            {/* 2. CHỌN ST */}
                             <div className="space-y-2.5">
                                 <div className="flex items-center justify-between">
                                     <label className="block text-xs font-black uppercase tracking-wider text-slate-700">
-                                        2. Đơn vị Siêu thị công tác: <span className="text-rose-500">*</span>
+                                        2. Đơn vị ST công tác: <span className="text-rose-500">*</span>
                                     </label>
 
                                     <button
@@ -492,7 +492,7 @@ export default function RegisterPage() {
                                         className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 cursor-pointer transition"
                                     >
                                         <PlusCircle className="w-3.5 h-3.5" />
-                                        <span>{isNewStore ? 'Chọn siêu thị có sẵn' : 'Khai báo siêu thị mới'}</span>
+                                        <span>{isNewStore ? 'Chọn ST có sẵn' : 'Khai báo ST mới'}</span>
                                     </button>
                                 </div>
 
@@ -502,18 +502,18 @@ export default function RegisterPage() {
                                             stores={stores}
                                             value={selectedStoreName}
                                             onChange={setSelectedStoreName}
-                                            placeholder="-- Nhập mã hoặc tên siêu thị để tìm kiếm --"
+                                            placeholder="-- Nhập mã hoặc tên ST để tìm kiếm --"
                                             disabled={isLoadingStores}
                                         />
                                         <p className="text-[10px] text-slate-400 pl-1">
-                                            💡 Gõ mã siêu thị (ví dụ: 10335) hoặc tên siêu thị để tìm nhanh.
+                                            💡 Gõ mã ST (ví dụ: 10335) hoặc tên ST để tìm nhanh.
                                         </p>
                                     </div>
                                 ) : (
                                     <div className="p-3.5 bg-amber-50/70 rounded-2xl border border-amber-200 space-y-3 animate-in fade-in duration-150">
                                         <div className="flex items-center gap-1.5 text-xs font-bold text-amber-900">
                                             <PlusCircle className="w-4 h-4 text-amber-600" />
-                                            <span>Đề xuất thêm siêu thị mới vào hệ thống:</span>
+                                            <span>Đề xuất thêm ST mới vào hệ thống:</span>
                                         </div>
 
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
@@ -533,7 +533,7 @@ export default function RegisterPage() {
 
                                             <div>
                                                 <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                                                    Mã siêu thị (POS/ERP): <span className="text-rose-500">*</span>
+                                                    Mã ST (POS/ERP): <span className="text-rose-500">*</span>
                                                 </label>
                                                 <input
                                                     type="text"

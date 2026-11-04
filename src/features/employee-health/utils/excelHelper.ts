@@ -34,7 +34,7 @@ export async function exportUnifiedTargetTemplate(
     const columns: Partial<ExcelJS.Column>[] = [
         { header: 'Mã NV', key: 'employee_id', width: 14 },
         { header: 'Họ và tên', key: 'full_name', width: 26 },
-        { header: 'Siêu thị', key: 'store_name', width: 26 },
+        { header: 'ST', key: 'store_name', width: 26 },
         { header: 'Target Doanh Thu (Triệu đ)', key: 'target_revenue', width: 24 }
     ];
 

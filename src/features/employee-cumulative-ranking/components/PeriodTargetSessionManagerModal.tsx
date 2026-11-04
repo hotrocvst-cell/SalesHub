@@ -53,7 +53,7 @@ export default function PeriodTargetSessionManagerModal({
     const [actionId, setActionId] = useState<string | null>(null);
     const [toastMsg, setToastMsg] = useState<string>('');
 
-    // State bộ lọc siêu thị và tìm kiếm
+    // State bộ lọc ST và tìm kiếm
     const [selectedFilterStore, setSelectedFilterStore] = useState<string>(currentStore || 'all');
     const [searchQuery, setSearchQuery] = useState<string>('');
 
@@ -64,7 +64,7 @@ export default function PeriodTargetSessionManagerModal({
 
     const loadSessions = async () => {
         setLoading(true);
-        // Tải toàn bộ các phiên để hỗ trợ chuyển đổi bộ lọc siêu thị mượt mà tức thì
+        // Tải toàn bộ các phiên để hỗ trợ chuyển đổi bộ lọc ST mượt mà tức thì
         const list = await fetchAllPeriodTargets();
         setSessions(list);
         setLoading(false);
@@ -106,7 +106,7 @@ export default function PeriodTargetSessionManagerModal({
         }
     };
 
-    // Danh sách siêu thị khả dụng (hợp nhất từ storesList và các phiên đang có)
+    // Danh sách ST khả dụng (hợp nhất từ storesList và các phiên đang có)
     const availableStores = useMemo(() => {
         const map = new Map<string, string>();
         if (storesList && storesList.length > 0) {
@@ -122,7 +122,7 @@ export default function PeriodTargetSessionManagerModal({
         return Array.from(map.entries()).map(([name, label]) => ({ name, label }));
     }, [storesList, sessions]);
 
-    // Thống kê số lượng phiên theo từng siêu thị
+    // Thống kê số lượng phiên theo từng ST
     const storeCounts = useMemo(() => {
         const counts: Record<string, number> = { all: sessions.length };
         sessions.forEach(sess => {
@@ -138,10 +138,10 @@ export default function PeriodTargetSessionManagerModal({
         return counts;
     }, [sessions, availableStores, storesList]);
 
-    // Danh sách phiên sau khi lọc theo siêu thị và từ khóa tìm kiếm
+    // Danh sách phiên sau khi lọc theo ST và từ khóa tìm kiếm
     const filteredSessions = useMemo(() => {
         return sessions.filter(sess => {
-            // Lọc theo siêu thị
+            // Lọc theo ST
             if (selectedFilterStore !== 'all') {
                 const matchesStore = sess.storeName === selectedFilterStore || isStoreMatch(sess.storeName, selectedFilterStore, storesList);
                 if (!matchesStore) return false;
@@ -203,9 +203,9 @@ export default function PeriodTargetSessionManagerModal({
                     </div>
                 )}
 
-                {/* HÀNG 1: BỘ LỌC SIÊU THỊ / CỤM Ở VỊ TRÍ ĐẦU TIÊN (RULE 10 CONVENTION) */}
+                {/* HÀNG 1: BỘ LỌC ST / CỤM Ở VỊ TRÍ ĐẦU TIÊN (RULE 10 CONVENTION) */}
                 <div className="p-3 bg-slate-50/90 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                    {/* BỘ LỌC SIÊU THỊ */}
+                    {/* BỘ LỌC ST */}
                     <div className="flex items-center gap-2 flex-1 min-w-0">
                         <div className="flex items-center gap-2 bg-white border border-slate-200 hover:border-indigo-400 px-3 py-1.5 rounded-xl text-xs transition-all shadow-2xs w-full sm:w-auto">
                             <StoreIcon className="w-4 h-4 text-indigo-600 shrink-0" />
@@ -216,7 +216,7 @@ export default function PeriodTargetSessionManagerModal({
                                 onChange={(e) => setSelectedFilterStore(e.target.value)}
                                 className="bg-transparent font-black text-slate-900 text-xs focus:outline-hidden cursor-pointer disabled:cursor-not-allowed w-full sm:min-w-[220px]"
                             >
-                                <option value="all">🏢 Tất cả siêu thị ({storeCounts['all'] || 0} phiên)</option>
+                                <option value="all">🏢 Tất cả ST ({storeCounts['all'] || 0} phiên)</option>
                                 {availableStores.map(st => (
                                     <option key={st.name} value={st.name}>
                                         🏪 {st.label} ({storeCounts[st.name] || 0} phiên)
@@ -310,7 +310,7 @@ export default function PeriodTargetSessionManagerModal({
                             <p className="text-[11px] text-slate-400">
                                 {sessions.length === 0
                                     ? 'Hãy bấm "+ Thêm giai đoạn mới" để thiết lập target riêng cho từng nhân viên theo dải ngày.'
-                                    : 'Vui lòng thử chọn siêu thị khác hoặc xóa từ khóa tìm kiếm.'}
+                                    : 'Vui lòng thử chọn ST khác hoặc xóa từ khóa tìm kiếm.'}
                             </p>
                             {selectedFilterStore !== 'all' || searchQuery ? (
                                 <button
@@ -322,7 +322,7 @@ export default function PeriodTargetSessionManagerModal({
                                     className="px-3 py-1 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg text-xs font-bold transition-all cursor-pointer inline-flex items-center gap-1"
                                 >
                                     <Filter className="w-3 h-3" />
-                                    <span>Xem tất cả siêu thị</span>
+                                    <span>Xem tất cả ST</span>
                                 </button>
                             ) : null}
                         </div>
@@ -346,10 +346,10 @@ export default function PeriodTargetSessionManagerModal({
                                                 {sess.periodTitle}
                                             </h3>
 
-                                            {/* BADGE SIÊU THỊ NỔI BẬT */}
+                                            {/* BADGE ST NỔI BẬT */}
                                             <span className="inline-flex items-center gap-1 text-[10px] font-black text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-lg">
                                                 <StoreIcon className="w-3 h-3 text-blue-600 shrink-0" />
-                                                <span>{sess.storeName === 'all' ? 'Toàn cụm siêu thị' : getShortStoreName(sess.storeName)}</span>
+                                                <span>{sess.storeName === 'all' ? 'Toàn cụm ST' : getShortStoreName(sess.storeName)}</span>
                                             </span>
 
                                             {/* BADGE TRẠNG THÁI CLOUD */}

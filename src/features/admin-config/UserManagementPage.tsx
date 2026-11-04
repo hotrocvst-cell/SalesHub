@@ -395,7 +395,7 @@ export default function UserManagementPage() {
                             )}
                         </div>
                         <p className="text-xs text-slate-500 mt-0.5">
-                            Quản lý toàn bộ tài khoản, đặt lại mật khẩu cho nhân sự, chuyển giao siêu thị và phân quyền vai trò
+                            Quản lý toàn bộ tài khoản, đặt lại mật khẩu cho nhân sự, chuyển giao ST và phân quyền vai trò
                         </p>
                     </div>
                 </div>
@@ -426,10 +426,10 @@ export default function UserManagementPage() {
                     <Link
                         to="/phan-quyen-sieu-thi"
                         className="px-3.5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition flex items-center gap-1.5 border border-slate-200 cursor-pointer"
-                        title="Theo dõi và phân quyền xem dữ liệu siêu thị cho các tài khoản"
+                        title="Theo dõi và phân quyền xem dữ liệu ST cho các tài khoản"
                     >
                         <Building2 className="w-4 h-4 text-blue-600" />
-                        <span className="hidden sm:inline">Phân Quyền Siêu Thị</span>
+                        <span className="hidden sm:inline">Phân Quyền ST</span>
                     </Link>
 
                     <Link
@@ -465,7 +465,7 @@ export default function UserManagementPage() {
                                 <span className="px-2 py-0.5 bg-amber-200 text-amber-900 rounded-full text-[10px] font-bold">Chờ duyệt</span>
                             </div>
                             <p className="text-amber-800 text-[11px] mt-0.5 leading-relaxed">
-                                Người dùng đã đăng ký tài khoản và gửi yêu cầu vai trò / siêu thị. Bạn có thể mở danh sách xét duyệt hoặc bấm trực tiếp nút <b>"Duyệt"</b> ở từng dòng dưới bảng.
+                                Người dùng đã đăng ký tài khoản và gửi yêu cầu vai trò / ST. Bạn có thể mở danh sách xét duyệt hoặc bấm trực tiếp nút <b>"Duyệt"</b> ở từng dòng dưới bảng.
                             </p>
                         </div>
                     </div>
@@ -559,7 +559,7 @@ export default function UserManagementPage() {
                     <div className="text-xl font-black text-emerald-700 mt-0.5">{stats.active}</div>
                 </div>
                 <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs">
-                    <div className="text-[11px] font-bold text-amber-600 uppercase">Quản lý Siêu thị (QL)</div>
+                    <div className="text-[11px] font-bold text-amber-600 uppercase">Quản lý ST (QL)</div>
                     <div className="text-xl font-black text-amber-700 mt-0.5">{stats.managers}</div>
                 </div>
                 <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs">
@@ -607,13 +607,13 @@ export default function UserManagementPage() {
                         <option value="REJECTED">Bị khóa / Từ chối</option>
                     </select>
 
-                    {/* Lọc Siêu thị */}
+                    {/* Lọc ST */}
                     <select
                         value={storeFilter}
                         onChange={(e) => setStoreFilter(e.target.value)}
                         className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer max-w-[180px] truncate"
                     >
-                        <option value="ALL">Tất cả siêu thị</option>
+                        <option value="ALL">Tất cả ST</option>
                         {stores.map(st => (
                             <option key={st.id || st.code} value={st.name}>{st.name}</option>
                         ))}
@@ -629,7 +629,7 @@ export default function UserManagementPage() {
                             <tr>
                                 <th className="py-3.5 px-4">Tài khoản &amp; Nhân sự</th>
                                 <th className="py-3.5 px-3">Vai trò</th>
-                                <th className="py-3.5 px-3">Siêu thị công tác</th>
+                                <th className="py-3.5 px-3">ST công tác</th>
                                 <th className="py-3.5 px-3">Trạng thái</th>
                                 <th className="py-3.5 px-3">Bảo mật</th>
                                 <th className="py-3.5 px-4 text-right">Thao tác Admin</th>
@@ -696,7 +696,7 @@ export default function UserManagementPage() {
                                             </span>
                                         </td>
 
-                                        {/* SIÊU THỊ CÔNG TÁC & PHẠM VI XEM */}
+                                        {/* ST CÔNG TÁC & PHẠM VI XEM */}
                                         <td className="py-3 px-3">
                                             {u.store_name ? (
                                                 <div className="space-y-0.5">
@@ -1124,7 +1124,7 @@ export default function UserManagementPage() {
                                         className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     >
                                         <option value="ADMIN">🛡️ Admin</option>
-                                        <option value="QUAN_LY">👑 Quản lý Siêu thị</option>
+                                        <option value="QUAN_LY">👑 Quản lý ST</option>
                                         <option value="TRUONG_CA">⭐ Trưởng ca</option>
                                         <option value="NHAN_VIEN">👤 Nhân viên kinh doanh</option>
                                     </select>
@@ -1148,14 +1148,14 @@ export default function UserManagementPage() {
 
                             <div>
                                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                                    Đơn vị Siêu thị công tác:
+                                    Đơn vị ST công tác:
                                 </label>
                                 <select
                                     value={editUser.store_name || ''}
                                     onChange={(e) => setEditUser({ ...editUser, store_name: e.target.value })}
                                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 >
-                                    <option value="">-- Chưa gán siêu thị --</option>
+                                    <option value="">-- Chưa gán ST --</option>
                                     {stores.map(st => (
                                         <option key={st.id || st.code} value={st.name}>
                                             {st.name} {st.code ? `(${st.code})` : ''}
@@ -1303,7 +1303,7 @@ export default function UserManagementPage() {
                                         className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     >
                                         <option value="ADMIN">🛡️ Admin</option>
-                                        <option value="QUAN_LY">👑 Quản lý Siêu thị</option>
+                                        <option value="QUAN_LY">👑 Quản lý ST</option>
                                         <option value="TRUONG_CA">⭐ Trưởng ca</option>
                                         <option value="NHAN_VIEN">👤 Nhân viên kinh doanh</option>
                                     </select>
@@ -1311,7 +1311,7 @@ export default function UserManagementPage() {
 
                                 <div>
                                     <label className="block text-xs font-bold text-slate-700 mb-1">
-                                        Siêu thị công tác:
+                                        ST công tác:
                                     </label>
                                     <select
                                         value={createForm.store_name}

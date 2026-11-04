@@ -178,11 +178,11 @@ export default function GuestCreateModal({
                         </div>
                     </div>
 
-                    {/* Siêu thị gán */}
+                    {/* ST gán */}
                     <div className="space-y-1">
                         <label className="font-bold text-slate-700 flex items-center gap-1.5">
                             <Store className="w-3.5 h-3.5 text-blue-600" />
-                            <span>Siêu thị dữ liệu trải nghiệm:</span>
+                            <span>ST dữ liệu trải nghiệm:</span>
                         </label>
                         <select
                             value={form.store_name}

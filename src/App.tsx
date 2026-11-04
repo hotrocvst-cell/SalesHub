@@ -83,7 +83,7 @@ export default function App() {
                                     </ProtectedRoute>
                                 } />
 
-                                {/* Phân hệ Báo Cáo Cụm Siêu Thị (Bảng 11 Cột) */}
+                                {/* Phân hệ Báo Cáo Cụm ST (Bảng 11 Cột) */}
                                 <Route path="/bao-cao-cum-sieu-thi" element={
                                     <ProtectedRoute path="/bao-cao-cum-sieu-thi">
                                         <ClusterReportPage />
@@ -254,7 +254,7 @@ export default function App() {
                                     </ProtectedRoute>
                                 } />
 
-                                {/* Phân hệ Cấu hình Siêu thị & Nhân viên */}
+                                {/* Phân hệ Cấu hình ST & Nhân viên */}
                                 <Route path="/cau-hinh-sieu-thi-nhan-vien" element={
                                     <ProtectedRoute path="/cau-hinh-sieu-thi-nhan-vien">
                                         <StoreEmployeeConfigPage />

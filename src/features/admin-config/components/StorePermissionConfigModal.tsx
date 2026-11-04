@@ -49,7 +49,7 @@ export default function StorePermissionConfigModal({
         setSearchQuery('');
     }, [page, isOpen]);
 
-    // Danh sách siêu thị sau khi lọc tìm kiếm
+    // Danh sách ST sau khi lọc tìm kiếm
     const filteredStores = useMemo(() => {
         const query = searchQuery.trim().toLowerCase();
         if (!query) return stores;
@@ -108,7 +108,7 @@ export default function StorePermissionConfigModal({
                         <div>
                             <div className="flex items-center gap-2 flex-wrap">
                                 <h3 className="font-extrabold text-sm sm:text-base text-slate-800">
-                                    Phân Quyền Siêu Thị Sử Dụng
+                                    Phân Quyền ST Sử Dụng
                                 </h3>
                                 <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-100 text-indigo-700">
                                     {page.page_name}
@@ -134,13 +134,13 @@ export default function StorePermissionConfigModal({
                     <div className="bg-blue-50/70 border border-blue-200/80 rounded-2xl p-3 flex items-start gap-2.5 text-xs text-blue-900">
                         <Sparkles className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
                         <div className="text-[11.5px] leading-relaxed">
-                            <span className="font-extrabold">Cơ chế quản trị theo đơn vị:</span> Cho phép mở hoặc giới hạn tính năng chỉ cho các siêu thị cụ thể (tương đương phân quyền theo gói chi nhánh/tài khoản trả phí). <b>Admin</b> luôn có toàn quyền truy cập bất kể thiết lập này.
+                            <span className="font-extrabold">Cơ chế quản trị theo đơn vị:</span> Cho phép mở hoặc giới hạn tính năng chỉ cho các ST cụ thể (tương đương phân quyền theo gói chi nhánh/tài khoản trả phí). <b>Admin</b> luôn có toàn quyền truy cập bất kể thiết lập này.
                         </div>
                     </div>
 
                     {/* Lựa chọn Chế độ phân quyền */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {/* Option 1: Tất cả siêu thị */}
+                        {/* Option 1: Tất cả ST */}
                         <div
                             onClick={() => setMode('ALL')}
                             className={`p-3.5 rounded-2xl border-2 transition-all cursor-pointer flex items-start gap-3 ${mode === 'ALL'
@@ -155,15 +155,15 @@ export default function StorePermissionConfigModal({
                             <div>
                                 <div className="font-extrabold text-xs flex items-center gap-1.5">
                                     <Globe className="w-3.5 h-3.5 text-indigo-600" />
-                                    <span>Tất cả Siêu Thị</span>
+                                    <span>Tất cả ST</span>
                                 </div>
                                 <div className="text-[11px] text-slate-500 mt-0.5 leading-normal">
-                                    Mọi siêu thị trên toàn hệ thống đều có thể xem và sử dụng trang này (Mặc định).
+                                    Mọi ST trên toàn hệ thống đều có thể xem và sử dụng trang này (Mặc định).
                                 </div>
                             </div>
                         </div>
 
-                        {/* Option 2: Giới hạn theo siêu thị */}
+                        {/* Option 2: Giới hạn theo ST */}
                         <div
                             onClick={() => setMode('SPECIFIC')}
                             className={`p-3.5 rounded-2xl border-2 transition-all cursor-pointer flex items-start gap-3 ${mode === 'SPECIFIC'
@@ -178,16 +178,16 @@ export default function StorePermissionConfigModal({
                             <div>
                                 <div className="font-extrabold text-xs flex items-center gap-1.5">
                                     <Building2 className="w-3.5 h-3.5 text-indigo-600" />
-                                    <span>Chỉ định Siêu Thị</span>
+                                    <span>Chỉ định ST</span>
                                 </div>
                                 <div className="text-[11px] text-slate-500 mt-0.5 leading-normal">
-                                    Chỉ các siêu thị được chọn mới nhìn thấy trên menu và được quyền truy cập.
+                                    Chỉ các ST được chọn mới nhìn thấy trên menu và được quyền truy cập.
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    {/* Vùng chọn danh sách siêu thị nếu mode === 'SPECIFIC' */}
+                    {/* Vùng chọn danh sách ST nếu mode === 'SPECIFIC' */}
                     {mode === 'SPECIFIC' && (
                         <div className="space-y-3 pt-1 animate-in fade-in duration-200">
                             {/* Toolbar tìm kiếm & Tác vụ chọn */}
@@ -196,7 +196,7 @@ export default function StorePermissionConfigModal({
                                     <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
                                     <input
                                         type="text"
-                                        placeholder="Tìm tên hoặc mã siêu thị..."
+                                        placeholder="Tìm tên hoặc mã ST..."
                                         value={searchQuery}
                                         onChange={(e) => setSearchQuery(e.target.value)}
                                         className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-medium outline-none focus:ring-2 focus:ring-indigo-500"
@@ -236,21 +236,21 @@ export default function StorePermissionConfigModal({
                             <div className="flex items-center justify-between text-xs px-1">
                                 <span className="text-slate-500 font-medium">
                                     Đang chọn:{' '}
-                                    <b className="text-indigo-600 font-extrabold">{selectedStores.length}</b> / {stores.length} siêu thị
+                                    <b className="text-indigo-600 font-extrabold">{selectedStores.length}</b> / {stores.length} ST
                                 </span>
                                 {selectedStores.length === 0 && (
                                     <span className="text-rose-600 font-bold text-[11px] flex items-center gap-1">
                                         <AlertCircle className="w-3.5 h-3.5" />
-                                        Chưa chọn siêu thị nào (Chỉ Admin truy cập)
+                                        Chưa chọn ST nào (Chỉ Admin truy cập)
                                     </span>
                                 )}
                             </div>
 
-                            {/* Danh sách siêu thị dạng Checkbox Grid */}
+                            {/* Danh sách ST dạng Checkbox Grid */}
                             <div className="border border-slate-200 rounded-2xl p-2.5 max-h-64 sm:max-h-72 overflow-y-auto space-y-1 bg-slate-50/50">
                                 {filteredStores.length === 0 ? (
                                     <div className="py-8 text-center text-xs text-slate-400 italic">
-                                        Không tìm thấy siêu thị phù hợp với từ khóa "{searchQuery}"
+                                        Không tìm thấy ST phù hợp với từ khóa "{searchQuery}"
                                     </div>
                                 ) : (
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
@@ -309,7 +309,7 @@ export default function StorePermissionConfigModal({
                 {/* Footer Modal */}
                 <div className="p-4 sm:p-5 border-t border-slate-200 bg-slate-50 flex items-center justify-between gap-3">
                     <span className="text-[11px] text-slate-500 hidden sm:inline">
-                        {mode === 'ALL' ? '🌍 Áp dụng cho mọi siêu thị' : `🏢 Giới hạn cho ${selectedStores.length} siêu thị`}
+                        {mode === 'ALL' ? '🌍 Áp dụng cho mọi ST' : `🏢 Giới hạn cho ${selectedStores.length} ST`}
                     </span>
                     <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
                         <button

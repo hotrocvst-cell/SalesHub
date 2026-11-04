@@ -159,10 +159,10 @@ Nhiệm vụ: Trích xuất chính xác các số liệu DOANH THU QUY ĐỔI (D
 LƯU Ý NGHIỆP VỤ BẮT BUỘC:
 1. BỎ QUA HOÀN TOÀN các watermark chữ mờ ("26479 - Đào Bá Linh",...).
 2. BỎ QUA HOÀN TOÀN thẻ "Tổng" hoặc "Tổng (2 dòng)".
-3. CHỈ TRÍCH XUẤT các thẻ của từng SIÊU THỊ CỤ THỂ có tên bắt đầu bằng mã số (ví dụ: "10335 - AAR_BRV_VTA - 290 Trương Công Định", "111 - TGD_BRV_VTA - 290 Trương Công Định").
+3. CHỈ TRÍCH XUẤT các thẻ của từng ST CỤ THỂ có tên bắt đầu bằng mã số (ví dụ: "10335 - AAR_BRV_VTA - 290 Trương Công Định", "111 - TGD_BRV_VTA - 290 Trương Công Định").
 4. Đọc ngày giờ cập nhật ở góc trên bên phải ảnh (ví dụ: "30/10/2026", "17:19:12").
-5. Đối với mỗi siêu thị, lấy các chỉ số sau:
-   - storeRawName: Tên đầy đủ của siêu thị trên thẻ
+5. Đối với mỗi ST, lấy các chỉ số sau:
+   - storeRawName: Tên đầy đủ của ST trên thẻ
    - revenueQd: Giá trị của "DOANH THU QĐ" (loại bỏ dấu phẩy phân cách hàng nghìn, ví dụ: trên ảnh "20,688" thì kết quả là 20688, "3,123" -> 3123)
    - targetQd: Giá trị của "TARGET" (nếu là cột Target của bảng DTQĐ)
    - quantityQd: Giá trị của "SỐ LƯỢNG" (ví dụ 1934)
@@ -214,10 +214,10 @@ Nhiệm vụ: Trích xuất chính xác các số liệu DOANH THU THỰC TẾ v
 LƯU Ý NGHIỆP VỤ BẮT BUỘC:
 1. BỎ QUA HOÀN TOÀN các watermark chữ mờ ("26479 - Đào Bá Linh",...).
 2. BỎ QUA HOÀN TOÀN thẻ "Tổng" hoặc "Tổng (2 dòng)".
-3. CHỈ TRÍCH XUẤT các thẻ của từng SIÊU THỊ CỤ THỂ (ví dụ: "10335 - AAR_BRV_VTA - 290 Trương Công Định", "111 - TGD_BRV_VTA - 290 Trương Công Định").
+3. CHỈ TRÍCH XUẤT các thẻ của từng ST CỤ THỂ (ví dụ: "10335 - AAR_BRV_VTA - 290 Trương Công Định", "111 - TGD_BRV_VTA - 290 Trương Công Định").
 4. Đọc ngày giờ cập nhật ở góc trên bên phải ảnh.
-5. Đối với mỗi siêu thị, lấy các chỉ số sau:
-   - storeRawName: Tên siêu thị
+5. Đối với mỗi ST, lấy các chỉ số sau:
+   - storeRawName: Tên ST
    - revenueReal: Giá trị của "DOANH THU" (Doanh thu thực tế, ví dụ 15964)
    - targetReal: Giá trị của "TARGET" (ví dụ 10889)
    - installmentReal: Giá trị của "DT TRẢ GÓP" (ví dụ 6685)
@@ -284,7 +284,7 @@ LƯU Ý NGHIỆP VỤ BẮT BUỘC:
    - CỘT 3: Luôn là "TARGET".
    - CỘT 4: "% HT THÁNG".
 4. DƯỚI DÒNG TỔNG là CÁC DÒNG ST:
-   - Tên siêu thị chữ màu xanh dương (ví dụ: "AAR_BRV_VTA - 290 Trương Công Định", "TGD_BRV_VTA - 290 Trương Công Định").
+   - Tên ST chữ màu xanh dương (ví dụ: "AAR_BRV_VTA - 290 Trương Công Định", "TGD_BRV_VTA - 290 Trương Công Định").
    - Giá trị Cột 2 (DOANH THU hoặc SỐ LƯỢNG thực tế).
    - Giá trị Cột 3 (TARGET).
    - Giá trị Cột 4 (% HT nếu đọc được, nếu bị cắt như "142...." thì tính lại = actual / target * 100).
@@ -314,8 +314,8 @@ LƯU Ý NGHIỆP VỤ BẮT BUỘC:
 }
 
 /**
- * 3b. TRÍCH XUẤT THẺ THI ĐUA MOBILE TỪNG SIÊU THỊ (LƯỚI THẺ 2 CỘT)
- * Dành riêng cho ảnh chụp màn hình điện thoại danh sách thẻ thi đua theo từng siêu thị.
+ * 3b. TRÍCH XUẤT THẺ THI ĐUA MOBILE TỪNG ST (LƯỚI THẺ 2 CỘT)
+ * Dành riêng cho ảnh chụp màn hình điện thoại danh sách thẻ thi đua theo từng ST.
  */
 export async function extractStoreMobileEmulationCards(
     apiKey: string,
@@ -346,7 +346,7 @@ QUY TẮC BẮT BUỘC:
 - Trích xuất ĐẦY ĐỦ TẤT CẢ các thẻ có trong ảnh theo thứ tự từ trên xuống dưới, từ trái qua phải.
 - Với tỷ lệ ghi dạng "3,003%" thì chuyển thành số 3003 (loại bỏ dấu phẩy phân cách hàng nghìn).
 - Với số thập phân (31.47, 22.29, 0.90), giữ nguyên phần thập phân.
-- Nếu ở thanh tiêu đề ảnh có tên Siêu thị hoặc ngày giờ thì trích xuất vào storeName, reportDate, reportTime. Nếu không có thì để null.
+- Nếu ở thanh tiêu đề ảnh có tên ST hoặc ngày giờ thì trích xuất vào storeName, reportDate, reportTime. Nếu không có thì để null.
 
 Định dạng JSON trả về:
 {
@@ -500,7 +500,7 @@ export async function extractAndMergeAllImages(
         const codeMatch = rawName.match(/^(\d{3,6})/);
         const storeCode = code || (codeMatch ? codeMatch[1] : undefined);
 
-        // Khớp siêu thị thông minh: ưu tiên mã số siêu thị (10335, 111...), sau đó đến tên rút gọn
+        // Khớp ST thông minh: ưu tiên mã số ST (10335, 111...), sau đó đến tên rút gọn
         const existingKey = Object.keys(storeMap).find(k => {
             if (storeCode && storeMap[k].storeCode && storeMap[k].storeCode === storeCode) return true;
             return k === short;

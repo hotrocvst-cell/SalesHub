@@ -93,7 +93,7 @@ export default function CampaignDirectoryPage() {
     };
 
     // =========================================================================
-    // YÊU CẦU 2: TỰ ĐỘNG CHỌN CÁC CHƯƠNG TRÌNH THI ĐUA THEO SIÊU THỊ CỦA USER
+    // YÊU CẦU 2: TỰ ĐỘNG CHỌN CÁC CHƯƠNG TRÌNH THI ĐUA THEO ST CỦA USER
     // LẤY THEO DANH SÁCH CÁC CHƯƠNG TRÌNH CÓ KHAI BÁO MỤC TIÊU TỪ BÁO CÁO LŨY KẾ THÁNG
     // =========================================================================
     const {
@@ -177,7 +177,7 @@ export default function CampaignDirectoryPage() {
     // Danh sách đã lọc theo các tiêu chí (kèm lọc chỉ xem chương trình có mục tiêu nếu bật toggle)
     const filteredPrograms = useMemo(() => {
         return programs.filter(item => {
-            // Lọc theo mục tiêu siêu thị nếu đang bật checkbox
+            // Lọc theo mục tiêu ST nếu đang bật checkbox
             if (onlyShowStoreTargets && !matchedProgramIds.includes(item.id)) {
                 return false;
             }

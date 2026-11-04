@@ -85,8 +85,8 @@ MANGO_iCALLME	8	10	80.0%`,
         items: [
             {
                 id: 'item-cum-progress',
-                label: 'Báo cáo Tiến độ kinh doanh siêu thị',
-                sample_text: `STT	Mã ST	Tên siêu thị	DTQĐ Thực tế	Target Tháng	% Hoàn thành
+                label: 'Báo cáo Tiến độ kinh doanh ST',
+                sample_text: `STT	Mã ST	Tên ST	DTQĐ Thực tế	Target Tháng	% Hoàn thành
 1	10335	TGD_290_TRUONG_CONG_DINH	1450.5	1800.0	80.6%
 2	8842	DMX_45_BA_CU	2100.0	2500.0	84.0%
 3	1204	AAR_290_TRUONG_CONG_DINH	980.0	1200.0	81.7%`,
@@ -96,7 +96,7 @@ MANGO_iCALLME	8	10	80.0%`,
             {
                 id: 'item-cum-emp',
                 label: 'Thi đua Lũy kế cá nhân nhân viên',
-                sample_text: `Mã NV	Họ và Tên	Siêu thị	DTQĐ	Bảo hiểm	ICT Android	Tablet
+                sample_text: `Mã NV	Họ và Tên	ST	DTQĐ	Bảo hiểm	ICT Android	Tablet
 142857	Nguyễn Phương Nam	10335	185.5	12	8	3
 987654	Trần Thị Kim Cúc	8842	210.0	15	10	5
 345678	Lê Quang Vinh	1204	160.2	9	7	2`,

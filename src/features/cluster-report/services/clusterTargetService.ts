@@ -5,7 +5,7 @@ const STORAGE_KEY_TARGETS = 'saleshub_cluster_targets_cache';
 const STORAGE_KEY_ASSESSMENT = 'saleshub_cluster_assessment_cache';
 
 export const CLUSTER_REPORT_SQL = `
--- Bảng lưu cấu hình Target vượt trội & Doanh thu TB 3 tháng cho Cụm Siêu Thị
+-- Bảng lưu cấu hình Target vượt trội & Doanh thu TB 3 tháng cho Cụm ST
 CREATE TABLE IF NOT EXISTS public.cluster_target_configs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     store_name TEXT NOT NULL,
@@ -130,8 +130,8 @@ export async function fetchClusterTargetConfigPackage(month: number, year: numbe
 
 /**
  * Lưu danh sách Target Cụm lên Supabase Cloud & Local Cache (đồng bộ đa thiết bị)
- * Hỗ trợ MERGE an toàn khi Quản lý/Trưởng ca chỉ cấu hình riêng cho các siêu thị mình phụ trách,
- * đảm bảo không ghi đè hay làm mất cấu hình của các siêu thị khác trong cụm.
+ * Hỗ trợ MERGE an toàn khi Quản lý/Trưởng ca chỉ cấu hình riêng cho các ST mình phụ trách,
+ * đảm bảo không ghi đè hay làm mất cấu hình của các ST khác trong cụm.
  */
 export async function saveClusterTargetConfigs(
     month: number,

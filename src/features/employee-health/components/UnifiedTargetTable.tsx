@@ -48,7 +48,7 @@ export default function UnifiedTargetTable({
                             <th className="p-3 w-12 text-center border-r border-slate-800">STT</th>
                             <th className="p-3 w-24 border-r border-slate-800">Mã NV</th>
                             <th className="p-3 min-w-[180px] border-r border-slate-800">Họ và Tên</th>
-                            <th className="p-3 min-w-[160px] border-r border-slate-800">Siêu Thị</th>
+                            <th className="p-3 min-w-[160px] border-r border-slate-800">ST</th>
                             
                             {/* Cột Target Doanh Thu */}
                             <th className="p-3 min-w-[170px] bg-blue-900/90 text-right border-r border-blue-800">

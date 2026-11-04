@@ -240,7 +240,7 @@ export async function loadRebalanceConfig(targetStore?: string): Promise<{
 
 /**
  * Tải danh sách tất cả các phiên cấu hình/xin hàng đã lưu (ưu tiên Cloud, fallback LocalStorage)
- * Hỗ trợ khớp tên siêu thị linh hoạt có mã kho (ví dụ: '111 - TGD_BRV_VTA - 290 Trương Công Định')
+ * Hỗ trợ khớp tên ST linh hoạt có mã kho (ví dụ: '111 - TGD_BRV_VTA - 290 Trương Công Định')
  */
 export async function fetchAllRebalanceSessions(targetStore?: string): Promise<{
     sessions: InventoryBalancingSavedConfig[];

@@ -202,7 +202,7 @@ export default function EmployeeTargetUnifiedPage() {
         };
     }, [scopeEmployees, revenueTargets, campaignTargets, selectedStore]);
 
-    // Danh sách siêu thị
+    // Danh sách ST
     const storeList = useMemo(() => {
         const set = new Set<string>();
         employees.forEach(e => {
@@ -453,7 +453,7 @@ export default function EmployeeTargetUnifiedPage() {
                 onReload={loadData}
             />
 
-            {/* Bộ lọc Siêu thị & Tìm kiếm */}
+            {/* Bộ lọc ST & Tìm kiếm */}
             <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                     <Store className="w-4 h-4 text-blue-600" />
@@ -463,7 +463,7 @@ export default function EmployeeTargetUnifiedPage() {
                         onChange={e => setSelectedStore(e.target.value)}
                         className="text-xs font-semibold px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white text-slate-800"
                     >
-                        <option value="all">🏢 Tất cả siêu thị ({storeList.length})</option>
+                        <option value="all">🏢 Tất cả ST ({storeList.length})</option>
                         {storeList.map(s => (
                             <option key={s} value={s}>{s}</option>
                         ))}
@@ -474,7 +474,7 @@ export default function EmployeeTargetUnifiedPage() {
                     <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
                     <input
                         type="text"
-                        placeholder="Tìm theo mã NV, tên, siêu thị..."
+                        placeholder="Tìm theo mã NV, tên, ST..."
                         value={searchQuery}
                         onChange={e => setSearchQuery(e.target.value)}
                         className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500 text-slate-800"

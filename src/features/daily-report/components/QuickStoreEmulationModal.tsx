@@ -107,9 +107,9 @@ export default function QuickStoreEmulationModal({
         return (localStores && localStores.length > 0) ? localStores : availableStores;
     }, [localStores, availableStores]);
 
-    // 1. Tập hợp danh sách các siêu thị được phân quyền
+    // 1. Tập hợp danh sách các ST được phân quyền
     const permittedStores = useMemo<StoreItem[]>(() => {
-        // Hợp nhất danh sách siêu thị từ activeAvailableStores và user profile
+        // Hợp nhất danh sách ST từ activeAvailableStores và user profile
         const masterList: StoreItem[] = [...activeAvailableStores];
         const userStores = [
             currentUser?.store_name,
@@ -163,7 +163,7 @@ export default function QuickStoreEmulationModal({
         return deduplicateStoreNames(rawNames, activeAvailableStores);
     }, [permittedStores, activeAvailableStores]);
 
-    // Khởi tạo siêu thị mặc định (nếu defaultSelectedStore hợp lệ và user có quyền)
+    // Khởi tạo ST mặc định (nếu defaultSelectedStore hợp lệ và user có quyền)
     const [selectedStore, setSelectedStore] = useState<string>(() => {
         if (defaultSelectedStore && !/^(tổng|tong|all|toàn cụm)/i.test(defaultSelectedStore)) {
             const match = storeOptions.find(s => isStoreMatch(s, defaultSelectedStore, activeAvailableStores) || s === defaultSelectedStore);
@@ -221,14 +221,14 @@ export default function QuickStoreEmulationModal({
     const [isSaving, setIsSaving] = useState<boolean>(false);
     const [toastMessage, setToastMessage] = useState<string>('');
 
-    // 5. Doanh thu của siêu thị đang chọn (DTQĐ, Target, DT Thực, Trả góp)
+    // 5. Doanh thu của ST đang chọn (DTQĐ, Target, DT Thực, Trả góp)
     const [revenueQd, setRevenueQd] = useState<number | string>('');
     const [targetQd, setTargetQd] = useState<number | string>('');
     const [revenueReal, setRevenueReal] = useState<number | string>('');
     const [installmentReal, setInstallmentReal] = useState<number | string>('');
     const [installmentRate, setInstallmentRate] = useState<number | string>('');
 
-    // Tự động điền doanh thu hiện có khi đổi siêu thị
+    // Tự động điền doanh thu hiện có khi đổi ST
     useEffect(() => {
         if (!selectedStore) return;
         const currentSession = existingSessions.find(s =>
@@ -386,7 +386,7 @@ export default function QuickStoreEmulationModal({
                 setScreenshotTimeStr(`${new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} ${formatDate(new Date())}`);
             }
 
-            // Tự động nhận diện siêu thị nếu có trên ảnh
+            // Tự động nhận diện ST nếu có trên ảnh
             if (result.storeName) {
                 const matched = storeOptions.find(s =>
                     isStoreMatch(s, result.storeName, activeAvailableStores) ||
@@ -396,7 +396,7 @@ export default function QuickStoreEmulationModal({
                 if (matched) {
                     setSelectedStore(matched);
                 } else if (!effectiveIsAdmin) {
-                    setOcrError(`⚠️ Ảnh chụp thuộc siêu thị "${result.storeName}", không thuộc danh sách siêu thị bạn được phân quyền phụ trách! Vui lòng kiểm tra lại ảnh.`);
+                    setOcrError(`⚠️ Ảnh chụp thuộc ST "${result.storeName}", không thuộc danh sách ST bạn được phân quyền phụ trách! Vui lòng kiểm tra lại ảnh.`);
                 }
             }
 
@@ -454,21 +454,21 @@ export default function QuickStoreEmulationModal({
         ]);
     };
 
-    // Lưu thi đua cho siêu thị đang chọn lên Cloud hoặc Áp dụng vào bảng số liệu
+    // Lưu thi đua cho ST đang chọn lên Cloud hoặc Áp dụng vào bảng số liệu
     const handleSave = async (saveDirectlyToCloud: boolean = true) => {
         if (!selectedStore) {
-            showToast('⚠️ Vui lòng chọn siêu thị cần lưu thi đua!');
+            showToast('⚠️ Vui lòng chọn ST cần lưu thi đua!');
             return;
         }
 
-        // Kiểm tra phân quyền nạp và lưu siêu thị
+        // Kiểm tra phân quyền nạp và lưu ST
         const isPermitted = effectiveIsAdmin ||
             canAccessStore(selectedStore) ||
             canAccessStore(getShortStoreName(selectedStore)) ||
             permittedStores.some(p => isStoreMatch(p.name, selectedStore, activeAvailableStores));
 
         if (!isPermitted) {
-            showToast(`❌ Bạn không có quyền nạp/lưu dữ liệu cho siêu thị "${formatStoreDisplayName(selectedStore)}". Vui lòng chỉ chọn siêu thị bạn được phân quyền phụ trách!`);
+            showToast(`❌ Bạn không có quyền nạp/lưu dữ liệu cho ST "${formatStoreDisplayName(selectedStore)}". Vui lòng chỉ chọn ST bạn được phân quyền phụ trách!`);
             return;
         }
 
@@ -601,23 +601,23 @@ export default function QuickStoreEmulationModal({
 
                 {/* 2. BODY CUỘN */}
                 <div className="p-4 sm:p-5 overflow-y-auto space-y-4 flex-1">
-                    {/* KHỐI CHỌN SIÊU THỊ & KEY API */}
+                    {/* KHỐI CHỌN ST & KEY API */}
                     <div className="bg-slate-50 border border-slate-200/90 rounded-2xl p-3.5 space-y-3">
                         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
                             <div className="flex-1">
                                 <label className="block text-[11px] font-black uppercase text-slate-600 mb-1 flex items-center gap-1.5">
                                     <Store className="w-3.5 h-3.5 text-blue-600" />
-                                    <span>Chọn Siêu Thị Cần Cập Nhật Thi Đua</span>
+                                    <span>Chọn ST Cần Cập Nhật Thi Đua</span>
                                     <span className="text-rose-500">*</span>
                                     {!effectiveIsAdmin && storeOptions.length > 0 && (
                                         <span className="ml-auto text-[10px] font-normal normal-case text-slate-500">
-                                            (Được phân quyền: <strong className="text-blue-700 font-bold">{storeOptions.length}</strong> siêu thị)
+                                            (Được phân quyền: <strong className="text-blue-700 font-bold">{storeOptions.length}</strong> ST)
                                         </span>
                                     )}
                                 </label>
                                 {storeOptions.length === 0 ? (
                                     <div className="text-xs text-rose-600 font-bold p-2 bg-rose-50 border border-rose-200 rounded-xl">
-                                        ⚠️ Tài khoản của bạn chưa được phân quyền siêu thị nào để nhập liệu. Vui lòng liên hệ Quản trị viên.
+                                        ⚠️ Tài khoản của bạn chưa được phân quyền ST nào để nhập liệu. Vui lòng liên hệ Quản trị viên.
                                     </div>
                                 ) : (
                                     <select
@@ -655,18 +655,18 @@ export default function QuickStoreEmulationModal({
                             <Clock className="w-3.5 h-3.5 text-amber-500 shrink-0" />
                             <span>
                                 {mode === 'DAILY_BUSINESS_RECORD' && reportDate
-                                    ? `Cập nhật thi đua cho siêu thị này sẽ bảo lưu 100% doanh thu đã có của chốt ngày ${formatDate(reportDate)}.`
+                                    ? `Cập nhật thi đua cho ST này sẽ bảo lưu 100% doanh thu đã có của chốt ngày ${formatDate(reportDate)}.`
                                     : 'Có thể nhập/sửa Doanh thu trực tiếp bên dưới hoặc giữ nguyên số liệu Cloud đã lưu.'}
                             </span>
                         </div>
                     </div>
 
-                    {/* KHỐI NHẬP & XEM DOANH THU SIÊU THỊ */}
+                    {/* KHỐI NHẬP & XEM DOANH THU ST */}
                     <div className="bg-gradient-to-br from-blue-50/80 via-indigo-50/60 to-slate-50 border border-blue-200 rounded-2xl p-3.5 space-y-2.5">
                         <div className="flex items-center justify-between">
                             <span className="text-[11px] font-black uppercase text-blue-900 flex items-center gap-1.5">
                                 <DollarSign className="w-3.5 h-3.5 text-blue-600" />
-                                <span>Doanh Thu Siêu Thị (Đơn vị: Triệu đồng)</span>
+                                <span>Doanh Thu ST (Đơn vị: Triệu đồng)</span>
                             </span>
                             <span className="text-[10px] text-blue-700 bg-blue-100/80 px-2 py-0.5 rounded-md font-bold">
                                 {formatStoreDisplayName(selectedStore)}

@@ -62,7 +62,7 @@ export default function EmployeeListSection({
     const [selectedRoleFilter, setSelectedRoleFilter] = useState('all');
     const [searchQuery, setSearchQuery] = useState('');
 
-    // Khóa bộ lọc siêu thị về đúng 1 shop nếu user không phải Admin và chỉ phụ trách 1 shop
+    // Khóa bộ lọc ST về đúng 1 shop nếu user không phải Admin và chỉ phụ trách 1 shop
     useEffect(() => {
         if (!isAdmin && stores.length === 1 && stores[0]?.name) {
             if (selectedStoreFilter !== stores[0].name) {
@@ -76,7 +76,7 @@ export default function EmployeeListSection({
     const [isSaving, setIsSaving] = useState(false);
     const [errorMsg, setErrorMsg] = useState('');
 
-    // Lọc danh sách nhân viên theo Siêu thị và Vai trò (Vai trò cũng là bộ phận)
+    // Lọc danh sách nhân viên theo ST và Vai trò (Vai trò cũng là bộ phận)
     const filteredEmployees = useMemo(() => {
         return employees.filter(emp => {
             const roleStr = (emp.role || emp.job_title || '').toLowerCase();
@@ -190,7 +190,7 @@ export default function EmployeeListSection({
 
     const handleExportCsv = () => {
         if (filteredEmployees.length === 0) return;
-        const headers = ['STT,Mã NV,Họ và Tên,Siêu Thị,Vai Trò,Trạng Thái'];
+        const headers = ['STT,Mã NV,Họ và Tên,ST,Vai Trò,Trạng Thái'];
         const rows = filteredEmployees.map((e, idx) => {
             const role = e.role || e.job_title || 'Nhân viên';
             return `${idx + 1},"${e.employee_id}","${e.full_name}","${e.store_name}","${role}","${e.is_active !== false ? 'Đang làm việc' : 'Nghỉ việc'}"`;
@@ -211,7 +211,7 @@ export default function EmployeeListSection({
             {/* Toolbar Bộ lọc & Thao tác */}
             <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs space-y-3">
                 <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
-                    {/* Filter Siêu thị và Vai trò (Vai trò cũng là bộ phận) */}
+                    {/* Filter ST và Vai trò (Vai trò cũng là bộ phận) */}
                     <div className="flex flex-wrap items-center gap-2 flex-1">
                         <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
                             <Store className="w-4 h-4 text-blue-600" />
@@ -225,8 +225,8 @@ export default function EmployeeListSection({
                             {isAdmin || stores.length > 1 ? (
                                 <option value="all">
                                     {isAdmin
-                                        ? `🏢 Tất cả siêu thị (${stores.length})`
-                                        : `🏢 Tất cả siêu thị phụ trách (${stores.length})`}
+                                        ? `🏢 Tất cả ST (${stores.length})`
+                                        : `🏢 Tất cả ST phụ trách (${stores.length})`}
                                 </option>
                             ) : null}
                             {stores.map(s => (
@@ -316,7 +316,7 @@ export default function EmployeeListSection({
                                 <th className="py-2 px-2.5 w-10 text-center">STT</th>
                                 <th className="py-2 px-2.5 w-20">Mã NV</th>
                                 <th className="py-2 px-2.5">Họ và Tên</th>
-                                <th className="py-2 px-2.5">Siêu Thị</th>
+                                <th className="py-2 px-2.5">ST</th>
                                 <th className="py-2 px-2.5 w-36">Vai Trò</th>
                                 <th className="py-2 px-2.5 w-24 text-center">Trạng Thái</th>
                                 <th className="py-2 px-2.5 w-20 text-right">Thao Tác</th>
@@ -468,7 +468,7 @@ export default function EmployeeListSection({
 
                             <div>
                                 <label className="text-[11px] font-bold text-slate-600 block mb-1">
-                                    Siêu Thị Trực Thuộc <span className="text-rose-500">*</span>
+                                    ST Trực Thuộc <span className="text-rose-500">*</span>
                                 </label>
                                 <select
                                     value={editingEmp.store_name || ''}

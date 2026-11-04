@@ -364,7 +364,7 @@ export default function VoucherQrDoubleCheckModal({
                         </div>
                     </div>
 
-                    {/* Chi tiết người nhận & siêu thị & Mã đơn hàng */}
+                    {/* Chi tiết người nhận & ST & Mã đơn hàng */}
                     {currentVoucher && (
                         <div className="bg-slate-50 rounded-2xl p-3 border border-slate-200 text-[11px] space-y-2 text-slate-600">
                             {currentVoucher.claimed_by_name && (

@@ -79,7 +79,7 @@ export default function DailyEmployeeRevenueOcrModal({
 }: Props) {
     if (!isOpen) return null;
 
-    // Bản đồ nhân viên -> siêu thị từ danh bạ hệ thống
+    // Bản đồ nhân viên -> ST từ danh bạ hệ thống
     const empStoreMap = useMemo(() => {
         const map: Record<string, string> = {};
         employeesDirectory.forEach(emp => {
@@ -93,7 +93,7 @@ export default function DailyEmployeeRevenueOcrModal({
     const { currentUser, isAdmin: authIsAdmin, canAccessStore } = useAuth();
     const effectiveIsAdmin = Boolean(isAdmin || authIsAdmin || currentUser?.role === 'ADMIN');
 
-    // Lọc danh sách siêu thị theo phân quyền người dùng
+    // Lọc danh sách ST theo phân quyền người dùng
     const permittedStores = useMemo<StoreItem[]>(() => {
         if (effectiveIsAdmin) {
             return availableStores;
@@ -123,7 +123,7 @@ export default function DailyEmployeeRevenueOcrModal({
         );
     }, [availableStores, effectiveIsAdmin, currentUser, canAccessStore]);
 
-    // Khử trùng lặp danh sách siêu thị và chuẩn hóa tên có mã số
+    // Khử trùng lặp danh sách ST và chuẩn hóa tên có mã số
     const deduplicatedStores = useMemo<StoreItem[]>(() => {
         const uniqueNames = deduplicateStoreNames(permittedStores.map(s => s.name), availableStores);
         return uniqueNames.map(name => {
@@ -132,7 +132,7 @@ export default function DailyEmployeeRevenueOcrModal({
         });
     }, [permittedStores, availableStores]);
 
-    // Quyền nạp Toàn Cụm: Chỉ Admin hoặc Quản lý phụ trách >= 2 siêu thị
+    // Quyền nạp Toàn Cụm: Chỉ Admin hoặc Quản lý phụ trách >= 2 ST
     const canAccessAllCluster = useMemo(() => {
         if (effectiveIsAdmin) return true;
         if (currentUser?.role === 'NHAN_VIEN') return false;
@@ -151,7 +151,7 @@ export default function DailyEmployeeRevenueOcrModal({
         return deduplicatedStores[0]?.name || '';
     });
 
-    // Đồng bộ lại selectedStore khi modal mở hoặc danh sách siêu thị đổi
+    // Đồng bộ lại selectedStore khi modal mở hoặc danh sách ST đổi
     useEffect(() => {
         if (!isOpen || deduplicatedStores.length === 0) return;
         if (selectedStore === 'all') {
@@ -435,7 +435,7 @@ export default function DailyEmployeeRevenueOcrModal({
         onClose();
     };
 
-    // 2. Áp dụng & Lưu trực tiếp lên Supabase Cloud (Hỗ trợ cả 1 siêu thị hoặc Toàn Cụm)
+    // 2. Áp dụng & Lưu trực tiếp lên Supabase Cloud (Hỗ trợ cả 1 ST hoặc Toàn Cụm)
     const handleApplyAndSaveCloud = async () => {
         if (extractedRecords.length === 0) {
             showToast('⚠️ Chưa có dữ liệu nhân viên để lưu!');
@@ -464,7 +464,7 @@ export default function DailyEmployeeRevenueOcrModal({
             };
 
             if (selectedStore === 'all') {
-                // Lưu cho Toàn Cụm và tự động phân bổ về các siêu thị trong cụm
+                // Lưu cho Toàn Cụm và tự động phân bổ về các ST trong cụm
                 const clusterRes = await saveClusterDailyEmployeeSessions(
                     sessionRecord,
                     employeesDirectory,
@@ -484,9 +484,9 @@ export default function DailyEmployeeRevenueOcrModal({
                 }
 
                 const storeCount = clusterRes.affectedStores.length > 1 ? clusterRes.affectedStores.length - 1 : 0;
-                showToast(`🎉 Đã lưu phiên Toàn Cụm (${summaryStats.totalEmp} NV) và phân bổ về ${storeCount} siêu thị!`);
+                showToast(`🎉 Đã lưu phiên Toàn Cụm (${summaryStats.totalEmp} NV) và phân bổ về ${storeCount} ST!`);
             } else {
-                // Lưu cho 1 siêu thị cụ thể
+                // Lưu cho 1 ST cụ thể
                 const res = await saveDailyEmployeeSession(sessionRecord, currentUserName);
                 if (!res.success) {
                     showToast(`❌ Lỗi lưu Cloud: ${res.error}`);
@@ -554,7 +554,7 @@ export default function DailyEmployeeRevenueOcrModal({
 
                 {/* 2. BODY CUỘN */}
                 <div className="p-4 sm:p-5 overflow-y-auto space-y-4 flex-1">
-                    {/* KHỐI THIẾT LẬP SIÊU THỊ REALTIME */}
+                    {/* KHỐI THIẾT LẬP ST REALTIME */}
                     <div className="bg-slate-50 border border-slate-200/90 rounded-2xl p-3.5 space-y-3">
                         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
                             <div className="flex-1">

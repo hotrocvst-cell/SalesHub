@@ -42,13 +42,13 @@ export function formatRemainingTarget(
     return decPart !== undefined ? `${formattedInt},${decPart}` : formattedInt;
 }
 
-// Rút gọn tên siêu thị hiển thị trên giao diện
+// Rút gọn tên ST hiển thị trên giao diện
 export function getShortStoreName(name: string): string {
     if (!name) return "Tổng";
     const trimmed = name.trim();
     if (trimmed.toUpperCase().startsWith("TỔNG") || trimmed.toUpperCase().startsWith("TONG")) return "Tổng";
 
-    // Loại bỏ mã số siêu thị ở đầu chuỗi (hỗ trợ cả [111] và 111 - ...)
+    // Loại bỏ mã số ST ở đầu chuỗi (hỗ trợ cả [111] và 111 - ...)
     const cleaned = trimmed.replace(/^\[?\d{3,8}\]?\s*[-–—._]?\s*/, '');
     if (cleaned.includes(' - ')) {
         const p = cleaned.split(' - ');
@@ -61,10 +61,10 @@ export function getShortStoreName(name: string): string {
 }
 
 /**
- * Định dạng tên siêu thị hiển thị gọn gàng, tinh tế và chuyên nghiệp:
- * - Nếu có mã siêu thị ở đầu: [Mã] Chuỗi - Địa chỉ (ví dụ: [10335] AAR - 290 Trương Công Định)
+ * Định dạng tên ST hiển thị gọn gàng, tinh tế và chuyên nghiệp:
+ * - Nếu có mã ST ở đầu: [Mã] Chuỗi - Địa chỉ (ví dụ: [10335] AAR - 290 Trương Công Định)
  * - Nếu không có mã: Chuỗi - Địa chỉ (ví dụ: AAR - 290 Trương Công Định)
- * - Nếu chỉ có mã số: Siêu thị [Mã]
+ * - Nếu chỉ có mã số: ST [Mã]
  */
 export function formatStoreDisplayName(name: string): string {
     if (!name) return 'Toàn Cụm (Tổng)';
@@ -72,7 +72,7 @@ export function formatStoreDisplayName(name: string): string {
     if (/^(tổng|tong|toàn cụm|toan cum|all)$/i.test(trimmed)) return 'Toàn Cụm (Tổng)';
 
     if (/^\d{3,8}$/.test(trimmed)) {
-        return `Siêu thị [${trimmed}]`;
+        return `ST [${trimmed}]`;
     }
 
     // Khớp cả [111] Chuỗi - Địa chỉ lẫn 111 - Chuỗi - Địa chỉ
@@ -90,13 +90,13 @@ export function formatStoreDisplayName(name: string): string {
     return getShortStoreName(trimmed);
 }
 
-// Chuẩn hóa tên siêu thị để kiểm tra quyền
+// Chuẩn hóa tên ST để kiểm tra quyền
 export function cleanStoreNameForAuth(name: string): string {
     if (!name) return '';
     return name.trim().replace(/^\[?\d{3,8}\]?\s*[-–—._]?\s*/, '').trim();
 }
 
-// Kiểm tra quyền siêu thị
+// Kiểm tra quyền ST
 export function isStoreAuthorized(name: string): boolean {
     if (!name) return true;
     const cleaned = cleanStoreNameForAuth(name);
@@ -110,8 +110,8 @@ export function isStoreAuthorized(name: string): boolean {
 }
 
 /**
- * So sánh chính xác 2 tên siêu thị có cùng là một siêu thị hay không
- * Ngăn chặn tuyệt đối việc nhầm lẫn giữa các siêu thị có cùng số nhà/địa chỉ (ví dụ: AAR và TGD cùng tại 290 Trương Công Định)
+ * So sánh chính xác 2 tên ST có cùng là một ST hay không
+ * Ngăn chặn tuyệt đối việc nhầm lẫn giữa các ST có cùng số nhà/địa chỉ (ví dụ: AAR và TGD cùng tại 290 Trương Công Định)
  */
 export function isStoreMatch(
     storeNameA: string | undefined | null,
@@ -130,7 +130,7 @@ export function isStoreMatch(
         return isAllA && isAllB;
     }
 
-    // Nếu so sánh getShortStoreName khớp nhau thì là cùng 1 siêu thị
+    // Nếu so sánh getShortStoreName khớp nhau thì là cùng 1 ST
     const shortA = getShortStoreName(a).toLowerCase();
     const shortB = getShortStoreName(b).toLowerCase();
     if (shortA && shortB && shortA === shortB && shortA !== 'tổng') {
@@ -152,7 +152,7 @@ export function isStoreMatch(
         }
     }
 
-    // Kiểm tra mã số siêu thị ở đầu chuỗi (hỗ trợ cả [111] và 111 - ...)
+    // Kiểm tra mã số ST ở đầu chuỗi (hỗ trợ cả [111] và 111 - ...)
     const codeMatchA = a.match(/^\[?(\d{3,8})\]?/);
     const codeMatchB = b.match(/^\[?(\d{3,8})\]?/);
     if (codeMatchA && codeMatchB && codeMatchA[1] === codeMatchB[1]) {
@@ -195,10 +195,10 @@ export function isStoreMatch(
 }
 
 /**
- * Chuẩn hóa và loại bỏ trùng lặp danh sách siêu thị (Deduplication)
- * - Nhóm các tên siêu thị đại diện cho cùng 1 siêu thị vật lý (dựa trên isStoreMatch & getShortStoreName)
+ * Chuẩn hóa và loại bỏ trùng lặp danh sách ST (Deduplication)
+ * - Nhóm các tên ST đại diện cho cùng 1 ST vật lý (dựa trên isStoreMatch & getShortStoreName)
  * - Tự động nâng cấp tên rút gọn thành tên đầy đủ có mã số nếu tìm thấy trong danh mục availableStores
- * - Ưu tiên giữ lại tên chuẩn có mã số siêu thị ở đầu (ví dụ: "10335 - AAR_BRV_VTA - 290 Trương Công Định")
+ * - Ưu tiên giữ lại tên chuẩn có mã số ST ở đầu (ví dụ: "10335 - AAR_BRV_VTA - 290 Trương Công Định")
  *   thay vì tên rút gọn không có mã số (ví dụ: "AAR - 290 Trương Công Định")
  */
 export function deduplicateStoreNames(

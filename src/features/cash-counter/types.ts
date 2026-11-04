@@ -36,7 +36,7 @@ export const CASH_HISTORY_LOCAL_KEY = 'cash_history_portal';
 
 export const CASH_COUNT_TABLE_NAME = 'cash_count_records';
 
-export const CASH_COUNT_SQL_DDL = `-- BẢNG LƯU TRỮ LỊCH SỬ KIỂM QUỸ CA TRỰC (CHUYÊN VIÊN SIÊU THỊ)
+export const CASH_COUNT_SQL_DDL = `-- BẢNG LƯU TRỮ LỊCH SỬ KIỂM QUỸ CA TRỰC (CHUYÊN VIÊN ST)
 CREATE TABLE IF NOT EXISTS public.cash_count_records (
     id TEXT PRIMARY KEY,
     created_at TIMESTAMPTZ DEFAULT now(),

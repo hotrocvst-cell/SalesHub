@@ -213,7 +213,7 @@ export default function ImportTargetModal({
                                 rows={5}
                                 value={rawPasteText}
                                 onChange={e => handlePasteChange(e.target.value)}
-                                placeholder="Copy các cột (Mã NV [tab] Họ tên [tab] Siêu thị [tab] Target Doanh thu [tab] Thi đua 1 [tab]...) và dán vào đây"
+                                placeholder="Copy các cột (Mã NV [tab] Họ tên [tab] ST [tab] Target Doanh thu [tab] Thi đua 1 [tab]...) và dán vào đây"
                                 className="w-full p-3 text-xs font-mono bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500 text-slate-800"
                             />
                         </div>

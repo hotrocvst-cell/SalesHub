@@ -53,7 +53,7 @@ export default function WorkHoursConfirmModal({
     const [selectedReportDate, setSelectedReportDate] = useState<string>(
         () => reportDate || editingSession?.report_date || getYesterdayDateString()
     );
-    // Mặc định: nếu phát hiện nhiều siêu thị thì chọn tách riêng theo siêu thị, nếu đang chọn 1 siêu thị cụ thể thì chọn single_store
+    // Mặc định: nếu phát hiện nhiều ST thì chọn tách riêng theo ST, nếu đang chọn 1 ST cụ thể thì chọn single_store
     const [scope, setScope] = useState<WorkHoursSaveScope>(() => {
         if (currentSelectedStore && currentSelectedStore !== 'all') {
             return 'single_store';
@@ -97,7 +97,7 @@ export default function WorkHoursConfirmModal({
                         </div>
                         <div>
                             <h3 className="font-extrabold text-base leading-tight">Xác Nhận Lưu Giờ Công Nhân Viên</h3>
-                            <p className="text-xs text-emerald-100">Lựa chọn phạm vi lưu theo siêu thị hoặc tự động tách riêng</p>
+                            <p className="text-xs text-emerald-100">Lựa chọn phạm vi lưu theo ST hoặc tự động tách riêng</p>
                         </div>
                     </div>
                     <button
@@ -110,7 +110,7 @@ export default function WorkHoursConfirmModal({
                 </div>
 
                 <form onSubmit={handleSubmit} className="p-5 space-y-4 max-h-[80vh] overflow-y-auto">
-                    {/* KHỐI 1: TÙY CHỌN PHẠM VI LƯU THEO SIÊU THỊ */}
+                    {/* KHỐI 1: TÙY CHỌN PHẠM VI LƯU THEO ST */}
                     <div className="space-y-2">
                         <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800">
                             <Store className="w-4 h-4 text-emerald-600" />
@@ -118,7 +118,7 @@ export default function WorkHoursConfirmModal({
                         </div>
 
                         <div className="space-y-2">
-                            {/* Option 1: Tự động tách theo từng siêu thị */}
+                            {/* Option 1: Tự động tách theo từng ST */}
                             <label className={`block p-3 rounded-xl border transition cursor-pointer text-xs ${
                                 scope === 'split_by_store'
                                     ? 'bg-emerald-50/70 border-emerald-500 ring-2 ring-emerald-500/20 shadow-xs'
@@ -137,21 +137,21 @@ export default function WorkHoursConfirmModal({
                                         <div className="flex items-center gap-1.5 flex-wrap">
                                             <Split className="w-3.5 h-3.5 text-emerald-700" />
                                             <strong className="text-emerald-950 font-extrabold">
-                                                Tách riêng phiên theo từng Siêu thị (Khuyên dùng)
+                                                Tách riêng phiên theo từng ST (Khuyên dùng)
                                             </strong>
                                             <span className="px-1.5 py-0.2 rounded text-[10px] bg-emerald-200 text-emerald-800 font-bold">
                                                 Tối ưu trạng thái dữ liệu
                                             </span>
                                         </div>
                                         <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
-                                            Hệ thống tự động nhóm nhân viên theo siêu thị thực tế và tạo các phiên giờ công riêng tương ứng. Giúp trang <b>Trạng thái dữ liệu</b> và báo cáo hiệu quả siêu thị hiển thị chính xác 100%.
+                                            Hệ thống tự động nhóm nhân viên theo ST thực tế và tạo các phiên giờ công riêng tương ứng. Giúp trang <b>Trạng thái dữ liệu</b> và báo cáo hiệu quả ST hiển thị chính xác 100%.
                                         </p>
 
-                                        {/* Danh sách các siêu thị được phát hiện */}
+                                        {/* Danh sách các ST được phát hiện */}
                                         {storeBreakdown.length > 0 && (
                                             <div className="mt-2 pt-2 border-t border-emerald-200/60 flex flex-wrap gap-1.5">
                                                 <span className="text-[10px] font-bold text-emerald-900 block w-full">
-                                                    Phát hiện {storeBreakdown.length} siêu thị từ danh sách nhân sự:
+                                                    Phát hiện {storeBreakdown.length} ST từ danh sách nhân sự:
                                                 </span>
                                                 {storeBreakdown.map(sb => (
                                                     <span
@@ -168,7 +168,7 @@ export default function WorkHoursConfirmModal({
                                 </div>
                             </label>
 
-                            {/* Option 2: Lưu riêng cho 1 siêu thị cụ thể */}
+                            {/* Option 2: Lưu riêng cho 1 ST cụ thể */}
                             <label className={`block p-3 rounded-xl border transition cursor-pointer text-xs ${
                                 scope === 'single_store'
                                     ? 'bg-emerald-50/70 border-emerald-500 ring-2 ring-emerald-500/20 shadow-xs'
@@ -187,11 +187,11 @@ export default function WorkHoursConfirmModal({
                                         <div className="flex items-center gap-1.5">
                                             <Store className="w-3.5 h-3.5 text-blue-600" />
                                             <strong className="text-slate-800 font-extrabold">
-                                                Lưu cho 1 siêu thị cụ thể
+                                                Lưu cho 1 ST cụ thể
                                             </strong>
                                         </div>
                                         <p className="text-[11px] text-slate-500 mt-0.5">
-                                            Ghi nhận toàn bộ số giờ công này cho 1 siêu thị được chọn bên dưới
+                                            Ghi nhận toàn bộ số giờ công này cho 1 ST được chọn bên dưới
                                         </p>
 
                                         {scope === 'single_store' && (
@@ -237,7 +237,7 @@ export default function WorkHoursConfirmModal({
                                                 </strong>
                                             </div>
                                             <p className="text-[11px] text-slate-500 mt-0.5">
-                                                Lưu 1 phiên duy nhất với tên &quot;Toàn Cụm Siêu Thị&quot; cho toàn bộ nhân sự
+                                                Lưu 1 phiên duy nhất với tên &quot;Toàn Cụm ST&quot; cho toàn bộ nhân sự
                                             </p>
                                         </div>
                                     </div>
@@ -366,7 +366,7 @@ export default function WorkHoursConfirmModal({
                             <span>Kết quả dự kiến:</span>
                             <span className="font-bold text-slate-800">
                                 {scope === 'split_by_store'
-                                    ? `Tạo ${storeBreakdown.length || 1} phiên riêng theo từng siêu thị`
+                                    ? `Tạo ${storeBreakdown.length || 1} phiên riêng theo từng ST`
                                     : scope === 'single_store'
                                     ? `Lưu cho: ${getShortStoreName(selectedStoreName)}`
                                     : 'Lưu 1 phiên toàn cụm'}
@@ -394,7 +394,7 @@ export default function WorkHoursConfirmModal({
                                 {isSaving
                                     ? 'Đang Lưu...'
                                     : scope === 'split_by_store'
-                                    ? `Xác Nhận Tách ${storeBreakdown.length || ''} Siêu Thị`
+                                    ? `Xác Nhận Tách ${storeBreakdown.length || ''} ST`
                                     : 'Xác Nhận Lưu Giờ Công'}
                             </span>
                         </button>

@@ -98,7 +98,7 @@ export default function DailyEmployeeRevenueReportPage() {
     const [showSqlModal, setShowSqlModal] = useState<boolean>(false);
     const [isCopiedSql, setIsCopiedSql] = useState<boolean>(false);
 
-    // Phân quyền phạm vi siêu thị theo vai trò người dùng (Nhân viên bị khóa shop, Quản lý đa shop, Admin toàn quyền)
+    // Phân quyền phạm vi ST theo vai trò người dùng (Nhân viên bị khóa shop, Quản lý đa shop, Admin toàn quyền)
     const { allowedStores, isLockedToSingleStore, canViewAllStores } = useUserStoreFilter(
         stores,
         selectedStore,
@@ -112,7 +112,7 @@ export default function DailyEmployeeRevenueReportPage() {
     // Báo cáo Realtime trong ngày: luôn mặc định theo ngày hôm nay
     const [reportDate, setReportDate] = useState<string>(() => getTodayDateString());
 
-    // Tên siêu thị nhận diện được từ văn bản dán
+    // Tên ST nhận diện được từ văn bản dán
     const [detectedStoreName, setDetectedStoreName] = useState<string>('');
 
     // Danh sách nhân sự đi làm trong ca được chọn bổ sung thủ công (chưa có DT trong báo cáo dán)
@@ -138,7 +138,7 @@ export default function DailyEmployeeRevenueReportPage() {
         setTimeout(() => setToastMessage(''), 3500);
     };
 
-    // Tải danh bạ Siêu thị và Nhân viên từ Supabase
+    // Tải danh bạ ST và Nhân viên từ Supabase
     useEffect(() => {
         Promise.all([fetchStores(), fetchEmployees()]).then(([storesRes, empsRes]) => {
             if (storesRes.success && storesRes.data) setStores(storesRes.data);
@@ -146,7 +146,7 @@ export default function DailyEmployeeRevenueReportPage() {
         });
     }, []);
 
-    // Bản đồ nhân viên -> siêu thị
+    // Bản đồ nhân viên -> ST
     const empStoreMap = useMemo(() => {
         const map: Record<string, string> = {};
         employees.forEach(e => {
@@ -164,7 +164,7 @@ export default function DailyEmployeeRevenueReportPage() {
         return parseEmployeeRevenueText(rawText, rawRealText);
     }, [customRecords, rawText, rawRealText]);
 
-    // Tự động tải phiên dữ liệu nhân viên từ Supabase Cloud khi thay đổi siêu thị hoặc ngày
+    // Tự động tải phiên dữ liệu nhân viên từ Supabase Cloud khi thay đổi ST hoặc ngày
     useEffect(() => {
         let isMounted = true;
         const loadCloudSession = async () => {
@@ -199,13 +199,13 @@ export default function DailyEmployeeRevenueReportPage() {
         return () => { isMounted = false; };
     }, [selectedStore, reportDate, rawText, rawRealText]);
 
-    // Tự động nhận diện siêu thị từ văn bản dán và khớp với dropdown
+    // Tự động nhận diện ST từ văn bản dán và khớp với dropdown
     useEffect(() => {
         if (rawText.trim()) {
             const detected = detectStoreFromRawText(rawText);
             if (detected) {
                 setDetectedStoreName(detected);
-                // Khớp thử với danh sách siêu thị được phép truy cập
+                // Khớp thử với danh sách ST được phép truy cập
                 const matched = allowedStores.find(s => isStoreMatch(s.name, detected, stores));
                 if (matched && selectedStore === 'all' && canViewAllStores) {
                     setSelectedStore(matched.name);
@@ -224,13 +224,13 @@ export default function DailyEmployeeRevenueReportPage() {
         }
     }, [selectedStore, reportDate]);
 
-    // Danh sách nhân sự cấu hình của siêu thị đang chọn
+    // Danh sách nhân sự cấu hình của ST đang chọn
     const currentStoreEmployees = useMemo(() => {
         if (selectedStore === 'all') return employees;
         return employees.filter(e => isStoreMatch(e.store_name, selectedStore, stores));
     }, [employees, selectedStore, stores]);
 
-    // MẶC ĐỊNH: Lọc nhân viên theo siêu thị đã chọn và CHỈ TỰ ĐỘNG CHỌN các bạn có DTQĐ khác 0
+    // MẶC ĐỊNH: Lọc nhân viên theo ST đã chọn và CHỈ TỰ ĐỘNG CHỌN các bạn có DTQĐ khác 0
     useEffect(() => {
         if (parsedRawList.length === 0) {
             setManualShiftEmpIds(new Set());
@@ -239,7 +239,7 @@ export default function DailyEmployeeRevenueReportPage() {
 
         const newChecked = new Set<string>();
 
-        // Chỉ tự động chọn nhân viên có DTQĐ khác 0 thuộc siêu thị đang chọn
+        // Chỉ tự động chọn nhân viên có DTQĐ khác 0 thuộc ST đang chọn
         parsedRawList.forEach(p => {
             if (p.revenue_qd !== 0) {
                 const id = p.employee_id.trim();
@@ -279,7 +279,7 @@ export default function DailyEmployeeRevenueReportPage() {
         return list;
     }, [currentStoreEmployees, manualShiftEmpIds, parsedRawList]);
 
-    // 2. Xử lý & Chuẩn hóa toàn bộ số liệu theo siêu thị đang chọn
+    // 2. Xử lý & Chuẩn hóa toàn bộ số liệu theo ST đang chọn
     const processedData = useMemo(() => {
         return processDailyEmployeeRevenueData(parsedRawList, {
             selectedStore,
@@ -347,10 +347,10 @@ export default function DailyEmployeeRevenueReportPage() {
         return top30Employees.slice(0, 3);
     }, [top30Employees]);
 
-    // Tên siêu thị hiển thị trên báo cáo
+    // Tên ST hiển thị trên báo cáo
     const displayStoreTitle = useMemo(() => {
         if (selectedStore === 'all') {
-            return detectedStoreName ? `Toàn Cụm (${detectedStoreName})` : 'Toàn Cụm Siêu Thị';
+            return detectedStoreName ? `Toàn Cụm (${detectedStoreName})` : 'Toàn Cụm ST';
         }
         return selectedStore;
     }, [selectedStore, detectedStoreName]);
@@ -428,7 +428,7 @@ export default function DailyEmployeeRevenueReportPage() {
         showToast(`✅ Đã chọn tất cả ${currentStoreEmployees.length} nhân sự đi làm trong ca!`);
     };
 
-    // Đặt lại mặc định: chỉ chọn nhân sự thuộc siêu thị có DTQĐ khác 0
+    // Đặt lại mặc định: chỉ chọn nhân sự thuộc ST có DTQĐ khác 0
     const handleResetToDefaultShift = () => {
         const newChecked = new Set<string>();
         parsedRawList.forEach(p => {
@@ -777,18 +777,18 @@ export default function DailyEmployeeRevenueReportPage() {
             </div>
 
             {/* ========================================================= */}
-            {/* 1. KHU VỰC ĐIỀU KHIỂN & BỘ LỌC SIÊU THỊ                   */}
+            {/* 1. KHU VỰC ĐIỀU KHIỂN & BỘ LỌC ST                   */}
             {/* ========================================================= */}
             <div className="bg-white rounded-3xl border border-slate-200 p-4 sm:p-5 shadow-xs space-y-4">
                 <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                    {/* Tiêu đề & Chọn Siêu thị / Ngày */}
+                    {/* Tiêu đề & Chọn ST / Ngày */}
                     <div className="space-y-1.5">
 
                         <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
                             Báo Cáo Doanh Thu Nhân Viên
                         </h1>
 
-                        {/* 1. Chọn Siêu thị (Dòng độc lập đầu tiên - Rule 10 Convention) */}
+                        {/* 1. Chọn ST (Dòng độc lập đầu tiên - Rule 10 Convention) */}
                         <div className="pt-1.5 pb-1">
                             <div className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border text-xs font-bold transition-all ${isLockedToSingleStore
                                 ? 'bg-amber-50/90 border-amber-200 text-amber-900 shadow-2xs'
@@ -804,14 +804,14 @@ export default function DailyEmployeeRevenueReportPage() {
                                     value={selectedStore}
                                     onChange={e => setSelectedStore(e.target.value)}
                                     disabled={isLockedToSingleStore}
-                                    title={currentUser?.is_guest ? 'Tài khoản trải nghiệm sử dụng dữ liệu siêu thị 10335 - AAR_BRV_VTA - 290 Trương Công Định' : (isLockedToSingleStore ? 'Tài khoản nhân viên được cố định theo siêu thị đã đăng ký' : undefined)}
+                                    title={currentUser?.is_guest ? 'Tài khoản trải nghiệm sử dụng dữ liệu ST 10335 - AAR_BRV_VTA - 290 Trương Công Định' : (isLockedToSingleStore ? 'Tài khoản nhân viên được cố định theo ST đã đăng ký' : undefined)}
                                     className={`bg-transparent font-black outline-hidden min-w-[200px] sm:min-w-[260px] ${isLockedToSingleStore
                                         ? 'cursor-not-allowed text-amber-900'
                                         : 'cursor-pointer text-slate-900'
                                         }`}
                                 >
                                     {canViewAllStores && (
-                                        <option value="all">🌐 Toàn Cụm Siêu Thị</option>
+                                        <option value="all">🌐 Toàn Cụm ST</option>
                                     )}
                                     {allowedStores.map(s => (
                                         <option key={s.id || s.name} value={s.name}>
@@ -972,7 +972,7 @@ export default function DailyEmployeeRevenueReportPage() {
                         </div>
                         <div className="flex items-center justify-between pt-1">
                             <span className="text-[11px] text-slate-400">
-                                Hệ thống sẽ tự động lọc nhân viên theo siêu thị, chuẩn hóa DTQĐ khác 0 và loại bỏ dòng Online.
+                                Hệ thống sẽ tự động lọc nhân viên theo ST, chuẩn hóa DTQĐ khác 0 và loại bỏ dòng Online.
                             </span>
                             <button
                                 type="button"
@@ -997,7 +997,7 @@ export default function DailyEmployeeRevenueReportPage() {
                             <div>
                                 <h4 className="text-xs font-black text-slate-900 uppercase flex items-center gap-1.5">
                                     <Users className="w-4 h-4 text-blue-600" />
-                                    <span>Danh sách nhân sự thuộc Siêu thị ({currentStoreEmployees.length} nhân sự)</span>
+                                    <span>Danh sách nhân sự thuộc ST ({currentStoreEmployees.length} nhân sự)</span>
                                 </h4>
                                 <p className="text-[11px] text-slate-500">
                                     Tích chọn các nhân viên <b>có đi làm trong ca</b> hôm nay nhưng <b>không có biến động doanh thu</b> để hiển thị đầy đủ trên báo cáo.
@@ -1854,7 +1854,7 @@ export default function DailyEmployeeRevenueReportPage() {
                                                             </div>
                                                         </th>
 
-                                                        <th className="py-1.5 px-1 text-right border-r border-slate-800" title="Tỷ trọng đóng góp vào doanh thu siêu thị">
+                                                        <th className="py-1.5 px-1 text-right border-r border-slate-800" title="Tỷ trọng đóng góp vào doanh thu ST">
                                                             % ST
                                                         </th>
                                                     </>

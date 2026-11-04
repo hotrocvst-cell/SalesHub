@@ -1,7 +1,7 @@
 import type { XMusicPlaylist } from '../types';
 
 /**
- * Danh sách Playlist mẫu chuẩn tối ưu cho siêu thị MWG
+ * Danh sách Playlist mẫu chuẩn tối ưu cho ST MWG
  */
 export const DEFAULT_SAMPLE_PLAYLISTS: XMusicPlaylist[] = [
   {

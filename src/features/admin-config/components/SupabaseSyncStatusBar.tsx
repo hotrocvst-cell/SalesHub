@@ -238,12 +238,12 @@ export default function SupabaseSyncStatusBar({
                                     public.store_campaign_scores
                                 </p>
                                 <p className="text-[10px] text-slate-500 mt-0.5">
-                                    Cấu hình điểm theo siêu thị & chế độ tính
+                                    Cấu hình điểm theo ST & chế độ tính
                                 </p>
                             </div>
                             <div className="flex items-center gap-1.5">
                                 <span className="font-bold text-[11px] text-slate-700 bg-white px-2 py-0.5 rounded border border-slate-200">
-                                    {scoresCount > 0 ? `${scoresCount} siêu thị` : 'Sẵn sàng'}
+                                    {scoresCount > 0 ? `${scoresCount} ST` : 'Sẵn sàng'}
                                 </span>
                                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" title="Đã kết nối thành công"></span>
                             </div>

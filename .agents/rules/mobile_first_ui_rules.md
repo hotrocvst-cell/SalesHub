@@ -5,7 +5,7 @@ trigger: always_on
 # QUY CHUẨN THIẾT KẾ GIAO DIỆN & BÁO CÁO SMARTPHONE (MOBILE-FIRST CONVENTIONS)
 
 ## 1. MỤC TIÊU & ĐỐI TƯỢNG NGƯỜI DÙNG (SMARTPHONE-FIRST)
-- **Đối tượng cốt lõi**: Quản lý siêu thị, Quản lý khu vực, Giám đốc kinh doanh và Nhân viên bán hàng.
+- **Đối tượng cốt lõi**: Quản lý ST, Quản lý khu vực, Giám đốc kinh doanh và Nhân viên bán hàng.
 - **Thiết bị tiêu thụ chính**: Điện thoại thông minh (smartphone).
 - **Kênh tiếp nhận chính**: Trực tiếp trên trình duyệt mobile và qua hình ảnh báo cáo được chia sẻ vào nhóm chat Messaging App.
 - **Tiêu chuẩn cao nhất**: Mọi trang báo cáo và hình ảnh xuất ra phải đạt độ sắc nét, dễ đọc, xem nhanh được trên màn hình dọc smartphone mà không cần phải zoom in/zoom out hay xoay ngang máy.
@@ -15,7 +15,7 @@ trigger: always_on
 ## 2. BỐ CỤC BÁO CÁO TỊNH TIẾN THEO CHIỀU DỌC (VERTICAL FLOW)
 1. **Dàn trang theo trục dọc tự nhiên**:
    - Bố cục các thành phần báo cáo theo trình tự từ trên xuống dưới:
-     1. **Header**: Tên báo cáo, Siêu thị, Kỳ ngày/tháng, Badge trạng thái.
+     1. **Header**: Tên báo cáo, ST, Kỳ ngày/tháng, Badge trạng thái.
      2. **Khối Chỉ số Cốt Lõi (Key KPIs)**: Dàn thẻ dạng 1 cột hoặc 2 cột trên mobile (`grid-cols-1 sm:grid-cols-2 md:grid-cols-3`).
      3. **Khối Trọng tâm & Vinh danh (Highlights / Reminders)**: Thẻ Top xuất sắc, Thẻ nhóm cần tăng tốc, Thẻ cảnh báo.
      4. **Bảng Chi Tiết (Detailed Table)**: Bảng dữ liệu số liệu chi tiết của từng nhân sự hoặc ngành hàng.

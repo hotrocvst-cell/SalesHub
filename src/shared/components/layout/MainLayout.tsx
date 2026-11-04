@@ -194,13 +194,13 @@ export default function MainLayout() {
                     </div>
                 </div>
 
-                {/* Phía bên phải: Badge Siêu thị, Badge Hệ thống, Chuông Thông Báo & Badge Người Dùng */}
+                {/* Phía bên phải: Badge ST, Badge Hệ thống, Chuông Thông Báo & Badge Người Dùng */}
                 <div className="flex items-center gap-2">
                     {isAuthenticated && currentUser?.email && currentUser?.id ? (
                         <>
-                            {/* Badge Siêu thị hiện tại */}
+                            {/* Badge ST hiện tại */}
                             {currentUser.store_name && (
-                                <div className="hidden xl:inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold max-w-xs truncate" title={`Siêu thị hiện tại: ${currentUser.store_name}`}>
+                                <div className="hidden xl:inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold max-w-xs truncate" title={`ST hiện tại: ${currentUser.store_name}`}>
                                     <Store className="w-3.5 h-3.5 text-blue-600 shrink-0" />
                                     <span className="truncate">{currentUser.store_name}</span>
                                 </div>
@@ -263,7 +263,7 @@ export default function MainLayout() {
                                                     ? 'bg-indigo-600 text-white border-indigo-700 shadow-xs'
                                                     : 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100'
                                             }`}
-                                            title="Bật/Tắt thanh công cụ kiểm thử phân quyền theo Siêu thị & Nhân viên"
+                                            title="Bật/Tắt thanh công cụ kiểm thử phân quyền theo ST & Nhân viên"
                                         >
                                             <FlaskConical className="w-3.5 h-3.5 text-indigo-600" />
                                             <span className="hidden sm:inline">Giả Lập Testing</span>
