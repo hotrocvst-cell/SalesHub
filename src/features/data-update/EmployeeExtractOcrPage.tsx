@@ -31,6 +31,7 @@ import {
 } from './services/geminiEmployeeOcrService';
 import {
     fetchStoreKnownCampaignTargets,
+    isQuantityCampaign,
     type KnownStoreCampaignTarget,
     type CampaignMappingItem
 } from './services/campaignTargetMappingService';
@@ -471,9 +472,31 @@ export default function EmployeeExtractOcrPage() {
             records = records.filter(r => storeEmpIdSet.has(String(r.employee_id || '').trim().toLowerCase()));
         }
         const items = convertSessionRecordsToOcrItems(records);
-        setEmployeesData(items);
+        // Đảm bảo các chỉ tiêu số lượng (SL) được làm tròn chuẩn số nguyên (ví dụ 47,8 -> 48)
+        const normalizedItems = items.map(emp => {
+            const campaigns = { ...emp.campaigns };
+            const details = (emp.campaignDetails || []).map(d => {
+                const isQty = isQuantityCampaign(d.unit, d.campaignName, knownStoreCampaigns, campaignDict);
+                const val = isQty ? Math.round(d.value) : d.value;
+                if (isQty) {
+                    campaigns[d.campaignName] = val;
+                }
+                return {
+                    ...d,
+                    value: val,
+                    unit: isQty ? 'SL' : d.unit
+                };
+            });
+            Object.entries(campaigns).forEach(([cName, cVal]) => {
+                if (isQuantityCampaign(undefined, cName, knownStoreCampaigns, campaignDict)) {
+                    campaigns[cName] = Math.round(cVal);
+                }
+            });
+            return { ...emp, campaigns, campaignDetails: details };
+        });
+        setEmployeesData(normalizedItems);
         setActiveTab('manual');
-        showToast(`📥 Đã nạp thành công ${items.length} nhân viên thuộc danh bạ ST từ phiên ngày ${formatDate(reportDate)}!`);
+        showToast(`📥 Đã nạp thành công ${normalizedItems.length} nhân viên thuộc danh bạ ST từ phiên ngày ${formatDate(reportDate)}!`);
     };
 
     // Quét bổ sung các ảnh thi đua mới và chèn thêm vào danh sách nhân viên hiện tại
@@ -543,15 +566,25 @@ export default function EmployeeExtractOcrPage() {
     const handleRemapCampaign = (oldName: string, newName: string) => {
         if (!oldName || !newName || oldName === newName) return;
 
+        const isNewQuantity = isQuantityCampaign(undefined, newName, knownStoreCampaigns, campaignDict);
+
         setEmployeesData(prev => prev.map(emp => {
             const campaigns = { ...emp.campaigns };
             if (campaigns[oldName] !== undefined) {
-                campaigns[newName] = campaigns[oldName];
+                const oldVal = campaigns[oldName];
+                campaigns[newName] = isNewQuantity ? Math.round(oldVal) : oldVal;
                 delete campaigns[oldName];
             }
             const campaignDetails = (emp.campaignDetails || []).map(d =>
                 d.campaignName === oldName
-                    ? { ...d, campaignName: newName, isAutoMatched: false, mappedReason: 'Quản lý chọn thủ công' }
+                    ? {
+                        ...d,
+                        campaignName: newName,
+                        value: isNewQuantity ? Math.round(d.value) : d.value,
+                        unit: isNewQuantity ? 'SL' : d.unit,
+                        isAutoMatched: false,
+                        mappedReason: 'Quản lý chọn thủ công'
+                    }
                     : d
             );
             return { ...emp, campaigns, campaignDetails };
@@ -559,7 +592,13 @@ export default function EmployeeExtractOcrPage() {
 
         setCampaignMappings(prev => prev.map(m =>
             m.resolvedName === oldName
-                ? { ...m, resolvedName: newName, isAutoMatched: false, mappedReason: 'Quản lý tùy chỉnh thủ công' }
+                ? {
+                    ...m,
+                    resolvedName: newName,
+                    unit: isNewQuantity ? 'SL' : m.unit,
+                    isAutoMatched: false,
+                    mappedReason: 'Quản lý tùy chỉnh thủ công'
+                }
                 : m
         ));
 

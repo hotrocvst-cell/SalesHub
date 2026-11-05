@@ -8,10 +8,13 @@ export type GeminiKeySource = 'USER' | 'ADMIN' | 'NONE';
 
 export interface ActiveKeyInfo {
     key: string;
+    backupKeys: string[];
+    allKeys: string[];
     source: GeminiKeySource;
     adminKeyConfigured: boolean;
     userKeyConfigured: boolean;
     isTableReady: boolean;
+    totalKeysCount: number;
 }
 
 export class GeminiQuotaExceededError extends Error {
@@ -23,6 +26,26 @@ export class GeminiQuotaExceededError extends Error {
         this.name = 'GeminiQuotaExceededError';
         this.keySource = keySource;
     }
+}
+
+/**
+ * Tách và lọc danh sách API Key từ chuỗi thô (hỗ trợ nhiều key cách nhau bằng xuống dòng, dấu phẩy, chấm phẩy)
+ */
+export function parseApiKeys(raw: string): string[] {
+    if (!raw) return [];
+    return raw
+        .split(/[\r\n,;]+/)
+        .map(k => k.trim())
+        .filter(k => k.length >= 20);
+}
+
+/**
+ * Che một phần API Key để hiển thị an toàn trên giao diện hoặc log
+ */
+export function maskApiKey(key: string): string {
+    const clean = key.trim();
+    if (clean.length <= 10) return '***';
+    return `${clean.substring(0, 6)}...${clean.substring(clean.length - 4)}`;
 }
 
 export const SYSTEM_SETTINGS_SQL = `-- Bảng lưu trữ cấu hình tham số hệ thống chung (Do Quản trị viên cấu hình trên Cloud)
@@ -131,38 +154,102 @@ export async function saveAdminGeminiKeyCloud(
 
 /**
  * 5. Xác định Key hoạt động (Ưu tiên: User Key > Admin Key > None)
+ * Tự động phân tách và hỗ trợ nhiều Key dự phòng
  */
 export function resolveActiveGeminiKey(isTableReady = true): ActiveKeyInfo {
-    const userKey = getUserGeminiKey();
-    const adminKey = getAdminGeminiKeyLocal();
+    const userKeys = parseApiKeys(getUserGeminiKey());
+    const adminKeys = parseApiKeys(getAdminGeminiKeyLocal());
 
-    if (userKey) {
+    // Nếu người dùng có cấu hình key cá nhân (ưu tiên cao nhất)
+    if (userKeys.length > 0) {
         return {
-            key: userKey,
+            key: userKeys[0],
+            backupKeys: [...userKeys.slice(1), ...adminKeys],
+            allKeys: [...userKeys, ...adminKeys],
             source: 'USER',
-            adminKeyConfigured: Boolean(adminKey),
+            adminKeyConfigured: adminKeys.length > 0,
             userKeyConfigured: true,
-            isTableReady
+            isTableReady,
+            totalKeysCount: userKeys.length + adminKeys.length
         };
     }
 
-    if (adminKey) {
+    // Nếu chỉ có Admin keys
+    if (adminKeys.length > 0) {
         return {
-            key: adminKey,
+            key: adminKeys[0],
+            backupKeys: adminKeys.slice(1),
+            allKeys: adminKeys,
             source: 'ADMIN',
             adminKeyConfigured: true,
             userKeyConfigured: false,
-            isTableReady
+            isTableReady,
+            totalKeysCount: adminKeys.length
         };
     }
 
     return {
         key: '',
+        backupKeys: [],
+        allKeys: [],
         source: 'NONE',
         adminKeyConfigured: false,
         userKeyConfigured: false,
-        isTableReady
+        isTableReady,
+        totalKeysCount: 0
     };
+}
+
+/**
+ * Trả về danh sách tất cả các key sẵn có để thử nghiệm hoặc xoay vòng khi hết hạn ngạch
+ */
+export function getAvailableApiKeys(preferredKey?: string): string[] {
+    const active = resolveActiveGeminiKey();
+    const list: string[] = [];
+
+    if (preferredKey?.trim()) {
+        const parsed = parseApiKeys(preferredKey);
+        parsed.forEach(k => {
+            if (!list.includes(k)) list.push(k);
+        });
+    }
+
+    active.allKeys.forEach(k => {
+        if (!list.includes(k)) list.push(k);
+    });
+
+    return list;
+}
+
+export interface KeyTestDetail {
+    key: string;
+    maskedKey: string;
+    success: boolean;
+    message: string;
+    quotaExceeded?: boolean;
+    activeModel?: string;
+}
+
+/**
+ * Kiểm tra toàn bộ danh sách API Key dự phòng và báo cáo chi tiết từng key
+ */
+export async function testAllGeminiApiKeys(rawKeys: string): Promise<KeyTestDetail[]> {
+    const keys = parseApiKeys(rawKeys);
+    if (keys.length === 0) return [];
+
+    const results: KeyTestDetail[] = [];
+    for (const k of keys) {
+        const res = await testGeminiApiKey(k);
+        results.push({
+            key: k,
+            maskedKey: maskApiKey(k),
+            success: res.success,
+            message: res.message,
+            quotaExceeded: res.quotaExceeded,
+            activeModel: res.activeModel
+        });
+    }
+    return results;
 }
 
 /**

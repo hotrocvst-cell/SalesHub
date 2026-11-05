@@ -87,8 +87,8 @@ export function resolveCampaignNameByTarget(
     storeTarget: number,
     storeActual: number | undefined,
     knownCampaigns: KnownStoreCampaignTarget[],
-    campaignDictionary: Array<{ raw_key: string; display_name: string }> = []
-): { resolvedName: string; isAutoMatched: boolean; reason?: string } {
+    campaignDictionary: Array<{ raw_key: string; display_name: string; unit?: string }> = []
+): { resolvedName: string; isAutoMatched: boolean; reason?: string; unit?: string } {
     const cleanRaw = rawName.trim();
     if (!cleanRaw) return { resolvedName: 'Chương trình khác', isAutoMatched: false };
 
@@ -102,7 +102,7 @@ export function resolveCampaignNameByTarget(
     // 1. Nếu tên đầy đủ và trùng khớp 100% với một mục đã biết
     const exactMatch = knownCampaigns.find(k => k.campaignName.toLowerCase() === cleanRaw.toLowerCase());
     if (exactMatch && !isTruncated) {
-        return { resolvedName: exactMatch.campaignName, isAutoMatched: false };
+        return { resolvedName: exactMatch.campaignName, isAutoMatched: false, unit: exactMatch.unit };
     }
 
     // 2. Nếu tên bị cắt ngắn hoặc cần đối chiếu qua Target ST:
@@ -120,7 +120,8 @@ export function resolveCampaignNameByTarget(
             return {
                 resolvedName: matchedByPrefixAndTarget.campaignName,
                 isAutoMatched: true,
-                reason: `Khớp Target ST: ${storeTarget} (Chương trình gốc: ${matchedByPrefixAndTarget.campaignName})`
+                reason: `Khớp Target ST: ${storeTarget} (Chương trình gốc: ${matchedByPrefixAndTarget.campaignName})`,
+                unit: matchedByPrefixAndTarget.unit
             };
         }
 
@@ -130,7 +131,8 @@ export function resolveCampaignNameByTarget(
             return {
                 resolvedName: matchedByExactTargetOnly[0].campaignName,
                 isAutoMatched: true,
-                reason: `Khớp duy nhất Target ST: ${storeTarget}`
+                reason: `Khớp duy nhất Target ST: ${storeTarget}`,
+                unit: matchedByExactTargetOnly[0].unit
             };
         }
     }
@@ -147,7 +149,8 @@ export function resolveCampaignNameByTarget(
             return {
                 resolvedName: dictCandidate.raw_key || dictCandidate.display_name,
                 isAutoMatched: true,
-                reason: `Khớp tiền tố trong danh mục hệ thống: ${dictCandidate.display_name}`
+                reason: `Khớp tiền tố trong danh mục hệ thống: ${dictCandidate.display_name}`,
+                unit: dictCandidate.unit
             };
         }
     }
@@ -158,5 +161,64 @@ export function resolveCampaignNameByTarget(
         resolvedName: cleanedName,
         isAutoMatched: false
     };
+}
+
+/**
+ * Kiểm tra xem một chương trình thi đua có phải tính theo số lượng (SL) hay không
+ * dựa trên nhãn đơn vị, tên chương trình, danh mục target ST hoặc danh mục hệ thống.
+ */
+export function isQuantityCampaign(
+    unit?: string,
+    campaignName?: string,
+    knownTargets?: KnownStoreCampaignTarget[],
+    campaignDictionary?: Array<{ raw_key?: string; display_name?: string; unit?: string }>
+): boolean {
+    // 1. Kiểm tra trực tiếp qua unit
+    if (unit) {
+        const u = unit.trim().toUpperCase();
+        if (u === 'SL' || u === 'SLQĐ' || u === 'SLQD' || u.includes('SL') || u.includes('SỐ LƯỢNG') || u.includes('SO LUONG')) {
+            return true;
+        }
+    }
+
+    // 2. Kiểm tra nhãn/hậu tố trong tên chương trình: ví dụ "[SL]", "(SL)", "[SLQĐ]", "Số lượng"
+    if (campaignName) {
+        const cleanName = campaignName.trim();
+        if (/[\(\[\{](SL|SLQĐ|SLQD|SỐ LƯỢNG|SO LUONG)[\)\]\}]/i.test(cleanName)) {
+            return true;
+        }
+        if (/\b(SL|SLQĐ|SLQD)\b/i.test(cleanName) && !/\b(DT|DTQĐ|DTQD)\b/i.test(cleanName)) {
+            return true;
+        }
+    }
+
+    // 3. Tra cứu trong knownTargets của ST
+    if (campaignName && knownTargets && knownTargets.length > 0) {
+        const cLower = campaignName.trim().toLowerCase();
+        const found = knownTargets.find(k => k.campaignName.toLowerCase() === cLower);
+        if (found && found.unit) {
+            const fu = found.unit.trim().toUpperCase();
+            if (fu === 'SL' || fu === 'SLQĐ' || fu === 'SLQD' || fu.includes('SL') || fu.includes('SỐ LƯỢNG') || fu.includes('SO LUONG')) {
+                return true;
+            }
+        }
+    }
+
+    // 4. Tra cứu trong danh mục hệ thống campaignDictionary
+    if (campaignName && campaignDictionary && campaignDictionary.length > 0) {
+        const cLower = campaignName.trim().toLowerCase();
+        const found = campaignDictionary.find(d => 
+            (d.raw_key && d.raw_key.trim().toLowerCase() === cLower) || 
+            (d.display_name && d.display_name.trim().toLowerCase() === cLower)
+        );
+        if (found && found.unit) {
+            const du = found.unit.trim().toUpperCase();
+            if (du === 'SL' || du === 'SLQĐ' || du === 'SLQD' || du.includes('SL') || du.includes('SỐ LƯỢNG') || du.includes('SO LUONG')) {
+                return true;
+            }
+        }
+    }
+
+    return false;
 }
 

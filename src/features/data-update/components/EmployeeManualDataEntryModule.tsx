@@ -26,6 +26,7 @@ import { getShortenedEmployeeName, formatValue, formatDate, formatDateTime } fro
 import type { EmployeeDataSession } from '../../employee-cumulative/utils/sessionStorage';
 import type { EmployeeItem, CampaignDictItem } from '../../../core/lib/storage';
 import type { CampaignMappingItem, KnownStoreCampaignTarget } from '../services/campaignTargetMappingService';
+import { isQuantityCampaign } from '../services/campaignTargetMappingService';
 import CampaignMappingReviewBar from './CampaignMappingReviewBar';
 
 interface Props {
@@ -227,9 +228,12 @@ export default function EmployeeManualDataEntryModule({
     const handleUpdateCampaignValue = (empId: string, cName: string, val: number) => {
         const updated = employees.map(e => {
             if (e.employeeId !== empId) return e;
-            const campaigns = { ...e.campaigns, [cName]: val };
+            const detail = (e.campaignDetails || []).find(d => d.campaignName === cName);
+            const isQty = isQuantityCampaign(detail?.unit, cName, knownStoreCampaigns, campaignDict);
+            const finalVal = isQty ? Math.round(val) : val;
+            const campaigns = { ...e.campaigns, [cName]: finalVal };
             const details = (e.campaignDetails || []).map(d =>
-                d.campaignName === cName ? { ...d, value: val } : d
+                d.campaignName === cName ? { ...d, value: finalVal, unit: isQty ? 'SL' : d.unit } : d
             );
             return { ...e, campaigns, campaignDetails: details };
         });
@@ -614,6 +618,8 @@ export default function EmployeeManualDataEntryModule({
                                                                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
                                                                     {Object.entries(emp.campaigns).map(([cName, cVal]) => {
                                                                         const detail = (emp.campaignDetails || []).find(d => d.campaignName === cName);
+                                                                        const isQty = isQuantityCampaign(detail?.unit, cName, knownStoreCampaigns, campaignDict);
+                                                                        const displayUnit = isQty ? 'SL' : (detail?.unit || 'DT');
                                                                         return (
                                                                             <div
                                                                                 key={cName}
@@ -624,11 +630,11 @@ export default function EmployeeManualDataEntryModule({
                                                                                         <span className="font-bold text-slate-800 text-xs truncate max-w-[150px] sm:max-w-none" title={cName}>
                                                                                             {cName}
                                                                                         </span>
-                                                                                        {detail?.unit && (
+                                                                                        {(detail?.unit || isQty) && (
                                                                                             <span className={`text-[9px] font-black px-1 py-0.2 rounded shrink-0 ${
-                                                                                                detail.unit === 'SL' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'
+                                                                                                displayUnit === 'SL' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'
                                                                                             }`}>
-                                                                                                {detail.unit}
+                                                                                                {displayUnit}
                                                                                             </span>
                                                                                         )}
                                                                                     </div>
@@ -673,8 +679,12 @@ export default function EmployeeManualDataEntryModule({
 
                                                                                 <input
                                                                                     type="number"
+                                                                                    step={isQty ? '1' : '0.01'}
                                                                                     value={cVal || ''}
-                                                                                    onChange={(e) => handleUpdateCampaignValue(emp.employeeId, cName, Number(e.target.value) || 0)}
+                                                                                    onChange={(e) => {
+                                                                                        const num = Number(e.target.value) || 0;
+                                                                                        handleUpdateCampaignValue(emp.employeeId, cName, isQty ? Math.round(num) : num);
+                                                                                    }}
                                                                                     className="w-20 text-right font-mono font-bold text-xs bg-slate-50 border border-slate-200 rounded px-1.5 py-1 outline-none focus:ring-1 focus:ring-blue-500"
                                                                                 />
                                                                             </div>

@@ -31,6 +31,7 @@ import {
     Sparkles,
     Layers,
     Music,
+    Gamepad2,
     MessageSquareText,
     Boxes,
     Banknote,
@@ -254,6 +255,20 @@ export const NAVIGATION_GROUPS: NavGroup[] = [
                 path: '/can-ton-kho',
                 icon: Boxes,
                 badge: '📦 Mới'
+            }
+        ]
+    },
+    {
+        groupTitle: 'GIẢI TRÍ',
+        icon: Gamepad2,
+        colorClass: 'text-purple-700',
+        bgClass: 'bg-purple-100 text-purple-700',
+        items: [
+            {
+                name: 'Đấu Trường Giải Trí',
+                path: '/dau-truong-giai-tri',
+                icon: Gamepad2,
+                badge: '🎮 HOT'
             }
         ]
     },

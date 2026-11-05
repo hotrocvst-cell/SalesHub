@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Trophy, CheckCircle2, AlertTriangle, ArrowRight, RefreshCw, ChevronDown, Sparkles } from 'lucide-react';
 import type { CampaignMappingItem, KnownStoreCampaignTarget } from '../services/campaignTargetMappingService';
+import { isQuantityCampaign } from '../services/campaignTargetMappingService';
 import type { CampaignDictItem } from '../../../core/lib/storage';
 import { formatValue } from '../../../core/lib/formatters';
 
@@ -34,10 +35,11 @@ export default function CampaignMappingReviewBar({
         activeCampaignNames.forEach(cName => {
             if (!map.has(cName)) {
                 const known = knownStoreCampaigns.find(k => k.campaignName.toLowerCase() === cName.toLowerCase());
+                const isQty = isQuantityCampaign(known?.unit, cName, knownStoreCampaigns, campaignDict);
                 map.set(cName, {
                     rawName: cName,
                     resolvedName: cName,
-                    unit: known?.unit || 'DT',
+                    unit: isQty ? 'SL' : (known?.unit || 'DT'),
                     storeActual: known?.actual || 0,
                     storeTarget: known?.target || 0,
                     isAutoMatched: false
@@ -92,6 +94,8 @@ export default function CampaignMappingReviewBar({
                     const cName = item.resolvedName || item.rawName || '';
                     const isEditing = editingCampaignName === cName;
                     const isTruncatedRaw = item.rawName && (item.rawName.endsWith('...') || item.rawName.endsWith('…'));
+                    const isQty = isQuantityCampaign(item.unit, cName, knownStoreCampaigns, campaignDict);
+                    const displayUnit = isQty ? 'SL' : (item.unit || 'DT');
 
                     return (
                         <div
@@ -105,9 +109,9 @@ export default function CampaignMappingReviewBar({
                                             {cName}
                                         </span>
                                         <span className={`text-[9px] font-black px-1 py-0.2 rounded shrink-0 ${
-                                            item.unit === 'SL' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'
+                                            displayUnit === 'SL' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'
                                         }`}>
-                                            {item.unit || 'DT'}
+                                            {displayUnit}
                                         </span>
                                     </div>
 

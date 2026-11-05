@@ -3,7 +3,9 @@ import { getShortenedEmployeeName, cleanEmployeeName, cleanBiNumber } from '../.
 import type { ParsedEmployeeRevenue } from '../../employee-cumulative/utils/employeeParsers';
 import {
     GeminiQuotaExceededError,
-    type GeminiKeySource
+    type GeminiKeySource,
+    getAvailableApiKeys,
+    maskApiKey
 } from '../../data-update/services/geminiApiKeyService';
 import { fileToBase64 } from '../../data-update/services/geminiVisionOcrService';
 
@@ -19,7 +21,7 @@ interface RawOcrRow {
 }
 
 /**
- * Gọi Gemini Vision API
+ * Gọi Gemini Vision API (Hỗ trợ tự động chuyển Key dự phòng khi gặp lỗi 429)
  */
 async function callGeminiVisionText(
     apiKey: string,
@@ -27,6 +29,11 @@ async function callGeminiVisionText(
     mimeType: string,
     prompt: string
 ): Promise<any> {
+    const candidateKeys = getAvailableApiKeys(apiKey);
+    if (candidateKeys.length === 0) {
+        throw new Error('Chưa cấu hình API Key nào.');
+    }
+
     const cachedModel = localStorage.getItem('SALESHUB_ACTIVE_GEMINI_MODEL');
     const models = Array.from(
         new Set([
@@ -39,57 +46,77 @@ async function callGeminiVisionText(
     );
     let lastError: any = null;
 
-    for (const model of models) {
-        try {
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-            const res = await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    contents: [
-                        {
-                            parts: [
-                                { text: prompt },
-                                {
-                                    inline_data: {
-                                        mime_type: mimeType || 'image/jpeg',
-                                        data: base64Image
+    for (let kIdx = 0; kIdx < candidateKeys.length; kIdx++) {
+        const currentKey = candidateKeys[kIdx];
+        let keyQuotaExceeded = false;
+
+        for (const model of models) {
+            try {
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${currentKey}`;
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [
+                            {
+                                parts: [
+                                    { text: prompt },
+                                    {
+                                        inline_data: {
+                                            mime_type: mimeType || 'image/jpeg',
+                                            data: base64Image
+                                        }
                                     }
-                                }
-                            ]
+                                ]
+                            }
+                        ],
+                        generationConfig: {
+                            temperature: 0.1,
+                            response_mime_type: 'application/json'
                         }
-                    ],
-                    generationConfig: {
-                        temperature: 0.1,
-                        response_mime_type: 'application/json'
+                    })
+                });
+
+                if (!res.ok) {
+                    const errData = await res.json().catch(() => ({}));
+                    const errMsg = errData?.error?.message || `HTTP ${res.status}`;
+                    if (res.status === 429 || errMsg.toLowerCase().includes('quota') || errMsg.toLowerCase().includes('rate limit')) {
+                        keyQuotaExceeded = true;
+                        lastError = new GeminiQuotaExceededError(`Key [${maskApiKey(currentKey)}] đạt giới hạn 429: ${errMsg}`);
+                        break;
                     }
-                })
-            });
-
-            if (!res.ok) {
-                const errData = await res.json().catch(() => ({}));
-                const errMsg = errData?.error?.message || `HTTP ${res.status}`;
-                if (res.status === 429 || errMsg.toLowerCase().includes('quota') || errMsg.toLowerCase().includes('rate limit')) {
-                    throw new GeminiQuotaExceededError(`Quota exceeded for ${model}`);
+                    lastError = new Error(`Model ${model} error: ${errMsg}`);
+                    continue;
                 }
-                lastError = new Error(`Model ${model} error: ${errMsg}`);
-                continue;
-            }
 
-            const json = await res.json();
-            const text = json?.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (!text) {
-                lastError = new Error(`Empty response from ${model}`);
-                continue;
-            }
+                const json = await res.json();
+                const text = json?.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (!text) {
+                    lastError = new Error(`Empty response from ${model}`);
+                    continue;
+                }
 
-            const cleanText = text.replace(/```json/gi, '').replace(/```/g, '').trim();
-            return JSON.parse(cleanText);
-        } catch (err: any) {
-            if (err?.isQuotaExceeded || err instanceof GeminiQuotaExceededError) {
-                throw err;
+                const cleanText = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+                return JSON.parse(cleanText);
+            } catch (err: any) {
+                if (err?.isQuotaExceeded || err instanceof GeminiQuotaExceededError) {
+                    keyQuotaExceeded = true;
+                    lastError = err;
+                    break;
+                }
+                lastError = err;
             }
-            lastError = err;
+        }
+
+        if (keyQuotaExceeded) {
+            if (kIdx + 1 < candidateKeys.length) {
+                console.warn(`⚠️ Key [${maskApiKey(currentKey)}] hết hạn ngạch. Tự động chuyển sang Key dự phòng #${kIdx + 2} [${maskApiKey(candidateKeys[kIdx + 1])}]...`);
+                continue;
+            } else {
+                throw new GeminiQuotaExceededError(
+                    `Toàn bộ ${candidateKeys.length} API Key dự phòng đều đã đạt giới hạn hạn ngạch (429 Resource Exhausted).`
+                );
+            }
         }
     }
 

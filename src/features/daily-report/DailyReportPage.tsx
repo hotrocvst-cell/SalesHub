@@ -28,11 +28,14 @@ import {
     Info,
     Edit3,
     Camera,
-    Sparkles
+    Sparkles,
+    KeyRound
 } from 'lucide-react';
 import ReportActionButtons from '../../shared/components/report/ReportActionButtons';
 import CloudDataSyncStatusBanner from '../../shared/components/report/CloudDataSyncStatusBanner';
 import type { AssessmentTemplate } from '../../shared/components/report/ReportAssessmentModal';
+import GeminiApiKeyModal from '../data-update/components/GeminiApiKeyModal';
+import { resolveActiveGeminiKey, type ActiveKeyInfo } from '../data-update/services/geminiApiKeyService';
 
 import {
     DAILY_REPORT_STORAGE_KEYS,
@@ -77,6 +80,9 @@ export default function DailyReportPage() {
     const [isUpdateModalOpen, setIsUpdateModalOpen] = useState<boolean>(false);
     const [isQuickEmulationModalOpen, setIsQuickEmulationModalOpen] = useState<boolean>(false);
     const [isManagerModalOpen, setIsManagerModalOpen] = useState<boolean>(false);
+    const [isKeyModalOpen, setIsKeyModalOpen] = useState<boolean>(false);
+    const [keyInfo, setKeyInfo] = useState<ActiveKeyInfo>(() => resolveActiveGeminiKey());
+    const [isQuotaExceeded, setIsQuotaExceeded] = useState<boolean>(false);
     const [availableStores, setAvailableStores] = useState<StoreItem[]>([]);
     const [showLegacyPasteInput, setShowLegacyPasteInput] = useState<boolean>(false);
 
@@ -649,6 +655,27 @@ export default function DailyReportPage() {
                                     <Sparkles className="w-3 h-3 text-emerald-600" />
                                     <span>📸 Thi Đua Từng ST</span>
                                 </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsKeyModalOpen(true)}
+                                    className={`text-[11px] font-bold px-2 py-0.5 rounded-lg flex items-center gap-1 transition cursor-pointer border ${
+                                        isQuotaExceeded
+                                            ? 'bg-amber-100 text-amber-900 border-amber-300 animate-pulse'
+                                            : !keyInfo.key
+                                            ? 'bg-rose-50 text-rose-700 border-rose-300'
+                                            : 'text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 border-slate-200'
+                                    }`}
+                                    title="Quản lý & kiểm tra hạn mức Google Gemini API Key (Hỗ trợ cấu hình nhiều Key dự phòng)"
+                                >
+                                    <KeyRound className={`w-3 h-3 ${isQuotaExceeded ? 'text-amber-700' : !keyInfo.key ? 'text-rose-600' : 'text-amber-600'}`} />
+                                    <span>
+                                        {isQuotaExceeded
+                                            ? '⚠️ Hết hạn ngạch'
+                                            : !keyInfo.key
+                                            ? 'Cài Key AI'
+                                            : `API Key AI${keyInfo.totalKeysCount > 1 ? ` (${keyInfo.totalKeysCount} key)` : ''}`}
+                                    </span>
+                                </button>
                             </div>
                         </div>
                         <select
@@ -903,6 +930,17 @@ export default function DailyReportPage() {
                     onSessionsUpdated={() => loadRealtimeSessions()}
                 />
             )}
+            {/* MODAL CÀI ĐẶT & KIỂM TRA HẠN MỨC GEMINI API KEY */}
+            <GeminiApiKeyModal
+                isOpen={isKeyModalOpen}
+                onClose={() => setIsKeyModalOpen(false)}
+                isAdmin={isAdmin}
+                isQuotaExceeded={isQuotaExceeded}
+                onKeySaved={() => {
+                    setKeyInfo(resolveActiveGeminiKey());
+                    setIsQuotaExceeded(false);
+                }}
+            />
         </div>
     );
 }

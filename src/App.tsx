@@ -34,6 +34,7 @@ const DataStatusPage = lazy(() => import('./features/data-status/DataStatusPage'
 const VoucherClaimPage = lazy(() => import('./features/voucher/VoucherClaimPage'));
 const VoucherAdminPage = lazy(() => import('./features/voucher/VoucherAdminPage'));
 const XmusicPlaylistPage = lazy(() => import('./features/xmusic-playlist/XmusicPlaylistPage'));
+const GameArenaPage = lazy(() => import('./features/game-arena/GameArenaPage'));
 const SupportTicketPage = lazy(() => import('./features/support-ticket/SupportTicketPage'));
 const EmployeeCumulativeRankingPage = lazy(() => import('./features/employee-cumulative-ranking/EmployeeCumulativeRankingPage'));
 const CampaignDirectoryPage = lazy(() => import('./features/campaign-directory/CampaignDirectoryPage'));
@@ -232,6 +233,11 @@ export default function App() {
                                 <Route path="/xmusic-playlist" element={
                                     <ProtectedRoute path="/xmusic-playlist">
                                         <XmusicPlaylistPage />
+                                    </ProtectedRoute>
+                                } />
+                                <Route path="/dau-truong-giai-tri" element={
+                                    <ProtectedRoute path="/dau-truong-giai-tri">
+                                        <GameArenaPage />
                                     </ProtectedRoute>
                                 } />
                                 <Route path="/ho-tro-gop-y" element={

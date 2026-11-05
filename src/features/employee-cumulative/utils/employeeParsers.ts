@@ -630,7 +630,10 @@ export function parseEmployeeCampaignText(rawText: string): {
             const match = empRaw.match(/^(\w+)\s*-\s*(.+)$/);
             if (match) {
                 const empId = match[1].trim();
-                const value = parseNumber(parts[1]);
+                let value = parseNumber(parts[1]);
+                if (currentCampaign.unit_type === 'SỐ LƯỢNG') {
+                    value = Math.round(value);
+                }
                 currentCampaign.employee_values[empId] = value;
             }
         }

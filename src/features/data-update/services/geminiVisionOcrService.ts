@@ -10,6 +10,8 @@ import {
     fetchAdminGeminiKeyCloud,
     saveAdminGeminiKeyCloud,
     resolveActiveGeminiKey,
+    getAvailableApiKeys,
+    maskApiKey,
     testGeminiApiKey,
     SYSTEM_SETTINGS_SQL
 } from './geminiApiKeyService';
@@ -55,7 +57,7 @@ export async function fileToBase64(file: File): Promise<string> {
 }
 
 /**
- * Gọi Gemini Vision API trích xuất JSON
+ * Gọi Gemini Vision API trích xuất JSON (Hỗ trợ tự động chuyển Key dự phòng khi gặp lỗi 429)
  */
 async function callGeminiVision(
     apiKey: string,
@@ -64,6 +66,11 @@ async function callGeminiVision(
     prompt: string,
     keySource: GeminiKeySource = 'ADMIN'
 ): Promise<any> {
+    const candidateKeys = getAvailableApiKeys(apiKey);
+    if (candidateKeys.length === 0) {
+        throw new Error('Chưa cấu hình API Key Gemini nào.');
+    }
+
     const cachedModel = localStorage.getItem('SALESHUB_ACTIVE_GEMINI_MODEL');
     const models = Array.from(
         new Set([
@@ -76,68 +83,90 @@ async function callGeminiVision(
     );
     let lastError: any = null;
 
-    for (const model of models) {
-        try {
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-            const res = await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    contents: [
-                        {
-                            parts: [
-                                { text: prompt },
-                                {
-                                    inline_data: {
-                                        mime_type: mimeType || 'image/jpeg',
-                                        data: base64Image
-                                    }
-                                }
-                            ]
-                        }
-                    ],
-                    generationConfig: {
-                        temperature: 0.1,
-                        response_mime_type: 'application/json'
-                    }
-                })
-            });
+    for (let kIdx = 0; kIdx < candidateKeys.length; kIdx++) {
+        const currentKey = candidateKeys[kIdx];
+        let keyQuotaExceeded = false;
 
-            if (res.status === 429) {
+        for (const model of models) {
+            try {
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${currentKey}`;
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [
+                            {
+                                parts: [
+                                    { text: prompt },
+                                    {
+                                        inline_data: {
+                                            mime_type: mimeType || 'image/jpeg',
+                                            data: base64Image
+                                        }
+                                    }
+                                ]
+                            }
+                        ],
+                        generationConfig: {
+                            temperature: 0.1,
+                            response_mime_type: 'application/json'
+                        }
+                    })
+                });
+
+                if (res.status === 429) {
+                    keyQuotaExceeded = true;
+                    lastError = new GeminiQuotaExceededError(
+                        `Key [${maskApiKey(currentKey)}] đạt giới hạn 429 (Resource Exhausted).`,
+                        keySource
+                    );
+                    break;
+                }
+
+                if (!res.ok) {
+                    const errData = await res.json().catch(() => ({}));
+                    const errMsg = errData?.error?.message || `Lỗi HTTP ${res.status} từ Gemini API (${model})`;
+                    const isQuota =
+                        errData?.error?.status === 'RESOURCE_EXHAUSTED' ||
+                        errMsg.toLowerCase().includes('quota') ||
+                        errMsg.toLowerCase().includes('rate limit');
+
+                    if (isQuota) {
+                        keyQuotaExceeded = true;
+                        lastError = new GeminiQuotaExceededError(errMsg, keySource);
+                        break;
+                    }
+
+                    throw new Error(errMsg);
+                }
+
+                const json = await res.json();
+                const rawText = json?.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (!rawText) throw new Error('Không nhận được nội dung từ Gemini');
+
+                localStorage.setItem('SALESHUB_ACTIVE_GEMINI_MODEL', model);
+                return JSON.parse(rawText);
+            } catch (err: any) {
+                if (err?.isQuotaExceeded || err instanceof GeminiQuotaExceededError) {
+                    keyQuotaExceeded = true;
+                    lastError = err;
+                    break;
+                }
+                console.warn(`Lỗi gọi model ${model} với key ${maskApiKey(currentKey)}:`, err);
+                lastError = err;
+            }
+        }
+
+        if (keyQuotaExceeded) {
+            if (kIdx + 1 < candidateKeys.length) {
+                console.warn(`⚠️ Key [${maskApiKey(currentKey)}] hết hạn ngạch. Tự động chuyển sang Key dự phòng #${kIdx + 2} [${maskApiKey(candidateKeys[kIdx + 1])}]...`);
+                continue;
+            } else {
                 throw new GeminiQuotaExceededError(
-                    'Hạn ngạch API đã đạt giới hạn (HTTP 429 Too Many Requests / Resource Exhausted).',
+                    `Toàn bộ ${candidateKeys.length} API Key dự phòng đều đã đạt giới hạn hạn ngạch (429 Resource Exhausted).`,
                     keySource
                 );
             }
-
-            if (!res.ok) {
-                const errData = await res.json().catch(() => ({}));
-                const errMsg = errData?.error?.message || `Lỗi HTTP ${res.status} từ Gemini API (${model})`;
-                const isQuota =
-                    errData?.error?.status === 'RESOURCE_EXHAUSTED' ||
-                    errMsg.toLowerCase().includes('quota') ||
-                    errMsg.toLowerCase().includes('rate limit');
-
-                if (isQuota) {
-                    throw new GeminiQuotaExceededError(errMsg, keySource);
-                }
-
-                throw new Error(errMsg);
-            }
-
-            const json = await res.json();
-            const rawText = json?.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (!rawText) throw new Error('Không nhận được nội dung từ Gemini');
-
-            localStorage.setItem('SALESHUB_ACTIVE_GEMINI_MODEL', model);
-            return JSON.parse(rawText);
-        } catch (err: any) {
-            // Nếu là lỗi Quota, ném ra ngay lập tức để UI mở modal Google cá nhân
-            if (err?.isQuotaExceeded || err instanceof GeminiQuotaExceededError) {
-                throw err;
-            }
-            console.warn(`Lỗi gọi model ${model}:`, err);
-            lastError = err;
         }
     }
 

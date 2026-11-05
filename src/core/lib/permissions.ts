@@ -448,6 +448,22 @@ const RAW_DEFAULT_PAGE_PERMISSIONS: SystemPagePermission[] = [
         badge_color: 'indigo'
     },
     {
+        page_key: 'game_arena',
+        page_name: 'Đấu Trường Giải Trí',
+        path: '/dau-truong-giai-tri',
+        group_title: 'GIẢI TRÍ',
+        description: 'Chuyên mục giải trí, mini game thư giãn (2048, Bắt Deal) và bảng xếp hạng điểm toàn hệ thống',
+        is_enabled: true,
+        allowed_roles: ['ADMIN'], // MẶC ĐỊNH CHỈ DUY NHẤT ADMIN THEO QUY CHUẨN 4
+        order_index: 12.5,
+        badge_enabled: true,
+        badge_icon: '🎮',
+        badge_text: 'HOT',
+        badge_color: 'purple',
+        allow_excel_export: false,
+        allowed_excel_roles: ['ADMIN']
+    },
+    {
         page_key: 'ho_tro_gop_y',
         page_name: 'Hỗ Trợ & Góp Ý',
         path: '/ho-tro-gop-y',

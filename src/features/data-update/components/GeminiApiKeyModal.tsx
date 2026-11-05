@@ -24,6 +24,10 @@ import {
     saveAdminGeminiKeyCloud,
     resolveActiveGeminiKey,
     testGeminiApiKey,
+    testAllGeminiApiKeys,
+    parseApiKeys,
+    maskApiKey,
+    type KeyTestDetail,
     SYSTEM_SETTINGS_SQL,
     type GeminiKeySource
 } from '../services/geminiApiKeyService';
@@ -54,6 +58,8 @@ export default function GeminiApiKeyModal({
     // Trạng thái kiểm tra
     const [isTesting, setIsTesting] = useState<boolean>(false);
     const [testResult, setTestResult] = useState<{ success: boolean; msg: string; quotaExceeded?: boolean } | null>(null);
+    const [multiTestResults, setMultiTestResults] = useState<KeyTestDetail[] | null>(null);
+    const [isTestingAll, setIsTestingAll] = useState<boolean>(false);
     const [isSaving, setIsSaving] = useState<boolean>(false);
     const [saveSuccessMsg, setSaveSuccessMsg] = useState<string>('');
 
@@ -75,6 +81,7 @@ export default function GeminiApiKeyModal({
         setUserKey(getUserGeminiKey());
         setAdminKey(getAdminGeminiKeyLocal());
         setTestResult(null);
+        setMultiTestResults(null);
         setSaveSuccessMsg('');
 
         // Tải Admin key từ Cloud
@@ -134,13 +141,24 @@ export default function GeminiApiKeyModal({
         setTimeout(() => setSaveSuccessMsg(''), 2500);
     };
 
-    // Kiểm tra kết nối API Key
+    // Kiểm tra kết nối API Key đơn lẻ
     const handleTestKey = async (keyToTest: string) => {
         setIsTesting(true);
         setTestResult(null);
+        setMultiTestResults(null);
         const res = await testGeminiApiKey(keyToTest);
         setIsTesting(false);
         setTestResult({ success: res.success, msg: res.message, quotaExceeded: res.quotaExceeded });
+    };
+
+    // Kiểm tra kết nối toàn bộ danh sách API Key
+    const handleTestAllKeys = async (rawKeys: string) => {
+        setIsTestingAll(true);
+        setTestResult(null);
+        setMultiTestResults(null);
+        const results = await testAllGeminiApiKeys(rawKeys);
+        setIsTestingAll(false);
+        setMultiTestResults(results);
     };
 
     const handleCopySql = () => {
@@ -150,6 +168,8 @@ export default function GeminiApiKeyModal({
     };
 
     const currentResolution = resolveActiveGeminiKey(isTableReady);
+    const parsedAdminKeys = parseApiKeys(adminKey);
+    const parsedUserKeys = parseApiKeys(userKey);
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
@@ -268,31 +288,75 @@ export default function GeminiApiKeyModal({
 
                             {/* Ô nhập Admin Key */}
                             <div className="space-y-1.5">
-                                <label className="font-bold text-slate-700 block">
-                                    Google Gemini API Key (Admin Master Key):
-                                </label>
-                                <input
-                                    type="password"
+                                <div className="flex items-center justify-between">
+                                    <label className="font-bold text-slate-700 block">
+                                        Google Gemini API Key (Admin Master Key):
+                                    </label>
+                                    <span className="text-[11px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200">
+                                        {parsedAdminKeys.length > 0 ? `🔑 ${parsedAdminKeys.length} Key nhận diện` : 'Chưa có key'}
+                                    </span>
+                                </div>
+                                <textarea
                                     value={adminKey}
-                                    onChange={e => setAdminKey(e.target.value)}
-                                    placeholder="Dán mã key bắt đầu bằng AIzaSy..."
-                                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono text-xs"
+                                    onChange={e => {
+                                        setAdminKey(e.target.value);
+                                        setTestResult(null);
+                                        setMultiTestResults(null);
+                                    }}
+                                    rows={3}
+                                    placeholder="Dán các mã Key bắt đầu bằng AIzaSy... (Mỗi dòng 1 key để cài đặt nhiều Key dự phòng)"
+                                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono text-xs leading-relaxed"
                                 />
+                                <div className="flex items-center justify-between text-[10.5px] text-slate-500">
+                                    <span>Hỗ trợ nhiều key: Mỗi dòng 1 key hoặc cách nhau dấu phẩy</span>
+                                    {parsedAdminKeys.length > 1 && (
+                                        <span className="text-emerald-700 font-bold">
+                                            ✨ Tự động chuyển key dự phòng khi gặp 429
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Hướng dẫn tạo nhiều project dưới 1 tài khoản Google */}
+                            <div className="p-3 rounded-xl bg-gradient-to-r from-amber-50 to-indigo-50 border border-amber-200 text-[11px] text-slate-700 space-y-1">
+                                <div className="font-bold text-amber-900 flex items-center gap-1">
+                                    <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                                    <span>Mẹo nhân x5 hạn ngạch với 1 tài khoản Google:</span>
+                                </div>
+                                <p className="text-slate-600 leading-normal">
+                                    Google tính hạn mức theo <strong>Google Cloud Project</strong>. Trong Google AI Studio, chọn <strong>"Create API key in new project"</strong> thay vì dùng project cũ. Mỗi project có 15 RPM / 1,500 RPD miễn phí hoàn toàn độc lập. Dán các key vào đây, hệ thống sẽ tự động xoay vòng key khi bị 429!
+                                </p>
                             </div>
 
                             {/* Nút hành động */}
-                            <div className="flex items-center justify-between gap-2 pt-2">
+                            <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                                <div className="flex items-center gap-2">
+                                    {parsedAdminKeys.length > 1 ? (
+                                        <button
+                                            type="button"
+                                            onClick={() => handleTestAllKeys(adminKey)}
+                                            disabled={isTestingAll || parsedAdminKeys.length === 0}
+                                            className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-all disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+                                        >
+                                            <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                                            <span>{isTestingAll ? 'Đang kiểm tra...' : `Kiểm tra ${parsedAdminKeys.length} Key`}</span>
+                                        </button>
+                                    ) : (
+                                        <button
+                                            type="button"
+                                            onClick={() => handleTestKey(adminKey)}
+                                            disabled={isTesting || !adminKey.trim()}
+                                            className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-all disabled:opacity-50 cursor-pointer"
+                                        >
+                                            {isTesting ? 'Đang kiểm tra...' : 'Kiểm tra kết nối'}
+                                        </button>
+                                    )}
+                                </div>
                                 <button
-                                    onClick={() => handleTestKey(adminKey)}
-                                    disabled={isTesting || !adminKey.trim()}
-                                    className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-all disabled:opacity-50"
-                                >
-                                    {isTesting ? 'Đang kiểm tra...' : 'Kiểm tra kết nối'}
-                                </button>
-                                <button
+                                    type="button"
                                     onClick={handleSaveAdminKey}
                                     disabled={isSaving || !adminKey.trim()}
-                                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-all shadow-md shadow-indigo-100 disabled:opacity-50 flex items-center gap-1.5"
+                                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-all shadow-md shadow-indigo-100 disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
                                 >
                                     <ShieldCheck className="w-4 h-4" />
                                     <span>{isSaving ? 'Đang lưu...' : 'Lưu Lên Cloud (Cho Toàn Hệ Thống)'}</span>
@@ -310,11 +374,11 @@ export default function GeminiApiKeyModal({
                                     <span className="font-bold text-slate-700">Trạng thái Key đang áp dụng:</span>
                                     {currentResolution.source === 'USER' ? (
                                         <span className="bg-emerald-100 text-emerald-800 text-[10px] font-black px-2 py-0.5 rounded-full border border-emerald-300">
-                                            👤 Key Cá Nhân (Ưu tiên)
+                                            👤 Key Cá Nhân ({currentResolution.totalKeysCount} key)
                                         </span>
                                     ) : currentResolution.source === 'ADMIN' ? (
                                         <span className="bg-blue-100 text-blue-800 text-[10px] font-black px-2 py-0.5 rounded-full border border-blue-300">
-                                            🛡️ Key Quản Trị Hệ Thống (Mặc định)
+                                            🛡️ Key Quản Trị Hệ Thống ({currentResolution.totalKeysCount} key)
                                         </span>
                                     ) : (
                                         <span className="bg-amber-100 text-amber-800 text-[10px] font-black px-2 py-0.5 rounded-full border border-amber-300">
@@ -356,39 +420,62 @@ export default function GeminiApiKeyModal({
 
                                 <ol className="list-decimal list-inside space-y-1 text-[11px] text-slate-600 font-medium">
                                     <li>Nhấn nút màu xanh bên trên để đăng nhập tài khoản Google của bạn.</li>
-                                    <li>Nhấn nút <strong>"Create API key"</strong> trên trang Google AI Studio.</li>
+                                    <li>Nhấn nút <strong>"Create API key"</strong> $\rightarrow$ chọn <strong>"Create API key in new project"</strong>.</li>
                                     <li>Sao chép mã Key (dạng <code className="bg-slate-200 px-1 py-0.2 rounded text-[10px]">AIzaSy...</code>), dán vào ô bên dưới và nhấn Lưu.</li>
                                 </ol>
                             </div>
 
                             {/* Ô nhập Key Cá Nhân */}
                             <div className="space-y-1.5">
-                                <label className="font-bold text-slate-700 block">
-                                    Dán API Key cá nhân của bạn vào đây:
-                                </label>
-                                <input
-                                    type="text"
+                                <div className="flex items-center justify-between">
+                                    <label className="font-bold text-slate-700 block">
+                                        Dán API Key cá nhân của bạn vào đây:
+                                    </label>
+                                    <span className="text-[11px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200">
+                                        {parsedUserKeys.length > 0 ? `🔑 ${parsedUserKeys.length} Key nhận diện` : 'Chưa có key'}
+                                    </span>
+                                </div>
+                                <textarea
                                     value={userKey}
-                                    onChange={e => setUserKey(e.target.value)}
-                                    placeholder="AIzaSy..."
-                                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono text-xs"
+                                    onChange={e => {
+                                        setUserKey(e.target.value);
+                                        setTestResult(null);
+                                        setMultiTestResults(null);
+                                    }}
+                                    rows={3}
+                                    placeholder="AIzaSy... (Mỗi dòng 1 key nếu bạn tạo nhiều project dự phòng)"
+                                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono text-xs leading-relaxed"
                                 />
                             </div>
 
                             {/* Các nút hành động */}
                             <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
                                 <div className="flex items-center gap-2">
-                                    <button
-                                        onClick={() => handleTestKey(userKey)}
-                                        disabled={isTesting || !userKey.trim()}
-                                        className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-all disabled:opacity-50"
-                                    >
-                                        {isTesting ? 'Đang thử...' : 'Kiểm tra key'}
-                                    </button>
+                                    {parsedUserKeys.length > 1 ? (
+                                        <button
+                                            type="button"
+                                            onClick={() => handleTestAllKeys(userKey)}
+                                            disabled={isTestingAll || parsedUserKeys.length === 0}
+                                            className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-all disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+                                        >
+                                            <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                                            <span>{isTestingAll ? 'Đang kiểm tra...' : `Kiểm tra ${parsedUserKeys.length} Key`}</span>
+                                        </button>
+                                    ) : (
+                                        <button
+                                            type="button"
+                                            onClick={() => handleTestKey(userKey)}
+                                            disabled={isTesting || !userKey.trim()}
+                                            className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-all disabled:opacity-50 cursor-pointer"
+                                        >
+                                            {isTesting ? 'Đang thử...' : 'Kiểm tra key'}
+                                        </button>
+                                    )}
                                     {getUserGeminiKey() && (
                                         <button
+                                            type="button"
                                             onClick={handleClearUserKey}
-                                            className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-xl transition-all flex items-center gap-1 border border-rose-200"
+                                            className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-xl transition-all flex items-center gap-1 border border-rose-200 cursor-pointer"
                                             title="Xóa key cá nhân để quay về dùng lại Key Admin"
                                         >
                                             <Trash2 className="w-3.5 h-3.5" />
@@ -397,9 +484,10 @@ export default function GeminiApiKeyModal({
                                     )}
                                 </div>
                                 <button
+                                    type="button"
                                     onClick={handleSaveUserKey}
                                     disabled={!userKey.trim()}
-                                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-all shadow-md shadow-indigo-100 disabled:opacity-50 flex items-center gap-1.5"
+                                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-all shadow-md shadow-indigo-100 disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
                                 >
                                     <Check className="w-4 h-4" />
                                     <span>Lưu Key Cá Nhân & Tiếp Tục</span>
@@ -408,7 +496,52 @@ export default function GeminiApiKeyModal({
                         </div>
                     )}
 
-                    {/* KẾT QUẢ KIỂM TRA KEY */}
+                    {/* KẾT QUẢ KIỂM TRA TOÀN BỘ KEY */}
+                    {multiTestResults && multiTestResults.length > 0 && (
+                        <div className="space-y-2 border border-slate-200 bg-slate-50/80 rounded-2xl p-3">
+                            <div className="flex items-center justify-between font-bold text-slate-700 text-xs pb-1 border-b border-slate-200">
+                                <span>Kết quả kiểm tra {multiTestResults.length} Key:</span>
+                                <span className="text-[10px] text-slate-500 font-normal">
+                                    {multiTestResults.filter(r => r.success).length}/{multiTestResults.length} hoạt động tốt
+                                </span>
+                            </div>
+                            <div className="space-y-1.5">
+                                {multiTestResults.map((item, idx) => (
+                                    <div
+                                        key={item.key}
+                                        className={`p-2 rounded-xl border flex items-center justify-between gap-2 text-xs font-semibold ${
+                                            item.success
+                                                ? 'bg-emerald-50 text-emerald-900 border-emerald-200'
+                                                : item.quotaExceeded
+                                                ? 'bg-amber-50 text-amber-900 border-amber-300'
+                                                : 'bg-rose-50 text-rose-900 border-rose-200'
+                                        }`}
+                                    >
+                                        <div className="flex items-center gap-1.5 min-w-0">
+                                            {item.success ? (
+                                                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                                            ) : item.quotaExceeded ? (
+                                                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                                            ) : (
+                                                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                                            )}
+                                            <span className="font-mono font-bold text-[11px] bg-white px-1.5 py-0.5 rounded border border-slate-200 shrink-0">
+                                                Key #{idx + 1}: {item.maskedKey}
+                                            </span>
+                                            <span className="truncate text-[11px]">{item.message}</span>
+                                        </div>
+                                        {item.activeModel && (
+                                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 shrink-0">
+                                                {item.activeModel}
+                                            </span>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* KẾT QUẢ KIỂM TRA KEY ĐƠN LẺ */}
                     {testResult && (
                         <div
                             className={`p-3 rounded-xl border flex items-center gap-2 text-xs font-semibold ${

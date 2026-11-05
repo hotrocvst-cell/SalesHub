@@ -1,12 +1,15 @@
 import {
     GeminiQuotaExceededError,
-    type GeminiKeySource
+    type GeminiKeySource,
+    getAvailableApiKeys,
+    maskApiKey
 } from './geminiApiKeyService';
 import { getShortenedEmployeeName, cleanBiNumber } from '../../../core/lib/formatters';
 import type { EmployeeSessionRecord } from '../../employee-cumulative/utils/sessionStorage';
 import type { EmployeeItem } from '../../../core/lib/storage';
 import {
     resolveCampaignNameByTarget,
+    isQuantityCampaign,
     type KnownStoreCampaignTarget,
     type CampaignMappingItem
 } from './campaignTargetMappingService';
@@ -228,7 +231,7 @@ Cấu trúc các hàng:
 QUY TẮC BẮT BUỘC:
 1. DẤU PHẨY ',' LÀ DẤU PHÂN CÁCH HÀNG NGHÌN (ví dụ: '1,169.83' -> 1169.83; '1,718.82' -> 1718.82; '10,887.00' -> 10887; '1,844.77' -> 1844.77).
 2. TỈ LỆ TỈ TRỌNG (%): Loại bỏ ký tự '%' và chuyển thành số (ví dụ: '66.9%' -> 66.9; '43.3%' -> 43.3; '100%' -> 100; '-' -> 0).
-3. ĐƠN VỊ: Nhận diện nhãn '[DT]' -> 'DT', '[SL]' -> 'SL'.
+3. ĐƠN VỊ: Nhận diện nhãn '[DT]' -> 'DT', '[SL]' -> 'SL'. Nếu chương trình có nhãn [SL] hoặc đơn vị là Số Lượng, bắt buộc đặt unit là 'SL'.
 4. TÊN BỊ CẮT NGẮN: Giữ nguyên tên gốc (kể cả có '...' như 'T11 - Trả chậm...').
 5. BỎ QUA HOÀN TOÀN: Dòng 'online - Online - 18001060' và các dòng chữ mờ watermark.
 
@@ -272,6 +275,11 @@ async function callGeminiVisionJson(
     keySource: GeminiKeySource = 'ADMIN',
     onLog?: (msg: string) => void
 ): Promise<any> {
+    const candidateKeys = getAvailableApiKeys(apiKey);
+    if (candidateKeys.length === 0) {
+        throw new Error('Chưa cấu hình API Key nào.');
+    }
+
     const parts: any[] = [{ text: promptText }];
     for (const img of images) {
         parts.push({
@@ -286,69 +294,101 @@ async function callGeminiVisionJson(
 
     let lastError: any = null;
 
-    for (const model of modelsToTry) {
-        try {
-            onLog?.(`Đang gọi mô hình ${model}...`);
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    for (let kIdx = 0; kIdx < candidateKeys.length; kIdx++) {
+        const currentKey = candidateKeys[kIdx];
+        let keyQuotaExceeded = false;
 
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => {
-                controller.abort();
-            }, timeoutMs);
+        for (const model of modelsToTry) {
+            try {
+                onLog?.(`Đang gọi mô hình ${model} (Key #${kIdx + 1})...`);
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${currentKey}`;
 
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                signal: controller.signal,
-                body: JSON.stringify({
-                    contents: [{ parts }],
-                    generationConfig: {
-                        temperature: 0.1,
-                        responseMimeType: 'application/json'
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => {
+                    controller.abort();
+                }, timeoutMs);
+
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    signal: controller.signal,
+                    body: JSON.stringify({
+                        contents: [{ parts }],
+                        generationConfig: {
+                            temperature: 0.1,
+                            responseMimeType: 'application/json'
+                        }
+                    })
+                });
+
+                clearTimeout(timeoutId);
+
+                if (response.status === 429) {
+                    keyQuotaExceeded = true;
+                    lastError = new GeminiQuotaExceededError(`Key [${maskApiKey(currentKey)}] đạt giới hạn 429`, keySource);
+                    break;
+                }
+
+                if (!response.ok) {
+                    const errJson = await response.json().catch(() => ({}));
+                    const errMsg = errJson.error?.message || response.statusText;
+                    const isQuota =
+                        errJson?.error?.status === 'RESOURCE_EXHAUSTED' ||
+                        errMsg.toLowerCase().includes('quota') ||
+                        errMsg.toLowerCase().includes('rate limit');
+
+                    if (isQuota) {
+                        keyQuotaExceeded = true;
+                        lastError = new GeminiQuotaExceededError(errMsg, keySource);
+                        break;
                     }
-                })
-            });
 
-            clearTimeout(timeoutId);
+                    console.warn(`Mô hình ${model} trả về HTTP ${response.status}:`, errMsg);
+                    lastError = new Error(`Model ${model}: ${errMsg}`);
+                    continue;
+                }
 
-            if (response.status === 429) {
-                throw new GeminiQuotaExceededError('Hạn mức API Key đã hết (Lỗi 429)', keySource);
+                const data = await response.json();
+                const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+                if (!rawText) {
+                    lastError = new Error(`Mô hình ${model} không trả về kết quả.`);
+                    continue;
+                }
+
+                setCachedModel(model);
+
+                let cleanJson = rawText.trim();
+                if (cleanJson.startsWith('```json')) cleanJson = cleanJson.slice(7);
+                if (cleanJson.startsWith('```')) cleanJson = cleanJson.slice(3);
+                if (cleanJson.endsWith('```')) cleanJson = cleanJson.slice(0, -3);
+
+                return JSON.parse(cleanJson.trim());
+            } catch (err: any) {
+                if (err instanceof GeminiQuotaExceededError || err?.isQuotaExceeded) {
+                    keyQuotaExceeded = true;
+                    lastError = err;
+                    break;
+                }
+                if (err.name === 'AbortError' || err.message?.includes('aborted')) {
+                    lastError = new Error(`Xử lý nhóm ảnh vượt quá thời gian cho phép (${Math.round(timeoutMs / 1000)}s).`);
+                } else {
+                    lastError = err;
+                }
+                console.warn(`Lỗi khi gọi model ${model}:`, err);
             }
+        }
 
-            if (!response.ok) {
-                const errJson = await response.json().catch(() => ({}));
-                const errMsg = errJson.error?.message || response.statusText;
-                console.warn(`Mô hình ${model} trả về HTTP ${response.status}:`, errMsg);
-                lastError = new Error(`Model ${model}: ${errMsg}`);
+        if (keyQuotaExceeded) {
+            if (kIdx + 1 < candidateKeys.length) {
+                console.warn(`⚠️ Key [${maskApiKey(currentKey)}] hết hạn ngạch. Tự động chuyển sang Key dự phòng #${kIdx + 2} [${maskApiKey(candidateKeys[kIdx + 1])}]...`);
                 continue;
-            }
-
-            const data = await response.json();
-            const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-
-            if (!rawText) {
-                lastError = new Error(`Mô hình ${model} không trả về kết quả.`);
-                continue;
-            }
-
-            setCachedModel(model);
-
-            let cleanJson = rawText.trim();
-            if (cleanJson.startsWith('```json')) cleanJson = cleanJson.slice(7);
-            if (cleanJson.startsWith('```')) cleanJson = cleanJson.slice(3);
-            if (cleanJson.endsWith('```')) cleanJson = cleanJson.slice(0, -3);
-
-            return JSON.parse(cleanJson.trim());
-        } catch (err: any) {
-            if (err instanceof GeminiQuotaExceededError) {
-                throw err;
-            }
-            if (err.name === 'AbortError' || err.message?.includes('aborted')) {
-                lastError = new Error(`Xử lý nhóm ảnh vượt quá thời gian cho phép (${Math.round(timeoutMs / 1000)}s).`);
             } else {
-                lastError = err;
+                throw new GeminiQuotaExceededError(
+                    `Toàn bộ ${candidateKeys.length} API Key dự phòng đều đã đạt giới hạn hạn ngạch (429 Resource Exhausted).`,
+                    keySource
+                );
             }
-            console.warn(`Lỗi khi gọi model ${model}:`, err);
         }
     }
 
@@ -389,7 +429,7 @@ function processEmulationChunkResult(
         const rawName = String(camp.programName || camp.campaignName || '').trim();
         const storeActual = cleanBiNumber(camp.storeActual || camp.actual || camp.totalValue);
         const storeTarget = cleanBiNumber(camp.storeTarget || camp.target);
-        const unit = String(camp.unit || 'DT').toUpperCase().includes('SL') ? 'SL' : 'DT';
+        let unit = String(camp.unit || 'DT').toUpperCase().includes('SL') ? 'SL' : 'DT';
 
         // Tự động mapping tên chương trình qua Target ST
         const mappingRes = resolveCampaignNameByTarget(
@@ -400,6 +440,24 @@ function processEmulationChunkResult(
             targetMappingOptions?.campaignDict || []
         );
         const resolvedName = mappingRes.resolvedName || rawName;
+
+        if (mappingRes.unit) {
+            const mappedUnit = String(mappingRes.unit).toUpperCase();
+            if (mappedUnit.includes('SL') || mappedUnit.includes('SỐ LƯỢNG') || mappedUnit.includes('SO LUONG')) {
+                unit = 'SL';
+            }
+        }
+
+        // Nhận diện chương trình thi đua tính theo số lượng (SL)
+        const isQty = isQuantityCampaign(
+            unit,
+            resolvedName || rawName,
+            targetMappingOptions?.knownTargets,
+            targetMappingOptions?.campaignDict
+        );
+        if (isQty) {
+            unit = 'SL';
+        }
 
         if (resolvedName) {
             detectedMappings.set(resolvedName, {
@@ -429,10 +487,16 @@ function processEmulationChunkResult(
                 ratioPercent = cleanBiNumber(empRow.ratioPercent);
                 if (ratioPercent > 0 && storeActual !== 0) {
                     const rawCalculated = storeActual * (ratioPercent / 100);
-                    val = Number(rawCalculated.toFixed(2));
+                    // Đối với các chương trình thi đua tính theo số lượng (SL), làm tròn số kết quả (ví dụ: 47,8 → 48)
+                    val = isQty ? Math.round(rawCalculated) : Number(rawCalculated.toFixed(2));
                 }
             } else if (empRow.value !== undefined && empRow.value !== null) {
                 val = cleanBiNumber(empRow.value);
+            }
+
+            // Đảm bảo kết quả số lượng luôn được làm tròn thành số nguyên
+            if (isQty && !isNaN(val)) {
+                val = Math.round(val);
             }
 
             let targetEmp = employeeMap.get(empId);
