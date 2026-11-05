@@ -807,6 +807,7 @@ export default function DataExtractOcrPage() {
 
                         {/* Vùng Upload 3 Nhóm Ảnh */}
                         <OcrUploadZone
+                            mode="STORE"
                             qdFile={qdFile}
                             onQdFileChange={setQdFile}
                             realFile={realFile}

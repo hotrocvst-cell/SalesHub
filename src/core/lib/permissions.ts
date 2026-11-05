@@ -259,6 +259,21 @@ const RAW_DEFAULT_PAGE_PERMISSIONS: SystemPagePermission[] = [
         badge_color: 'purple'
     },
     {
+        page_key: 'thi_dua_trong_tam',
+        page_name: 'Thi đua trọng tâm',
+        path: '/thi-dua-trong-tam',
+        group_title: 'SỨC KHỎE NHÂN VIÊN',
+        description: 'Theo dõi tổng quát các thi đua trọng tâm theo nhóm hàng, số liệu lũy kế ST và nhân sự',
+        is_enabled: true,
+        allowed_roles: ['ADMIN'],
+        order_index: 9.5,
+        badge_enabled: true,
+        badge_icon: '🎯',
+        badge_text: 'Mới',
+        badge_color: 'emerald',
+        allow_excel_export: false
+    },
+    {
         page_key: 'nhip_doanh_thu',
         page_name: 'Nhịp Doanh Thu',
         path: '/nhip-doanh-thu',

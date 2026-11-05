@@ -583,7 +583,11 @@ export async function fetchEmployees(storeName?: string, options?: { includeDemo
 
         const { data, error } = await query;
         if (error) throw error;
-        const list = (data as EmployeeItem[]) || [];
+        const rawList = (data as any[]) || [];
+        const list: EmployeeItem[] = rawList.map(item => ({
+            ...item,
+            job_title: item.job_title || item.department || item.role || ''
+        }));
         if (options?.includeDemo && (!storeName || storeName === 'all')) {
             return { success: true, data: [...list, ...getGuestDemoEmployees()] };
         }
@@ -606,7 +610,6 @@ export async function upsertEmployee(emp: Partial<EmployeeItem>) {
             store_name: emp.store_name?.trim(),
             role: normalizedRole,
             department: normalizedDept,
-            job_title: normalizedDept,
             is_active: emp.is_active ?? true,
             updated_at: new Date().toISOString()
         };
@@ -626,6 +629,7 @@ export async function upsertEmployee(emp: Partial<EmployeeItem>) {
                 // Dự phòng nếu bảng employees trên Supabase chưa có cột department
                 const fallbackPayload = { ...payload };
                 delete fallbackPayload.department;
+                delete fallbackPayload.job_title;
                 const { data: fbData, error: fbError } = await supabase
                     .from('employees')
                     .update(fallbackPayload)
@@ -655,6 +659,7 @@ export async function upsertEmployee(emp: Partial<EmployeeItem>) {
                 if (error) {
                     const fallbackPayload = { ...payload };
                     delete fallbackPayload.department;
+                delete fallbackPayload.job_title;
                     const { data: fbData, error: fbError } = await supabase
                         .from('employees')
                         .update(fallbackPayload)
@@ -675,6 +680,7 @@ export async function upsertEmployee(emp: Partial<EmployeeItem>) {
                 if (error) {
                     const fallbackPayload = { ...payload };
                     delete fallbackPayload.department;
+                delete fallbackPayload.job_title;
                     const { data: fbData, error: fbError } = await supabase
                         .from('employees')
                         .insert(fallbackPayload)
@@ -703,6 +709,12 @@ export async function upsertEmployee(emp: Partial<EmployeeItem>) {
             }
         }
 
+        if (resultData) {
+            resultData = {
+                ...resultData,
+                job_title: resultData.job_title || resultData.department || resultData.role || ''
+            };
+        }
         return { success: true, data: resultData };
     } catch (err: any) {
         console.error('Lỗi upsertEmployee:', err);
@@ -722,7 +734,6 @@ export async function upsertEmployeesBatch(emps: Partial<EmployeeItem>[]) {
                 store_name: emp.store_name?.trim() || '',
                 role: normalizedRole,
                 department: normalizedDept,
-                job_title: normalizedDept,
                 is_active: emp.is_active ?? true,
                 updated_at: new Date().toISOString()
             };
@@ -1108,44 +1119,83 @@ export async function upsertEmployeeCampaignTargetsBatch(items: EmployeeCampaign
 
 export async function saveUnifiedEmployeeTargets(payload: UnifiedEmployeeTargetPayload) {
     try {
-        const promises: PromiseLike<any>[] = [];
+        // 1. Lấy danh sách nhân viên và từ điển thi đua thực tế từ DB để xác thực khóa ngoại (tránh lỗi 23503)
+        const [{ data: emps, error: empErr }, { data: dict, error: dictErr }] = await Promise.all([
+            supabase.from('employees').select('employee_id'),
+            supabase.from('campaign_dictionary').select('raw_key')
+        ]);
 
-        if (payload.revenueTargets.length > 0) {
-            const revData = payload.revenueTargets.map(item => ({
-                employee_id: item.employee_id.trim(),
+        if (empErr) throw empErr;
+        if (dictErr) throw dictErr;
+
+        const validEmpIds = new Set((emps || []).map((e: any) => String(e.employee_id || '').trim()));
+        const validRawKeys = new Set((dict || []).map((d: any) => String(d.raw_key || '').trim()));
+
+        // 2. Chuẩn hóa & khử trùng lặp Chỉ tiêu Doanh thu (tránh lỗi Postgres 21000: ON CONFLICT DO UPDATE cannot affect row a second time)
+        const revMap = new Map<string, any>();
+        (payload.revenueTargets || []).forEach(item => {
+            const cleanId = String(item.employee_id || '').trim();
+            if (!cleanId || !validEmpIds.has(cleanId)) return;
+            revMap.set(cleanId, {
+                employee_id: cleanId,
                 month: payload.month,
                 year: payload.year,
                 target_revenue: Number(item.target_revenue) || 0,
                 updated_at: new Date().toISOString()
-            }));
-            promises.push(
-                supabase
-                    .from('employee_targets')
-                    .upsert(revData, { onConflict: 'employee_id,month,year' })
-            );
-        }
+            });
+        });
+        const revData = Array.from(revMap.values());
 
-        if (payload.campaignTargets.length > 0) {
-            const campData = payload.campaignTargets.map(item => ({
-                employee_id: item.employee_id.trim(),
-                raw_key: item.raw_key.trim(),
+        // 3. Chuẩn hóa & khử trùng lặp Chỉ tiêu Thi đua
+        const campMap = new Map<string, any>();
+        (payload.campaignTargets || []).forEach(item => {
+            const cleanId = String(item.employee_id || '').trim();
+            const cleanKey = String(item.raw_key || '').trim();
+            if (!cleanId || !cleanKey) return;
+            if (!validEmpIds.has(cleanId)) return;
+            if (!validRawKeys.has(cleanKey)) return;
+            const uniqueKey = `${cleanId}:::${cleanKey}`;
+            campMap.set(uniqueKey, {
+                employee_id: cleanId,
+                raw_key: cleanKey,
                 month: payload.month,
                 year: payload.year,
                 target_value: Number(item.target_value) || 0,
                 updated_at: new Date().toISOString()
-            }));
-            promises.push(
-                supabase
-                    .from('employee_campaign_targets')
-                    .upsert(campData, { onConflict: 'employee_id,raw_key,month,year' })
-            );
+            });
+        });
+        const campData = Array.from(campMap.values());
+
+        // 4. Batch upsert chia nhỏ (chunked 200 items) an toàn với PostgREST
+        const CHUNK_SIZE = 200;
+
+        if (revData.length > 0) {
+            for (let i = 0; i < revData.length; i += CHUNK_SIZE) {
+                const chunk = revData.slice(i, i + CHUNK_SIZE);
+                const { error } = await supabase
+                    .from('employee_targets')
+                    .upsert(chunk, { onConflict: 'employee_id,month,year' });
+                if (error) {
+                    console.error('Lỗi upsert employee_targets:', error);
+                    throw new Error(`Lỗi cập nhật chỉ tiêu doanh thu: ${error.message || error.details || error.code}`);
+                }
+            }
         }
 
-        const results = await Promise.all(promises);
-        const hasError = results.some(r => r.error);
-        if (hasError) throw new Error('Có lỗi khi cập nhật chỉ tiêu lên hệ thống!');
+        if (campData.length > 0) {
+            for (let i = 0; i < campData.length; i += CHUNK_SIZE) {
+                const chunk = campData.slice(i, i + CHUNK_SIZE);
+                const { error } = await supabase
+                    .from('employee_campaign_targets')
+                    .upsert(chunk, { onConflict: 'employee_id,raw_key,month,year' });
+                if (error) {
+                    console.error('Lỗi upsert employee_campaign_targets:', error);
+                    throw new Error(`Lỗi cập nhật chỉ tiêu thi đua: ${error.message || error.details || error.code}`);
+                }
+            }
+        }
 
-        return { success: true };
+        return { success: true, revCount: revData.length, campCount: campData.length };
     } catch (err: any) {
         console.error('Lỗi saveUnifiedEmployeeTargets:', err);
         return { success: false, error: err.message || err };

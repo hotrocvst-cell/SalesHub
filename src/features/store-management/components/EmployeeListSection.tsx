@@ -33,14 +33,7 @@ interface Props {
 const COMMON_ROLES = [
     { value: 'Quản lý', label: 'Quản Lý', icon: '👑' },
     { value: 'Trưởng ca', label: 'Trưởng Ca', icon: '⭐' },
-    { value: 'Nhân viên', label: 'Nhân Viên', icon: '👤' },
-    { value: 'AIO', label: 'AIO', icon: '📱' },
-    { value: 'AIO - TZ', label: 'AIO - TZ', icon: '📱' },
-    { value: 'AIO - TGD', label: 'AIO - TGD', icon: '📱' },
-    { value: 'AIO - ĐMX', label: 'AIO - ĐMX', icon: '📱' },
-    { value: 'Tư vấn bán hàng', label: 'Tư vấn bán hàng', icon: '👥' },
-    { value: 'Thu ngân', label: 'Thu ngân', icon: '💳' },
-    { value: 'Kho / Kỹ thuật', label: 'Kho / Kỹ thuật', icon: '📦' }
+    { value: 'Nhân viên', label: 'Nhân Viên', icon: '👤' }    
 ];
 
 export default function EmployeeListSection({

@@ -846,7 +846,6 @@ export async function processApprovalRequest(params: {
                     full_name: preserveName,
                     store_name: req.store_name || existingEmp.store_name,
                     role: preserveRole,
-                    job_title: preserveRole,
                     department: preserveRole,
                     is_active: true,
                     updated_at: new Date().toISOString()
@@ -872,7 +871,6 @@ export async function processApprovalRequest(params: {
                     full_name: req.full_name,
                     store_name: req.store_name,
                     role: defaultRoleName,
-                    job_title: defaultRoleName,
                     department: defaultRoleName,
                     is_active: true,
                     updated_at: new Date().toISOString()

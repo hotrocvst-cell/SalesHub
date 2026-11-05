@@ -14,6 +14,7 @@ import {
 import type { OcrEngineType } from '../types/ocrTypes';
 
 interface Props {
+    mode?: 'STORE' | 'EMPLOYEE';
     qdFile: File | null;
     onQdFileChange: (file: File | null) => void;
     realFile: File | null;
@@ -33,6 +34,7 @@ interface Props {
 }
 
 export default function OcrUploadZone({
+    mode = 'STORE',
     qdFile,
     onQdFileChange,
     realFile,
@@ -241,7 +243,15 @@ export default function OcrUploadZone({
                             </span>
                         </div>
                         <p className="text-[10px] text-purple-800 bg-purple-50/80 border border-purple-200 px-2 py-1 rounded-lg mt-1 font-medium leading-relaxed">
-                            📱 <strong>Ảnh thi đua theo ST:</strong> AI tự động tính số liệu NV từ % tỉ trọng &amp; mapping tên đầy đủ qua Target ST.
+                            {mode === 'STORE' ? (
+                                <>
+                                    📱 <strong>Ảnh thi đua theo ST:</strong> AI tự động bóc tách Target, Lũy kế thực hiện &amp; %DK của từng ngành hàng thi đua của ST.
+                                </>
+                            ) : (
+                                <>
+                                    📱 <strong>Ảnh thi đua theo ST:</strong> AI tự động tính số liệu NV từ % tỉ trọng &amp; mapping tên đầy đủ qua Target ST.
+                                </>
+                            )}
                         </p>
                         {emulationFiles.length >= 4 && (
                             <span className="text-[10px] text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md font-bold block mt-1">

@@ -42,6 +42,7 @@ const CashCounterPage = lazy(() => import('./features/cash-counter/CashCounterPa
 const GuestAccountsPage = lazy(() => import('./features/admin-config/GuestAccountsPage'));
 const CampaignOffsetPage = lazy(() => import('./features/campaign-offset/CampaignOffsetPage'));
 const SampleDataPage = lazy(() => import('./features/sample-data/SampleDataPage'));
+const FocusCampaignPage = lazy(() => import('./features/focus-campaign/FocusCampaignPage'));
 
 // Các trang Định danh, Đăng ký & Onboarding
 const LoginPage = lazy(() => import('./features/auth/LoginPage'));
@@ -165,6 +166,13 @@ export default function App() {
                                 <Route path="/can-tru-thi-dua" element={
                                     <ProtectedRoute path="/can-tru-thi-dua">
                                         <CampaignOffsetPage />
+                                    </ProtectedRoute>
+                                } />
+
+                                {/* Báo Cáo Thi Đua Trọng Tâm */}
+                                <Route path="/thi-dua-trong-tam" element={
+                                    <ProtectedRoute path="/thi-dua-trong-tam">
+                                        <FocusCampaignPage />
                                     </ProtectedRoute>
                                 } />
 

@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import type { EmployeeItem, CampaignDictItem } from '../../../core/lib/storage';
-import { cleanEmployeeName } from '../../../core/lib/formatters';
+import { cleanEmployeeName, getShortStoreName } from '../../../core/lib/formatters';
 import type { CampaignOffsetItem } from '../services/campaignOffsetService';
-import { Plus, X, ArrowRight, AlertCircle, Save } from 'lucide-react';
+import { Plus, X, AlertCircle, Save } from 'lucide-react';
 
 interface Props {
     isOpen: boolean;
@@ -28,11 +28,14 @@ export default function ManualAddOffsetModal({
     const [employeeId, setEmployeeId] = useState('');
     const [fromCampaign, setFromCampaign] = useState('');
     const [toCampaign, setToCampaign] = useState('');
-    const [quantity, setQuantity] = useState(1);
+    const [quantity, setQuantity] = useState<string>('1');
     const [note, setNote] = useState('');
     const [error, setError] = useState('');
 
     if (!isOpen) return null;
+
+    const selectedFromCampaign = campaigns.find(c => c.raw_key === fromCampaign);
+    const unitLabel = selectedFromCampaign?.unit || 'sản phẩm / triệu đ';
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -54,20 +57,25 @@ export default function ManualAddOffsetModal({
             setError('Ngành hàng nguồn và ngành hàng đích không được trùng nhau');
             return;
         }
-        if (quantity <= 0) {
-            setError('Số lượng cấn trừ phải lớn hơn 0');
+
+        const numQty = parseFloat(String(quantity).replace(',', '.'));
+        if (isNaN(numQty) || numQty <= 0) {
+            setError('Số lượng hoặc giá trị cấn trừ phải lớn hơn 0 (cho phép số thập phân như 0.5, 1.25)');
             return;
         }
 
+        const matchedEmp = employees.find(e => e.employee_id.trim() === employeeId.trim());
+        const actualStore = matchedEmp?.store_name || (storeName === 'all' ? 'Hệ Thống' : storeName);
+
         const newOffset: CampaignOffsetItem = {
             id: crypto.randomUUID(),
-            store_name: storeName,
+            store_name: actualStore,
             month,
             year,
-            employee_id: employeeId,
-            from_campaign_key: fromCampaign,
-            to_campaign_key: toCampaign,
-            offset_quantity: Number(quantity),
+            employee_id: employeeId.trim(),
+            from_campaign_key: fromCampaign.trim(),
+            to_campaign_key: toCampaign.trim(),
+            offset_quantity: Math.round(numQty * 1000) / 1000,
             note: note.trim(),
             is_approved: true,
             created_at: new Date().toISOString()
@@ -88,7 +96,7 @@ export default function ManualAddOffsetModal({
                         </div>
                         <div>
                             <h3 className="text-sm font-bold tracking-tight">Thêm Cặp Cấn Trừ Thủ Công</h3>
-                            <p className="text-[11px] text-slate-400">Quy tắc 1 đổi 1 giữa 2 ngành hàng của nhân sự</p>
+                            <p className="text-[11px] text-slate-400">Quy tắc cấn trừ 1 đổi 1 giữa 2 ngành hàng của nhân sự</p>
                         </div>
                     </div>
                     <button
@@ -120,7 +128,7 @@ export default function ManualAddOffsetModal({
                             <option value="">-- Chọn nhân viên thực hiện cấn trừ --</option>
                             {employees.map(emp => (
                                 <option key={emp.employee_id} value={emp.employee_id}>
-                                    {emp.employee_id} - {cleanEmployeeName(emp.full_name || '')}
+                                    {emp.employee_id} - {cleanEmployeeName(emp.full_name || '')} {storeName === 'all' && emp.store_name ? `• ${getShortStoreName(emp.store_name)}` : ''}
                                 </option>
                             ))}
                         </select>
@@ -140,7 +148,7 @@ export default function ManualAddOffsetModal({
                                 <option value="">-- Chọn ngành hàng dư --</option>
                                 {campaigns.map(c => (
                                     <option key={c.raw_key} value={c.raw_key}>
-                                        {c.display_name}
+                                        {c.display_name} {c.unit ? `(${c.unit})` : ''}
                                     </option>
                                 ))}
                             </select>
@@ -158,29 +166,35 @@ export default function ManualAddOffsetModal({
                                 <option value="">-- Chọn ngành hàng thiếu --</option>
                                 {campaigns.map(c => (
                                     <option key={c.raw_key} value={c.raw_key}>
-                                        {c.display_name}
+                                        {c.display_name} {c.unit ? `(${c.unit})` : ''}
                                     </option>
                                 ))}
                             </select>
                         </div>
                     </div>
 
-                    {/* Số lượng cấn trừ */}
+                    {/* Số lượng / Giá trị cấn trừ */}
                     <div>
                         <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                            Số lượng sản phẩm cấn trừ (1 đổi 1): <span className="text-rose-500">*</span>
+                            Số lượng / Doanh thu cấn trừ (1 đổi 1): <span className="text-rose-500">*</span>
                         </label>
                         <div className="flex items-center gap-2">
                             <input
                                 type="number"
-                                min={1}
-                                step={1}
+                                min="0.001"
+                                step="any"
                                 value={quantity}
-                                onChange={e => setQuantity(Math.max(1, parseInt(e.target.value, 10) || 1))}
-                                className="w-24 px-3 py-2 border border-slate-300 rounded-lg text-xs font-black font-mono focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+                                onChange={e => setQuantity(e.target.value)}
+                                placeholder="Ví dụ: 1 hoặc 0.5..."
+                                className="w-32 px-3 py-2 border border-slate-300 rounded-lg text-xs font-black font-mono focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
                             />
-                            <span className="text-slate-500 font-medium">sản phẩm thực tế</span>
+                            <span className="text-slate-500 font-bold bg-slate-100 px-2 py-1 rounded text-[11px]">
+                                {unitLabel}
+                            </span>
                         </div>
+                        <p className="text-[10.5px] text-slate-400 mt-1">
+                            * Hỗ trợ số nguyên (sản phẩm, hợp đồng) và số thập phân (doanh thu triệu đồng).
+                        </p>
                     </div>
 
                     {/* Ghi chú */}
@@ -219,4 +233,3 @@ export default function ManualAddOffsetModal({
         </div>
     );
 }
-

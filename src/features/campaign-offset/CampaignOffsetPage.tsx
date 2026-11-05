@@ -81,7 +81,7 @@ export default function CampaignOffsetPage() {
     const [toastMessage, setToastMessage] = useState<string>('');
 
     const { currentUser, isAdmin, isGuest } = useAuth();
-    const { allowedStores } = useUserStoreFilter(stores, selectedStore, setSelectedStore);
+    const { allowedStores, isLockedToSingleStore, canViewAllStores } = useUserStoreFilter(stores, selectedStore, setSelectedStore);
     const { canExportExcel } = useExcelExportPermission('/can-tru-thi-dua');
     const reportRef = useRef<HTMLDivElement>(null);
 
@@ -215,13 +215,6 @@ export default function CampaignOffsetPage() {
 
     // XỬ LÝ GỢI Ý THÔNG MINH
     const handleOpenSmartAuto = () => {
-        const suggestions = calculateSmartAutoOffsets(
-            filteredEmployees,
-            campaignTargets,
-            campaignActualsMap,
-            campaignDict
-        );
-        setAutoSuggestions(suggestions);
         setIsSmartModalOpen(true);
     };
 
@@ -387,15 +380,25 @@ export default function CampaignOffsetPage() {
                         <select
                             value={selectedStore}
                             onChange={e => setSelectedStore(e.target.value)}
-                            className="flex-1 px-3 py-1.5 border border-slate-300 rounded-xl text-xs font-bold text-slate-800 bg-white focus:ring-2 focus:ring-purple-500 focus:outline-hidden"
+                            disabled={isLockedToSingleStore}
+                            className={`flex-1 px-3 py-1.5 border border-slate-300 rounded-xl text-xs font-bold bg-white focus:ring-2 focus:ring-purple-500 focus:outline-hidden ${
+                                isLockedToSingleStore ? 'cursor-not-allowed text-amber-900 bg-amber-50/50' : 'text-slate-800'
+                            }`}
                         >
-                            <option value="all">Toàn bộ ST ({stores.length} Shop)</option>
-                            {stores.map(s => (
-                                <option key={s.id || s.name} value={s.name}>
+                            {canViewAllStores && (
+                                <option value="all">Toàn bộ ST ({allowedStores.length} Shop)</option>
+                            )}
+                            {allowedStores.map(s => (
+                                <option key={s.id || s.code || s.name} value={s.name}>
                                     {getShortStoreName(s.name)}
                                 </option>
                             ))}
                         </select>
+                        {isLockedToSingleStore && (
+                            <span className="text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded font-bold uppercase shrink-0">
+                                Đã khóa ST
+                            </span>
+                        )}
                     </div>
 
                     {/* Nút hành động chính */}
@@ -559,10 +562,10 @@ export default function CampaignOffsetPage() {
                     <div className="bg-emerald-50/50 p-3 rounded-xl border border-emerald-100 flex items-center justify-between">
                         <div>
                             <div className="text-[10.5px] font-bold text-emerald-800 uppercase tracking-wider">
-                                Tổng Sản Phẩm Cấn Trừ
+                                Tổng Lượng Cấn Trừ
                             </div>
                             <div className="text-lg font-black text-emerald-950 mt-0.5 font-avo">
-                                {totalOffsetUnits} <span className="text-xs font-normal text-slate-500">sản phẩm</span>
+                                {Number(totalOffsetUnits.toFixed(3)).toLocaleString('vi-VN')} <span className="text-xs font-normal text-slate-500">SL / ĐT</span>
                             </div>
                         </div>
                         <div className="w-9 h-9 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
@@ -599,7 +602,10 @@ export default function CampaignOffsetPage() {
             <SmartAutoOffsetModal
                 isOpen={isSmartModalOpen}
                 onClose={() => setIsSmartModalOpen(false)}
-                suggestions={autoSuggestions}
+                employees={filteredEmployees}
+                campaignDict={campaignDict}
+                campaignTargets={campaignTargets}
+                campaignActualsMap={campaignActualsMap}
                 onApply={handleApplySmartSuggestions}
             />
 

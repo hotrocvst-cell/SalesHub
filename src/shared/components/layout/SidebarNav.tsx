@@ -37,7 +37,8 @@ import {
     Coins,
     Shuffle,
     FileSpreadsheet,
-    Camera
+    Camera,
+    Crosshair
 } from 'lucide-react';
 
 export interface NavItem {
@@ -150,6 +151,12 @@ export const NAVIGATION_GROUPS: NavGroup[] = [
                 path: '/can-tru-thi-dua',
                 icon: Shuffle,
                 badge: '✨ Mới'
+            },
+            {
+                name: 'Thi đua trọng tâm',
+                path: '/thi-dua-trong-tam',
+                icon: Crosshair,
+                badge: '🎯 Mới'
             },
             {
                 name: 'Chi tiết nhân viên',

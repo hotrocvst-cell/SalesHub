@@ -847,6 +847,7 @@ export default function EmployeeExtractOcrPage() {
             {activeTab === 'ocr' ? (
                 <div className="space-y-4">
                     <OcrUploadZone
+                        mode="EMPLOYEE"
                         qdFile={qdFile}
                         onQdFileChange={setQdFile}
                         realFile={realFile}

@@ -221,34 +221,48 @@ export interface SmartOffsetSuggestion {
     from_campaign_key: string;
     from_campaign_name: string;
     from_surplus: number;
+    from_unit?: string;
     to_campaign_key: string;
     to_campaign_name: string;
     to_deficit: number;
-    offset_quantity: number; // Số lượng 1 đổi 1
+    to_unit?: string;
+    offset_quantity: number; // Số lượng / Doanh thu 1 đổi 1 (hỗ trợ số thập phân)
     reason: string;
+}
+
+export interface SmartAutoOffsetOptions {
+    selectedEmployeeIds?: string[];      // Danh sách mã NV cần cấn trừ (nếu rỗng/undefined thì lấy tất cả)
+    allowedFromCampaignKeys?: string[];  // Danh sách ngành nguồn được phép cấn (nếu rỗng/undefined thì lấy tất cả)
+    allowedToCampaignKeys?: string[];    // Danh sách ngành đích được phép nhận bù (nếu rỗng/undefined thì lấy tất cả)
 }
 
 /**
  * Thuật toán tính toán cấn trừ thông minh (Smart Auto-Offset)
- * Quy tắc: 1 sản phẩm thực tế của ngành hàng có dư cấn trừ bù cho 1 sản phẩm ngành hàng thiếu
+ * Quy tắc: 1 sản phẩm / doanh thu thực tế của ngành hàng có dư cấn trừ bù cho ngành hàng thiếu
  * Mục tiêu: Tối đa hóa số chương trình thi đua đạt chỉ tiêu cho nhân viên
  */
 export function calculateSmartAutoOffsets(
     targetEmployees: EmployeeItem[],
     campaignTargets: Record<string, Record<string, number>>,
     campaignActualsMap: Record<string, Record<string, number>>,
-    campaignDict: CampaignDictItem[]
+    campaignDict: CampaignDictItem[],
+    options?: SmartAutoOffsetOptions
 ): SmartOffsetSuggestion[] {
     const suggestions: SmartOffsetSuggestion[] = [];
 
-    targetEmployees.forEach(emp => {
+    // 0. Lọc danh sách nhân viên nếu có tùy chọn
+    const empsToProcess = options?.selectedEmployeeIds && options.selectedEmployeeIds.length > 0
+        ? targetEmployees.filter(e => options.selectedEmployeeIds!.includes(e.employee_id.trim()))
+        : targetEmployees;
+
+    empsToProcess.forEach(emp => {
         const empId = emp.employee_id.trim();
         const empTargets = campaignTargets[empId] || {};
         const empActuals = campaignActualsMap[empId] || {};
 
         // 1. Phân loại các ngành hàng có dư (surplus) và các ngành hàng đang thiếu (deficit)
-        const surpluses: { key: string; name: string; surplus: number }[] = [];
-        const deficits: { key: string; name: string; deficit: number }[] = [];
+        const surpluses: { key: string; name: string; unit?: string; surplus: number }[] = [];
+        const deficits: { key: string; name: string; unit?: string; deficit: number }[] = [];
 
         Object.entries(empTargets).forEach(([rawKey, targetVal]) => {
             const target = Number(targetVal) || 0;
@@ -257,6 +271,7 @@ export function calculateSmartAutoOffsets(
             const resolved = resolveCanonicalCampaign(rawKey, campaignDict);
             const cKey = resolved.canonicalKey;
             const displayName = resolved.dictItem?.display_name || cKey;
+            const unit = resolved.dictItem?.unit || 'cái';
 
             let actual = 0;
             if (empActuals[rawKey] !== undefined) {
@@ -265,11 +280,19 @@ export function calculateSmartAutoOffsets(
                 actual = Number(empActuals[cKey]) || 0;
             }
 
-            const diff = actual - target;
+            const diff = Math.round((actual - target) * 1000) / 1000;
             if (diff > 0) {
-                surpluses.push({ key: cKey, name: displayName, surplus: diff });
+                // Kiểm tra xem ngành nguồn này có được phép cấn trừ theo options không
+                if (!options?.allowedFromCampaignKeys || options.allowedFromCampaignKeys.length === 0 ||
+                    options.allowedFromCampaignKeys.includes(cKey) || options.allowedFromCampaignKeys.includes(rawKey)) {
+                    surpluses.push({ key: cKey, name: displayName, unit, surplus: diff });
+                }
             } else if (diff < 0) {
-                deficits.push({ key: cKey, name: displayName, deficit: Math.abs(diff) });
+                // Kiểm tra xem ngành đích này có được phép nhận bù theo options không
+                if (!options?.allowedToCampaignKeys || options.allowedToCampaignKeys.length === 0 ||
+                    options.allowedToCampaignKeys.includes(cKey) || options.allowedToCampaignKeys.includes(rawKey)) {
+                    deficits.push({ key: cKey, name: displayName, unit, deficit: Math.abs(diff) });
+                }
             }
         });
 
@@ -285,22 +308,25 @@ export function calculateSmartAutoOffsets(
             for (const sur of surpluses) {
                 if (sur.surplus <= 0) continue;
 
-                const transfer = Math.min(sur.surplus, needed);
+                const rawTransfer = Math.min(sur.surplus, needed);
+                const transfer = Math.round(rawTransfer * 1000) / 1000;
                 if (transfer > 0) {
-                    sur.surplus -= transfer;
-                    needed -= transfer;
+                    sur.surplus = Math.round((sur.surplus - transfer) * 1000) / 1000;
+                    needed = Math.round((needed - transfer) * 1000) / 1000;
 
                     suggestions.push({
                         employee_id: empId,
                         employee_name: emp.full_name || empId,
                         from_campaign_key: sur.key,
                         from_campaign_name: sur.name,
-                        from_surplus: sur.surplus + transfer,
+                        from_surplus: Math.round((sur.surplus + transfer) * 1000) / 1000,
+                        from_unit: sur.unit,
                         to_campaign_key: def.key,
                         to_campaign_name: def.name,
                         to_deficit: def.deficit,
+                        to_unit: def.unit,
                         offset_quantity: transfer,
-                        reason: `Cấn ${transfer} sp từ [${sur.name}] bù thiếu cho [${def.name}]`
+                        reason: `Cấn ${transfer} ${sur.unit || ''} từ [${sur.name}] bù thiếu cho [${def.name}]`.trim()
                     });
 
                     if (needed <= 0) break;
