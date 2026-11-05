@@ -2123,8 +2123,8 @@ export default function DailyEmployeeRevenueReportPage() {
                                     <Database className="w-5 h-5" />
                                 </div>
                                 <div>
-                                    <h3 className="text-base font-black text-slate-900">Mã Lệnh SQL Khởi Tạo Bảng Supabase</h3>
-                                    <p className="text-xs text-slate-500">Chạy câu lệnh này trong Supabase SQL Editor để kích hoạt lưu trữ Cloud</p>
+                                    <h3 className="text-base font-black text-slate-900">Mã Lệnh SQL Khởi Tạo Bảng Database</h3>
+                                    <p className="text-xs text-slate-500">Chạy câu lệnh này trong SQL Editor để kích hoạt lưu trữ Cloud</p>
                                 </div>
                             </div>
                             <button

@@ -1010,7 +1010,7 @@ export default function VoucherAdminPage() {
                                 <span>⚡ Hướng dẫn kích hoạt lưu trữ Cloud (Chỉ cần làm 1 lần):</span>
                             </div>
                             <ol className="list-decimal list-inside space-y-1 text-[11.5px] text-emerald-800 leading-relaxed font-medium">
-                                <li>Mở <strong>Supabase Dashboard</strong> dự án SalesHub, chọn mục <strong>SQL Editor</strong> ở menu trái.</li>
+                                <li>Mở <strong>Cloud Dashboard</strong> dự án SalesHub, chọn mục <strong>SQL Editor</strong> ở menu trái.</li>
                                 <li>Bấm <strong>New Query</strong>, dán toàn bộ đoạn mã SQL bên dưới vào ô soạn thảo.</li>
                                 <li>Bấm nút <strong>Run</strong> (hoặc nhấn tổ hợp phím <code>Ctrl + Enter</code>) để tạo bảng.</li>
                                 <li>Quay lại trang này và bấm nút <strong>"Kiểm Tra & Đồng Bộ Local Lên Cloud"</strong> bên dưới.</li>

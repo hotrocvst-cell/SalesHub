@@ -133,13 +133,13 @@ export async function checkCampaignProgramTableReady(): Promise<{ exists: boolea
         const { error } = await supabase.from('campaign_programs').select('id').limit(1);
         if (error) {
             if (error.code === 'PGRST205' || error.message?.includes('schema cache') || error.message?.includes('not find')) {
-                return { exists: false, error: 'Chưa tạo bảng campaign_programs trên Supabase' };
+                return { exists: false, error: 'Chưa tạo bảng campaign_programs trên cloud' };
             }
             return { exists: false, error: error.message };
         }
         return { exists: true };
     } catch (e: any) {
-        return { exists: false, error: e?.message || 'Không thể kết nối Supabase' };
+        return { exists: false, error: e?.message || 'Không thể kết nối cloud' };
     }
 }
 
@@ -349,7 +349,7 @@ export async function deleteCampaignProgram(id: string): Promise<{ success: bool
             await supabase.from('campaign_programs').delete().eq('id', id);
         }
     } catch (e: any) {
-        console.warn('Lỗi xóa trên Supabase:', e);
+        console.warn('Lỗi xóa trên Cloud:', e);
     }
     return { success: true };
 }

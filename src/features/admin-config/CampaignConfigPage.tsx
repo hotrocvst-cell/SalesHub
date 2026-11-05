@@ -350,7 +350,7 @@ export default function CampaignConfigPage() {
             showToast(`💾 Đã lưu thành công ${payloads.length} mục từ điển thi đua!`);
             loadData();
         } else {
-            showToast(`⚠️ Lỗi khi lưu cấu hình lên Supabase: ${res.error || 'Vui lòng thử lại!'}`);
+            showToast(`⚠️ Lỗi khi lưu cấu hình lên Cloud: ${res.error || 'Vui lòng thử lại!'}`);
         }
     };
 

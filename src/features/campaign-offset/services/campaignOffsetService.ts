@@ -18,7 +18,7 @@ export interface CampaignOffsetItem {
     updated_at?: string;
 }
 
-export const CAMPAIGN_OFFSETS_SQL = `-- 1. BẢNG LƯU TRỮ CẤN TRỪ THI ĐUA CUỐI THÁNG TRÊN SUPABASE CLOUD
+export const CAMPAIGN_OFFSETS_SQL = `-- 1. BẢNG LƯU TRỮ CẤN TRỪ THI ĐUA CUỐI THÁNG TRÊN CLOUD
 CREATE TABLE IF NOT EXISTS public.employee_campaign_offsets (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     store_name TEXT NOT NULL,
@@ -87,10 +87,10 @@ export async function fetchCampaignOffsets(
             } catch { }
             return { success: true, data: mapped, fromSupabase: true };
         } else if (error) {
-            console.warn('Lỗi đọc employee_campaign_offsets từ Supabase:', error.message);
+            console.warn('Lỗi đọc employee_campaign_offsets từ Database:', error.message);
         }
     } catch (e) {
-        console.warn('Lỗi truy vấn Supabase campaign offsets:', e);
+        console.warn('Lỗi truy vấn Database campaign offsets:', e);
     }
 
     // 2. Fallback đọc LocalStorage cache

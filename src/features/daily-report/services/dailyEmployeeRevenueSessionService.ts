@@ -148,7 +148,7 @@ export async function fetchDailyEmployeeSession(
         const cached = getCachedDailyEmployeeSession(storeName, reportDate);
         return { success: true, data: cached };
     } catch (err: any) {
-        console.error('Ngoại lệ khi gọi Supabase daily_employee_revenue_sessions:', err);
+        console.error('Ngoại lệ khi gọi daily_employee_revenue_sessions:', err);
         const cached = getCachedDailyEmployeeSession(storeName, reportDate);
         return { success: false, data: cached, error: err?.message || 'Lỗi kết nối' };
     }
@@ -218,14 +218,14 @@ export async function saveDailyEmployeeSession(
                 error.message?.includes('schema cache');
 
             if (isMissing) {
-                return { success: false, isTableMissing: true, error: 'Bảng daily_employee_revenue_sessions chưa được tạo trên Supabase.' };
+                return { success: false, isTableMissing: true, error: 'Bảng daily_employee_revenue_sessions chưa được tạo trên Cloud.' };
             }
             return { success: false, error: error.message };
         }
 
         return { success: true };
     } catch (err: any) {
-        return { success: false, error: err?.message || 'Lỗi khi lưu Supabase' };
+        return { success: false, error: err?.message || 'Lỗi khi lưu Cloud' };
     }
 }
 

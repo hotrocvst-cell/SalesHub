@@ -326,10 +326,10 @@ export default function CampaignDirectoryPage() {
             const res = await checkCampaignProgramTableReady();
             setIsCloudReady(res.exists);
             if (res.exists) {
-                showToast('🟢 Đã kết nối Supabase Cloud thành công!');
+                showToast('🟢 Đã kết nối Cloud thành công!');
                 loadPrograms();
             } else {
-                showToast('🟡 Chưa tìm thấy bảng campaign_programs trên Supabase');
+                showToast('🟡 Chưa tìm thấy bảng campaign_programs trên Database');
             }
         } finally {
             setIsCheckingCloud(false);

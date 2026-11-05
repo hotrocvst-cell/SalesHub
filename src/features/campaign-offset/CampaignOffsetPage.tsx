@@ -265,7 +265,7 @@ export default function CampaignOffsetPage() {
 
         if (res.success) {
             setHasUnsavedChanges(false);
-            showToast('🚀 Đã lưu và chốt số liệu cấn trừ thành công lên Supabase Cloud!');
+            showToast('🚀 Đã lưu và chốt số liệu cấn trừ thành công lên Cloud!');
         } else {
             showToast(`⚠️ Lỗi lưu Cloud: ${res.error || 'Vui lòng thử lại'}`);
         }
@@ -449,7 +449,7 @@ export default function CampaignOffsetPage() {
                             <button
                                 onClick={() => setShowSqlModal(true)}
                                 className="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 border border-slate-200 transition"
-                                title="Xem mã lệnh SQL DDL Supabase (Admin-only)"
+                                title="Xem mã lệnh SQL DDL (Admin-only)"
                             >
                                 <Database className="w-4 h-4 text-emerald-600" />
                             </button>

@@ -277,7 +277,7 @@ export default function ClusterTargetConfigModal({
                                 )}
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                                     <Cloud className="w-3 h-3" />
-                                    <span>Cloud Supabase</span>
+                                    <span>Cloud</span>
                                 </span>
                             </div>
                             <p className="text-[11px] text-slate-500 mt-0.5">

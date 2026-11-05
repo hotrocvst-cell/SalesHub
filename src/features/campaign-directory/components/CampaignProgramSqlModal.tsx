@@ -46,10 +46,10 @@ export default function CampaignProgramSqlModal({
                         </div>
                         <div>
                             <h3 className="text-base font-black text-slate-900">
-                                Trạng Thái Kết Nối & Mã SQL Supabase
+                                Trạng Thái Kết Nối & Mã SQL
                             </h3>
                             <p className="text-[11px] text-slate-400">
-                                Khởi tạo bảng campaign_programs trên Supabase PostgreSQL Cloud
+                                Khởi tạo bảng campaign_programs trên PostgreSQL Cloud
                             </p>
                         </div>
                     </div>
@@ -70,7 +70,7 @@ export default function CampaignProgramSqlModal({
                             <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
                             <div className="space-y-0.5">
                                 <div className="font-black text-sm text-emerald-900">
-                                    Đã Kết Nối Supabase Cloud Thành Công!
+                                    Đã Kết Nối Cloud Thành Công!
                                 </div>
                                 <p className="text-emerald-800 leading-relaxed font-medium">
                                     Bảng <code>campaign_programs</code> đã sẵn sàng trên Cloud. Mọi thao tác thêm, sửa, xóa chương trình thi đua đều được lưu trữ đồng bộ thời gian thực đa thiết bị.
@@ -82,10 +82,10 @@ export default function CampaignProgramSqlModal({
                             <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                             <div className="space-y-1">
                                 <div className="font-black text-sm text-amber-900">
-                                    Chưa Tìm Thấy Bảng Trên Supabase Cloud (Đang Dùng LocalStorage Cache)
+                                    Chưa Tìm Thấy Bảng Trên Cloud (Đang Dùng LocalStorage Cache)
                                 </div>
                                 <p className="text-amber-800 leading-relaxed font-medium">
-                                    Hệ thống hiện đang lưu tạm trên bộ nhớ trình duyệt máy bạn. Để dữ liệu được chia sẻ cho toàn bộ quản lý và nhân viên trên điện thoại, Quản trị viên vui lòng sao chép đoạn mã SQL bên dưới và dán chạy 1 lần duy nhất trong <strong>Supabase SQL Editor</strong>.
+                                    Hệ thống hiện đang lưu tạm trên bộ nhớ trình duyệt máy bạn. Để dữ liệu được chia sẻ cho toàn bộ quản lý và nhân viên trên điện thoại, Quản trị viên vui lòng sao chép đoạn mã SQL bên dưới và dán chạy 1 lần duy nhất trong <strong>SQL Editor</strong>.
                                 </p>
                             </div>
                         </div>

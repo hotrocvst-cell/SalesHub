@@ -163,7 +163,7 @@ export default function SupabaseSyncStatusBar({
                             onClick={onSyncNow}
                             disabled={isSyncing}
                             className="px-3.5 py-1.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white rounded-xl text-xs font-black flex items-center gap-1.5 shadow-xs transition cursor-pointer disabled:opacity-50"
-                            title="Lưu tất cả thay đổi và đồng bộ ngay lên Supabase"
+                            title="Lưu tất cả thay đổi và đồng bộ ngay lên Cloud"
                         >
                             <Save className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
                             <span>{isSyncing ? 'ĐANG SYNC...' : '⚡ ĐỒNG BỘ CLOUD NGAY'}</span>

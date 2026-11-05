@@ -93,7 +93,7 @@ export default function CampaignDirectoryHeader({
                             title="Bấm để xem trạng thái kết nối Cloud và mã SQL DDL"
                         >
                             <Database className="w-3 h-3 shrink-0" />
-                            <span>{isCloudReady && cloudSource === 'cloud' ? '🟢 Supabase Cloud' : '🟡 Local Cache (SQL)'}</span>
+                            <span>{isCloudReady && cloudSource === 'cloud' ? '🟢 Cloud' : '🟡 Local Cache (SQL)'}</span>
                         </button>
                     </div>
 

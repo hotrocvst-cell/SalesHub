@@ -67,7 +67,7 @@ export async function checkSupabaseGuestConfigsTable(): Promise<{ exists: boolea
 
         if (error) {
             if (error.code === 'PGRST205' || error.message?.includes('does not exist')) {
-                return { exists: false, error: 'Chưa khởi tạo bảng account_expiration_configs trên Supabase' };
+                return { exists: false, error: 'Chưa khởi tạo bảng account_expiration_configs trên Cloud' };
             }
             return { exists: false, error: error.message };
         }
@@ -106,7 +106,7 @@ export async function fetchAccountExpirationConfig(): Promise<{
             return { config, isCloud: true };
         }
     } catch (e) {
-        console.warn('Lỗi tải cấu hình Supabase account_expiration_configs, fallback LocalStorage:', e);
+        console.warn('Lỗi tải cấu hình Database account_expiration_configs, fallback LocalStorage:', e);
     }
 
     // 2. Fallback LocalStorage
@@ -157,7 +157,7 @@ export async function saveAccountExpirationConfig(
                 });
 
             if (error) {
-                console.warn('Lỗi upsert account_expiration_configs Supabase:', error);
+                console.warn('Lỗi upsert account_expiration_configs:', error);
                 return { success: true, data: updated, error: 'Đã lưu cục bộ. Lỗi Cloud: ' + error.message };
             }
         } catch (cloudErr: any) {

@@ -123,7 +123,7 @@ export default function RealtimeSessionBanner({
                             type="button"
                             onClick={() => setShowSqlModal(true)}
                             className="px-2.5 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-400/50 rounded-xl text-xs font-bold flex items-center gap-1 transition cursor-pointer"
-                            title="Tạo bảng Supabase realtime_store_sessions"
+                            title="Tạo bảng SQL realtime_store_sessions"
                         >
                             <Database className="w-3.5 h-3.5" />
                             <span>Mã SQL Bảng</span>
@@ -201,7 +201,7 @@ export default function RealtimeSessionBanner({
                         </div>
 
                         <p className="text-xs text-slate-400 leading-relaxed">
-                            Chạy câu lệnh SQL này trong <strong>Supabase SQL Editor</strong> để khởi tạo bảng <code>realtime_store_sessions</code> với ràng buộc <code>UNIQUE(store_name)</code> (mỗi ST chỉ lưu 1 phiên realtime duy nhất).
+                            Chạy câu lệnh SQL này trong <strong>SQL Editor</strong> để khởi tạo bảng <code>realtime_store_sessions</code> với ràng buộc <code>UNIQUE(store_name)</code> (mỗi ST chỉ lưu 1 phiên realtime duy nhất).
                         </p>
 
                         <pre className="p-3 bg-slate-950 border border-slate-800 rounded-xl text-xs font-mono text-emerald-400 overflow-x-auto max-h-60 leading-relaxed">

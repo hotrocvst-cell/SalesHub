@@ -92,9 +92,9 @@ export default function UserStorePermissionPage() {
         setHasNativeColumn(res.hasNativeColumn);
         setIsCheckingColumn(false);
         if (res.hasNativeColumn) {
-            showToast('🟢 Supabase đã có cột accessible_stores (JSONB) gốc!');
+            showToast('🟢 Database đã có cột accessible_stores (JSONB) gốc!');
         } else {
-            showToast('⚡ Supabase đang hoạt động qua cơ chế lưu Cloud vĩnh viễn.');
+            showToast('⚡ Database đang hoạt động qua cơ chế lưu Cloud vĩnh viễn.');
         }
     };
 
@@ -191,7 +191,7 @@ export default function UserStorePermissionPage() {
                 });
             }
             const modeText = res.storageMode === 'NATIVE' ? '(Cột JSONB gốc)' : '(Lưu Cloud vĩnh viễn)';
-            showToast(`✅ Đã lưu phân quyền ${storeList.length} ST cho ${editingUser.full_name} lên Supabase ${modeText}!`);
+            showToast(`✅ Đã lưu phân quyền ${storeList.length} ST cho ${editingUser.full_name} lên Cloud ${modeText}!`);
             setEditingUser(null);
         } else {
             showToast(`❌ Lỗi lưu phân quyền: ${res.error || 'Vui lòng thử lại'}`);
@@ -299,10 +299,10 @@ export default function UserStorePermissionPage() {
                             type="button"
                             onClick={() => setShowSqlModal(true)}
                             className="px-3.5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition flex items-center gap-2 border border-white/15 cursor-pointer backdrop-blur-sm"
-                            title="Kiểm tra cấu hình cột Supabase"
+                            title="Kiểm tra cấu hình cột Database"
                         >
                             <Database className="w-3.5 h-3.5 text-blue-300" />
-                            <span>Cấu hình Supabase</span>
+                            <span>Cấu hình Database</span>
                             {hasNativeColumn === true ? (
                                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" title="Cột JSONB gốc sẵn sàng" />
                             ) : (
@@ -352,8 +352,8 @@ export default function UserStorePermissionPage() {
                         </div>
                         <p className="text-slate-600 text-[11px] mt-0.5">
                             {hasNativeColumn === true
-                                ? 'Mọi thay đổi phân quyền ST được lưu trực tiếp vào trường accessible_stores trên Supabase.'
-                                : 'Hệ thống đã tự động kích hoạt chế độ lưu trữ đám mây an toàn trên Supabase. Bạn có thể F5 trang mà không bao giờ bị mất phân quyền.'}
+                                ? 'Mọi thay đổi phân quyền ST được lưu trực tiếp vào trường accessible_stores trên Cloud.'
+                                : 'Hệ thống đã tự động kích hoạt chế độ lưu trữ đám mây an toàn trên Cloud. Bạn có thể F5 trang mà không bao giờ bị mất phân quyền.'}
                         </p>
                     </div>
                 </div>
@@ -960,11 +960,11 @@ export default function UserStorePermissionPage() {
                             </div>
 
                             <p className="font-semibold text-slate-700">
-                                Để kích hoạt cột chuẩn <code className="bg-slate-100 px-1.5 py-0.5 rounded text-blue-700 font-mono">accessible_stores JSONB</code> trong Supabase:
+                                Để kích hoạt cột chuẩn <code className="bg-slate-100 px-1.5 py-0.5 rounded text-blue-700 font-mono">accessible_stores JSONB</code> trong Database:
                             </p>
 
                             <ol className="list-decimal pl-4 space-y-1 text-slate-600 text-[11px] leading-relaxed">
-                                <li>Truy cập vào <b>Supabase Dashboard</b> dự án SalesHub.</li>
+                                <li>Truy cập vào <b>Cloud Dashboard</b> dự án SalesHub.</li>
                                 <li>Chọn menu <b>SQL Editor</b> bên tay trái.</li>
                                 <li>Dán câu lệnh SQL bên dưới và nhấn <b>Run</b> để thực thi.</li>
                             </ol>

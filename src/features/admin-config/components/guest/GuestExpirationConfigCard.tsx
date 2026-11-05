@@ -160,7 +160,7 @@ export default function GuestExpirationConfigCard({ config, onSave, isSaving }: 
                 {/* Footer Save Button */}
                 <div className="flex items-center justify-between pt-1">
                     <span className="text-[11px] text-slate-400 font-medium italic">
-                        * Dữ liệu cấu hình tự động đồng bộ thời gian thực qua Cloud Supabase
+                        * Dữ liệu cấu hình tự động đồng bộ thời gian thực qua Cloud
                     </span>
                     <button
                         type="submit"

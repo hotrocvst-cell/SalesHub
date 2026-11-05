@@ -28,7 +28,7 @@ export default function CampaignOffsetSqlModal({ isOpen, onClose }: Props) {
                             <Database className="w-4 h-4" />
                         </div>
                         <div>
-                            <h3 className="text-sm font-bold tracking-tight">Mã Lệnh DDL Khởi Tạo Bảng Supabase</h3>
+                            <h3 className="text-sm font-bold tracking-tight">Mã Lệnh DDL Khởi Tạo Bảng Database</h3>
                             <p className="text-[11px] text-slate-400">Bảng: employee_campaign_offsets (Dành riêng cho Admin)</p>
                         </div>
                     </div>
@@ -48,7 +48,7 @@ export default function CampaignOffsetSqlModal({ isOpen, onClose }: Props) {
                 {/* Footer */}
                 <div className="px-5 py-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between shrink-0">
                     <span className="text-[11px] text-slate-500">
-                        Sao chép và chạy 1 lần duy nhất trong Supabase SQL Editor
+                        Sao chép và chạy 1 lần duy nhất trong SQL Editor
                     </span>
                     <button
                         onClick={handleCopy}

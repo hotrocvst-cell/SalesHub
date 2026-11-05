@@ -228,7 +228,7 @@ export default function SystemAdminPage() {
         if (sqlTab === 'AUTH') return AUTH_SYSTEM_SQL;
         if (sqlTab === 'SESSIONS') return EMPLOYEE_DATA_SESSIONS_SQL;
         if (sqlTab === 'CLUSTER') return CLUSTER_REPORT_SQL;
-        return `-- ==================================================\n-- TOÀN BỘ LỆNH TẠO BẢNG SUPABASE CHO SALES HUB\n-- ==================================================\n\n` +
+        return `-- ==================================================\n-- TOÀN BỘ LỆNH TẠO BẢNG SQL CHO SALES HUB\n-- ==================================================\n\n` +
             SYSTEM_PAGE_PERMISSIONS_SQL + '\n\n' +
             BADGE_MIGRATION_SQL + '\n\n' +
             AUTH_SYSTEM_SQL + '\n\n' +
@@ -266,12 +266,12 @@ export default function SystemAdminPage() {
         setIsCheckingCloud(false);
         if (res.exists) {
             if (!res.hasBadgeColumns) {
-                showToast(`⚠️ Bảng đã kết nối nhưng chưa có cột Badge Sidebar. Bấm "Mã SQL Supabase" > "Cột Badge" để cập nhật!`);
+                showToast(`⚠️ Bảng đã kết nối nhưng chưa có cột Badge Sidebar. Bấm "Mã SQL" > "Cột Badge" để cập nhật!`);
             } else {
                 showToast(`✅ Kết nối Cloud hoàn tất! Bảng [system_page_permissions] và cột Badge đã sẵn sàng (${res.count} bản ghi).`);
             }
         } else {
-            showToast(`⚠️ Chưa tìm thấy bảng [system_page_permissions] trên Supabase! Đang mở hướng dẫn tạo bảng...`);
+            showToast(`⚠️ Chưa tìm thấy bảng [system_page_permissions] trên Cloud! Đang mở hướng dẫn tạo bảng...`);
             setIsSqlModalOpen(true);
         }
     };
@@ -401,9 +401,9 @@ export default function SystemAdminPage() {
             if (res.fromSupabase) {
                 showToast('☁️ Đã lưu cấu hình lên Cloud thành công! Áp dụng ngay cho mọi thiết bị.');
             } else if (res.error && res.error.includes('badge')) {
-                showToast('⚠️ Đã lưu cấu hình an toàn trên máy này. Supabase chưa có cột Badge, hãy chạy 4 dòng SQL để đồng bộ Cloud!');
+                showToast('⚠️ Đã lưu cấu hình an toàn trên máy này. Dữ liệu chưa có cột Badge, hãy chạy 4 dòng SQL để đồng bộ Cloud!');
             } else {
-                showToast(`⚠️ Đã lưu cấu hình tạm vào máy này (${res.error ? `Lỗi Cloud: ${res.error}` : 'Chưa kết nối Cloud'}). Bấm "Mã SQL Supabase" để kiểm tra.`);
+                showToast(`⚠️ Đã lưu cấu hình tạm vào máy này (${res.error ? `Lỗi Cloud: ${res.error}` : 'Chưa kết nối Cloud'}). Bấm "Mã SQL" để kiểm tra.`);
             }
         } else {
             showToast('⚠️ Lỗi khi lưu cấu hình: ' + (res.error || 'Vui lòng thử lại!'));
@@ -495,7 +495,7 @@ export default function SystemAdminPage() {
                         onClick={handleCheckCloud}
                         disabled={isCheckingCloud}
                         className="px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs transition cursor-pointer disabled:opacity-50"
-                        title="Kiểm tra trạng thái kết nối tới bảng trên Supabase"
+                        title="Kiểm tra trạng thái kết nối tới bảng trên Cloud"
                     >
                         <RefreshCw className={`w-3.5 h-3.5 text-blue-600 ${isCheckingCloud ? 'animate-spin' : ''}`} />
                         <span>{isCheckingCloud ? 'Đang kiểm tra...' : 'Kiểm tra Cloud'}</span>
@@ -548,10 +548,10 @@ export default function SystemAdminPage() {
                         type="button"
                         onClick={() => setIsSqlModalOpen(true)}
                         className="px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs transition cursor-pointer"
-                        title="Xem mã SQL để tạo bảng lưu trữ trên Supabase"
+                        title="Xem mã SQL để tạo bảng lưu trữ trên Cloud"
                     >
                         <Code className="w-3.5 h-3.5 text-indigo-600" />
-                        <span>Mã SQL Supabase</span>
+                        <span>Mã SQL</span>
                     </button>
 
                     <button
@@ -631,7 +631,7 @@ export default function SystemAdminPage() {
                             </div>
                             <p className="text-amber-800 text-[11px] mt-1 leading-relaxed">
                                 Dữ liệu huy hiệu Sidebar hiện tại đã được hệ thống lưu giữ an toàn trong trình duyệt máy này (F5 refresh không bị mất).
-                                Để huy hiệu tự động đồng bộ xuyên suốt sang điện thoại và các tài khoản khác, vui lòng chạy 4 dòng SQL vào <b>Supabase SQL Editor</b>.
+                                Để huy hiệu tự động đồng bộ xuyên suốt sang điện thoại và các tài khoản khác, vui lòng chạy 4 dòng SQL vào <b>SQL Editor</b>.
                             </p>
                         </div>
                     </div>
@@ -640,7 +640,7 @@ export default function SystemAdminPage() {
                             type="button"
                             onClick={() => {
                                 navigator.clipboard.writeText(BADGE_MIGRATION_SQL);
-                                showToast('📋 Đã sao chép 4 dòng SQL tạo cột Badge! Dán vào Supabase SQL Editor và nhấn RUN.');
+                                showToast('📋 Đã sao chép 4 dòng SQL tạo cột Badge! Dán vào SQL Editor và nhấn RUN.');
                             }}
                             className="px-3 py-1.5 sm:px-3.5 sm:py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 shadow-xs cursor-pointer"
                         >
@@ -1341,7 +1341,7 @@ export default function SystemAdminPage() {
                             </p>
                             <ol className="list-decimal list-inside space-y-1 text-slate-600">
                                 <li>Nhấn nút <b>"Copy Mã SQL"</b> ở bên dưới.</li>
-                                <li>Truy cập vào <b>Supabase Dashboard &gt; SQL Editor</b> của dự án.</li>
+                                <li>Truy cập vào <b>Cloud Dashboard &gt; SQL Editor</b> của dự án.</li>
                                 <li>Dán mã SQL vào ô soạn thảo và nhấn nút <b>RUN</b> (màu xanh lá) để tạo bảng.</li>
                             </ol>
                         </div>

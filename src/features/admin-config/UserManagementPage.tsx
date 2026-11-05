@@ -388,7 +388,7 @@ export default function UserManagementPage() {
                                     type="button"
                                     onClick={() => setIsSqlModalOpen(true)}
                                     className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 hover:bg-amber-200 transition cursor-pointer"
-                                    title="Nhấp để xem lệnh SQL tạo bảng trên Supabase"
+                                    title="Nhấp để xem lệnh SQL tạo bảng trên Cloud"
                                 >
                                     ⚠️ Chưa tạo bảng Cloud
                                 </button>
@@ -1417,7 +1417,7 @@ export default function UserManagementPage() {
                             <div className="font-bold">📋 Hướng dẫn thực hiện 3 bước:</div>
                             <ol className="list-decimal pl-4 space-y-0.5 text-[11px] text-blue-800">
                                 <li>Nhấp nút <b>"Sao Chép Mã SQL"</b> bên dưới.</li>
-                                <li>Mở Supabase Dashboard ➔ chọn mục <b>SQL Editor</b> (ở thanh bên trái).</li>
+                                <li>Mở Cloud Dashboard ➔ chọn mục <b>SQL Editor</b> (ở thanh bên trái).</li>
                                 <li>Dán đoạn mã vào và nhấn nút <b>Run</b> (chạy). Hệ thống sẽ tự động tạo bảng và lưu trữ vĩnh viễn toàn bộ tài khoản!</li>
                             </ol>
                         </div>

@@ -215,7 +215,7 @@ export default function RealtimeDataUpdateModal({
 
             if (!res.success) {
                 if (res.isTableMissing) {
-                    showToast('⚠️ Bảng realtime_store_sessions chưa được tạo trên Supabase!');
+                    showToast('⚠️ Bảng realtime_store_sessions chưa được tạo trên cloud!');
                 } else {
                     showToast(`⚠️ Lỗi lưu dữ liệu: ${res.error}`);
                 }

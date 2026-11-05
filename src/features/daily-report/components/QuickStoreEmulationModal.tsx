@@ -1024,7 +1024,7 @@ export default function QuickStoreEmulationModal({
                                     onClick={() => handleSave(true)}
                                     disabled={isSaving || (cards.length === 0 && revenueQd === '' && revenueReal === '')}
                                     className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-50 text-white rounded-xl text-xs font-black flex items-center gap-2 shadow-md transition cursor-pointer"
-                                    title="Cập nhật vào bảng và đồng bộ ngay lên Supabase Cloud"
+                                    title="Cập nhật vào bảng và đồng bộ ngay lên Cloud"
                                 >
                                     <Save className={`w-4 h-4 ${isSaving ? 'animate-spin' : ''}`} />
                                     <span>{isSaving ? 'Đang lưu Cloud...' : 'Lưu Ngay Lên Cloud'}</span>

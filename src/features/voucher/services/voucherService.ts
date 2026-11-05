@@ -38,8 +38,8 @@ export const DEFAULT_VOUCHER_DISTRIBUTION_CONFIG: VoucherDistributionConfig = {
 };
 
 export const STORE_VOUCHERS_SQL = `-- ========================================================
--- 1. TẠO BẢNG LƯU TRỮ KHO MÃ VOUCHER TRÊN SUPABASE CLOUD
--- Vui lòng chạy lệnh này trong Supabase Dashboard -> SQL Editor
+-- 1. TẠO BẢNG LƯU TRỮ KHO MÃ VOUCHER TRÊN CLOUD
+-- Vui lòng chạy lệnh này trong Cloud Dashboard -> SQL Editor
 -- ========================================================
 CREATE TABLE IF NOT EXISTS public.store_vouchers (
     id TEXT PRIMARY KEY,

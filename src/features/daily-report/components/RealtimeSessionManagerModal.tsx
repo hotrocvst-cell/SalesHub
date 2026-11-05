@@ -109,7 +109,7 @@ export default function RealtimeSessionManagerModal({
 
     // Xóa toàn bộ phiên
     const handleDeleteAll = async () => {
-        if (!window.confirm('⚠️ CẢNH BÁO QUAN TRỌNG:\n\nBạn có chắc chắn muốn XÓA TOÀN BỘ các phiên Realtime trên Supabase Cloud?\nThao tác này không thể hoàn tác!')) {
+        if (!window.confirm('⚠️ CẢNH BÁO QUAN TRỌNG:\n\nBạn có chắc chắn muốn XÓA TOÀN BỘ các phiên Realtime trên Cloud?\nThao tác này không thể hoàn tác!')) {
             return;
         }
         if (!window.confirm('Xác nhận lần 2: Nhấn OK để xóa sạch toàn bộ các phiên Realtime hiện có.')) {
@@ -167,7 +167,7 @@ export default function RealtimeSessionManagerModal({
                                 </span>
                             </div>
                             <p className="text-xs text-slate-400 mt-0.5">
-                                Danh sách các phiên độc lập lưu trên bảng Supabase <code className="text-indigo-300">realtime_store_sessions</code>
+                                Danh sách các phiên độc lập lưu trên bảng Cloud <code className="text-indigo-300">realtime_store_sessions</code>
                             </p>
                         </div>
                     </div>

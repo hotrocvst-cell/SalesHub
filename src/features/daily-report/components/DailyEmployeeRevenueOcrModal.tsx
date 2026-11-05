@@ -1042,7 +1042,7 @@ export default function DailyEmployeeRevenueOcrModal({
                             onClick={handleApplyAndSaveCloud}
                             disabled={isSavingCloud || extractedRecords.length === 0}
                             className="px-5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-50 text-white rounded-xl text-xs font-black flex items-center gap-2 shadow-md transition cursor-pointer"
-                            title="Áp dụng vào báo cáo và lưu vĩnh viễn lên Supabase Cloud"
+                            title="Áp dụng vào báo cáo và lưu vĩnh viễn lên Cloud"
                         >
                             <Save className={`w-4 h-4 ${isSavingCloud ? 'animate-spin' : ''}`} />
                             <span>{isSavingCloud ? 'Đang lưu Cloud...' : '💾 Áp Dụng & Lưu Cloud Ngay'}</span>
