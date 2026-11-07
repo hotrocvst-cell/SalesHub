@@ -27,6 +27,10 @@ import {
     type CampaignOffsetItem
 } from '../campaign-offset/services/campaignOffsetService';
 import {
+    fetchEmployeeBonuses,
+    type EmployeeBonusItem
+} from '../../core/lib/employeeBonusService';
+import {
     getStoreCampaignScoreConfig,
     getCampaignPoints,
     syncStoreCampaignScoresFromCloud
@@ -94,6 +98,7 @@ interface CampaignDetailRow {
     completionRate: number;     // %DK (Dự kiến hoàn thành %DKHT)
     pointsEarned: number;       // +/-Điểm (điểm được tính)
     isAchieved: boolean;        // %DK >= 100%
+    bonusPoints?: number;       // Điểm cộng thưởng ngành hàng
 }
 
 // 2. HELPER MÀU SẮC ĐIỂM THI ĐUA THEO PHÂN CẤP ĐIỂM
@@ -195,6 +200,7 @@ export default function EmployeeDetailReportPage() {
     const [campaignTargetsMap, setCampaignTargetsMap] = useState<Record<string, Record<string, number>>>({});
     const [sessions, setSessions] = useState<EmployeeDataSession[]>([]);
     const [campaignOffsets, setCampaignOffsets] = useState<CampaignOffsetItem[]>([]);
+    const [bonuses, setBonuses] = useState<EmployeeBonusItem[]>([]);
 
     const [loading, setLoading] = useState<boolean>(true);
     const [isExporting, setIsExporting] = useState<boolean>(false);
@@ -252,7 +258,7 @@ export default function EmployeeDetailReportPage() {
     const loadAllData = async () => {
         setLoading(true);
         try {
-            const [storesRes, empsRes, dictRes, revTargetsRes, campTargetsRes, allSessions, , offsetsRes] = await Promise.all([
+            const [storesRes, empsRes, dictRes, revTargetsRes, campTargetsRes, allSessions, , offsetsRes, bonusList] = await Promise.all([
                 fetchStores(),
                 fetchEmployees(),
                 fetchCampaignDictionary(),
@@ -260,13 +266,15 @@ export default function EmployeeDetailReportPage() {
                 fetchEmployeeCampaignTargets(selectedMonth, selectedYear),
                 syncAndFetchEmployeeDataSessions({ month: selectedMonth, year: selectedYear }),
                 syncStoreCampaignScoresFromCloud(),
-                fetchCampaignOffsets(selectedStore, selectedMonth, selectedYear)
+                fetchCampaignOffsets(selectedStore, selectedMonth, selectedYear),
+                fetchEmployeeBonuses({ month: selectedMonth, year: selectedYear })
             ]);
 
             if (storesRes.success) setStores(storesRes.data);
             if (empsRes.success) setEmployees(empsRes.data);
             if (dictRes.success && dictRes.data) setCampaignDict(dictRes.data);
             if (offsetsRes && offsetsRes.success && offsetsRes.data) setCampaignOffsets(offsetsRes.data);
+            setBonuses(bonusList || []);
 
             // Parse Revenue Targets
             const revMap: Record<string, number> = {};
@@ -315,16 +323,31 @@ export default function EmployeeDetailReportPage() {
         loadAllData();
     }, [selectedMonth, selectedYear]);
 
-    // 4. DANH SÁCH NHÂN VIÊN THEO PHẠM VI ST ĐƯỢC CHỌN
+    // 4. DANH SÁCH NHÂN VIÊN THEO PHẠM VI ST ĐƯỢC CHỌN (LỌC BỎ NGHỈ VIỆC & KHÔNG CÓ TARGET)
     const availableEmployees = useMemo(() => {
-        let list = employees;
+        let list = employees.filter(e => {
+            // Loại bỏ nhân viên đã nghỉ việc
+            if (e.is_active === false) return false;
+            const empStatus = (e.status || '').toLowerCase();
+            if (empStatus === 'inactive' || empStatus === 'resigned') return false;
+
+            // Loại bỏ nhân viên không có bất kỳ target nào trong kỳ (cả DT và thi đua)
+            const empId = (e.employee_id || '').trim();
+            const hasRevTarget = (revenueTargets[empId] || 0) > 0;
+            const empCampTargets = campaignTargetsMap[empId] || {};
+            const hasCampTarget = Object.values(empCampTargets).some(v => Number(v) > 0);
+            if (!hasRevTarget && !hasCampTarget) return false;
+
+            return true;
+        });
+
         if (selectedStore !== 'all') {
             list = list.filter(e => isStoreMatch(e.store_name, selectedStore, stores));
         } else if (!canViewAllStores && allowedStores.length > 0) {
             list = list.filter(e => allowedStores.some(s => isStoreMatch(e.store_name, s.name, stores)));
         }
         return list.sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''));
-    }, [employees, selectedStore, stores, canViewAllStores, allowedStores]);
+    }, [employees, revenueTargets, campaignTargetsMap, selectedStore, stores, canViewAllStores, allowedStores]);
 
     // Tự động chọn nhân viên theo phân quyền hoặc Admin kiểm thử
     useEffect(() => {
@@ -629,6 +652,16 @@ export default function EmployeeDetailReportPage() {
         };
     }, [selectedEmployeeId, revenueTargets, employeeLatestSessionRecord, effectivePassedDays, operatingConfig, resolvedWorkHours]);
 
+    // Danh sách điểm thưởng của nhân viên đang xem trong kỳ
+    const currentEmpBonuses = useMemo(() => {
+        if (!selectedEmployeeId) return [];
+        return bonuses.filter(b => (b.employee_id || '').trim() === selectedEmployeeId.trim());
+    }, [bonuses, selectedEmployeeId]);
+
+    const totalEmpBonusPoints = useMemo(() => {
+        return Number(currentEmpBonuses.reduce((sum, b) => sum + (Number(b.bonus_points) || 0), 0).toFixed(1));
+    }, [currentEmpBonuses]);
+
     // 8. TÍNH TOÁN CHI TIẾT CÁC NGÀNH HÀNG / THI ĐUA CỦA NHÂN VIÊN THEO CẤU HÌNH ĐIỂM
     const campaignDetailRows = useMemo<CampaignDetailRow[]>(() => {
         if (!selectedEmployeeId) return [];
@@ -746,7 +779,17 @@ export default function EmployeeDetailReportPage() {
             // 5. Điểm và +/-Điểm: Nếu %DK >= 100% -> Có trọn vẹn điểm, ngược lại 0 điểm
             const pointsWeight = getCampaignPoints(cKey, scoreConfig);
             const isAchieved = forecastRate >= 100;
-            const pointsEarned = isAchieved ? pointsWeight : 0;
+            let pointsEarned = isAchieved ? pointsWeight : 0;
+
+            // Tìm điểm thưởng gắn liền với ngành hàng này (nếu có)
+            const matchedBonuses = currentEmpBonuses.filter(b => {
+                const bKey = (b.campaign_key || '').trim();
+                return bKey === cKey || aliasKeys.includes(bKey);
+            });
+            const campBonusPts = matchedBonuses.reduce((sum, b) => sum + (Number(b.bonus_points) || 0), 0);
+            if (campBonusPts > 0) {
+                pointsEarned = Number((pointsEarned + campBonusPts).toFixed(1));
+            }
 
             rows.push({
                 stt: index++,
@@ -762,7 +805,8 @@ export default function EmployeeDetailReportPage() {
                 realCompletionRate: realRate,
                 completionRate: forecastRate,
                 pointsEarned: pointsEarned,
-                isAchieved: isAchieved
+                isAchieved: isAchieved,
+                bonusPoints: campBonusPts
             });
         });
 
@@ -791,7 +835,7 @@ export default function EmployeeDetailReportPage() {
         });
 
         return rows;
-    }, [selectedEmployeeId, campaignTargetsMap, employeeLatestSessionRecord, effectivePassedDays, operatingConfig, campaignDict, scoreConfig, campaignOffsets]);
+    }, [selectedEmployeeId, campaignTargetsMap, employeeLatestSessionRecord, effectivePassedDays, operatingConfig, campaignDict, scoreConfig, campaignOffsets, currentEmpBonuses]);
 
     // 9. LỌC CÁC DÒNG THEO CHẾ ĐỘ & SẮP XẾP THEO CỘT (MẶC ĐỊNH %DK GIẢM DẦN)
     const filteredCampaignRows = useMemo(() => {
@@ -861,9 +905,16 @@ export default function EmployeeDetailReportPage() {
         const achieved = rowsWithTarget.filter(r => r.isAchieved).length;
         const pct = total > 0 ? Math.round((achieved / total) * 100) : 0;
 
-        // Tổng điểm theo cấu hình shop
+        // Điểm thưởng chung không gắn ngành hàng
+        const generalBonuses = currentEmpBonuses.filter(b => {
+            const bKey = (b.campaign_key || 'GENERAL').trim();
+            return bKey === 'GENERAL' || bKey === '' || !campaignDetailRows.some(r => r.canonicalKey === bKey);
+        });
+        const generalBonusPts = generalBonuses.reduce((sum, b) => sum + (Number(b.bonus_points) || 0), 0);
+
+        // Tổng điểm theo cấu hình shop (bao gồm điểm các ngành hàng + điểm thưởng)
         const totalPoints = rowsWithTarget.reduce((sum, r) => sum + r.pointsWeight, 0);
-        const achievedPoints = rowsWithTarget.reduce((sum, r) => sum + r.pointsEarned, 0);
+        const achievedPoints = Number((rowsWithTarget.reduce((sum, r) => sum + r.pointsEarned, 0) + generalBonusPts).toFixed(1));
         const pointsPct = totalPoints > 0 ? Math.round((achievedPoints / totalPoints) * 100) : 0;
 
         // Tổng sản lượng
@@ -879,11 +930,12 @@ export default function EmployeeDetailReportPage() {
             totalPoints,
             achievedPoints,
             pointsPercentage: pointsPct,
+            totalBonusPoints: totalEmpBonusPoints,
             totalTarget,
             totalActual,
             totalRemaining
         };
-    }, [campaignDetailRows, isPointsMode]);
+    }, [campaignDetailRows, isPointsMode, currentEmpBonuses, totalEmpBonusPoints]);
 
     // 11. XUẤT ẢNH CHẤT LƯỢNG SIÊU NÉT 8K THEO ĐÚNG SCREEN CHO BÁO CÁO CHI TIẾT (KHÔNG GIỚI HẠN CHIỀU DÀI)
     const generateCanvas = async (): Promise<HTMLCanvasElement | null> => {
@@ -1418,149 +1470,149 @@ export default function EmployeeDetailReportPage() {
                             </select>
                         </div>
 
-                    {/* Chọn Năm */}
-                    <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl">
-                        <select
-                            value={selectedYear}
-                            onChange={e => {
-                                const y = parseInt(e.target.value, 10);
-                                setSelectedYear(y);
-                                setSearchParams(prev => {
-                                    const p = new URLSearchParams(prev);
-                                    p.set('year', String(y));
-                                    return p;
-                                });
-                            }}
-                            className="bg-transparent text-xs font-bold text-slate-800 outline-hidden cursor-pointer"
-                        >
-                            {[2025, 2026, 2027].map(y => (
-                                <option key={y} value={y}>Năm {y}</option>
-                            ))}
-                        </select>
-                    </div>
+                        {/* Chọn Năm */}
+                        <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl">
+                            <select
+                                value={selectedYear}
+                                onChange={e => {
+                                    const y = parseInt(e.target.value, 10);
+                                    setSelectedYear(y);
+                                    setSearchParams(prev => {
+                                        const p = new URLSearchParams(prev);
+                                        p.set('year', String(y));
+                                        return p;
+                                    });
+                                }}
+                                className="bg-transparent text-xs font-bold text-slate-800 outline-hidden cursor-pointer"
+                            >
+                                {[2025, 2026, 2027].map(y => (
+                                    <option key={y} value={y}>Năm {y}</option>
+                                ))}
+                            </select>
+                        </div>
 
-                    {/* Chọn Nhân Viên Dropdown + Quick Prev / Next */}
-                    <div className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl border transition ${isLockedToEmployee
-                        ? 'bg-amber-50/90 border-amber-300 text-amber-950 shadow-2xs'
-                        : 'bg-emerald-50 border-emerald-200'
-                        }`}>
-                        {isLockedToEmployee ? (
-                            <Lock className="w-4 h-4 text-amber-600 shrink-0" />
-                        ) : (
-                            <UserCheck className="w-4 h-4 text-emerald-700 shrink-0" />
-                        )}
-                        <button
-                            type="button"
-                            disabled={isLockedToEmployee}
-                            onClick={() => handleNavigateEmployee('PREV')}
-                            className="p-1 hover:bg-emerald-100 rounded-lg text-emerald-800 transition cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                            title={isLockedToEmployee ? 'Vai trò Nhân Viên chỉ được xem dữ liệu cá nhân' : 'Xem nhân viên trước đó'}
-                        >
-                            <ChevronLeft className="w-4 h-4" />
-                        </button>
-
-                        <select
-                            value={selectedEmployeeId}
-                            disabled={isLockedToEmployee}
-                            onChange={e => handleSelectEmployee(e.target.value)}
-                            className="bg-transparent text-xs font-black text-emerald-950 outline-hidden cursor-pointer disabled:cursor-not-allowed max-w-[240px] truncate"
-                        >
-                            {availableEmployees.map(emp => (
-                                <option key={emp.employee_id} value={emp.employee_id}>
-                                    {emp.employee_id} - {cleanEmployeeName(emp.full_name)}
-                                </option>
-                            ))}
-                        </select>
-
-                        <button
-                            type="button"
-                            disabled={isLockedToEmployee}
-                            onClick={() => handleNavigateEmployee('NEXT')}
-                            className="p-1 hover:bg-emerald-100 rounded-lg text-emerald-800 transition cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                            title={isLockedToEmployee ? 'Vai trò Nhân Viên chỉ được xem dữ liệu cá nhân' : 'Xem nhân viên kế tiếp'}
-                        >
-                            <ChevronRight className="w-4 h-4" />
-                        </button>
-
-                        {isLockedToEmployee && (
-                            <span className="hidden xl:inline text-[10px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded ml-1">
-                                Cá nhân
-                            </span>
-                        )}
-                    </div>
-
-                    {/* Chọn Phiên Dữ Liệu (Ràng buộc ST & Nhân Viên) */}
-                    <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl text-xs font-bold min-w-[220px] max-w-full flex-1 sm:flex-initial">
-                        <Layers className="w-4 h-4 text-indigo-600 shrink-0" />
-                        <span className="text-slate-500 shrink-0">Phiên:</span>
-                        <select
-                            value={selectedSessionId || activeSession?.id || ''}
-                            onChange={e => handleSelectSession(e.target.value)}
-                            disabled={availableSessions.length === 0}
-                            className="bg-transparent text-xs font-bold text-slate-800 outline-hidden cursor-pointer disabled:cursor-not-allowed flex-1 min-w-0 truncate"
-                            title="Chọn phiên cập nhật số liệu cần xem (ràng buộc theo ST và nhân viên)"
-                        >
-                            {availableSessions.length === 0 ? (
-                                <option value="">Chưa có phiên dữ liệu cho NV này</option>
+                        {/* Chọn Nhân Viên Dropdown + Quick Prev / Next */}
+                        <div className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl border transition ${isLockedToEmployee
+                            ? 'bg-amber-50/90 border-amber-300 text-amber-950 shadow-2xs'
+                            : 'bg-emerald-50 border-emerald-200'
+                            }`}>
+                            {isLockedToEmployee ? (
+                                <Lock className="w-4 h-4 text-amber-600 shrink-0" />
                             ) : (
-                                availableSessions.map(s => {
-                                    const storeLabel = s.store_name === 'Toàn Cụm ST'
-                                        ? 'Toàn Cụm'
-                                        : (getShortStoreName(s.store_name) || s.store_name || 'Shop');
-                                    const dateLabel = s.report_date ? formatDate(s.report_date) : (s.created_at ? formatDate(s.created_at) : '');
-                                    return (
-                                        <option key={s.id} value={s.id}>
-                                            [{storeLabel}] Phiên ngày {dateLabel}
-                                        </option>
-                                    );
-                                })
+                                <UserCheck className="w-4 h-4 text-emerald-700 shrink-0" />
                             )}
-                        </select>
-                        {availableSessions.length > 0 && (
-                            <span className="text-[10px] font-bold bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full shrink-0">
-                                {availableSessions.length} phiên
-                            </span>
-                        )}
+                            <button
+                                type="button"
+                                disabled={isLockedToEmployee}
+                                onClick={() => handleNavigateEmployee('PREV')}
+                                className="p-1 hover:bg-emerald-100 rounded-lg text-emerald-800 transition cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                                title={isLockedToEmployee ? 'Vai trò Nhân Viên chỉ được xem dữ liệu cá nhân' : 'Xem nhân viên trước đó'}
+                            >
+                                <ChevronLeft className="w-4 h-4" />
+                            </button>
+
+                            <select
+                                value={selectedEmployeeId}
+                                disabled={isLockedToEmployee}
+                                onChange={e => handleSelectEmployee(e.target.value)}
+                                className="bg-transparent text-xs font-black text-emerald-950 outline-hidden cursor-pointer disabled:cursor-not-allowed max-w-[240px] truncate"
+                            >
+                                {availableEmployees.map(emp => (
+                                    <option key={emp.employee_id} value={emp.employee_id}>
+                                        {emp.employee_id} - {cleanEmployeeName(emp.full_name)}
+                                    </option>
+                                ))}
+                            </select>
+
+                            <button
+                                type="button"
+                                disabled={isLockedToEmployee}
+                                onClick={() => handleNavigateEmployee('NEXT')}
+                                className="p-1 hover:bg-emerald-100 rounded-lg text-emerald-800 transition cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                                title={isLockedToEmployee ? 'Vai trò Nhân Viên chỉ được xem dữ liệu cá nhân' : 'Xem nhân viên kế tiếp'}
+                            >
+                                <ChevronRight className="w-4 h-4" />
+                            </button>
+
+                            {isLockedToEmployee && (
+                                <span className="hidden xl:inline text-[10px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded ml-1">
+                                    Cá nhân
+                                </span>
+                            )}
+                        </div>
+
+                        {/* Chọn Phiên Dữ Liệu (Ràng buộc ST & Nhân Viên) */}
+                        <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl text-xs font-bold min-w-[220px] max-w-full flex-1 sm:flex-initial">
+                            <Layers className="w-4 h-4 text-indigo-600 shrink-0" />
+                            <span className="text-slate-500 shrink-0">Phiên:</span>
+                            <select
+                                value={selectedSessionId || activeSession?.id || ''}
+                                onChange={e => handleSelectSession(e.target.value)}
+                                disabled={availableSessions.length === 0}
+                                className="bg-transparent text-xs font-bold text-slate-800 outline-hidden cursor-pointer disabled:cursor-not-allowed flex-1 min-w-0 truncate"
+                                title="Chọn phiên cập nhật số liệu cần xem (ràng buộc theo ST và nhân viên)"
+                            >
+                                {availableSessions.length === 0 ? (
+                                    <option value="">Chưa có phiên dữ liệu cho NV này</option>
+                                ) : (
+                                    availableSessions.map(s => {
+                                        const storeLabel = s.store_name === 'Toàn Cụm ST'
+                                            ? 'Toàn Cụm'
+                                            : (getShortStoreName(s.store_name) || s.store_name || 'Shop');
+                                        const dateLabel = s.report_date ? formatDate(s.report_date) : (s.created_at ? formatDate(s.created_at) : '');
+                                        return (
+                                            <option key={s.id} value={s.id}>
+                                                [{storeLabel}] Phiên ngày {dateLabel}
+                                            </option>
+                                        );
+                                    })
+                                )}
+                            </select>
+                            {availableSessions.length > 0 && (
+                                <span className="text-[10px] font-bold bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full shrink-0">
+                                    {availableSessions.length} phiên
+                                </span>
+                            )}
+                        </div>
+
+                        {/* Bộ lọc chế độ hiển thị ngành hàng */}
+                        <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl">
+                            <Filter className="w-4 h-4 text-amber-600" />
+                            <select
+                                value={campaignFilterMode}
+                                onChange={e => setCampaignFilterMode(e.target.value as any)}
+                                className="bg-transparent text-xs font-bold text-slate-800 outline-hidden cursor-pointer"
+                            >
+                                <option value="TARGET_ONLY">🎯 Chỉ ngành hàng có Taget ({campaignDetailRows.filter(r => r.target > 0).length})</option>
+                                <option value="ALL">📋 Tất cả ngành hàng ({campaignDetailRows.length})</option>
+                                <option value="UNACHIEVED">⏳ Chưa đạt ({campaignDetailRows.filter(r => !r.isAchieved && r.target > 0).length})</option>
+                                <option value="ACHIEVED">✅ Đã đạt ({campaignDetailRows.filter(r => r.isAchieved).length})</option>
+                            </select>
+                        </div>
+
+                        {/* Chỉ báo Chế độ Tính Điểm Thi Đua của ST */}
+                        <div className={`px-2.5 py-1.5 rounded-xl border text-[11px] font-black flex items-center gap-1.5 ${isPointsMode
+                            ? 'bg-indigo-50 border-indigo-200 text-indigo-900'
+                            : 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                            }`}>
+                            <Award className="w-3.5 h-3.5" />
+                            <span>{isPointsMode ? 'Tính theo Tổng Điểm đạt' : 'Tính theo Số CT đạt'}</span>
+                        </div>
                     </div>
 
-                    {/* Bộ lọc chế độ hiển thị ngành hàng */}
-                    <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl">
-                        <Filter className="w-4 h-4 text-amber-600" />
-                        <select
-                            value={campaignFilterMode}
-                            onChange={e => setCampaignFilterMode(e.target.value as any)}
-                            className="bg-transparent text-xs font-bold text-slate-800 outline-hidden cursor-pointer"
+                    <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={loadAllData}
+                            className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-600 transition cursor-pointer flex items-center gap-1 text-xs font-bold"
+                            title="Tải lại số liệu"
                         >
-                            <option value="TARGET_ONLY">🎯 Chỉ ngành hàng có Taget ({campaignDetailRows.filter(r => r.target > 0).length})</option>
-                            <option value="ALL">📋 Tất cả ngành hàng ({campaignDetailRows.length})</option>
-                            <option value="UNACHIEVED">⏳ Chưa đạt ({campaignDetailRows.filter(r => !r.isAchieved && r.target > 0).length})</option>
-                            <option value="ACHIEVED">✅ Đã đạt ({campaignDetailRows.filter(r => r.isAchieved).length})</option>
-                        </select>
+                            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-emerald-600' : ''}`} />
+                            <span className="hidden sm:inline">Làm Mới</span>
+                        </button>
                     </div>
-
-                    {/* Chỉ báo Chế độ Tính Điểm Thi Đua của ST */}
-                    <div className={`px-2.5 py-1.5 rounded-xl border text-[11px] font-black flex items-center gap-1.5 ${isPointsMode
-                        ? 'bg-indigo-50 border-indigo-200 text-indigo-900'
-                        : 'bg-emerald-50 border-emerald-200 text-emerald-900'
-                        }`}>
-                        <Award className="w-3.5 h-3.5" />
-                        <span>{isPointsMode ? 'Tính theo Tổng Điểm đạt' : 'Tính theo Số CT đạt'}</span>
-                    </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                    <button
-                        type="button"
-                        onClick={loadAllData}
-                        className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-600 transition cursor-pointer flex items-center gap-1 text-xs font-bold"
-                        title="Tải lại số liệu"
-                    >
-                        <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-emerald-600' : ''}`} />
-                        <span className="hidden sm:inline">Làm Mới</span>
-                    </button>
                 </div>
             </div>
-        </div>
 
             {/* Cảnh báo nếu không có phiên dữ liệu nào cho nhân viên đang chọn */}
             {availableSessions.length === 0 && !loading && (
@@ -1953,11 +2005,10 @@ export default function EmployeeDetailReportPage() {
                                                             <span>{formatNumberVn(row.actual, 1)}</span>
                                                             {row.offsetAdjustment ? (
                                                                 <span
-                                                                    className={`text-[9.5px] px-1 py-0.2 rounded font-bold shrink-0 ${
-                                                                        row.offsetAdjustment > 0
+                                                                    className={`text-[9.5px] px-1 py-0.2 rounded font-bold shrink-0 ${row.offsetAdjustment > 0
                                                                             ? 'bg-purple-100 text-purple-800 border border-purple-200'
                                                                             : 'bg-amber-100 text-amber-800 border border-amber-200'
-                                                                    }`}
+                                                                        }`}
                                                                     title={
                                                                         row.offsetAdjustment > 0
                                                                             ? `Gốc: ${row.rawActual ?? row.actual} • Cấn bù +${row.offsetAdjustment}`
@@ -1999,9 +2050,14 @@ export default function EmployeeDetailReportPage() {
                                                     {/* 9. +/-Điểm */}
                                                     <td className="py-2.5 px-0.5 text-center font-mono text-[10.5px]">
                                                         {isPointsMode ? (
-                                                            row.isAchieved ? (
-                                                                <span className={`inline-block px-1.5 py-0.5 rounded text-[10.5px] font-mono ${getEarnedPointBadgeStyle(row.pointsEarned, true)}`}>
-                                                                    +{row.pointsEarned} đ
+                                                            row.pointsEarned > 0 ? (
+                                                                <span
+                                                                    className={`inline-block px-1.5 py-0.5 rounded text-[10.5px] font-mono ${getEarnedPointBadgeStyle(row.pointsEarned, true)}`}
+                                                                    title={row.bonusPoints && row.bonusPoints > 0
+                                                                        ? `Điểm chuẩn: ${row.isAchieved ? row.pointsWeight : 0} đ + Điểm thưởng: +${row.bonusPoints} đ`
+                                                                        : undefined}
+                                                                >
+                                                                    +{row.pointsEarned} đ{row.bonusPoints && row.bonusPoints > 0 ? ' ⭐' : ''}
                                                                 </span>
                                                             ) : (
                                                                 <span className="inline-block px-1.5 py-0.5 rounded text-[10.5px] font-mono font-bold bg-slate-100 text-slate-400 border border-slate-200">
@@ -2028,6 +2084,43 @@ export default function EmployeeDetailReportPage() {
                             </table>
                         </div>
                     </div>
+
+                    {/* KHỐI VINH DANH & LỊCH SỬ ĐIỂM CỘNG CỦA NHÂN VIÊN */}
+                    {currentEmpBonuses.length > 0 && (
+                        <div className="bg-gradient-to-r from-amber-50/80 via-orange-50/70 to-yellow-50/80 rounded-2xl p-4 border border-amber-200 shadow-2xs space-y-2.5">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-6 h-6 rounded-lg bg-amber-500 text-white flex items-center justify-center font-bold text-xs shadow-2xs">
+                                        ⭐
+                                    </div>
+                                    <h4 className="text-xs font-black text-amber-950 uppercase tracking-wider">
+                                        ĐIỂM CỘNG THI ĐUA TRONG KỲ: +{totalEmpBonusPoints} ĐIỂM
+                                    </h4>
+                                </div>
+                                <span className="text-[10.5px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full border border-amber-300">
+                                    {currentEmpBonuses.length} lượt khen thưởng
+                                </span>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                                {currentEmpBonuses.map(b => (
+                                    <div key={b.id} className="p-2.5 bg-white/90 rounded-xl border border-amber-200/80 flex items-center justify-between gap-2 shadow-2xs">
+                                        <div className="min-w-0">
+                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                <span className="font-black text-slate-900">{b.reason}</span>
+                                                <span className="text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.2 rounded font-medium">
+                                                    {b.campaign_name}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <span className="px-2 py-0.5 rounded-lg text-xs font-black bg-gradient-to-r from-amber-500 to-orange-500 text-white font-mono shrink-0 shadow-2xs">
+                                            +{Number(b.bonus_points).toFixed(1)} đ
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
 
                     {/* 3.4. KHU VỰC PHÂN TÍCH NHANH & GỢI Ý HÀNH ĐỘNG (XUẤT ALL HOẶC LOẠI TRỪ) */}
                     {includeAnalysisSection && (

@@ -251,8 +251,18 @@ export default function EmployeePerformanceReportPage() {
         const totalDays = Math.max(1, operatingConfig.operatingDays);
 
         const targetEmployees = employees.filter(emp => {
+            // 0. Loại bỏ nhân viên đã nghỉ việc
+            if (emp.is_active === false) return false;
+            const empStatus = (emp.status || '').toLowerCase();
+            if (empStatus === 'inactive' || empStatus === 'resigned') return false;
+
+            // 0.1. Loại bỏ nhân viên không có target doanh thu trong kỳ
+            const empId = (emp.employee_id || '').trim();
+            const target = revenueTargets[empId] ?? revenueTargets[emp.employee_id] ?? 0;
+            if (target <= 0) return false;
+
             const empStore = emp.store_name || '';
-            const isDemo = isGuestDemoStore(empStore) || emp.employee_id?.trim().startsWith('NV838');
+            const isDemo = isGuestDemoStore(empStore) || empId.startsWith('NV838');
 
             if (isGuest) return isDemo;
             if (isDemo) return false;

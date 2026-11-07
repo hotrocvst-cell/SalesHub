@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
     X,
     Camera,
@@ -23,8 +23,7 @@ import {
     GeminiQuotaExceededError,
     type ActiveKeyInfo
 } from '../../data-update/services/geminiApiKeyService';
-import { runClientTesseractOcr } from '../../data-update/services/tesseractOcrService';
-import type { OcrEngineType, StoreReportingData } from '../../data-update/types/ocrTypes';
+import type { StoreReportingData, EmulationUploadMode, SingleStoreEmulationEntry } from '../../data-update/types/ocrTypes';
 import type { StoreItem, CampaignDictItem } from '../../../core/lib/storage';
 import { formatDate, formatStoreDisplayName, getShortStoreName } from '../../../core/lib/formatters';
 import { useAuth } from '../../../shared/contexts/AuthContext';
@@ -66,8 +65,39 @@ export default function RealtimeDataUpdateModal({
     const [realFile, setRealFile] = useState<File | null>(null);
     const [emulationFiles, setEmulationFiles] = useState<File[]>([]);
 
-    // 2. Engine & Gemini Key
-    const [engineType, setEngineType] = useState<OcrEngineType>('GEMINI_FLASH');
+    // 1b. Switch nạp thi đua: 'CLUSTER' (Cả cụm) | 'SINGLE_STORE' (Đích danh từng ST)
+    const [emulationMode, setEmulationMode] = useState<EmulationUploadMode>('CLUSTER');
+
+    // Danh sách các ST người dùng có quyền nạp số liệu
+    const selectableStores = useMemo(() => {
+        if (effectiveIsAdmin) {
+            return availableStores;
+        }
+        const filtered = availableStores.filter(s =>
+            canAccessStore(s.name) || canAccessStore(s.short_name || '') || canAccessStore(getShortStoreName(s.name))
+        );
+        return filtered.length > 0 ? filtered : availableStores;
+    }, [availableStores, effectiveIsAdmin, canAccessStore]);
+
+    const defaultStoreName = selectableStores[0]?.name || availableStores[0]?.name || '';
+
+    const [singleStoreEmulations, setSingleStoreEmulations] = useState<SingleStoreEmulationEntry[]>([
+        { storeName: defaultStoreName, files: [] }
+    ]);
+
+    // Cập nhật defaultStoreName khi selectableStores có dữ liệu
+    useEffect(() => {
+        if (selectableStores.length > 0) {
+            setSingleStoreEmulations(prev => {
+                if (prev.length === 1 && !prev[0].storeName) {
+                    return [{ storeName: selectableStores[0].name, files: [] }];
+                }
+                return prev;
+            });
+        }
+    }, [selectableStores]);
+
+    // 2. Gemini Key
     const [keyInfo, setKeyInfo] = useState<ActiveKeyInfo>(() => resolveActiveGeminiKey());
     const [isKeyModalOpen, setIsKeyModalOpen] = useState<boolean>(false);
     const [isQuotaExceeded, setIsQuotaExceeded] = useState<boolean>(false);
@@ -99,12 +129,16 @@ export default function RealtimeDataUpdateModal({
     // Chạy OCR trích xuất ảnh
     const handleRunOcr = async () => {
         const activeKey = keyInfo.key;
-        if (engineType === 'GEMINI_FLASH' && !activeKey) {
+        if (!activeKey) {
             setIsKeyModalOpen(true);
             return;
         }
 
-        if (!qdFile && !realFile && emulationFiles.length === 0) {
+        const hasEmulation = emulationMode === 'CLUSTER'
+            ? emulationFiles.length > 0
+            : singleStoreEmulations.some(e => e.files.length > 0);
+
+        if (!qdFile && !realFile && !hasEmulation) {
             showToast('⚠️ Vui lòng chọn ít nhất 1 ảnh (DT-QĐ, DT-THỰC hoặc Thi đua)!');
             return;
         }
@@ -115,58 +149,48 @@ export default function RealtimeDataUpdateModal({
         setProgressPercent(10);
 
         try {
-            if (engineType === 'GEMINI_FLASH') {
-                const result = await extractAndMergeAllImages(
-                    activeKey,
-                    { qdFile, realFile, emulationFiles },
-                    (msg, pct) => {
-                        setProgressText(msg);
-                        setProgressPercent(pct);
-                    },
-                    keyInfo.source
-                );
+            const result = await extractAndMergeAllImages(
+                activeKey,
+                {
+                    qdFile,
+                    realFile,
+                    emulationFiles,
+                    emulationMode,
+                    singleStoreEmulations
+                },
+                (msg, pct) => {
+                    setProgressText(msg);
+                    setProgressPercent(pct);
+                },
+                keyInfo.source
+            );
 
-                if (!result.success || result.stores.length === 0) {
-                    setOcrError(result.errors?.join('; ') || 'Không thể trích xuất số liệu từ ảnh đã chọn.');
-                    setIsExtracting(false);
-                    return;
-                }
-
-                // Ghi nhận giờ chụp trên ảnh (nếu có)
-                if (result.reportTime || result.reportDate) {
-                    const timeInfo = [
-                        result.reportTime,
-                        result.reportDate ? formatDate(result.reportDate) : ''
-                    ].filter(Boolean).join(' ');
-                    setScreenshotTimestamp(timeInfo);
-                } else {
-                    setScreenshotTimestamp(`${new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} ${formatDate(new Date())}`);
-                }
-
-                setStoresData(result.stores);
-                setIsQuotaExceeded(false);
-                setProgressPercent(100);
-                setProgressText('Trích xuất hoàn tất! Đang chuyển sang bảng rà soát...');
-                showToast(`✅ Đã bóc tách thành công số liệu ${result.stores.length} ST!`);
-                setTimeout(() => {
-                    setIsExtracting(false);
-                    setActiveTab('manual');
-                }, 900);
-            } else {
-                // Tesseract fallback
-                setProgressText('Đang quét chữ bằng Tesseract.js...');
-                setProgressPercent(50);
-                const target = qdFile || realFile || emulationFiles[0];
-                if (target) {
-                    await runClientTesseractOcr(target, (msg, pct) => {
-                        setProgressText(msg);
-                        setProgressPercent(pct);
-                    });
-                    showToast('✅ Đã quét xong chữ! Vui lòng hoàn thiện trong bảng nhập tay.');
-                    setIsExtracting(false);
-                    setActiveTab('manual');
-                }
+            if (!result.success || result.stores.length === 0) {
+                setOcrError(result.errors?.join('; ') || 'Không thể trích xuất số liệu từ ảnh đã chọn.');
+                setIsExtracting(false);
+                return;
             }
+
+            // Ghi nhận giờ chụp trên ảnh (nếu có)
+            if (result.reportTime || result.reportDate) {
+                const timeInfo = [
+                    result.reportTime,
+                    result.reportDate ? formatDate(result.reportDate) : ''
+                ].filter(Boolean).join(' ');
+                setScreenshotTimestamp(timeInfo);
+            } else {
+                setScreenshotTimestamp(`${new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} ${formatDate(new Date())}`);
+            }
+
+            setStoresData(result.stores);
+            setIsQuotaExceeded(false);
+            setProgressPercent(100);
+            setProgressText('Trích xuất hoàn tất! Đang chuyển sang bảng rà soát...');
+            showToast(`✅ Đã bóc tách thành công số liệu ${result.stores.length} ST!`);
+            setTimeout(() => {
+                setIsExtracting(false);
+                setActiveTab('manual');
+            }, 900);
         } catch (err: any) {
             console.error('Lỗi khi chạy OCR:', err);
             setIsExtracting(false);
@@ -341,8 +365,6 @@ export default function RealtimeDataUpdateModal({
                                 onRealFileChange={setRealFile}
                                 emulationFiles={emulationFiles}
                                 onEmulationFilesChange={setEmulationFiles}
-                                engineType={engineType}
-                                onEngineTypeChange={setEngineType}
                                 hasGeminiKey={Boolean(keyInfo.key)}
                                 keySource={keyInfo.source}
                                 isQuotaExceeded={isQuotaExceeded}
@@ -351,6 +373,11 @@ export default function RealtimeDataUpdateModal({
                                 isExtracting={isExtracting}
                                 progressText={progressText}
                                 progressPercent={progressPercent}
+                                emulationMode={emulationMode}
+                                onEmulationModeChange={setEmulationMode}
+                                selectableStores={selectableStores}
+                                singleStoreEmulations={singleStoreEmulations}
+                                onSingleStoreEmulationsChange={setSingleStoreEmulations}
                             />
                         </div>
                     ) : (

@@ -48,7 +48,6 @@ import {
     EMPLOYEE_DATA_SESSIONS_SQL,
     type EmployeeDataSession
 } from '../employee-cumulative/utils/sessionStorage';
-import type { OcrEngineType } from './types/ocrTypes';
 import {
     Camera,
     Sparkles,
@@ -116,8 +115,7 @@ export default function EmployeeExtractOcrPage() {
     const [realFile, setRealFile] = useState<File | null>(null);
     const [emulationFiles, setEmulationFiles] = useState<File[]>([]);
 
-    // 5. Cấu hình Gemini Key & Engine
-    const [engineType, setEngineType] = useState<OcrEngineType>('GEMINI_FLASH');
+    // 5. Cấu hình Gemini Key
     const [keyInfo, setKeyInfo] = useState<ActiveKeyInfo>(() => resolveActiveGeminiKey());
     const [isKeyModalOpen, setIsKeyModalOpen] = useState<boolean>(false);
     const [isQuotaExceeded, setIsQuotaExceeded] = useState<boolean>(false);
@@ -259,7 +257,7 @@ export default function EmployeeExtractOcrPage() {
     // Chạy OCR trích xuất dữ liệu nhân viên
     const handleRunOcr = async () => {
         const activeKey = keyInfo.key;
-        if (engineType === 'GEMINI_FLASH' && !activeKey) {
+        if (!activeKey) {
             setIsKeyModalOpen(true);
             return;
         }
@@ -893,8 +891,6 @@ export default function EmployeeExtractOcrPage() {
                         onRealFileChange={setRealFile}
                         emulationFiles={emulationFiles}
                         onEmulationFilesChange={setEmulationFiles}
-                        engineType={engineType}
-                        onEngineTypeChange={setEngineType}
                         hasGeminiKey={Boolean(keyInfo.key)}
                         keySource={keyInfo.source}
                         isQuotaExceeded={isQuotaExceeded}

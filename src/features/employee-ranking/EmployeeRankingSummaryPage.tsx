@@ -27,7 +27,7 @@ import {
     syncStoreCampaignScoresFromCloud,
     type StoreCampaignScoreConfig
 } from '../../core/lib/storeCampaignScoreService';
-import { resolveCanonicalCampaign } from '../campaign-summary/utils/campaignSummaryStorage';
+import { resolveCanonicalCampaign, normalizeCampaignToken } from '../campaign-summary/utils/campaignSummaryStorage';
 import { getYesterdayDateString, isStoreMatch, getShortStoreName } from '../../core/lib/formatters';
 import { isGuestDemoStore, GUEST_DEMO_STORE } from '../../core/lib/guestDemoStoreService';
 import { useAuth } from '../../shared/contexts/AuthContext';
@@ -53,6 +53,10 @@ import {
     fetchCampaignOffsets,
     type CampaignOffsetItem
 } from '../campaign-offset/services/campaignOffsetService';
+import {
+    fetchEmployeeBonuses,
+    type EmployeeBonusItem
+} from '../../core/lib/employeeBonusService';
 import EmployeeRescueConfigModal from './components/EmployeeRescueConfigModal';
 import type { EmployeeRankingRow, EmployeeRankingSummary } from './types';
 import {
@@ -139,6 +143,7 @@ export default function EmployeeRankingSummaryPage() {
 
     // Cấn trừ thi đua cuối tháng
     const [campaignOffsets, setCampaignOffsets] = useState<CampaignOffsetItem[]>([]);
+    const [bonuses, setBonuses] = useState<EmployeeBonusItem[]>([]);
 
     const [scoreConfigsVersion, setScoreConfigsVersion] = useState<number>(0);
 
@@ -187,7 +192,7 @@ export default function EmployeeRankingSummaryPage() {
                 ? GUEST_DEMO_STORE
                 : (selectedStore === 'all' ? undefined : selectedStore);
 
-            const [storesRes, empsRes, revTargetsRes, campTargetsRes, dictRes, allSessions, rescueCfg, offsetsRes] = await Promise.all([
+            const [storesRes, empsRes, revTargetsRes, campTargetsRes, dictRes, allSessions, rescueCfg, offsetsRes, bonusesList] = await Promise.all([
                 fetchStores(),
                 fetchEmployees(targetStoreParam),
                 fetchEmployeeRevenueTargets(selectedMonth, selectedYear),
@@ -199,7 +204,8 @@ export default function EmployeeRankingSummaryPage() {
                     storeName: targetStoreParam
                 }),
                 fetchEmployeeRescueConfig(selectedStore, selectedMonth, selectedYear),
-                fetchCampaignOffsets(selectedStore, selectedMonth, selectedYear)
+                fetchCampaignOffsets(selectedStore, selectedMonth, selectedYear),
+                fetchEmployeeBonuses({ month: selectedMonth, year: selectedYear })
             ]);
 
             if (storesRes.success) setStores(storesRes.data);
@@ -207,6 +213,7 @@ export default function EmployeeRankingSummaryPage() {
             if (dictRes.success && dictRes.data) setCampaignDict(dictRes.data);
             setRescueConfig(rescueCfg);
             if (offsetsRes.success && offsetsRes.data) setCampaignOffsets(offsetsRes.data);
+            setBonuses(bonusesList || []);
 
             // Chuyển đổi target doanh thu sang Map theo Mã NV (chuẩn hóa về triệu đồng)
             const rTargetMap: Record<string, number> = {};
@@ -337,8 +344,20 @@ export default function EmployeeRankingSummaryPage() {
 
         // Danh sách nhân viên thuộc ST được chọn và thỏa mãn phân quyền
         const targetEmployees = employees.filter(emp => {
-            const empStore = empStoreMap[emp.employee_id?.trim()] || emp.store_name || '';
-            const isDemo = isGuestDemoStore(empStore) || emp.employee_id?.trim().startsWith('NV838');
+            // 0. Loại bỏ nhân viên đã nghỉ việc
+            if (emp.is_active === false) return false;
+            const empStatus = (emp.status || '').toLowerCase();
+            if (empStatus === 'inactive' || empStatus === 'resigned') return false;
+
+            // 0.1. Loại bỏ nhân viên không có bất kỳ target nào trong kỳ (cả DT và thi đua)
+            const empId = (emp.employee_id || '').trim();
+            const hasRevTarget = (revenueTargets[empId] || 0) > 0;
+            const empCampTargets = campaignTargets[empId] || {};
+            const hasCampTarget = Object.values(empCampTargets).some(v => Number(v) > 0);
+            if (!hasRevTarget && !hasCampTarget) return false;
+
+            const empStore = empStoreMap[empId] || emp.store_name || '';
+            const isDemo = isGuestDemoStore(empStore) || empId.startsWith('NV838');
 
             // 1. Phân lập tài khoản trải nghiệm
             if (isGuest) {
@@ -400,12 +419,34 @@ export default function EmployeeRankingSummaryPage() {
                     const resolved = resolveCanonicalCampaign(rawKey, campaignDict);
                     const cKey = resolved.canonicalKey;
 
-                    // Lấy actual thô
+                    // Lấy actual thô với khả năng đối chiếu thông minh (exact -> canonical -> normalized token)
                     let actualVal = 0;
                     if (empCampaignActuals[rawKey] !== undefined) {
                         actualVal = Number(empCampaignActuals[rawKey]) || 0;
                     } else if (empCampaignActuals[cKey] !== undefined) {
                         actualVal = Number(empCampaignActuals[cKey]) || 0;
+                    } else {
+                        // 1. Đối chiếu qua resolveCanonicalCampaign
+                        for (const [sessKey, sessVal] of Object.entries(empCampaignActuals)) {
+                            const sessResolved = resolveCanonicalCampaign(sessKey, campaignDict);
+                            if (sessResolved.canonicalKey === cKey || sessResolved.canonicalKey === rawKey) {
+                                actualVal = Number(sessVal) || 0;
+                                break;
+                            }
+                        }
+
+                        // 2. Đối chiếu qua normalized token (loại bỏ dấu tiếng Việt, dấu cách thừa, dấu phẩy, tiền tố tháng)
+                        if (actualVal === 0) {
+                            const normRaw = normalizeCampaignToken(rawKey);
+                            const normCKey = normalizeCampaignToken(cKey);
+                            for (const [sessKey, sessVal] of Object.entries(empCampaignActuals)) {
+                                const normSess = normalizeCampaignToken(sessKey);
+                                if (normSess === normRaw || normSess === normCKey) {
+                                    actualVal = Number(sessVal) || 0;
+                                    break;
+                                }
+                            }
+                        }
                     }
 
                     // Áp dụng cấn trừ 1 đổi 1 (nếu có trong kỳ)
@@ -414,17 +455,22 @@ export default function EmployeeRankingSummaryPage() {
                     empOffsets.forEach(o => {
                         const toKey = (o.to_campaign_key || '').trim();
                         const fromKey = (o.from_campaign_key || '').trim();
-                        if (toKey === cKey || toKey === rawKey) {
+                        const toCanonical = resolveCanonicalCampaign(toKey, campaignDict).canonicalKey;
+                        const fromCanonical = resolveCanonicalCampaign(fromKey, campaignDict).canonicalKey;
+                        if (toKey === cKey || toKey === rawKey || toCanonical === cKey) {
                             offsetIn += Number(o.offset_quantity) || 0;
                         }
-                        if (fromKey === cKey || fromKey === rawKey) {
+                        if (fromKey === cKey || fromKey === rawKey || fromCanonical === cKey) {
                             offsetOut += Number(o.offset_quantity) || 0;
                         }
                     });
                     const effectiveActual = Math.max(0, actualVal + offsetIn - offsetOut);
 
-                    // Điểm số quy định cho nhóm thi đua này
-                    const pts = getCampaignPoints(cKey, scoreCfg);
+                    // Điểm số quy định cho nhóm thi đua này (đối chiếu cả cKey và rawKey)
+                    const pts = Math.max(
+                        getCampaignPoints(cKey, scoreCfg),
+                        getCampaignPoints(rawKey, scoreCfg)
+                    );
                     totalPoints += pts;
 
                     // Tính %DKHT nhóm thi đua với số lượng thực tế sau cấn trừ
@@ -438,15 +484,21 @@ export default function EmployeeRankingSummaryPage() {
                 }
             });
 
-            // Tỷ lệ hoàn thành thi đua
+            // Cộng điểm thưởng do QL/TC chỉ định (cho phép vượt 100%)
+            const empBonuses = (bonuses || []).filter(b => (b.employee_id || '').trim() === empId);
+            const totalBonusPts = empBonuses.reduce((sum, b) => sum + (Number(b.bonus_points) || 0), 0);
+            const finalAchievedPoints = Number((achievedPoints + totalBonusPts).toFixed(1));
+            const finalAchievedCount = Number((achievedCount + totalBonusPts).toFixed(1));
+
+            // Tỷ lệ hoàn thành thi đua (hỗ trợ cả 2 chế độ POINTS và COUNT)
             let emulationRate = 0;
             let emulationDisplay = '';
             if (isPointsMode) {
-                emulationRate = totalPoints > 0 ? (achievedPoints / totalPoints) * 100 : 0;
-                emulationDisplay = `${achievedPoints}/${totalPoints} đ`;
+                emulationRate = totalPoints > 0 ? (finalAchievedPoints / totalPoints) * 100 : 0;
+                emulationDisplay = `${finalAchievedPoints}/${totalPoints} đ`;
             } else {
-                emulationRate = totalCampaigns > 0 ? (achievedCount / totalCampaigns) * 100 : 0;
-                emulationDisplay = `${achievedCount}/${totalCampaigns} NH`;
+                emulationRate = totalCampaigns > 0 ? (finalAchievedCount / totalCampaigns) * 100 : 0;
+                emulationDisplay = `${finalAchievedCount}/${totalCampaigns} NH`;
             }
 
             return {
@@ -461,10 +513,11 @@ export default function EmployeeRankingSummaryPage() {
                 completion_rate: completionRate,
                 forecast_completion_rate: forecastRate,
                 scoring_mode: scoreCfg.scoring_mode,
-                points_achieved: achievedPoints,
+                points_achieved: finalAchievedPoints,
                 points_total: totalPoints,
-                campaigns_achieved: achievedCount,
+                campaigns_achieved: finalAchievedCount,
                 campaigns_total: totalCampaigns,
+                bonus_points: totalBonusPts,
                 emulation_rate: emulationRate,
                 emulation_display: emulationDisplay
             };
@@ -509,9 +562,18 @@ export default function EmployeeRankingSummaryPage() {
             revMapWithRank.set(item.employee_id, { rank, status, label });
         });
 
-        // 5.3. Tính thứ hạng Thi đua & Nhãn TOP/BOT Thi đua
+        // 5.3. Tính thứ hạng Thi đua & Nhãn TOP/BOT Thi đua (đã tính trọn vẹn điểm cộng thưởng)
         const sortedByEmu = [...rawList].sort((a, b) => {
-            return b.emulation_rate - a.emulation_rate || b.points_achieved - a.points_achieved;
+            if (b.emulation_rate !== a.emulation_rate) {
+                return b.emulation_rate - a.emulation_rate;
+            }
+            if (b.points_achieved !== a.points_achieved) {
+                return b.points_achieved - a.points_achieved;
+            }
+            if (b.campaigns_achieved !== a.campaigns_achieved) {
+                return b.campaigns_achieved - a.campaigns_achieved;
+            }
+            return b.revenue_qd - a.revenue_qd;
         });
 
         const emuMapWithRank = new Map<string, { rank: number; status: 'TOP' | 'BOT' | 'MID'; label: string }>();
@@ -579,6 +641,7 @@ export default function EmployeeRankingSummaryPage() {
         scoreConfigsVersion,
         rescueConfig,
         campaignOffsets,
+        bonuses,
         isGuest,
         isAdmin,
         allowedStores
@@ -1189,7 +1252,12 @@ export default function EmployeeRankingSummaryPage() {
                     isOpen={isRescueModalOpen}
                     onClose={() => setIsRescueModalOpen(false)}
                     config={rescueConfig}
-                    employees={employees.filter(e => selectedStore === 'all' ? true : isStoreMatch(e.store_name, selectedStore, stores))}
+                    employees={employees.filter(e => {
+                        if (e.is_active === false) return false;
+                        const empStatus = (e.status || '').toLowerCase();
+                        if (empStatus === 'inactive' || empStatus === 'resigned') return false;
+                        return selectedStore === 'all' ? true : isStoreMatch(e.store_name, selectedStore, stores);
+                    })}
                     onSaved={(newCfg) => {
                         setRescueConfig(newCfg);
                         showToast('✅ Đã lưu cấu hình tiêu chí cứu & chế độ!');

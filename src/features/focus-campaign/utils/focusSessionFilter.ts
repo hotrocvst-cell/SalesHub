@@ -45,17 +45,30 @@ export function getFilteredSessionRecords(
     stores: StoreItem[]
 ): EmployeeSessionRecord[] {
     const rawRecs = activeSession?.records || [];
-    if (selectedStore === 'all') return rawRecs;
 
+    const empInfoMap = new Map<string, EmployeeItem>();
     const empStoreMap: Record<string, string> = {};
     employees.forEach(e => {
         const id = (e.employee_id || '').trim();
-        if (id) empStoreMap[id] = e.store_name || '';
+        if (id) {
+            empInfoMap.set(id, e);
+            empStoreMap[id] = e.store_name || '';
+        }
     });
 
     return rawRecs.filter(r => {
         const empId = (r.employee_id || '').trim();
         if (!empId) return false;
+
+        // 0. Loại bỏ nhân viên đã nghỉ việc
+        const emp = empInfoMap.get(empId);
+        if (emp) {
+            if (emp.is_active === false) return false;
+            const st = (emp.status || '').toLowerCase();
+            if (st === 'inactive' || st === 'resigned') return false;
+        }
+
+        if (selectedStore === 'all') return true;
         return isEmployeeInStore(empId, selectedStore, empStoreMap, activeSession?.store_name, stores);
     });
 }

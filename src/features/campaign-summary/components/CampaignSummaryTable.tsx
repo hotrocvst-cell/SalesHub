@@ -181,8 +181,32 @@ export default function CampaignSummaryTable({
                                 {/* 3. SỐ THI ĐUA DỰ KIẾN ĐẠT/TỔNG (ví dụ: 15/39 hoặc 12/18 đ) */}
                                 <td className="py-2.5 px-2 text-center font-mono font-black text-slate-900 bg-white group-hover:bg-slate-50 border-r border-slate-200 sticky left-[240px] z-20 whitespace-nowrap min-w-[110px] w-[110px]">
                                     {isPointsMode
-                                        ? `${row.achieved_points ?? 0}/${row.total_points ?? 0} đ`
-                                        : `${row.achieved_count}/${row.total_count}`
+                                        ? (
+                                            <span
+                                                title={row.bonus_points && row.bonus_points > 0
+                                                    ? `Điểm ngành hàng: ${((row.achieved_points ?? 0) - row.bonus_points).toFixed(1)} đ + Điểm thưởng QL: +${row.bonus_points} đ = ${row.achieved_points} đ`
+                                                    : undefined}
+                                                className="inline-flex items-center justify-center gap-0.5"
+                                            >
+                                                <span>{row.achieved_points ?? 0}/{row.total_points ?? 0} đ</span>
+                                                {row.bonus_points && row.bonus_points > 0 ? (
+                                                    <span className="text-[10px] text-amber-500 font-black cursor-help" title={`Đã cộng +${row.bonus_points}đ điểm thưởng`}>⭐</span>
+                                                ) : null}
+                                            </span>
+                                        )
+                                        : (
+                                            <span
+                                                title={row.bonus_points && row.bonus_points > 0
+                                                    ? `Đạt chuẩn: ${Number(((row.achieved_count ?? 0) - row.bonus_points).toFixed(1))} NH + Thưởng: +${row.bonus_points}đ = ${row.achieved_count} NH`
+                                                    : undefined}
+                                                className="inline-flex items-center justify-center gap-0.5"
+                                            >
+                                                <span>{row.achieved_count}/{row.total_count}</span>
+                                                {row.bonus_points && row.bonus_points > 0 ? (
+                                                    <span className="text-[10px] text-amber-500 font-black cursor-help" title={`Đã cộng +${row.bonus_points}đ điểm thưởng`}>⭐</span>
+                                                ) : null}
+                                            </span>
+                                        )
                                     }
                                 </td>
 

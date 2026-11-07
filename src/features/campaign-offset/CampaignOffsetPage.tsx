@@ -173,11 +173,21 @@ export default function CampaignOffsetPage() {
         loadAllData();
     }, [selectedStore, selectedMonth, selectedYear]);
 
-    // Danh sách nhân viên khả dụng theo ST & phân quyền
+    // Danh sách nhân viên khả dụng theo ST & phân quyền (Lọc bỏ nhân viên nghỉ việc hoặc không có target thi đua)
     const filteredEmployees = useMemo(() => {
         return employees.filter(emp => {
+            // 0. Loại bỏ nhân viên đã nghỉ việc
+            if (emp.is_active === false) return false;
+            const empStatus = (emp.status || '').toLowerCase();
+            if (empStatus === 'inactive' || empStatus === 'resigned') return false;
+
+            // 0.1. Loại bỏ nhân viên không có bất kỳ target thi đua nào trong kỳ
+            const empId = (emp.employee_id || '').trim();
+            const empTargets = campaignTargets[empId];
+            if (!empTargets || !Object.values(empTargets).some(v => Number(v) > 0)) return false;
+
             const empStore = emp.store_name || '';
-            const isDemo = isGuestDemoStore(empStore) || emp.employee_id?.trim().startsWith('NV838');
+            const isDemo = isGuestDemoStore(empStore) || empId.startsWith('NV838');
             if (isGuest) return isDemo;
             if (isDemo) return false;
 
@@ -187,7 +197,7 @@ export default function CampaignOffsetPage() {
             }
             return isStoreMatch(empStore, selectedStore, stores);
         });
-    }, [employees, selectedStore, stores, isGuest, isAdmin, allowedStores]);
+    }, [employees, campaignTargets, selectedStore, stores, isGuest, isAdmin, allowedStores]);
 
     // Danh sách cấn trừ hiển thị (kèm tìm kiếm)
     const displayedOffsets = useMemo(() => {

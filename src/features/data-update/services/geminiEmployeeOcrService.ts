@@ -2,7 +2,9 @@ import {
     GeminiQuotaExceededError,
     type GeminiKeySource,
     getAvailableApiKeys,
-    maskApiKey
+    maskApiKey,
+    STANDARD_GEMINI_MODELS,
+    sanitizeCachedGeminiModel
 } from './geminiApiKeyService';
 import { getShortenedEmployeeName, cleanBiNumber } from '../../../core/lib/formatters';
 import type { EmployeeSessionRecord } from '../../employee-cumulative/utils/sessionStorage';
@@ -13,15 +15,13 @@ import {
     type KnownStoreCampaignTarget,
     type CampaignMappingItem
 } from './campaignTargetMappingService';
+import { prepareImageForOcr, fileToBase64 } from './imageCompressionService';
 
+export { prepareImageForOcr, fileToBase64 };
 export type { KnownStoreCampaignTarget, CampaignMappingItem };
 
 function getCachedModel(): string | null {
-    try {
-        return localStorage.getItem('SALESHUB_ACTIVE_GEMINI_MODEL');
-    } catch {
-        return null;
-    }
+    return sanitizeCachedGeminiModel();
 }
 
 function setCachedModel(model: string): void {
@@ -66,99 +66,7 @@ export interface EmployeeOcrResult {
     rawLogs?: string;
 }
 
-const CANDIDATE_MODELS = [
-    'gemini-flash-lite-latest',
-    'gemini-3.5-flash',
-    'gemini-3.8-flash'
-];
-
-/**
- * Chuyển File thô sang Base64
- */
-function fileToBase64(file: File): Promise<string> {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-            const res = reader.result as string;
-            const b64 = res.split(',')[1] || res;
-            resolve(b64);
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-    });
-}
-
-/**
- * Nén & chuẩn hóa ảnh trước khi gửi Gemini Vision (giảm kích thước max 1600px, JPEG 0.85)
- * Giúp giảm dung lượng từ 3-5MB/ảnh xuống ~250-350KB/ảnh, tăng tốc độ upload gấp 10 lần,
- * ngăn chặn hoàn toàn lỗi tràn bộ nhớ và timeout AbortError khi nạp 15-20 ảnh.
- */
-export function prepareImageForOcr(
-    file: File,
-    maxDim: number = 1600
-): Promise<{ data: string; mimeType: string }> {
-    return new Promise((resolve) => {
-        // Nếu không có DOM/Window (test environment) thì fallback về base64 thuần
-        if (typeof window === 'undefined' || typeof document === 'undefined') {
-            fileToBase64(file).then(b64 => resolve({ data: b64, mimeType: file.type || 'image/jpeg' }));
-            return;
-        }
-
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const rawDataUrl = e.target?.result as string;
-            if (!rawDataUrl) {
-                fileToBase64(file).then(b64 => resolve({ data: b64, mimeType: file.type || 'image/jpeg' }));
-                return;
-            }
-
-            const img = new Image();
-            img.onload = () => {
-                let { width, height } = img;
-                if (width <= maxDim && height <= maxDim && file.size < 500 * 1024) {
-                    const b64 = rawDataUrl.split(',')[1] || rawDataUrl;
-                    resolve({ data: b64, mimeType: file.type || 'image/jpeg' });
-                    return;
-                }
-
-                if (width > height) {
-                    if (width > maxDim) {
-                        height = Math.round((height * maxDim) / width);
-                        width = maxDim;
-                    }
-                } else {
-                    if (height > maxDim) {
-                        width = Math.round((width * maxDim) / height);
-                        height = maxDim;
-                    }
-                }
-
-                const canvas = document.createElement('canvas');
-                canvas.width = width;
-                canvas.height = height;
-                const ctx = canvas.getContext('2d');
-                if (!ctx) {
-                    const b64 = rawDataUrl.split(',')[1] || rawDataUrl;
-                    resolve({ data: b64, mimeType: file.type || 'image/jpeg' });
-                    return;
-                }
-
-                ctx.drawImage(img, 0, 0, width, height);
-                const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
-                const b64 = compressedDataUrl.split(',')[1] || compressedDataUrl;
-                resolve({ data: b64, mimeType: 'image/jpeg' });
-            };
-            img.onerror = () => {
-                fileToBase64(file).then(b64 => resolve({ data: b64, mimeType: file.type || 'image/jpeg' }));
-            };
-            img.src = rawDataUrl;
-        };
-        reader.onerror = () => {
-            fileToBase64(file).then(b64 => resolve({ data: b64, mimeType: file.type || 'image/jpeg' }));
-        };
-        reader.readAsDataURL(file);
-    });
-}
+const CANDIDATE_MODELS = STANDARD_GEMINI_MODELS;
 
 /**
  * Prompt chuyên biệt cho trích xuất DOANH THU (DT-QĐ và DT-THỰC)

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../../shared/contexts/AuthContext';
 import {
     fetchStores,
@@ -27,8 +28,13 @@ import {
     GeminiQuotaExceededError,
     type ActiveKeyInfo
 } from './services/geminiApiKeyService';
-import { runClientTesseractOcr } from './services/tesseractOcrService';
-import type { OcrEngineType, StoreReportingData, StoreMobileEmulationCardItem, EmulationOcrItem } from './types/ocrTypes';
+import type {
+    StoreReportingData,
+    StoreMobileEmulationCardItem,
+    EmulationOcrItem,
+    EmulationUploadMode,
+    SingleStoreEmulationEntry
+} from './types/ocrTypes';
 import QuickStoreEmulationModal from '../daily-report/components/QuickStoreEmulationModal';
 import { saveSingleStoreEmulationDailyRecord } from './services/dailyBusinessRecordService';
 import {
@@ -44,7 +50,8 @@ import {
     Edit3,
     Camera,
     AlertTriangle,
-    RotateCcw
+    RotateCcw,
+    BarChart3
 } from 'lucide-react';
 
 const DAILY_BUSINESS_RECORDS_SQL = `-- Bảng lưu trữ số liệu kinh doanh lũy kế theo ST
@@ -192,7 +199,6 @@ export default function DataExtractOcrPage() {
     const [keyInfo, setKeyInfo] = useState<ActiveKeyInfo>(() => resolveActiveGeminiKey());
     const [isKeyModalOpen, setIsKeyModalOpen] = useState<boolean>(false);
     const [isQuotaExceeded, setIsQuotaExceeded] = useState<boolean>(false);
-    const [engineType, setEngineType] = useState<OcrEngineType>('GEMINI_FLASH');
 
     // 4. File uploads
     const [qdFile, setQdFile] = useState<File | null>(null);
@@ -220,6 +226,38 @@ export default function DataExtractOcrPage() {
     const [isQuickEmulationModalOpen, setIsQuickEmulationModalOpen] = useState<boolean>(false);
     const [quickModalSelectedStore, setQuickModalSelectedStore] = useState<string>('');
     const [isLoadingExisting, setIsLoadingExisting] = useState<boolean>(false);
+
+    // 8. Switch nạp thi đua: 'CLUSTER' (Cả cụm) | 'SINGLE_STORE' (Đích danh từng ST)
+    const [emulationMode, setEmulationMode] = useState<EmulationUploadMode>('CLUSTER');
+
+    // Danh sách ST người dùng có quyền nạp số liệu
+    const selectableStores = useMemo(() => {
+        if (isAdmin) {
+            return availableStores;
+        }
+        const filtered = availableStores.filter(s =>
+            canAccessStore(s.name) || canAccessStore(s.short_name || '') || canAccessStore(getShortStoreName(s.name))
+        );
+        return filtered.length > 0 ? filtered : availableStores;
+    }, [availableStores, isAdmin, canAccessStore]);
+
+    const defaultStoreName = selectableStores[0]?.name || availableStores[0]?.name || '';
+
+    const [singleStoreEmulations, setSingleStoreEmulations] = useState<SingleStoreEmulationEntry[]>([
+        { storeName: defaultStoreName, files: [] }
+    ]);
+
+    // Cập nhật defaultStoreName khi selectableStores có dữ liệu
+    useEffect(() => {
+        if (selectableStores.length > 0) {
+            setSingleStoreEmulations(prev => {
+                if (prev.length === 1 && !prev[0].storeName) {
+                    return [{ storeName: selectableStores[0].name, files: [] }];
+                }
+                return prev;
+            });
+        }
+    }, [selectableStores]);
 
     // Nạp số liệu ngày chốt từ Supabase Cloud vào bảng rà soát để kiểm tra hoặc hiệu chỉnh
     const handleLoadExistingRecords = async () => {
@@ -296,70 +334,64 @@ export default function DataExtractOcrPage() {
     // Xử lý chạy OCR trích xuất ảnh
     const handleRunOcr = async () => {
         const activeKey = keyInfo.key;
-        if (engineType === 'GEMINI_FLASH' && !activeKey) {
+        if (!activeKey) {
             setIsKeyModalOpen(true);
             return;
         }
 
-        if (!qdFile && !realFile && emulationFiles.length === 0) {
+        const hasEmulation = emulationMode === 'CLUSTER'
+            ? emulationFiles.length > 0
+            : singleStoreEmulations.some(e => e.files.length > 0);
+
+        if (!qdFile && !realFile && !hasEmulation) {
             showToast('⚠️ Vui lòng chọn ít nhất 1 ảnh (DT-QĐ, DT-THỰC hoặc Thi đua)!');
             return;
         }
 
         setIsExtracting(true);
         setOcrError('');
-        setProgressText('Đang khởi tạo bộ phân tích hình ảnh...');
+        setProgressText('Đang khởi tạo bộ phân tích hình ảnh qua Canvas & AI...');
         setProgressPercent(10);
 
         try {
-            if (engineType === 'GEMINI_FLASH') {
-                const result = await extractAndMergeAllImages(
-                    activeKey,
-                    { qdFile, realFile, emulationFiles },
-                    (msg, pct) => {
-                        setProgressText(msg);
-                        setProgressPercent(pct);
-                    },
-                    keyInfo.source
-                );
+            const result = await extractAndMergeAllImages(
+                activeKey,
+                {
+                    qdFile,
+                    realFile,
+                    emulationFiles,
+                    emulationMode,
+                    singleStoreEmulations
+                },
+                (msg, pct) => {
+                    setProgressText(msg);
+                    setProgressPercent(pct);
+                },
+                keyInfo.source
+            );
 
-                if (!result.success || result.stores.length === 0) {
-                    setOcrError(result.errors?.join('; ') || 'Không thể trích xuất số liệu từ ảnh đã chọn.');
-                    setIsExtracting(false);
-                    return;
-                }
-
-                // Lưu thời điểm chụp ảnh để hiển thị đối soát (TUYỆT ĐỐI KHÔNG ghi đè ngày chốt phiên N-1 của user)
-                if (result.reportTime || result.reportDate) {
-                    const info = [result.reportTime, result.reportDate ? formatDate(result.reportDate) : ''].filter(Boolean).join(' ngày ');
-                    setScreenshotTimestamp(info);
-                }
-
-                setStoresData(result.stores);
-                setIsSaved(false);
-                setIsQuotaExceeded(false);
-                setProgressPercent(100);
-                setProgressText('Trích xuất thành công! Đang chuyển sang bảng rà soát...');
-                showToast(`✅ Đã trích xuất thành công số liệu ${result.stores.length} ST!`);
-                setTimeout(() => {
-                    setIsExtracting(false);
-                    setActiveTab('manual');
-                }, 1000);
-            } else {
-                // Tesseract fallback
-                setProgressText('Đang quét chữ bằng Tesseract.js cục bộ...');
-                setProgressPercent(50);
-                const target = qdFile || realFile || emulationFiles[0];
-                if (target) {
-                    await runClientTesseractOcr(target, (msg, pct) => {
-                        setProgressText(msg);
-                        setProgressPercent(pct);
-                    });
-                    showToast('✅ Đã quét xong chữ bằng Tesseract! Vui lòng tự hoàn thiện trong bảng nhập tay.');
-                    setIsExtracting(false);
-                    setActiveTab('manual');
-                }
+            if (!result.success || result.stores.length === 0) {
+                setOcrError(result.errors?.join('; ') || 'Không thể trích xuất số liệu từ ảnh đã chọn.');
+                setIsExtracting(false);
+                return;
             }
+
+            // Lưu thời điểm chụp ảnh để hiển thị đối soát (TUYỆT ĐỐI KHÔNG ghi đè ngày chốt phiên N-1 của user)
+            if (result.reportTime || result.reportDate) {
+                const info = [result.reportTime, result.reportDate ? formatDate(result.reportDate) : ''].filter(Boolean).join(' ngày ');
+                setScreenshotTimestamp(info);
+            }
+
+            setStoresData(result.stores);
+            setIsSaved(false);
+            setIsQuotaExceeded(false);
+            setProgressPercent(100);
+            setProgressText('Trích xuất thành công! Đang chuyển sang bảng rà soát...');
+            showToast(`✅ Đã trích xuất thành công số liệu ${result.stores.length} ST!`);
+            setTimeout(() => {
+                setIsExtracting(false);
+                setActiveTab('manual');
+            }, 1000);
         } catch (err: any) {
             console.error('Lỗi khi chạy OCR:', err);
             if (err?.isQuotaExceeded || err instanceof GeminiQuotaExceededError) {
@@ -540,6 +572,7 @@ export default function DataExtractOcrPage() {
                 campaignDict
             );
             if (res.success) {
+                setIsSaved(true);
                 showToast(`🎉 Đã lưu thi đua cho ${getShortStoreName(cleanTarget)} (Chốt ngày ${formatDate(reportDate)}) lên Cloud!`);
             } else {
                 showToast(`⚠️ Đã cập nhật vào bảng nhưng lưu Cloud thất bại: ${res.error}`);
@@ -636,6 +669,35 @@ export default function DataExtractOcrPage() {
                     sqlDdl={DAILY_BUSINESS_RECORDS_SQL}
                     customMessage={isSaved ? 'Số liệu kinh doanh đã được lưu an toàn trên Supabase Cloud.' : undefined}
                 />
+
+                {/* 1b. Banner gợi ý mở xem báo cáo tháng sau khi nạp / lưu thành công */}
+                {isSaved && storesData.length > 0 && (
+                    <div className="p-4 bg-gradient-to-r from-blue-600 via-indigo-600 to-emerald-600 rounded-2xl shadow-md text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-xs flex items-center justify-center shrink-0 border border-white/30">
+                                <CheckCircle2 className="w-6 h-6 text-emerald-300" />
+                            </div>
+                            <div>
+                                <h3 className="text-sm font-black flex items-center gap-2">
+                                    <span>Đã nạp &amp; lưu thành công dữ liệu ngày {formatDate(reportDate)} ({storesData.length} ST) lên Cloud!</span>
+                                </h3>
+                                <p className="text-xs text-blue-100 font-medium mt-0.5">
+                                    Số liệu kinh doanh đã sẵn sàng trên toàn hệ thống. Mở trang Báo Cáo Tháng để xem bức tranh tổng quan và phân tích lũy kế.
+                                </p>
+                            </div>
+                        </div>
+
+                        <Link
+                            to="/bc-thang/tong-quan"
+                            className="px-4 py-2.5 bg-white hover:bg-blue-50 text-blue-900 rounded-xl text-xs font-black transition-all shadow-sm hover:shadow flex items-center justify-center gap-2 shrink-0 cursor-pointer active:scale-95"
+                            title="Mở trang Báo Cáo Tháng để xem kết quả kinh doanh vừa nạp"
+                        >
+                            <BarChart3 className="w-4 h-4 text-blue-600" />
+                            <span>Mở Xem Báo Cáo Tháng</span>
+                            <ArrowRight className="w-4 h-4 text-blue-600" />
+                        </Link>
+                    </div>
+                )}
 
                 {/* 2. Thanh Tham Số Nghiệp Vụ & Bộ Chọn Tab */}
                 <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3">
@@ -789,19 +851,31 @@ export default function DataExtractOcrPage() {
                         {storesData.length > 0 && (
                             <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex flex-wrap items-center justify-between gap-3 text-xs">
                                 <div className="flex items-center gap-2 text-emerald-800 font-semibold">
-                                    <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                                    <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
                                     <span>
                                         Đã có số liệu của <strong>{storesData.length} ST</strong> sẵn sàng.
-                                        Bạn có thể chuyển sang Tab 2 để rà soát chi tiết hoặc xuất lưu Cloud.
+                                        {isSaved ? ' Dữ liệu đã được lưu thành công lên Supabase Cloud!' : ' Bạn có thể chuyển sang Tab 2 để rà soát chi tiết hoặc xuất lưu Cloud.'}
                                     </span>
                                 </div>
-                                <button
-                                    onClick={() => setActiveTab('manual')}
-                                    className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold flex items-center gap-1.5 shadow-sm transition-all"
-                                >
-                                    <span>Mở Bảng Rà Soát & Lưu Trữ</span>
-                                    <ArrowRight className="w-4 h-4" />
-                                </button>
+                                <div className="flex items-center gap-2">
+                                    {isSaved && (
+                                        <Link
+                                            to="/bc-thang/tong-quan"
+                                            className="px-3.5 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                                            title="Mở Báo Cáo Tháng để xem kết quả số liệu vừa nạp"
+                                        >
+                                            <BarChart3 className="w-4 h-4 text-amber-300" />
+                                            <span>Xem Báo Cáo Tháng</span>
+                                        </Link>
+                                    )}
+                                    <button
+                                        onClick={() => setActiveTab('manual')}
+                                        className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                                    >
+                                        <span>Mở Bảng Rà Soát & Lưu Trữ</span>
+                                        <ArrowRight className="w-4 h-4" />
+                                    </button>
+                                </div>
                             </div>
                         )}
 
@@ -814,8 +888,6 @@ export default function DataExtractOcrPage() {
                             onRealFileChange={setRealFile}
                             emulationFiles={emulationFiles}
                             onEmulationFilesChange={setEmulationFiles}
-                            engineType={engineType}
-                            onEngineTypeChange={setEngineType}
                             hasGeminiKey={Boolean(keyInfo.key)}
                             keySource={keyInfo.source}
                             isQuotaExceeded={isQuotaExceeded}
@@ -824,6 +896,11 @@ export default function DataExtractOcrPage() {
                             isExtracting={isExtracting}
                             progressText={progressText}
                             progressPercent={progressPercent}
+                            emulationMode={emulationMode}
+                            onEmulationModeChange={setEmulationMode}
+                            selectableStores={selectableStores}
+                            singleStoreEmulations={singleStoreEmulations}
+                            onSingleStoreEmulationsChange={setSingleStoreEmulations}
                         />
                     </div>
                 )}
@@ -840,6 +917,7 @@ export default function DataExtractOcrPage() {
                         reportDate={reportDate}
                         onSaveToSupabase={handleSaveToSupabase}
                         isSaving={isSaving}
+                        isSaved={isSaved}
                         existingRecordCount={existingRecordCount}
                         onLoadFromCloud={handleLoadExistingRecords}
                         isLoadingExisting={isLoadingExisting}

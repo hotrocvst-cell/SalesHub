@@ -36,9 +36,9 @@ export default function FocusCampaignEmployeeTable({
     }
 
     return (
-        <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden font-sans">
+        <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden font-sans" data-report-table="true">
             <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse report-table text-xs">
+                <table className="w-full text-left border-collapse report-table text-xs font-avo" data-report-table="true">
                     <thead>
                         <tr className="bg-slate-100/90 text-slate-700 font-black border-b border-slate-200">
                             <th className="px-2.5 py-2.5 text-center w-10 shrink-0">STT</th>

@@ -254,12 +254,25 @@ export default function EmployeeRankingTable({
                                             </div>
                                         </td>
 
-                                        {/* DỰ KIẾN THI ĐUA (Theo điểm hoặc theo nhóm) */}
-                                        <td className="py-2 px-2 text-center border-r border-slate-100">
+                                        {/* DỰ KIẾN THI ĐUA (Theo điểm hoặc theo nhóm, đã bao gồm điểm cộng thưởng) */}
+                                        <td
+                                            className="py-2 px-2 text-center border-r border-slate-100"
+                                            title={row.bonus_points && row.bonus_points > 0
+                                                ? `Đã bao gồm +${row.bonus_points}đ điểm cộng thưởng do QL/TC chỉ định`
+                                                : undefined}
+                                        >
                                             <div className="flex items-center justify-center gap-1.5">
                                                 <span className="font-black text-purple-950 text-xs font-mono">
                                                     {row.emulation_display}
                                                 </span>
+                                                {row.bonus_points && row.bonus_points > 0 ? (
+                                                    <span
+                                                        className="text-[10px] text-amber-500 font-black cursor-help"
+                                                        title={`Đã cộng +${row.bonus_points}đ điểm thưởng thi đua do QL/TC chỉ định`}
+                                                    >
+                                                        ⭐
+                                                    </span>
+                                                ) : null}
                                                 <span className={`px-1.5 py-0.2 rounded text-[9.5px] font-black ${row.emulation_rate >= 100
                                                     ? 'bg-emerald-100 text-emerald-800'
                                                     : row.emulation_rate >= 80

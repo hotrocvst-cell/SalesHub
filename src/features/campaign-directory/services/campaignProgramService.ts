@@ -1,7 +1,12 @@
 import { supabase } from '../../../core/lib/supabase';
 import type { CampaignProgramItem } from '../types';
 
-const STORAGE_KEY = 'saleshub_campaign_programs_v1';
+// Dọn dẹp key cache cũ (nếu có) để đảm bảo 100% sử dụng Cloud, không dùng LocalStorage
+try {
+    localStorage.removeItem('saleshub_campaign_programs_v1');
+} catch {
+    // Ignore error in non-browser environment
+}
 
 export const CAMPAIGN_PROGRAM_DDL_SQL = `-- 1. TẠO BẢNG CHƯƠNG TRÌNH THI ĐUA NẾU CHƯA CÓ
 CREATE TABLE IF NOT EXISTS public.campaign_programs (
@@ -128,59 +133,42 @@ export const INITIAL_SEED_PROGRAMS: CampaignProgramItem[] = [
     }
 ];
 
+/**
+ * Kiểm tra tính sẵn sàng của bảng campaign_programs trên Supabase Cloud
+ */
 export async function checkCampaignProgramTableReady(): Promise<{ exists: boolean; error?: string }> {
     try {
         const { error } = await supabase.from('campaign_programs').select('id').limit(1);
         if (error) {
             if (error.code === 'PGRST205' || error.message?.includes('schema cache') || error.message?.includes('not find')) {
-                return { exists: false, error: 'Chưa tạo bảng campaign_programs trên cloud' };
+                return { exists: false, error: 'Chưa tạo bảng campaign_programs trên Cloud' };
             }
             return { exists: false, error: error.message };
         }
         return { exists: true };
     } catch (e: any) {
-        return { exists: false, error: e?.message || 'Không thể kết nối cloud' };
+        return { exists: false, error: e?.message || 'Không thể kết nối Cloud' };
     }
 }
 
-export function getLocalCampaignPrograms(): CampaignProgramItem[] {
-    try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (raw) {
-            const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-                return parsed;
-            }
-        }
-    } catch (e) {
-        console.warn('Lỗi đọc local campaign programs:', e);
-    }
-    return INITIAL_SEED_PROGRAMS;
-}
-
-export function setLocalCampaignPrograms(items: CampaignProgramItem[]): void {
-    try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-    } catch (e) {
-        console.warn('Lỗi lưu local campaign programs:', e);
-    }
-}
-
+/**
+ * Nạp danh sách chương trình thi đua trực tiếp 100% từ Supabase Cloud
+ * (Tuyệt đối không dùng LocalStorage, không tự ý nạp lại seed data khi Admin đã xóa trống)
+ */
 export async function fetchCampaignPrograms(): Promise<{
     data: CampaignProgramItem[];
-    source: 'cloud' | 'local';
+    source: 'cloud';
     cloudReady: boolean;
     error?: string;
 }> {
-    const localData = getLocalCampaignPrograms();
     try {
         const { exists, error: checkErr } = await checkCampaignProgramTableReady();
         if (!exists) {
             return {
-                data: localData,
-                source: 'local',
+                data: [],
+                source: 'cloud',
                 cloudReady: false,
-                error: checkErr
+                error: checkErr || 'Bảng campaign_programs chưa sẵn sàng trên Cloud'
             };
         }
 
@@ -192,164 +180,187 @@ export async function fetchCampaignPrograms(): Promise<{
 
         if (error) throw error;
 
-        if (data && data.length > 0) {
-            const mapped: CampaignProgramItem[] = data.map((d: any) => ({
-                id: d.id,
-                group_name: d.group_name || 'ICT',
-                program_name: d.program_name || '',
-                short_name: d.short_name || '',
-                mapped_key: d.mapped_key || '',
-                orientation: d.orientation || 'Chính',
-                calculation_method: d.calculation_method || 'Doanh thu',
-                rules: d.rules || '',
-                product_status: d.product_status || 'Tất cả (All)',
-                opportunity: d.opportunity || '',
-                target_period: d.target_period || '',
-                start_date: d.start_date || '',
-                end_date: d.end_date || '',
-                order_index: d.order_index ?? 0,
-                is_active: d.is_active !== false,
-                created_at: d.created_at,
-                updated_at: d.updated_at,
-                created_by: d.created_by || ''
-            }));
-            setLocalCampaignPrograms(mapped);
-            return { data: mapped, source: 'cloud', cloudReady: true };
-        } else {
-            // Cloud trống -> Tự động nạp seed data lên cloud
-            await batchUpsertCampaignPrograms(localData);
-            return { data: localData, source: 'local', cloudReady: true };
-        }
+        const mapped: CampaignProgramItem[] = (data || []).map((d: any) => ({
+            id: d.id,
+            group_name: d.group_name || 'ICT',
+            program_name: d.program_name || '',
+            short_name: d.short_name || '',
+            mapped_key: d.mapped_key || '',
+            orientation: d.orientation || 'Chính',
+            calculation_method: d.calculation_method || 'Doanh thu',
+            rules: d.rules || '',
+            product_status: d.product_status || 'Tất cả (All)',
+            opportunity: d.opportunity || '',
+            target_period: d.target_period || '',
+            start_date: d.start_date || '',
+            end_date: d.end_date || '',
+            order_index: d.order_index ?? 0,
+            is_active: d.is_active !== false,
+            created_at: d.created_at,
+            updated_at: d.updated_at,
+            created_by: d.created_by || ''
+        }));
+
+        return { data: mapped, source: 'cloud', cloudReady: true };
     } catch (e: any) {
-        console.warn('Fallback to local campaign programs:', e);
+        console.error('Lỗi nạp chương trình thi đua từ Cloud:', e);
         return {
-            data: localData,
-            source: 'local',
+            data: [],
+            source: 'cloud',
             cloudReady: false,
-            error: e?.message
+            error: e?.message || 'Không thể nạp dữ liệu từ Cloud'
         };
     }
 }
 
+/**
+ * Lưu/Cập nhật 1 chương trình thi đua trực tiếp lên Supabase Cloud
+ */
 export async function saveCampaignProgram(
     item: Partial<CampaignProgramItem>
 ): Promise<{ success: boolean; data?: CampaignProgramItem; error?: string }> {
-    const localList = getLocalCampaignPrograms();
-    const id = item.id || `cp-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-    const now = new Date().toISOString();
-
-    const fullItem: CampaignProgramItem = {
-        id,
-        group_name: item.group_name || 'ICT',
-        program_name: item.program_name || 'Chương trình mới',
-        short_name: item.short_name || '',
-        mapped_key: item.mapped_key || '',
-        orientation: item.orientation || 'Chính',
-        calculation_method: item.calculation_method || 'Doanh thu',
-        rules: item.rules || '',
-        product_status: item.product_status || 'Tất cả (All)',
-        opportunity: item.opportunity || '',
-        target_period: item.target_period || '',
-        start_date: item.start_date || '',
-        end_date: item.end_date || '',
-        order_index: item.order_index ?? (localList.length + 1),
-        is_active: item.is_active !== false,
-        created_at: item.created_at || now,
-        updated_at: now,
-        created_by: item.created_by || ''
-    };
-
-    // 1. Cập nhật LocalStorage trước để phản hồi tức thì
-    const existingIndex = localList.findIndex(x => x.id === id);
-    let updatedLocal: CampaignProgramItem[];
-    if (existingIndex >= 0) {
-        updatedLocal = [...localList];
-        updatedLocal[existingIndex] = fullItem;
-    } else {
-        updatedLocal = [fullItem, ...localList];
-    }
-    setLocalCampaignPrograms(updatedLocal);
-
-    // 2. Đồng bộ Supabase nếu sẵn sàng
     try {
-        const { exists } = await checkCampaignProgramTableReady();
-        if (exists) {
-            const dbPayload = {
-                id: fullItem.id,
-                group_name: fullItem.group_name,
-                program_name: fullItem.program_name,
-                short_name: fullItem.short_name || '',
-                mapped_key: fullItem.mapped_key || '',
-                orientation: fullItem.orientation,
-                calculation_method: fullItem.calculation_method,
-                rules: fullItem.rules,
-                product_status: fullItem.product_status,
-                opportunity: fullItem.opportunity,
-                target_period: fullItem.target_period,
-                start_date: fullItem.start_date || null,
-                end_date: fullItem.end_date || null,
-                order_index: fullItem.order_index,
-                is_active: fullItem.is_active,
-                updated_at: now,
-                created_by: fullItem.created_by
-            };
-            const { error } = await supabase.from('campaign_programs').upsert(dbPayload);
-            if (error) console.warn('Supabase upsert failed:', error);
-        }
-    } catch (e) {
-        console.warn('Supabase sync error on save:', e);
-    }
+        const now = new Date().toISOString();
+        const isUuid = item.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(item.id);
 
-    return { success: true, data: fullItem };
+        const dbPayload: any = {
+            group_name: item.group_name || 'ICT',
+            program_name: item.program_name || 'Chương trình mới',
+            short_name: item.short_name || '',
+            mapped_key: item.mapped_key || '',
+            orientation: item.orientation || 'Chính',
+            calculation_method: item.calculation_method || 'Doanh thu',
+            rules: item.rules || '',
+            product_status: item.product_status || 'Tất cả (All)',
+            opportunity: item.opportunity || '',
+            target_period: item.target_period || '',
+            start_date: item.start_date || null,
+            end_date: item.end_date || null,
+            order_index: item.order_index ?? 0,
+            is_active: item.is_active !== false,
+            updated_at: now,
+            created_by: item.created_by || ''
+        };
+
+        if (isUuid) {
+            dbPayload.id = item.id;
+        }
+
+        const { data, error } = await supabase
+            .from('campaign_programs')
+            .upsert(dbPayload)
+            .select('*')
+            .single();
+
+        if (error) {
+            console.error('Lỗi Supabase khi lưu chương trình:', error);
+            return { success: false, error: error.message };
+        }
+
+        const savedItem: CampaignProgramItem = {
+            id: data.id,
+            group_name: data.group_name || 'ICT',
+            program_name: data.program_name || '',
+            short_name: data.short_name || '',
+            mapped_key: data.mapped_key || '',
+            orientation: data.orientation || 'Chính',
+            calculation_method: data.calculation_method || 'Doanh thu',
+            rules: data.rules || '',
+            product_status: data.product_status || 'Tất cả (All)',
+            opportunity: data.opportunity || '',
+            target_period: data.target_period || '',
+            start_date: data.start_date || '',
+            end_date: data.end_date || '',
+            order_index: data.order_index ?? 0,
+            is_active: data.is_active !== false,
+            created_at: data.created_at,
+            updated_at: data.updated_at,
+            created_by: data.created_by || ''
+        };
+
+        return { success: true, data: savedItem };
+    } catch (e: any) {
+        console.error('Lỗi ngoại lệ khi lưu chương trình lên Cloud:', e);
+        return { success: false, error: e?.message || 'Không thể lưu chương trình lên Cloud' };
+    }
 }
 
+/**
+ * Lưu hàng loạt chương trình thi đua trực tiếp lên Supabase Cloud
+ * @param items Danh sách chương trình cần lưu
+ * @param replaceAll Nếu true, xóa sạch danh sách cũ trên Cloud trước khi nạp
+ */
 export async function batchUpsertCampaignPrograms(
-    items: CampaignProgramItem[]
+    items: CampaignProgramItem[],
+    replaceAll: boolean = false
 ): Promise<{ success: boolean; count: number; error?: string }> {
-    setLocalCampaignPrograms(items);
     try {
-        const { exists } = await checkCampaignProgramTableReady();
-        if (exists) {
-            const payload = items.map(item => ({
-                id: item.id.startsWith('seed-') ? undefined : item.id,
-                group_name: item.group_name,
-                program_name: item.program_name,
+        if (replaceAll) {
+            const { error: delErr } = await supabase
+                .from('campaign_programs')
+                .delete()
+                .neq('id', '00000000-0000-0000-0000-000000000000');
+            if (delErr) {
+                console.warn('Lỗi xóa dữ liệu cũ khi replaceAll:', delErr);
+            }
+        }
+
+        if (items.length === 0) {
+            return { success: true, count: 0 };
+        }
+
+        const payload = items.map((item, idx) => {
+            const isUuid = item.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(item.id);
+            return {
+                ...(isUuid ? { id: item.id } : {}),
+                group_name: item.group_name || 'ICT',
+                program_name: item.program_name || '',
                 short_name: item.short_name || '',
                 mapped_key: item.mapped_key || '',
-                orientation: item.orientation,
-                calculation_method: item.calculation_method,
-                rules: item.rules,
-                product_status: item.product_status,
-                opportunity: item.opportunity,
-                target_period: item.target_period,
+                orientation: item.orientation || 'Chính',
+                calculation_method: item.calculation_method || 'Doanh thu',
+                rules: item.rules || '',
+                product_status: item.product_status || 'Tất cả (All)',
+                opportunity: item.opportunity || '',
+                target_period: item.target_period || '',
                 start_date: item.start_date || null,
                 end_date: item.end_date || null,
-                order_index: item.order_index,
-                is_active: item.is_active,
+                order_index: item.order_index ?? (idx + 1),
+                is_active: item.is_active !== false,
                 updated_at: new Date().toISOString()
-            }));
-            const { error } = await supabase.from('campaign_programs').upsert(payload);
-            if (error) throw error;
-        }
+            };
+        });
+
+        const { error } = await supabase.from('campaign_programs').upsert(payload);
+        if (error) throw error;
+
         return { success: true, count: items.length };
     } catch (e: any) {
-        console.warn('Batch upsert error:', e);
-        return { success: true, count: items.length, error: e?.message };
+        console.error('Batch upsert error trên Cloud:', e);
+        return { success: false, count: 0, error: e?.message || 'Lỗi lưu hàng loạt lên Cloud' };
     }
 }
 
+/**
+ * Xóa 1 chương trình thi đua trực tiếp từ Supabase Cloud
+ */
 export async function deleteCampaignProgram(id: string): Promise<{ success: boolean; error?: string }> {
-    const localList = getLocalCampaignPrograms();
-    const updated = localList.filter(x => x.id !== id);
-    setLocalCampaignPrograms(updated);
-
     try {
-        const { exists } = await checkCampaignProgramTableReady();
-        if (exists) {
-            await supabase.from('campaign_programs').delete().eq('id', id);
+        const { error } = await supabase.from('campaign_programs').delete().eq('id', id);
+        if (error) {
+            console.error('Lỗi xóa trên Cloud:', error);
+            return { success: false, error: error.message };
         }
+        return { success: true };
     } catch (e: any) {
-        console.warn('Lỗi xóa trên Cloud:', e);
+        console.error('Lỗi xóa chương trình trên Cloud:', e);
+        return { success: false, error: e?.message || 'Không thể xóa trên Cloud' };
     }
-    return { success: true };
+}
+
+/**
+ * Nạp thủ công 6 chương trình thi đua mẫu lên Cloud (Chỉ kích hoạt khi Admin chủ động bấm)
+ */
+export async function seedSampleCampaignPrograms(): Promise<{ success: boolean; count: number; error?: string }> {
+    return await batchUpsertCampaignPrograms(INITIAL_SEED_PROGRAMS, false);
 }

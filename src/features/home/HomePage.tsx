@@ -6,7 +6,7 @@ import QuickNavigationGrid from './components/QuickNavigationGrid';
 
 export default function HomePage() {
     useEffect(() => {
-        document.title = 'Trang Chủ | Hệ Thống Bán Hàng SalesHub';
+        document.title = 'Trang Chủ | Trợ Thủ Bán Hàng SalesHub';
     }, []);
 
     return (

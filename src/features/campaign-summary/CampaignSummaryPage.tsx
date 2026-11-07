@@ -43,6 +43,7 @@ import ExcelJS from 'exceljs';
 import { calculate8KScale } from '../../shared/utils/exportImage';
 import { GUEST_DEMO_STORE } from '../../core/lib/guestDemoStoreService';
 import { fetchCampaignOffsets, type CampaignOffsetItem } from '../campaign-offset/services/campaignOffsetService';
+import { fetchEmployeeBonuses, type EmployeeBonusItem } from '../../core/lib/employeeBonusService';
 import { useExcelExportPermission } from '../../shared/hooks/useExcelExportPermission';
 
 export default function CampaignSummaryPage() {
@@ -95,6 +96,7 @@ export default function CampaignSummaryPage() {
     const [campaignDict, setCampaignDict] = useState<CampaignDictItem[]>([]);
     const [offsets, setOffsets] = useState<CampaignOffsetItem[]>([]);
     const [applyOffsets, setApplyOffsets] = useState<boolean>(true);
+    const [bonuses, setBonuses] = useState<EmployeeBonusItem[]>([]);
 
     const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('ALL');
     const [searchQuery, setSearchQuery] = useState<string>('');
@@ -113,12 +115,13 @@ export default function CampaignSummaryPage() {
     const loadSystemData = async () => {
         setLoading(true);
 
-        const [storesRes, dictRes, targetsRes, empsRes, offsetsRes] = await Promise.all([
+        const [storesRes, dictRes, targetsRes, empsRes, offsetsRes, bonusesList] = await Promise.all([
             fetchStores(),
             fetchCampaignDictionary(),
             fetchEmployeeCampaignTargets(selectedMonth, selectedYear),
             fetchEmployees(),
-            fetchCampaignOffsets(selectedStore, selectedMonth, selectedYear)
+            fetchCampaignOffsets(selectedStore, selectedMonth, selectedYear),
+            fetchEmployeeBonuses({ month: selectedMonth, year: selectedYear })
         ]);
 
         if (storesRes.success) setStores(storesRes.data);
@@ -126,6 +129,7 @@ export default function CampaignSummaryPage() {
         if (empsRes.success) setEmployees(empsRes.data);
         if (offsetsRes.success && offsetsRes.data) setOffsets(offsetsRes.data);
         else setOffsets([]);
+        setBonuses(bonusesList || []);
 
         // Chuyển đổi chỉ tiêu thi đua sang bản đồ [empId][rawKey] = target
         const tMap: Record<string, Record<string, number>> = {};
@@ -162,20 +166,24 @@ export default function CampaignSummaryPage() {
         loadSystemData();
     }, [selectedMonth, selectedYear]);
 
-    // Tự động tải lại danh sách cấn trừ khi đổi ST
+    // Tự động tải lại danh sách cấn trừ và điểm cộng khi đổi ST
     useEffect(() => {
         let isMounted = true;
-        fetchCampaignOffsets(selectedStore, selectedMonth, selectedYear).then(res => {
+        Promise.all([
+            fetchCampaignOffsets(selectedStore, selectedMonth, selectedYear),
+            fetchEmployeeBonuses({ month: selectedMonth, year: selectedYear, storesList: stores })
+        ]).then(([offRes, bonusList]) => {
             if (isMounted) {
-                if (res.success && res.data) {
-                    setOffsets(res.data);
+                if (offRes.success && offRes.data) {
+                    setOffsets(offRes.data);
                 } else {
                     setOffsets([]);
                 }
+                setBonuses(bonusList || []);
             }
         });
         return () => { isMounted = false; };
-    }, [selectedStore, selectedMonth, selectedYear]);
+    }, [selectedStore, selectedMonth, selectedYear, stores]);
 
     // Bản đồ nhân viên -> ST
     const empStoreMap = useMemo(() => {
@@ -328,10 +336,12 @@ export default function CampaignSummaryPage() {
                 empStoreMap,
                 storesList: stores,
                 offsets,
-                applyOffsets
+                applyOffsets,
+                bonuses,
+                employees
             }
         );
-    }, [activeSession, targetsMap, campaignDict, operatingConfig, selectedStore, empStoreMap, stores, offsets, applyOffsets]);
+    }, [activeSession, targetsMap, campaignDict, operatingConfig, selectedStore, empStoreMap, stores, offsets, applyOffsets, bonuses, employees]);
 
     // Lọc theo tìm kiếm nhân viên
     const filteredRows = useMemo(() => {

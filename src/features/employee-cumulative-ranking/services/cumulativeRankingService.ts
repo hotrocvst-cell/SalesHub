@@ -1,6 +1,6 @@
 import { supabase } from '../../../core/lib/supabase';
 import { isStoreMatch, normalizeToMillion } from '../../../core/lib/formatters';
-import { fetchEmployeeRevenueTargets } from '../../../core/lib/storage';
+import { fetchEmployeeRevenueTargets, fetchEmployees } from '../../../core/lib/storage';
 import { syncAndFetchEmployeeDataSessions } from '../../employee-cumulative/utils/sessionStorage';
 import { fetchPeriodTarget } from './periodTargetStorage';
 import type { EmployeeCumulativeRankingRow, StoreCumulativeSummary, TargetSelectionMode } from '../types';
@@ -165,6 +165,15 @@ export async function fetchCumulativeRankingData(params: {
 
         if (sessError) {
             console.warn('Cảnh báo tải employee_data_sessions:', sessError);
+        }
+
+        // 2b. TẢI DANH MỤC NHÂN VIÊN ĐỂ XÁC ĐỊNH TRẠNG THÁI HOẠT ĐỘNG
+        const empsRes = await fetchEmployees();
+        const empStatusMap = new Map<string, { is_active?: boolean; status?: string }>();
+        if (empsRes.success && empsRes.data) {
+            empsRes.data.forEach(e => {
+                if (e.employee_id) empStatusMap.set(String(e.employee_id).trim(), e);
+            });
         }
 
         // 3. TẢI CẤU HÌNH TARGET THEO GIAI ĐOẠN RIÊNG BIỆT (A - B)
@@ -486,8 +495,21 @@ export async function fetchCumulativeRankingData(params: {
             storeTargetTotal = storeMonthlyTargetFromRecords;
         }
 
-        // 7. XÂY DỰNG DANH SÁCH DÒNG VÀ SẮP XẾP THEO %HT GIẢM DẦN
-        const rows: EmployeeCumulativeRankingRow[] = Array.from(empMap.values()).map(e => {
+        // 7. XÂY DỰNG DANH SÁCH DÒNG (LỌC BỎ NHÂN VIÊN NGHỈ VIỆC & KHÔNG CÓ TARGET) VÀ SẮP XẾP THEO %HT GIẢM DẦN
+        const validEmpList = Array.from(empMap.values()).filter(e => {
+            const empStatus = empStatusMap.get(e.employeeId);
+            if (empStatus) {
+                if (empStatus.is_active === false) return false;
+                const st = (empStatus.status || '').toLowerCase();
+                if (st === 'inactive' || st === 'resigned') return false;
+            }
+            const target = finalTargetMap[e.employeeId] || 0;
+            // Bắt buộc phải có target (> 0)
+            if (target <= 0) return false;
+            return true;
+        });
+
+        const rows: EmployeeCumulativeRankingRow[] = validEmpList.map(e => {
             const target = finalTargetMap[e.employeeId] || 0;
             const completionRate = target > 0 ? (e.cumulativeRevenue / target) * 100 : 0;
             const storeShareRate = storeCumulativeRevenue > 0
@@ -535,8 +557,9 @@ export async function fetchCumulativeRankingData(params: {
             shareRate: rows[0].storeShareRate
         } : null;
 
+        const sumOfValidEmployees = rows.reduce((sum, r) => sum + r.cumulativeRevenue, 0);
         const employeesWithSales = rows.filter(r => r.cumulativeRevenue > 0).length;
-        const avgPerEmployee = employeesWithSales > 0 ? sumOfEmployees / employeesWithSales : 0;
+        const avgPerEmployee = employeesWithSales > 0 ? sumOfValidEmployees / employeesWithSales : 0;
 
         const summary: StoreCumulativeSummary = {
             storeName: store,

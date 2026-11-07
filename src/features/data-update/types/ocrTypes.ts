@@ -1,4 +1,11 @@
-export type OcrEngineType = 'GEMINI_FLASH' | 'TESSERACT_CLIENT';
+export type OcrEngineType = 'GEMINI_FLASH';
+
+export type EmulationUploadMode = 'CLUSTER' | 'SINGLE_STORE';
+
+export interface SingleStoreEmulationEntry {
+    storeName: string;
+    files: File[];
+}
 
 export interface EmulationOcrItem {
     programName: string;

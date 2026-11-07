@@ -8,6 +8,7 @@ export interface CampaignSummaryRow {
     total_count: number;    // Tổng số ngành hàng xét, ví dụ 39
     achieved_points?: number; // Số điểm đạt được
     total_points?: number;    // Tổng điểm tối đa của các ngành hàng có target
+    bonus_points?: number;    // Điểm thưởng cộng thêm (QL/TC chỉ định)
     achievement_rate: number; // Tỷ lệ % đạt (15/39 = 38.5% hoặc điểm đạt / tổng điểm)
     campaign_rates: Record<string, number>; // { [categoryName]: percentageNumber (e.g. 76, 145, 0) }
     campaign_offsets?: Record<string, number>; // { [categoryName]: netOffsetQuantity (+X hoặc -Y) }
@@ -29,6 +30,8 @@ export interface CampaignSummaryData {
     has_offsets?: boolean;
     offsets_applied?: boolean;
     offset_count?: number;
+    has_bonuses?: boolean;
+    bonus_count?: number;
 }
 
 export interface SmartRemarkAnalysis {

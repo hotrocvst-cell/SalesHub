@@ -87,6 +87,18 @@ export function getStoreCampaignScoreConfig(
     };
 }
 
+function normalizeScoreToken(str: string): string {
+    if (!str) return '';
+    return str
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/đ/g, 'd')
+        .replace(/^t\d{1,2}\s*-\s*(t\d{1,2}\s*)?/i, '')
+        .replace(/[^a-z0-9]/g, '')
+        .trim();
+}
+
 /**
  * Lấy số điểm quy định của một chương trình thi đua cụ thể theo cấu hình ST
  * Mặc định trả về 1 điểm nếu chưa gán điểm hoặc điểm <= 0
@@ -97,18 +109,29 @@ export function getCampaignPoints(
 ): number {
     if (!config || !config.campaign_scores) return 1;
 
-    // Tìm theo exact key
+    // 1. Tìm theo exact key
     if (config.campaign_scores[campaignKey] !== undefined) {
         const pts = Number(config.campaign_scores[campaignKey]);
         return pts > 0 ? pts : 1;
     }
 
-    // Tìm không phân biệt hoa thường hoặc loại bỏ khoảng trắng
+    // 2. Tìm không phân biệt hoa thường hoặc loại bỏ khoảng trắng
     const cleanKey = campaignKey.trim().toLowerCase();
     for (const [k, v] of Object.entries(config.campaign_scores)) {
         if (k.trim().toLowerCase() === cleanKey) {
             const pts = Number(v);
             return pts > 0 ? pts : 1;
+        }
+    }
+
+    // 3. Tìm qua token chuẩn hóa (loại bỏ dấu tiếng Việt, dấu cách, dấu phẩy, tiền tố tháng)
+    const tok = normalizeScoreToken(campaignKey);
+    if (tok) {
+        for (const [k, v] of Object.entries(config.campaign_scores)) {
+            if (normalizeScoreToken(k) === tok) {
+                const pts = Number(v);
+                return pts > 0 ? pts : 1;
+            }
         }
     }
 

@@ -1,6 +1,6 @@
 import React from 'react';
 import type { FocusStoreCampaignMetric } from '../types';
-import { Target, Users, TrendingUp, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Users, CheckCircle2 } from 'lucide-react';
 
 interface Props {
     storeMetrics: FocusStoreCampaignMetric[];
@@ -17,30 +17,30 @@ export default function FocusCampaignStoreCards({ storeMetrics, storeName }: Pro
     }
 
     return (
-        <div className="space-y-2.5 font-sans">
-            <div className="flex items-center justify-between px-1">
-                <div className="flex items-center gap-2">
-                    <div className="w-2.5 h-2.5 rounded-full bg-blue-600 animate-pulse" />
+        <div className="space-y-2 font-sans" data-report-cards="true">
+            <div className="flex items-center justify-between px-0.5">
+                <div className="flex items-center gap-1.5">
+                    <div className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
                     <h3 className="text-xs sm:text-sm font-black text-slate-800 uppercase tracking-wide">
                         Tiến Độ Lũy Kế ST ({storeName}) - {storeMetrics.length} Nhóm Hàng Trọng Tâm
                     </h3>
                 </div>
-                <span className="text-[11px] font-semibold text-slate-400 italic">
+                <span className="text-[10.5px] font-semibold text-slate-400 italic hidden sm:inline">
                     *Số liệu lấy theo cập nhật lũy kế của ST
                 </span>
             </div>
 
-            {/* Grid Thẻ KPI - Tối ưu 1-2-3 cột mượt mà */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+            {/* Grid Thẻ KPI - Tối ưu Compact Mobile-First */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5">
                 {storeMetrics.map((item) => {
                     const isPassed = item.forecastRate >= 100;
                     const isWarning = item.forecastRate >= 80 && item.forecastRate < 100;
 
                     const statusBg = isPassed
-                        ? 'bg-emerald-50/70 border-emerald-200 text-emerald-800'
+                        ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
                         : isWarning
-                            ? 'bg-amber-50/70 border-amber-200 text-amber-800'
-                            : 'bg-rose-50/70 border-rose-200 text-rose-800';
+                            ? 'bg-amber-50 text-amber-800 border-amber-200'
+                            : 'bg-rose-50 text-rose-800 border-rose-200';
 
                     const barColor = isPassed
                         ? 'bg-emerald-500'
@@ -51,71 +51,65 @@ export default function FocusCampaignStoreCards({ storeMetrics, storeName }: Pro
                     return (
                         <div
                             key={item.campaignKey}
-                            className="bg-white border border-slate-200 rounded-2xl p-3.5 shadow-xs flex flex-col justify-between hover:shadow-md transition"
+                            className="bg-white border border-slate-200 hover:border-slate-300 rounded-xl p-2.5 shadow-2xs flex flex-col justify-between transition gap-1.5"
                         >
-                            {/* Header Thẻ */}
-                            <div className="flex items-start justify-between gap-2 pb-2 border-b border-slate-100">
-                                <div>
-                                    <h4 className="text-xs sm:text-sm font-black text-slate-900 line-clamp-1" title={item.displayName}>
-                                        {item.displayName}
-                                    </h4>
-                                    <span className="text-[10.5px] font-bold text-slate-400">
-                                        Đơn vị: {item.unit}
-                                    </span>
-                                </div>
-                                <span className={`text-[10.5px] font-black px-2 py-0.5 rounded-full border shrink-0 ${statusBg}`}>
+                            {/* Hàng 1: Tên nhóm hàng + Badge %DK */}
+                            <div className="flex items-center justify-between gap-1.5">
+                                <h4
+                                    className="text-xs font-black text-slate-900 truncate flex-1"
+                                    title={item.displayName}
+                                >
+                                    {item.displayName}
+                                </h4>
+                                <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-md border shrink-0 font-mono ${statusBg}`}>
                                     %DK: {item.forecastRate}%
                                 </span>
                             </div>
 
-                            {/* Số liệu ST (Target vs Lũy Kế) */}
-                            <div className="py-2.5 space-y-1.5">
-                                <div className="flex items-center justify-between text-xs">
-                                    <span className="text-slate-500 font-medium">Lũy kế ST:</span>
-                                    <span className="font-mono font-black text-slate-900 text-sm">
+                            {/* Hàng 2: Số liệu Thực tế / Target & Còn thiếu */}
+                            <div className="flex items-baseline justify-between gap-1 pt-0.5">
+                                <div className="flex items-baseline gap-1 truncate">
+                                    <span className="font-mono font-black text-sm text-slate-900">
                                         {item.storeActual.toLocaleString('vi-VN')}
                                     </span>
-                                </div>
-                                <div className="flex items-center justify-between text-xs">
-                                    <span className="text-slate-500 font-medium">Target ST:</span>
-                                    <span className="font-mono font-bold text-slate-600">
-                                        {item.storeTarget.toLocaleString('vi-VN')}
+                                    <span className="font-mono text-[11px] text-slate-400 font-bold">
+                                        /{item.storeTarget.toLocaleString('vi-VN')}
                                     </span>
-                                </div>
-                                <div className="flex items-center justify-between text-xs">
-                                    <span className="text-slate-500 font-medium">Còn thiếu:</span>
-                                    <span className="font-mono font-bold text-rose-600">
-                                        {item.storeRemaining.toLocaleString('vi-VN')}
+                                    <span className="text-[10px] text-slate-400 font-medium">
+                                        {item.unit}
                                     </span>
                                 </div>
 
-                                {/* Thanh Tiến Độ %DK */}
-                                <div className="pt-1">
-                                    <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden flex">
-                                        <div
-                                            className={`h-full rounded-full transition-all duration-500 ${barColor}`}
-                                            style={{ width: `${Math.min(100, item.forecastRate)}%` }}
-                                        />
-                                    </div>
-                                    <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1 font-semibold">
-                                        <span>%HT: {item.completionRate}%</span>
-                                        <span>{isPassed ? 'Đã đạt chỉ tiêu' : `Thiếu ${item.storeRemaining}`}</span>
-                                    </div>
-                                </div>
+                                {item.storeRemaining > 0 ? (
+                                    <span className="text-[10.5px] font-bold text-rose-700 font-mono bg-rose-50 border border-rose-200 px-1.5 py-0.2 rounded-md shrink-0">
+                                        Thiếu {item.storeRemaining.toLocaleString('vi-VN')}
+                                    </span>
+                                ) : (
+                                    <span className="text-[10.5px] font-bold text-emerald-700 font-mono bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded-md shrink-0 inline-flex items-center gap-0.5">
+                                        <CheckCircle2 className="w-3 h-3 text-emerald-600 inline" /> Đạt
+                                    </span>
+                                )}
                             </div>
 
-                            {/* Footer Thẻ: Tỷ lệ nhân sự đạt */}
-                            <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-600">
-                                <div className="flex items-center gap-1">
-                                    <Users className="w-3.5 h-3.5 text-blue-500" />
-                                    <span>NV đạt:</span>
-                                    <span className="font-bold text-slate-800">
-                                        {item.achievedEmployees}/{item.totalEmployeesWithTarget} NV
+                            {/* Hàng 3: Thanh tiến độ %DK */}
+                            <div className="space-y-1 pt-0.5">
+                                <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden flex">
+                                    <div
+                                        className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+                                        style={{ width: `${Math.min(100, item.forecastRate)}%` }}
+                                    />
+                                </div>
+                                <div className="flex items-center justify-between text-[10px] text-slate-500 font-medium">
+                                    <span>
+                                        %HT: <strong className="font-mono text-slate-800">{item.completionRate}%</strong>
+                                    </span>
+                                    <span className="inline-flex items-center gap-1">
+                                        <Users className="w-3 h-3 text-blue-500" />
+                                        <span>NV đạt:</span>
+                                        <strong className="font-mono text-slate-800">{item.achievedEmployees}/{item.totalEmployeesWithTarget}</strong>
+                                        <span className="font-mono text-blue-600 font-bold">({item.employeeAchieveRate}%)</span>
                                     </span>
                                 </div>
-                                <span className="font-black text-blue-600">
-                                    {item.employeeAchieveRate}%
-                                </span>
                             </div>
                         </div>
                     );

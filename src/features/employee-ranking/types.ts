@@ -24,6 +24,7 @@ export interface EmployeeRankingRow {
     points_total: number;
     campaigns_achieved: number;
     campaigns_total: number;
+    bonus_points?: number;       // Điểm cộng thưởng do QL/TC chỉ định
     emulation_rate: number;      // % Hoàn thành thi đua (theo điểm hoặc theo số nhóm)
     emulation_display: string;   // Chuỗi hiển thị: "8.5 / 10.0 đ" hoặc "4 / 5 nhóm"
     emulation_rank: number;      // Thứ hạng Thi đua (#1, #2...)

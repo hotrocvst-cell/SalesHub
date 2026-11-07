@@ -1,6 +1,7 @@
 import type { CampaignDictItem, BusinessDayRecord } from '../../../core/lib/storage';
 import type { EmployeeDataSession } from '../../employee-cumulative/utils/sessionStorage';
 import { resolveCanonicalCampaign, normalizeCampaignToken } from '../../campaign-summary/utils/campaignSummaryStorage';
+import { extractCampaignMonth } from './focusCampaignCalculations';
 
 /**
  * Trích xuất danh sách các nhóm hàng thi đua có phát sinh chỉ tiêu hoặc số liệu trong kỳ (Tháng/Năm)
@@ -50,10 +51,22 @@ export function extractPeriodActiveCampaigns(
     selectedCampaignKeys.forEach(k => activeRawKeys.add(k.trim()));
 
     const matched = campaignDict.filter(d => {
+        // Nếu d có tiền tố tháng và tiền tố đó khác với selectedMonth -> không đưa vào danh sách thi đua kỳ này (trừ khi đang được chọn)
+        const dMonth = extractCampaignMonth(d.raw_key) ?? extractCampaignMonth(d.display_name);
+        if (dMonth !== null && dMonth !== selectedMonth) {
+            if (!selectedCampaignKeys.includes(d.raw_key)) {
+                return false;
+            }
+        }
+
         if (selectedCampaignKeys.includes(d.raw_key)) return true;
         for (const rk of activeRawKeys) {
-            const res = resolveCanonicalCampaign(rk, campaignDict);
-            if (res.canonicalKey === d.raw_key || normalizeCampaignToken(rk) === normalizeCampaignToken(d.raw_key)) {
+            const rMonth = extractCampaignMonth(rk);
+            if (rMonth !== null && dMonth !== null && rMonth !== dMonth) {
+                continue;
+            }
+            if (rk === d.raw_key) return true;
+            if (normalizeCampaignToken(rk) === normalizeCampaignToken(d.raw_key)) {
                 return true;
             }
         }

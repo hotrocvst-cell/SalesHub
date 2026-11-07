@@ -8,12 +8,20 @@ import FocusCampaignStoreCards from './components/FocusCampaignStoreCards';
 import FocusCampaignEmployeeTable from './components/FocusCampaignEmployeeTable';
 import FocusWatchlistModal from './components/FocusWatchlistModal';
 import FocusCampaignRemarkModal from './components/FocusCampaignRemarkModal';
-import { exportFocusCampaignImage } from './utils/exportFocusImage';
+import { exportFocusCampaignImage, copyFocusCampaignImage } from './utils/exportFocusImage';
 
 export default function FocusCampaignPage() {
     const reportRef = useRef<HTMLDivElement>(null);
     const [isWatchlistModalOpen, setIsWatchlistModalOpen] = useState(false);
     const [isRemarkModalOpen, setIsRemarkModalOpen] = useState(false);
+    const [isExporting, setIsExporting] = useState(false);
+    const [isCopying, setIsCopying] = useState(false);
+    const [toastMessage, setToastMessage] = useState<string>('');
+
+    const showToast = (msg: string) => {
+        setToastMessage(msg);
+        setTimeout(() => setToastMessage(''), 3500);
+    };
 
     const {
         selectedMonth,
@@ -56,11 +64,36 @@ export default function FocusCampaignPage() {
         );
     };
 
-    const handleExportImage = () => {
+    const handleExportImage = async () => {
         if (!reportRef.current) return;
-        const storeLabel = selectedStore === 'all' ? 'Toan_Cum' : selectedStore.replace(/\s+/g, '_');
-        const prefix = `Thi_Dua_Trong_Tam_${storeLabel}_T${selectedMonth}_${selectedYear}`;
-        exportFocusCampaignImage(reportRef.current, prefix);
+        setIsExporting(true);
+        try {
+            const storeLabel = selectedStore === 'all' ? 'Toan_Cum' : selectedStore.replace(/\s+/g, '_');
+            const prefix = `Thi_Dua_Trong_Tam_${storeLabel}_T${selectedMonth}_${selectedYear}`;
+            const success = await exportFocusCampaignImage(reportRef.current, prefix);
+            if (success) {
+                showToast('🎉 Đã tải file ảnh toàn bộ bảng thi đua trọng tâm thành công!');
+            } else {
+                showToast('⚠️ Không thể tạo file ảnh báo cáo!');
+            }
+        } finally {
+            setIsExporting(false);
+        }
+    };
+
+    const handleCopyImage = async () => {
+        if (!reportRef.current) return;
+        setIsCopying(true);
+        try {
+            const success = await copyFocusCampaignImage(reportRef.current);
+            if (success) {
+                showToast('📋 Đã sao chép toàn bộ bảng thi đua trọng tâm vào Clipboard! Nhấn Ctrl + V để dán ngay.');
+            } else {
+                showToast('⚠️ Không thể sao chép ảnh báo cáo!');
+            }
+        } finally {
+            setIsCopying(false);
+        }
     };
 
     const storeDisplay = selectedStore === 'all' ? 'Toàn Cụm ST' : selectedStore;
@@ -109,7 +142,10 @@ export default function FocusCampaignPage() {
                     onOpenWatchlistModal={() => setIsWatchlistModalOpen(true)}
                     onOpenRemarkModal={() => setIsRemarkModalOpen(true)}
                     onExportImage={handleExportImage}
+                    onCopyImage={handleCopyImage}
                     isRefreshing={isLoading}
+                    isExporting={isExporting}
+                    isCopying={isCopying}
                 />
             </div>
 
@@ -194,6 +230,19 @@ export default function FocusCampaignPage() {
                 remarks={smartRemarks}
                 storeName={storeDisplay}
             />
+
+            {/* 8. TOAST THÔNG BÁO TÁC VỤ */}
+            {toastMessage && (
+                <div
+                    data-export-ignore="true"
+                    data-html2canvas-ignore="true"
+                    className="fixed bottom-5 right-5 z-50 animate-bounce duration-300"
+                >
+                    <div className="px-4 py-2.5 rounded-xl shadow-xl text-xs font-bold text-white bg-slate-900/95 border border-slate-700/50 backdrop-blur-md flex items-center gap-2">
+                        <span>{toastMessage}</span>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

@@ -127,13 +127,18 @@ export function useCampaignProgressData() {
         loadData();
     }, [selectedMonth, selectedYear, selectedStore]);
 
-    // Bản đồ nhân viên: empId -> Store Name & Full Name
+    // Bản đồ nhân viên: empId -> Store Name & Full Name & Trạng thái hoạt động
     const empInfoMap = useMemo(() => {
-        const map: Record<string, { storeName: string; fullName: string }> = {};
+        const map: Record<string, { storeName: string; fullName: string; isActive?: boolean; status?: string }> = {};
         employees.forEach(e => {
             const id = e.employee_id.trim();
             if (id) {
-                map[id] = { storeName: e.store_name || '', fullName: e.full_name || '' };
+                map[id] = {
+                    storeName: e.store_name || '',
+                    fullName: e.full_name || '',
+                    isActive: e.is_active,
+                    status: e.status
+                };
             }
         });
         return map;
@@ -259,10 +264,19 @@ export function useCampaignProgressData() {
             }
         }
 
-        // Lọc các bản ghi theo ST
+        // Lọc các bản ghi theo ST (Loại bỏ nhân viên nghỉ việc)
         const filteredRecords = records.filter(r => {
             const empId = (r.employee_id || '').trim();
             if (!empId) return false;
+
+            // 0. Loại bỏ nhân viên đã nghỉ việc
+            const empInfo = empInfoMap[empId];
+            if (empInfo) {
+                if (empInfo.isActive === false) return false;
+                const st = (empInfo.status || '').toLowerCase();
+                if (st === 'inactive' || st === 'resigned') return false;
+            }
+
             if (selectedStore !== 'all') {
                 const empStoreMap: Record<string, string> = {};
                 Object.entries(empInfoMap).forEach(([k, v]) => { empStoreMap[k] = v.storeName; });

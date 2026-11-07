@@ -3,6 +3,7 @@ import {
     RefreshCw,
     SlidersHorizontal,
     Camera,
+    Copy,
     FileSpreadsheet,
     MessageSquare,
     Search
@@ -46,8 +47,11 @@ interface Props {
     onOpenWatchlistModal: () => void;
     onOpenRemarkModal: () => void;
     onExportImage: () => void;
+    onCopyImage?: () => void;
     onExportExcel?: () => void;
     isRefreshing: boolean;
+    isExporting?: boolean;
+    isCopying?: boolean;
 }
 
 export default function FocusCampaignFilterBar({
@@ -79,8 +83,11 @@ export default function FocusCampaignFilterBar({
     onOpenWatchlistModal,
     onOpenRemarkModal,
     onExportImage,
+    onCopyImage,
     onExportExcel,
-    isRefreshing
+    isRefreshing,
+    isExporting = false,
+    isCopying = false
 }: Props) {
     const { canExportExcel } = useExcelExportPermission('/thi-dua-trong-tam');
 
@@ -139,14 +146,28 @@ export default function FocusCampaignFilterBar({
                         <span>Đánh Giá NV</span>
                     </button>
 
+                    {onCopyImage && (
+                        <button
+                            type="button"
+                            onClick={onCopyImage}
+                            disabled={isCopying}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 active:scale-95 transition cursor-pointer disabled:opacity-50"
+                            title="Sao chép toàn bộ ảnh báo cáo để dán vào Messaging App (Ctrl + V)"
+                        >
+                            <Copy className={`w-3.5 h-3.5 ${isCopying ? 'animate-spin' : ''}`} />
+                            <span>{isCopying ? 'Đang copy...' : 'Copy Ảnh'}</span>
+                        </button>
+                    )}
+
                     <button
                         type="button"
                         onClick={onExportImage}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-xs active:scale-95 transition cursor-pointer"
-                        title="Xuất ảnh báo cáo gửi Messaging App"
+                        disabled={isExporting}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-xs active:scale-95 transition cursor-pointer disabled:opacity-50"
+                        title="Tải ảnh báo cáo PNG về máy"
                     >
-                        <Camera className="w-3.5 h-3.5" />
-                        <span>Xuất Ảnh</span>
+                        <Camera className={`w-3.5 h-3.5 ${isExporting ? 'animate-spin' : ''}`} />
+                        <span>{isExporting ? 'Đang xuất...' : 'Xuất Ảnh'}</span>
                     </button>
 
                     {canExportExcel && onExportExcel && (

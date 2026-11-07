@@ -9,9 +9,12 @@ import {
     Key,
     Plus,
     X,
-    Cpu
+    Cpu,
+    Store
 } from 'lucide-react';
-import type { OcrEngineType } from '../types/ocrTypes';
+import type { OcrEngineType, EmulationUploadMode, SingleStoreEmulationEntry } from '../types/ocrTypes';
+import type { StoreItem } from '../../../core/lib/storage';
+import { formatStoreDisplayName } from '../../../core/lib/formatters';
 
 interface Props {
     mode?: 'STORE' | 'EMPLOYEE';
@@ -21,8 +24,8 @@ interface Props {
     onRealFileChange: (file: File | null) => void;
     emulationFiles: File[];
     onEmulationFilesChange: (files: File[]) => void;
-    engineType: OcrEngineType;
-    onEngineTypeChange: (engine: OcrEngineType) => void;
+    engineType?: OcrEngineType;
+    onEngineTypeChange?: (engine: OcrEngineType) => void;
     hasGeminiKey: boolean;
     keySource?: 'USER' | 'ADMIN' | 'NONE';
     isQuotaExceeded?: boolean;
@@ -31,6 +34,13 @@ interface Props {
     isExtracting: boolean;
     progressText: string;
     progressPercent: number;
+
+    // Switch chế độ nạp thi đua: 'CLUSTER' (Cả cụm) | 'SINGLE_STORE' (Đích danh từng ST)
+    emulationMode?: EmulationUploadMode;
+    onEmulationModeChange?: (mode: EmulationUploadMode) => void;
+    selectableStores?: StoreItem[];
+    singleStoreEmulations?: SingleStoreEmulationEntry[];
+    onSingleStoreEmulationsChange?: (entries: SingleStoreEmulationEntry[]) => void;
 }
 
 export default function OcrUploadZone({
@@ -41,8 +51,6 @@ export default function OcrUploadZone({
     onRealFileChange,
     emulationFiles,
     onEmulationFilesChange,
-    engineType,
-    onEngineTypeChange,
     hasGeminiKey,
     keySource = 'NONE',
     isQuotaExceeded = false,
@@ -50,7 +58,12 @@ export default function OcrUploadZone({
     onRunOcr,
     isExtracting,
     progressText,
-    progressPercent
+    progressPercent,
+    emulationMode = 'CLUSTER',
+    onEmulationModeChange,
+    selectableStores = [],
+    singleStoreEmulations = [],
+    onSingleStoreEmulationsChange
 }: Props) {
     const qdInputRef = useRef<HTMLInputElement>(null);
     const realInputRef = useRef<HTMLInputElement>(null);
@@ -68,7 +81,67 @@ export default function OcrUploadZone({
         onEmulationFilesChange(next);
     };
 
-    const canExtract = Boolean(qdFile || realFile || emulationFiles.length > 0);
+    // Handlers cho chế độ nạp thi đua đích danh từng ST
+    const handleAddSingleStoreFiles = (entryIdx: number, newFiles: FileList | null) => {
+        if (!newFiles || !onSingleStoreEmulationsChange) return;
+        const added = Array.from(newFiles);
+        const updated = singleStoreEmulations.map((entry, idx) => {
+            if (idx === entryIdx) {
+                return { ...entry, files: [...entry.files, ...added] };
+            }
+            return entry;
+        });
+        onSingleStoreEmulationsChange(updated);
+    };
+
+    const handleRemoveSingleStoreFile = (entryIdx: number, fileIdx: number) => {
+        if (!onSingleStoreEmulationsChange) return;
+        const updated = singleStoreEmulations.map((entry, idx) => {
+            if (idx === entryIdx) {
+                return { ...entry, files: entry.files.filter((_, fI) => fI !== fileIdx) };
+            }
+            return entry;
+        });
+        onSingleStoreEmulationsChange(updated);
+    };
+
+    const handleUpdateEntryStoreName = (entryIdx: number, storeName: string) => {
+        if (!onSingleStoreEmulationsChange) return;
+        const updated = singleStoreEmulations.map((entry, idx) => {
+            if (idx === entryIdx) {
+                return { ...entry, storeName };
+            }
+            return entry;
+        });
+        onSingleStoreEmulationsChange(updated);
+    };
+
+    const handleAddStoreEntry = () => {
+        if (!onSingleStoreEmulationsChange) return;
+        const currentStores = new Set(singleStoreEmulations.map(e => e.storeName));
+        const nextStore = selectableStores.find(s => !currentStores.has(s.name));
+        const nextName = nextStore ? nextStore.name : (selectableStores[0]?.name || '');
+        onSingleStoreEmulationsChange([
+            ...singleStoreEmulations,
+            { storeName: nextName, files: [] }
+        ]);
+    };
+
+    const handleRemoveStoreEntry = (entryIdx: number) => {
+        if (!onSingleStoreEmulationsChange) return;
+        const updated = singleStoreEmulations.filter((_, idx) => idx !== entryIdx);
+        onSingleStoreEmulationsChange(updated);
+    };
+
+    const hasEmulation = emulationMode === 'CLUSTER'
+        ? emulationFiles.length > 0
+        : singleStoreEmulations.some(e => e.files.length > 0);
+
+    const canExtract = Boolean(qdFile || realFile || hasEmulation);
+
+    const totalEmulationFiles = emulationMode === 'CLUSTER'
+        ? emulationFiles.length
+        : singleStoreEmulations.reduce((sum, e) => sum + e.files.length, 0);
 
     return (
         <div className="bg-white rounded-3xl border border-slate-200 p-4 sm:p-5 shadow-xs space-y-4 font-avo">
@@ -230,77 +303,223 @@ export default function OcrUploadZone({
                     )}
                 </div>
 
-                {/* 3. KHỐI THI ĐUA LŨY KẾ (NHIỀU ẢNH BATCH) */}
+                {/* 3. KHỐI THI ĐUA LŨY KẾ (HỖ TRỢ SWITCH: CẢ CỤM / ĐÍCH DANH TỪNG ST) */}
                 <div className="bg-slate-50/80 border border-slate-200 rounded-2xl p-3.5 flex flex-col justify-between space-y-3">
                     <div>
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between gap-1 flex-wrap">
                             <span className="text-xs font-black text-purple-900 uppercase tracking-wide flex items-center gap-1.5">
                                 <Layers className="w-3.5 h-3.5 text-purple-600" />
                                 <span>3. Thi đua</span>
                             </span>
+
+                            {/* Switch Chuyển Đổi Nạp Cả Cụm / Đích Danh Từng ST */}
+                            {onEmulationModeChange && (
+                                <div className="flex items-center bg-purple-100/90 p-0.5 rounded-lg border border-purple-200">
+                                    <button
+                                        type="button"
+                                        onClick={() => onEmulationModeChange('CLUSTER')}
+                                        className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition cursor-pointer flex items-center gap-1 ${
+                                            emulationMode === 'CLUSTER'
+                                                ? 'bg-purple-600 text-white shadow-2xs font-black'
+                                                : 'text-purple-800 hover:text-purple-950'
+                                        }`}
+                                        title="Nạp cả cụm (dữ liệu ảnh có đồng thời tên nhiều ST)"
+                                    >
+                                        <span>🌐 Cả Cụm</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => onEmulationModeChange('SINGLE_STORE')}
+                                        className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition cursor-pointer flex items-center gap-1 ${
+                                            emulationMode === 'SINGLE_STORE'
+                                                ? 'bg-purple-600 text-white shadow-2xs font-black'
+                                                : 'text-purple-800 hover:text-purple-950'
+                                        }`}
+                                        title="Nạp đích danh theo từng ST có thể nạp"
+                                    >
+                                        <span>🏪 Từng ST</span>
+                                    </button>
+                                </div>
+                            )}
+
                             <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-purple-100 text-purple-800 font-mono">
-                                {emulationFiles.length} ảnh
+                                {totalEmulationFiles} ảnh
                             </span>
                         </div>
-                        <p className="text-[10px] text-purple-800 bg-purple-50/80 border border-purple-200 px-2 py-1 rounded-lg mt-1 font-medium leading-relaxed">
-                            {mode === 'STORE' ? (
-                                <>
-                                    📱 <strong>Ảnh thi đua theo ST:</strong> AI tự động bóc tách Target, Lũy kế thực hiện &amp; %DK của từng ngành hàng thi đua của ST.
-                                </>
-                            ) : (
-                                <>
-                                    📱 <strong>Ảnh thi đua theo ST:</strong> AI tự động tính số liệu NV từ % tỉ trọng &amp; mapping tên đầy đủ qua Target ST.
-                                </>
-                            )}
-                        </p>
-                        {emulationFiles.length >= 4 && (
+
+                        {emulationMode === 'CLUSTER' ? (
+                            <p className="text-[10px] text-purple-800 bg-purple-50/80 border border-purple-200 px-2 py-1 rounded-lg mt-1 font-medium leading-relaxed">
+                                {mode === 'STORE' ? (
+                                    <>
+                                        🌐 <strong>Ảnh bảng thi đua cụm:</strong> Dữ liệu có đồng thời tên nhiều ST. AI tự động tách và gán cho từng ST.
+                                    </>
+                                ) : (
+                                    <>
+                                        🌐 <strong>Ảnh thi đua theo ST:</strong> AI tự động tính số liệu NV từ % tỉ trọng &amp; mapping tên đầy đủ qua Target ST.
+                                    </>
+                                )}
+                            </p>
+                        ) : (
+                            <p className="text-[10px] text-purple-900 bg-purple-50/90 border border-purple-200 px-2 py-1 rounded-lg mt-1 font-medium leading-relaxed">
+                                🏪 <strong>Đích danh từng ST:</strong> Chọn ST bạn có quyền nạp, sau đó nạp ảnh thẻ Mobile (2 cột) hoặc bảng BI của ST đó.
+                            </p>
+                        )}
+
+                        {totalEmulationFiles >= 4 && (
                             <span className="text-[10px] text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md font-bold block mt-1">
                                 ⚡ Tự động chia thành các đợt 3 ảnh để quét tuần tự an toàn &amp; không timeout
                             </span>
                         )}
                     </div>
 
-                    <input
-                        ref={emuInputRef}
-                        type="file"
-                        accept="image/*"
-                        multiple
-                        className="hidden"
-                        onChange={handleAddEmulationFiles}
-                    />
+                    {/* VÙNG NẠP ẢNH TÙY THEO CHẾ ĐỘ SWITCH */}
+                    {emulationMode === 'CLUSTER' ? (
+                        <>
+                            <input
+                                ref={emuInputRef}
+                                type="file"
+                                accept="image/*"
+                                multiple
+                                className="hidden"
+                                onChange={handleAddEmulationFiles}
+                            />
 
-                    <div className="space-y-1.5">
-                        {emulationFiles.length > 0 && (
-                            <div className="max-h-24 overflow-y-auto space-y-1 pr-1">
-                                {emulationFiles.map((file, idx) => (
-                                    <div
-                                        key={idx}
-                                        className="bg-white border border-purple-200 rounded-lg px-2 py-1 flex items-center justify-between gap-1 text-[11px] shadow-2xs"
-                                    >
-                                        <span className="truncate text-slate-800 font-medium" title={file.name}>
-                                            #{idx + 1}. {file.name}
-                                        </span>
-                                        <button
-                                            type="button"
-                                            onClick={() => handleRemoveEmulationFile(idx)}
-                                            className="text-slate-400 hover:text-rose-600 transition cursor-pointer p-0.5"
-                                        >
-                                            <X className="w-3 h-3" />
-                                        </button>
+                            <div className="space-y-1.5">
+                                {emulationFiles.length > 0 && (
+                                    <div className="max-h-24 overflow-y-auto space-y-1 pr-1">
+                                        {emulationFiles.map((file, idx) => (
+                                            <div
+                                                key={idx}
+                                                className="bg-white border border-purple-200 rounded-lg px-2 py-1 flex items-center justify-between gap-1 text-[11px] shadow-2xs"
+                                            >
+                                                <span className="truncate text-slate-800 font-medium" title={file.name}>
+                                                    #{idx + 1}. {file.name}
+                                                </span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleRemoveEmulationFile(idx)}
+                                                    className="text-slate-400 hover:text-rose-600 transition cursor-pointer p-0.5"
+                                                >
+                                                    <X className="w-3 h-3" />
+                                                </button>
+                                            </div>
+                                        ))}
                                     </div>
-                                ))}
-                            </div>
-                        )}
+                                )}
 
-                        <button
-                            type="button"
-                            onClick={() => emuInputRef.current?.click()}
-                            className="w-full py-2.5 px-3 border-2 border-dashed border-purple-200 hover:border-purple-400 hover:bg-purple-50/40 rounded-xl text-center cursor-pointer transition flex items-center justify-center gap-1.5 text-purple-700 text-xs font-black"
-                        >
-                            <Plus className="w-4 h-4 text-purple-600" />
-                            <span>{emulationFiles.length > 0 ? '+ Thêm ảnh thi đua khác...' : 'Nạp bộ ảnh thi đua (chọn nhiều)'}</span>
-                        </button>
-                    </div>
+                                <button
+                                    type="button"
+                                    onClick={() => emuInputRef.current?.click()}
+                                    className="w-full py-2.5 px-3 border-2 border-dashed border-purple-200 hover:border-purple-400 hover:bg-purple-50/40 rounded-xl text-center cursor-pointer transition flex items-center justify-center gap-1.5 text-purple-700 text-xs font-black"
+                                >
+                                    <Plus className="w-4 h-4 text-purple-600" />
+                                    <span>{emulationFiles.length > 0 ? '+ Thêm ảnh thi đua cụm khác...' : 'Nạp bộ ảnh thi đua cả cụm (chọn nhiều)'}</span>
+                                </button>
+                            </div>
+                        </>
+                    ) : (
+                        /* CHẾ ĐỘ: ĐÍCH DANH THEO TỪNG ST CÓ THỂ NẠP */
+                        <div className="space-y-2.5">
+                            {(singleStoreEmulations || []).map((entry, entryIdx) => {
+                                const inputId = `single-store-file-input-${entryIdx}`;
+                                return (
+                                    <div key={entryIdx} className="bg-white border border-purple-200/90 rounded-xl p-2.5 space-y-2 shadow-2xs">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                                                <Store className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                                                <span className="text-[11px] font-bold text-slate-700 shrink-0">ST:</span>
+                                                <select
+                                                    value={entry.storeName}
+                                                    onChange={e => handleUpdateEntryStoreName(entryIdx, e.target.value)}
+                                                    className="text-xs font-bold text-purple-950 bg-purple-50/60 border border-purple-300 rounded-lg px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-purple-500 cursor-pointer truncate"
+                                                >
+                                                    {selectableStores.length > 0 ? (
+                                                        selectableStores.map(st => (
+                                                            <option key={st.id || st.code || st.name} value={st.name}>
+                                                                {formatStoreDisplayName(st.name)}
+                                                            </option>
+                                                        ))
+                                                    ) : (
+                                                        <option value={entry.storeName || ''}>
+                                                            {entry.storeName ? formatStoreDisplayName(entry.storeName) : 'Chọn ST...'}
+                                                        </option>
+                                                    )}
+                                                </select>
+                                            </div>
+
+                                            {singleStoreEmulations.length > 1 && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleRemoveStoreEntry(entryIdx)}
+                                                    className="p-1 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition cursor-pointer"
+                                                    title="Xóa ST này"
+                                                >
+                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        <input
+                                            id={inputId}
+                                            type="file"
+                                            accept="image/*"
+                                            multiple
+                                            className="hidden"
+                                            onChange={e => {
+                                                handleAddSingleStoreFiles(entryIdx, e.target.files);
+                                                e.target.value = '';
+                                            }}
+                                        />
+
+                                        {entry.files && entry.files.length > 0 && (
+                                            <div className="max-h-20 overflow-y-auto space-y-1 pr-1">
+                                                {entry.files.map((file, fIdx) => (
+                                                    <div
+                                                        key={fIdx}
+                                                        className="bg-purple-50/50 border border-purple-200 rounded-md px-2 py-0.5 flex items-center justify-between gap-1 text-[10.5px]"
+                                                    >
+                                                        <span className="truncate text-slate-800 font-medium" title={file.name}>
+                                                            #{fIdx + 1}. {file.name}
+                                                        </span>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleRemoveSingleStoreFile(entryIdx, fIdx)}
+                                                            className="text-slate-400 hover:text-rose-600 transition cursor-pointer p-0.5"
+                                                        >
+                                                            <X className="w-3 h-3" />
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+
+                                        <label
+                                            htmlFor={inputId}
+                                            className="w-full py-1.5 px-2 border border-dashed border-purple-300 hover:border-purple-500 hover:bg-purple-50 text-purple-700 rounded-lg text-[11px] font-bold transition flex items-center justify-center gap-1 cursor-pointer"
+                                        >
+                                            <Plus className="w-3.5 h-3.5" />
+                                            <span>
+                                                {entry.files && entry.files.length > 0
+                                                    ? `+ Thêm ảnh thi đua (${entry.files.length} ảnh)...`
+                                                    : 'Tải ảnh thi đua cho ST này'}
+                                            </span>
+                                        </label>
+                                    </div>
+                                );
+                            })}
+
+                            {selectableStores.length > singleStoreEmulations.length && (
+                                <button
+                                    type="button"
+                                    onClick={handleAddStoreEntry}
+                                    className="w-full py-1.5 px-3 bg-purple-50 hover:bg-purple-100 border border-purple-300 text-purple-800 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
+                                >
+                                    <Plus className="w-3.5 h-3.5" />
+                                    <span>+ Thêm ST khác để nạp thi đua</span>
+                                </button>
+                            )}
+                        </div>
+                    )}
                 </div>
             </div>
 

@@ -11,6 +11,7 @@ import {
 } from '../../core/lib/storage';
 import { useAuth } from '../../shared/contexts/AuthContext';
 import StoreCampaignScoreTab from './components/StoreCampaignScoreTab';
+import StoreCampaignBonusTab from './components/StoreCampaignBonusTab';
 import {
     syncStoreCampaignScoresFromCloud,
     checkSupabaseCampaignConnection
@@ -36,7 +37,8 @@ import {
     Check,
     Hash,
     Trophy,
-    Award
+    Award,
+    Sparkles
 } from 'lucide-react';
 
 const COMMON_UNITS = ['Cái', 'Sim', 'HĐ', 'Thẻ', 'Tr.đ', 'Lượt'];
@@ -47,7 +49,7 @@ type StatusFilter = 'ALL' | 'ACTIVE' | 'INACTIVE';
 
 export default function CampaignConfigPage() {
     const { currentUser, isAdmin, canAccessStore } = useAuth();
-    const [activeMainTab, setActiveMainTab] = useState<'store_scores' | 'dictionary'>('store_scores');
+    const [activeMainTab, setActiveMainTab] = useState<'store_scores' | 'bonus_scores' | 'dictionary'>('store_scores');
     const [stores, setStores] = useState<StoreItem[]>([]);
 
     const [campaignList, setCampaignList] = useState<any[]>([]);
@@ -578,6 +580,18 @@ export default function CampaignConfigPage() {
                             <span>🎯 Điểm thi đua ST</span>
                         </button>
 
+                        <button
+                            type="button"
+                            onClick={() => setActiveMainTab('bonus_scores')}
+                            className={`px-3.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition cursor-pointer ${activeMainTab === 'bonus_scores'
+                                ? 'bg-white text-purple-900 shadow-xs'
+                                : 'text-slate-600 hover:text-slate-900'
+                                }`}
+                        >
+                            <Sparkles className="w-4 h-4 text-purple-600" />
+                            <span>⭐ Điểm cộng thi đua</span>
+                        </button>
+
                         {isAdmin && (
                             <button
                                 type="button"
@@ -997,6 +1011,15 @@ export default function CampaignConfigPage() {
                         </div>
                     </div>
                 </div>
+            ) : activeMainTab === 'bonus_scores' ? (
+                <StoreCampaignBonusTab
+                    campaigns={campaignList}
+                    stores={stores}
+                    currentUser={currentUser}
+                    isAdmin={isAdmin}
+                    showToast={showToast}
+                    onDataChanged={handleCheckCloudConnection}
+                />
             ) : (
                 <StoreCampaignScoreTab
                     campaigns={campaignList}

@@ -2,9 +2,10 @@ import type { CampaignSummaryData, CampaignSummaryRow, SmartRemarkAnalysis } fro
 import type { EmployeeDataSession } from '../../employee-cumulative/utils/sessionStorage';
 import { getCampaignLabel, formatDate, isStoreMatch } from '../../../core/lib/formatters';
 import { getShortenedEmployeeName } from '../../employee-performance/utils/performanceConfig';
-import type { CampaignDictItem } from '../../../core/lib/storage';
+import type { CampaignDictItem, EmployeeItem } from '../../../core/lib/storage';
 import { getStoreCampaignScoreConfig, getCampaignPoints } from '../../../core/lib/storeCampaignScoreService';
 import type { CampaignOffsetItem } from '../../campaign-offset/services/campaignOffsetService';
+import type { EmployeeBonusItem } from '../../../core/lib/employeeBonusService';
 
 /**
  * Chuẩn hóa chuỗi định danh thi đua để đối chiếu linh hoạt:
@@ -136,6 +137,8 @@ export function buildCampaignSummaryFromSession(
         storesList?: Array<{ code?: string; name: string; id?: string }>;
         offsets?: CampaignOffsetItem[];
         applyOffsets?: boolean;
+        bonuses?: EmployeeBonusItem[];
+        employees?: EmployeeItem[];
     }
 ): CampaignSummaryData {
     const rawRecords = session.records || [];
@@ -147,9 +150,20 @@ export function buildCampaignSummaryFromSession(
     // 1. Lọc kết quả nhân viên:
     // (a) Theo ST (nếu có chọn ST cụ thể)
     // (b) CHỈ CHỌN NHÂN VIÊN CÓ KHAI BÁO TARGET (targetsMap[empId] có ít nhất 1 target > 0)
+    // (c) LOẠI BỎ NHÂN VIÊN ĐÃ NGHỈ VIỆC
     const filteredRecords = rawRecords.filter(r => {
         const empId = (r.employee_id || '').trim();
         if (!empId) return false;
+
+        // 0. Bỏ nhân viên đã nghỉ việc nếu có danh mục nhân viên
+        if (options?.employees) {
+            const empInfo = options.employees.find(e => (e.employee_id || '').trim() === empId);
+            if (empInfo) {
+                if (empInfo.is_active === false) return false;
+                const st = (empInfo.status || '').toLowerCase();
+                if (st === 'inactive' || st === 'resigned') return false;
+            }
+        }
 
         // Bắt buộc: Nhân viên phải có khai báo target thi đua cho tháng này
         const empTargets = targetsMap[empId];
@@ -237,6 +251,8 @@ export function buildCampaignSummaryFromSession(
             : baseScoreConfig;
 
         const empOffsets = allOffsets.filter(o => o.employee_id === empId && o.is_approved !== false);
+        const empBonuses = (options?.bonuses || []).filter(b => (b.employee_id || '').trim() === empId);
+        const totalEmpBonus = empBonuses.reduce((sum, b) => sum + (Number(b.bonus_points) || 0), 0);
         const campaignOffsets: Record<string, number> = {};
 
         let achievedCount = 0;
@@ -328,10 +344,14 @@ export function buildCampaignSummaryFromSession(
             }
         });
 
+        // Tổng điểm và tổng số nhóm đạt được bao gồm điểm thưởng QL chỉ định (cho phép vượt 100%)
+        const totalAchievedPoints = achievedPoints + totalEmpBonus;
+        const finalAchievedCount = achievedCount + totalEmpBonus;
+
         // Tỷ lệ hoàn thành tổng quan: nếu tính điểm thì tính theo Điểm đạt/Tổng điểm, nếu đếm số lượng thì Số đạt/Tổng số mục
         const achievementRate = isPointsMode
-            ? (totalPoints > 0 ? Number(((achievedPoints / totalPoints) * 100).toFixed(1)) : 0)
-            : (totalCategories > 0 ? Number(((achievedCount / totalCategories) * 100).toFixed(1)) : 0);
+            ? (totalPoints > 0 ? Number(((totalAchievedPoints / totalPoints) * 100).toFixed(1)) : 0)
+            : (totalCategories > 0 ? Number(((finalAchievedCount / totalCategories) * 100).toFixed(1)) : 0);
 
         return {
             stt: 1,
@@ -339,10 +359,11 @@ export function buildCampaignSummaryFromSession(
             full_name: fullName,
             display_name: displayName,
             store_name: empStoreMap[empId] || session.store_name,
-            achieved_count: achievedCount,
+            achieved_count: Number(finalAchievedCount.toFixed(1)),
             total_count: totalCategories,
-            achieved_points: Number(achievedPoints.toFixed(1)),
+            achieved_points: Number(totalAchievedPoints.toFixed(1)),
             total_points: Number(totalPoints.toFixed(1)),
+            bonus_points: Number(totalEmpBonus.toFixed(1)),
             achievement_rate: achievementRate,
             campaign_rates: campaignRates,
             campaign_offsets: campaignOffsets,
@@ -384,7 +405,9 @@ export function buildCampaignSummaryFromSession(
         updated_at: new Date().toISOString(),
         has_offsets: allOffsets.length > 0,
         offsets_applied: applyOffsets,
-        offset_count: allOffsets.length
+        offset_count: allOffsets.length,
+        has_bonuses: (options?.bonuses || []).length > 0,
+        bonus_count: (options?.bonuses || []).length
     };
 }
 

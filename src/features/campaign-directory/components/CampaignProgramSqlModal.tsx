@@ -1,25 +1,27 @@
 import React, { useState } from 'react';
-import { X, Copy, Check, Database, RefreshCw, AlertTriangle, ShieldCheck } from 'lucide-react';
+import { X, Copy, Check, Database, RefreshCw, AlertTriangle, ShieldCheck, Sparkles } from 'lucide-react';
 import { CAMPAIGN_PROGRAM_DDL_SQL } from '../services/campaignProgramService';
 
 interface Props {
     isOpen: boolean;
     onClose: () => void;
     isCloudReady: boolean;
-    cloudSource: 'cloud' | 'local';
+    cloudSource?: 'cloud' | 'local';
     onRecheck: () => void;
     isChecking: boolean;
+    onSeedSample?: () => Promise<void>;
 }
 
 export default function CampaignProgramSqlModal({
     isOpen,
     onClose,
     isCloudReady,
-    cloudSource,
     onRecheck,
-    isChecking
+    isChecking,
+    onSeedSample
 }: Props) {
     const [copied, setCopied] = useState(false);
+    const [isSeeding, setIsSeeding] = useState(false);
 
     if (!isOpen) return null;
 
@@ -30,6 +32,19 @@ export default function CampaignProgramSqlModal({
             setTimeout(() => setCopied(false), 2500);
         } catch (e) {
             console.error('Lỗi sao chép SQL:', e);
+        }
+    };
+
+    const handleSeedSample = async () => {
+        if (!onSeedSample) return;
+        if (!window.confirm('Bạn có chắc chắn muốn nạp 6 chương trình thi đua mẫu lên Cloud không?')) {
+            return;
+        }
+        setIsSeeding(true);
+        try {
+            await onSeedSample();
+        } finally {
+            setIsSeeding(false);
         }
     };
 
@@ -46,10 +61,10 @@ export default function CampaignProgramSqlModal({
                         </div>
                         <div>
                             <h3 className="text-base font-black text-slate-900">
-                                Trạng Thái Kết Nối & Mã SQL
+                                Trạng Thái Kết Nối & Mã SQL (Dành Cho Admin)
                             </h3>
                             <p className="text-[11px] text-slate-400">
-                                Khởi tạo bảng campaign_programs trên PostgreSQL Cloud
+                                Khởi tạo và quản lý bảng campaign_programs trên Supabase Cloud
                             </p>
                         </div>
                     </div>
@@ -73,7 +88,7 @@ export default function CampaignProgramSqlModal({
                                     Đã Kết Nối Cloud Thành Công!
                                 </div>
                                 <p className="text-emerald-800 leading-relaxed font-medium">
-                                    Bảng <code>campaign_programs</code> đã sẵn sàng trên Cloud. Mọi thao tác thêm, sửa, xóa chương trình thi đua đều được lưu trữ đồng bộ thời gian thực đa thiết bị.
+                                    Bảng <code>campaign_programs</code> đã sẵn sàng trên Cloud. Mọi thao tác thêm, sửa, xóa chương trình thi đua đều được lưu trữ trực tiếp 100% trên Supabase Cloud, không dùng LocalStorage.
                                 </p>
                             </div>
                         </div>
@@ -82,10 +97,10 @@ export default function CampaignProgramSqlModal({
                             <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                             <div className="space-y-1">
                                 <div className="font-black text-sm text-amber-900">
-                                    Chưa Tìm Thấy Bảng Trên Cloud (Đang Dùng LocalStorage Cache)
+                                    Chưa Tìm Thấy Bảng Trên Cloud
                                 </div>
                                 <p className="text-amber-800 leading-relaxed font-medium">
-                                    Hệ thống hiện đang lưu tạm trên bộ nhớ trình duyệt máy bạn. Để dữ liệu được chia sẻ cho toàn bộ quản lý và nhân viên trên điện thoại, Quản trị viên vui lòng sao chép đoạn mã SQL bên dưới và dán chạy 1 lần duy nhất trong <strong>SQL Editor</strong>.
+                                    Trang hiện vận hành 100% bằng Supabase Cloud (không dùng LocalStorage). Quản trị viên vui lòng sao chép đoạn mã SQL DDL bên dưới và dán chạy 1 lần duy nhất trong <strong>Supabase SQL Editor</strong> để khởi tạo bảng.
                                 </p>
                             </div>
                         </div>
@@ -117,16 +132,31 @@ export default function CampaignProgramSqlModal({
                     </div>
 
                     {/* Footer Actions */}
-                    <div className="pt-2 flex items-center justify-between border-t border-slate-100">
-                        <button
-                            type="button"
-                            onClick={onRecheck}
-                            disabled={isChecking}
-                            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition cursor-pointer disabled:opacity-50"
-                        >
-                            <RefreshCw className={`w-3.5 h-3.5 ${isChecking ? 'animate-spin' : ''}`} />
-                            <span>{isChecking ? 'Đang kiểm tra...' : 'Kiểm tra lại kết nối'}</span>
-                        </button>
+                    <div className="pt-2 flex items-center justify-between border-t border-slate-100 gap-2 flex-wrap">
+                        <div className="flex items-center gap-2">
+                            <button
+                                type="button"
+                                onClick={onRecheck}
+                                disabled={isChecking}
+                                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition cursor-pointer disabled:opacity-50"
+                            >
+                                <RefreshCw className={`w-3.5 h-3.5 ${isChecking ? 'animate-spin' : ''}`} />
+                                <span>{isChecking ? 'Đang kiểm tra...' : 'Kiểm tra lại kết nối'}</span>
+                            </button>
+
+                            {isCloudReady && onSeedSample && (
+                                <button
+                                    type="button"
+                                    onClick={handleSeedSample}
+                                    disabled={isSeeding}
+                                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 font-bold text-xs transition cursor-pointer disabled:opacity-50"
+                                    title="Nạp lại 6 chương trình thi đua mẫu lên Cloud"
+                                >
+                                    <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                                    <span>{isSeeding ? 'Đang nạp...' : 'Nạp dữ liệu mẫu (Demo)'}</span>
+                                </button>
+                            )}
+                        </div>
 
                         <button
                             type="button"

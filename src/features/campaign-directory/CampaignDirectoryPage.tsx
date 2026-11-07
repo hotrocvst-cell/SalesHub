@@ -6,7 +6,8 @@ import {
     saveCampaignProgram,
     batchUpsertCampaignPrograms,
     deleteCampaignProgram,
-    checkCampaignProgramTableReady
+    checkCampaignProgramTableReady,
+    seedSampleCampaignPrograms
 } from './services/campaignProgramService';
 import type { CampaignProgramItem, ViewMode } from './types';
 import CampaignDirectoryHeader from './components/CampaignDirectoryHeader';
@@ -20,7 +21,7 @@ import { useAuth } from '../../shared/contexts/AuthContext';
 import { useUserStoreCampaignFilter } from './hooks/useUserStoreCampaignFilter';
 import { fetchCampaignDictionary, type CampaignDictItem } from '../../core/lib/storage';
 import { matchCampaignDictionary } from './utils/campaignExcelHelper';
-import { CheckCircle2, Sparkles, AlertCircle, Copy, Download, Camera } from 'lucide-react';
+import { CheckCircle2, Sparkles, AlertCircle, Copy, Download, Camera, Layers, Plus, FileSpreadsheet } from 'lucide-react';
 
 export default function CampaignDirectoryPage() {
     const reportCaptureRef = useRef<HTMLDivElement>(null);
@@ -291,10 +292,10 @@ export default function CampaignDirectoryPage() {
             showToast('⛔ Chỉ Admin mới có quyền dán và lưu hàng loạt chương trình thi đua!');
             return false;
         }
-        const res = await batchUpsertCampaignPrograms(items);
+        const res = await batchUpsertCampaignPrograms(items, replaceAll);
         if (res.success) {
-            setPrograms(items);
-            showToast(`🎉 Đã áp dụng thành công ${items.length} chương trình thi đua!`);
+            await loadPrograms();
+            showToast(`🎉 Đã áp dụng thành công ${items.length} chương trình thi đua lên Cloud!`);
             return true;
         }
         showToast(`❌ Lỗi lưu dữ liệu: ${res.error}`);
@@ -306,17 +307,21 @@ export default function CampaignDirectoryPage() {
             showToast('⛔ Chỉ Admin mới có quyền xóa chương trình thi đua!');
             return;
         }
-        if (!window.confirm(`Bạn có chắc chắn muốn xóa chương trình "${name}" không?`)) {
+        if (!window.confirm(`Bạn có chắc chắn muốn xóa chương trình "${name}" khỏi Cloud không?`)) {
             return;
         }
-        await deleteCampaignProgram(id);
-        setPrograms(prev => prev.filter(x => x.id !== id));
-        setSelectedIds(prev => {
-            const next = new Set(prev);
-            next.delete(id);
-            return next;
-        });
-        showToast(`🗑️ Đã xóa chương trình "${name}"`);
+        const res = await deleteCampaignProgram(id);
+        if (res.success) {
+            setPrograms(prev => prev.filter(x => x.id !== id));
+            setSelectedIds(prev => {
+                const next = new Set(prev);
+                next.delete(id);
+                return next;
+            });
+            showToast(`🗑️ Đã xóa chương trình "${name}" thành công!`);
+        } else {
+            showToast(`❌ Lỗi khi xóa trên Cloud: ${res.error || 'Không thể xóa'}`);
+        }
     };
 
     // Kiểm tra lại Supabase
@@ -599,6 +604,7 @@ Số lượng: ${programsToExport.length} chương trình
                 onOpenSqlModal={() => setIsSqlModalOpen(true)}
                 isCloudReady={isCloudReady}
                 cloudSource={cloudSource}
+                isAdmin={isAdmin}
                 canManage={canManage}
                 isExporting={isExporting}
                 isCopyingImage={isCopyingImage}
@@ -666,7 +672,44 @@ Số lượng: ${programsToExport.length} chương trình
                 </div>
 
                 {/* Danh Sách Thẻ hoặc Bảng */}
-                {viewMode === 'CARD' ? (
+                {programsToExport.length === 0 ? (
+                    <div className="bg-slate-50/70 rounded-2xl border border-dashed border-slate-300 p-10 text-center text-slate-500 space-y-3 font-avo">
+                        <Layers className="w-10 h-10 text-slate-400 mx-auto" />
+                        <div className="space-y-1">
+                            <p className="font-bold text-sm text-slate-700">
+                                {programs.length === 0
+                                    ? 'Chưa có chương trình thi đua nào trên Cloud'
+                                    : 'Không tìm thấy chương trình thi đua nào phù hợp với bộ lọc'}
+                            </p>
+                            <p className="text-xs text-slate-400 max-w-md mx-auto">
+                                {programs.length === 0
+                                    ? 'Dữ liệu chương trình thi đua đang trống. Quản trị viên Admin có thể thêm mới trực tiếp hoặc nhập file Excel.'
+                                    : 'Vui lòng thử đổi từ khóa tìm kiếm hoặc chọn nhóm ngành hàng khác.'}
+                            </p>
+                        </div>
+
+                        {canManage && programs.length === 0 && (
+                            <div className="pt-2 flex items-center justify-center gap-2 flex-wrap" data-export-ignore="true">
+                                <button
+                                    type="button"
+                                    onClick={handleOpenAddModal}
+                                    className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+                                >
+                                    <Plus className="w-3.5 h-3.5" />
+                                    <span>Thêm Mới Chương Trình</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsPasteModalOpen(true)}
+                                    className="px-3.5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+                                >
+                                    <FileSpreadsheet className="w-3.5 h-3.5" />
+                                    <span>Nhập File Excel</span>
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                ) : viewMode === 'CARD' ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5 sm:gap-4">
                         {programsToExport.map(item => (
                             <CampaignProgramCard
@@ -714,14 +757,26 @@ Số lượng: ${programsToExport.length} chương trình
                 campaignDict={campaignDict}
             />
 
-            <CampaignProgramSqlModal
-                isOpen={isSqlModalOpen}
-                onClose={() => setIsSqlModalOpen(false)}
-                isCloudReady={isCloudReady}
-                cloudSource={cloudSource}
-                onRecheck={handleRecheckCloud}
-                isChecking={isCheckingCloud}
-            />
+            {/* Modal SQL chỉ mở cho Quản trị viên Admin theo Quy chuẩn 12 */}
+            {isAdmin && (
+                <CampaignProgramSqlModal
+                    isOpen={isSqlModalOpen}
+                    onClose={() => setIsSqlModalOpen(false)}
+                    isCloudReady={isCloudReady}
+                    cloudSource={cloudSource}
+                    onRecheck={handleRecheckCloud}
+                    isChecking={isCheckingCloud}
+                    onSeedSample={async () => {
+                        const res = await seedSampleCampaignPrograms();
+                        if (res.success) {
+                            await loadPrograms();
+                            showToast(`🌱 Đã nạp thành công ${res.count} chương trình mẫu lên Cloud!`);
+                        } else {
+                            showToast(`❌ Lỗi nạp dữ liệu mẫu: ${res.error}`);
+                        }
+                    }}
+                />
+            )}
         </div>
     );
 }

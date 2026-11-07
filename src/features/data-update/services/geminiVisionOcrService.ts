@@ -1,4 +1,11 @@
-import type { StoreReportingData, EmulationOcrItem, StoreMobileEmulationCardItem, OcrExtractionResult } from '../types/ocrTypes';
+import type {
+    StoreReportingData,
+    EmulationOcrItem,
+    StoreMobileEmulationCardItem,
+    OcrExtractionResult,
+    EmulationUploadMode,
+    SingleStoreEmulationEntry
+} from '../types/ocrTypes';
 import { getShortStoreName, normalizeToMillion, cleanBiNumber } from '../../../core/lib/formatters';
 import {
     GeminiQuotaExceededError,
@@ -13,10 +20,13 @@ import {
     getAvailableApiKeys,
     maskApiKey,
     testGeminiApiKey,
-    SYSTEM_SETTINGS_SQL
+    SYSTEM_SETTINGS_SQL,
+    STANDARD_GEMINI_MODELS,
+    sanitizeCachedGeminiModel
 } from './geminiApiKeyService';
+import { prepareImageForOcr, fileToBase64 } from './imageCompressionService';
 
-// Tái xuất các hàm quản lý Key để tương thích ngược
+// Tái xuất các hàm quản lý Key & nén ảnh để tương thích ngược
 export {
     GeminiQuotaExceededError,
     type GeminiKeySource,
@@ -28,7 +38,9 @@ export {
     saveAdminGeminiKeyCloud,
     resolveActiveGeminiKey,
     testGeminiApiKey,
-    SYSTEM_SETTINGS_SQL
+    SYSTEM_SETTINGS_SQL,
+    fileToBase64,
+    prepareImageForOcr
 };
 
 // Hàm cũ tương thích
@@ -41,44 +53,26 @@ export function saveGeminiApiKey(key: string): void {
 }
 
 /**
- * Chuyển đổi File sang Base64
- */
-export async function fileToBase64(file: File): Promise<string> {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-            const result = reader.result as string;
-            const base64 = result.split(',')[1];
-            resolve(base64);
-        };
-        reader.onerror = error => reject(error);
-        reader.readAsDataURL(file);
-    });
-}
-
-/**
- * Gọi Gemini Vision API trích xuất JSON (Hỗ trợ tự động chuyển Key dự phòng khi gặp lỗi 429)
+ * Gọi Gemini Vision API trích xuất JSON (Hỗ trợ tự động chuyển Key dự phòng khi gặp lỗi 429 và timeout 35s)
  */
 async function callGeminiVision(
     apiKey: string,
     base64Image: string,
     mimeType: string,
     prompt: string,
-    keySource: GeminiKeySource = 'ADMIN'
+    keySource: GeminiKeySource = 'ADMIN',
+    timeoutMs: number = 35000
 ): Promise<any> {
     const candidateKeys = getAvailableApiKeys(apiKey);
     if (candidateKeys.length === 0) {
         throw new Error('Chưa cấu hình API Key Gemini nào.');
     }
 
-    const cachedModel = localStorage.getItem('SALESHUB_ACTIVE_GEMINI_MODEL');
+    const cachedModel = sanitizeCachedGeminiModel();
     const models = Array.from(
         new Set([
             ...(cachedModel ? [cachedModel] : []),
-            'gemini-3.5-flash',
-            'gemini-flash-lite-latest',
-            'gemini-3.8-flash',
-            'gemini-2.5-flash'
+            ...STANDARD_GEMINI_MODELS
         ])
     );
     let lastError: any = null;
@@ -89,10 +83,14 @@ async function callGeminiVision(
 
         for (const model of models) {
             try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
                 const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${currentKey}`;
                 const res = await fetch(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
+                    signal: controller.signal,
                     body: JSON.stringify({
                         contents: [
                             {
@@ -113,6 +111,8 @@ async function callGeminiVision(
                         }
                     })
                 });
+
+                clearTimeout(timeoutId);
 
                 if (res.status === 429) {
                     keyQuotaExceeded = true;
@@ -152,8 +152,9 @@ async function callGeminiVision(
                     lastError = err;
                     break;
                 }
-                console.warn(`Lỗi gọi model ${model} với key ${maskApiKey(currentKey)}:`, err);
-                lastError = err;
+                const isTimeout = err?.name === 'AbortError' || err?.message?.includes('aborted');
+                console.warn(`Lỗi gọi model ${model} với key ${maskApiKey(currentKey)}:`, isTimeout ? `Timeout ${timeoutMs / 1000}s` : err?.message);
+                lastError = isTimeout ? new Error(`Mô hình ${model} phản hồi quá lâu (${timeoutMs / 1000}s)`) : err;
             }
         }
 
@@ -181,7 +182,7 @@ export async function extractRevenueQdImage(
     file: File,
     keySource: GeminiKeySource = 'ADMIN'
 ): Promise<{ reportDate?: string; reportTime?: string; stores: Partial<StoreReportingData>[] }> {
-    const base64 = await fileToBase64(file);
+    const prepared = await prepareImageForOcr(file);
     const prompt = `Bạn là chuyên gia phân tích dữ liệu kinh doanh của hệ thống bán lẻ. 
 Nhiệm vụ: Trích xuất chính xác các số liệu DOANH THU QUY ĐỔI (DTQĐ) và DOANH THU THỰC TẾ (nếu có trên ảnh) từ ảnh chụp màn hình ứng dụng BI.
 
@@ -220,7 +221,7 @@ LƯU Ý NGHIỆP VỤ BẮT BUỘC:
   ]
 }`;
 
-    const parsed = await callGeminiVision(apiKey, base64, file.type, prompt, keySource);
+    const parsed = await callGeminiVision(apiKey, prepared.data, prepared.mimeType, prompt, keySource);
     return {
         reportDate: parsed.reportDate,
         reportTime: parsed.reportTime,
@@ -236,7 +237,7 @@ export async function extractRevenueRealImage(
     file: File,
     keySource: GeminiKeySource = 'ADMIN'
 ): Promise<{ reportDate?: string; reportTime?: string; stores: Partial<StoreReportingData>[] }> {
-    const base64 = await fileToBase64(file);
+    const prepared = await prepareImageForOcr(file);
     const prompt = `Bạn là chuyên gia phân tích dữ liệu kinh doanh của hệ thống bán lẻ. 
 Nhiệm vụ: Trích xuất chính xác các số liệu DOANH THU THỰC TẾ và DOANH THU QUY ĐỔI (nếu có trên ảnh) từ ảnh chụp màn hình ứng dụng BI.
 
@@ -273,7 +274,7 @@ LƯU Ý NGHIỆP VỤ BẮT BUỘC:
   ]
 }`;
 
-    const parsed = await callGeminiVision(apiKey, base64, file.type, prompt, keySource);
+    const parsed = await callGeminiVision(apiKey, prepared.data, prepared.mimeType, prompt, keySource);
     return {
         reportDate: parsed.reportDate,
         reportTime: parsed.reportTime,
@@ -300,7 +301,7 @@ export async function extractSingleEmulationImage(
         }>;
     }>;
 }> {
-    const base64 = await fileToBase64(file);
+    const prepared = await prepareImageForOcr(file);
     const prompt = `Bạn là chuyên gia trích xuất dữ liệu bảng thi đua lũy kế từ ảnh giao diện Dark Mode ứng dụng BI.
 Ảnh này chứa một hoặc nhiều BẢNG THI ĐUA LŨY KẾ xếp dọc.
 
@@ -336,7 +337,7 @@ LƯU Ý NGHIỆP VỤ BẮT BUỘC:
   ]
 }`;
 
-    const parsed = await callGeminiVision(apiKey, base64, file.type, prompt, keySource);
+    const parsed = await callGeminiVision(apiKey, prepared.data, prepared.mimeType, prompt, keySource);
     return {
         programs: parsed.programs || []
     };
@@ -356,7 +357,7 @@ export async function extractStoreMobileEmulationCards(
     reportTime?: string;
     cards: StoreMobileEmulationCardItem[];
 }> {
-    const base64 = await fileToBase64(file);
+    const prepared = await prepareImageForOcr(file);
     const prompt = `Bạn là chuyên gia bóc tách số liệu kinh doanh bán lẻ từ ảnh chụp màn hình điện thoại (Mobile App).
 Ảnh này chứa các THẺ THI ĐUA HÌNH CHỮ NHẬT XẾP THÀNH 2 CỘT (Mobile Card Grid).
 
@@ -402,7 +403,7 @@ QUY TẮC BẮT BUỘC:
   ]
 }`;
 
-    const parsed = await callGeminiVision(apiKey, base64, file.type, prompt, keySource);
+    const parsed = await callGeminiVision(apiKey, prepared.data, prepared.mimeType, prompt, keySource);
     const rawCards = Array.isArray(parsed?.cards) ? parsed.cards : [];
 
     const cleanedCards: StoreMobileEmulationCardItem[] = rawCards
@@ -464,29 +465,36 @@ export async function extractStoreMobileEmulationCardsBatch(
     let detectedTime = '';
 
     const total = files.length;
-    for (let i = 0; i < total; i++) {
-        const file = files[i];
-        const pct = Math.round(((i + 1) / total) * 100);
-        onProgress?.(`Đang bóc tách thẻ mobile (${i + 1}/${total}): ${file.name || 'Ảnh dán'}...`, pct);
+    onProgress?.(`Đang bóc tách đồng thời ${total} ảnh thẻ thi đua qua Canvas & AI...`, 20);
 
-        try {
-            const res = await extractStoreMobileEmulationCards(apiKey, file, keySource);
-            if (res.storeName && !detectedStore) detectedStore = res.storeName;
-            if (res.reportDate && !detectedDate) detectedDate = res.reportDate;
-            if (res.reportTime && !detectedTime) detectedTime = res.reportTime;
+    const results = await Promise.all(
+        files.map(async (file, i) => {
+            try {
+                return await extractStoreMobileEmulationCards(apiKey, file, keySource);
+            } catch (err: any) {
+                if (err?.isQuotaExceeded || err instanceof GeminiQuotaExceededError) throw err;
+                errors.push(`Lỗi đọc ảnh ${file.name || `thẻ #${i + 1}`}: ${err?.message || 'Không rõ lỗi'}`);
+                return null;
+            }
+        })
+    );
 
-            (res.cards || []).forEach(card => {
-                const key = card.programName.toLowerCase().trim();
-                // Nếu trùng chương trình, ưu tiên ghi đè bằng thẻ có số liệu khác 0
-                if (!cardMap.has(key) || (card.actual > 0 || card.target > 0)) {
-                    cardMap.set(key, card);
-                }
-            });
-        } catch (err: any) {
-            if (err?.isQuotaExceeded || err instanceof GeminiQuotaExceededError) throw err;
-            errors.push(`Lỗi đọc ảnh ${file.name || `thẻ #${i + 1}`}: ${err?.message || 'Không rõ lỗi'}`);
-        }
-    }
+    results.forEach(res => {
+        if (!res) return;
+        if (res.storeName && !detectedStore) detectedStore = res.storeName;
+        if (res.reportDate && !detectedDate) detectedDate = res.reportDate;
+        if (res.reportTime && !detectedTime) detectedTime = res.reportTime;
+
+        (res.cards || []).forEach(card => {
+            const key = card.programName.toLowerCase().trim();
+            // Nếu trùng chương trình, ưu tiên ghi đè bằng thẻ có số liệu khác 0
+            if (!cardMap.has(key) || (card.actual > 0 || card.target > 0)) {
+                cardMap.set(key, card);
+            }
+        });
+    });
+
+    onProgress?.('Bóc tách thẻ thi đua hoàn tất!', 100);
 
     return {
         storeName: detectedStore || undefined,
@@ -498,6 +506,92 @@ export async function extractStoreMobileEmulationCardsBatch(
 }
 
 /**
+ * 3d. TRÍCH XUẤT ẢNH THI ĐUA ĐÍCH DANH CHO 1 ST CỤ THỂ
+ * Hỗ trợ cả 2 định dạng:
+ * 1) Thẻ Mobile 2 cột (Mobile Cards Grid) chụp từ điện thoại của ST.
+ * 2) Bảng thi đua Dark Mode BI (tìm dòng của ST này hoặc bảng của ST này).
+ */
+export async function extractSingleStoreEmulationImage(
+    apiKey: string,
+    file: File,
+    targetStoreName: string,
+    keySource: GeminiKeySource = 'ADMIN'
+): Promise<{
+    programs: Array<{
+        programName: string;
+        unit: string;
+        actual: number;
+        target: number;
+        completionRate?: number;
+    }>;
+}> {
+    const prepared = await prepareImageForOcr(file);
+    const prompt = `Bạn là chuyên gia phân tích dữ liệu kinh doanh bán lẻ từ ảnh chụp màn hình ứng dụng (Mobile App hoặc BI Dashboard).
+Nhiệm vụ: Trích xuất ĐẦY ĐỦ các chương trình thi đua và số liệu kinh doanh dành riêng cho ST: "${targetStoreName}".
+
+Ảnh có thể thuộc 1 trong 2 định dạng sau:
+ĐỊNH DẠNG 1: THẺ THI ĐUA MOBILE 2 CỘT (Lưới thẻ chữ nhật trên điện thoại):
+- Tiêu đề thẻ ở góc trên: Tên chương trình thi đua (ví dụ: "T11 - Trả chậm Homecredit", "T11 - VAS", "T11 - Cáp sạc", "T11 - Bảo hiểm Tổng", "T11 - Phụ kiện", "T11 - Ví trả sau"...).
+- Badge góc trên bên phải: Chữ "DT" (DOANH THU) hoặc "SL" (SỐ LƯỢNG).
+- 4 ô số liệu:
+  + "THỰC HIỆN" (actual)
+  + "TARGET NGÀY" hoặc "TARGET" (target)
+  + "% HT NGÀY" hoặc "% HT" (completionRate)
+  + "DT DỰ KIẾN" / "SL DỰ KIẾN" (forecast)
+
+ĐỊNH DẠNG 2: BẢNG THI ĐUA DARK MODE:
+- Tiêu đề bảng ở góc trên (ví dụ: "T10 - IPHONE 18 series...", "T10 - NẠP - RÚT TIỀN...", "T10 - Bảo Hiểm Tổng"...).
+- Cột 2: Tiêu đề là "DOANH THU" hoặc "SỐ LƯỢNG".
+- Cột 3: "TARGET".
+- Cột 4: "% HT THÁNG".
+- Tìm dòng của ST "${targetStoreName}" (hoặc dòng dữ liệu nếu bảng chỉ có 1 ST) và lấy số liệu. Bỏ qua dòng TỔNG.
+
+LƯU Ý NGHIỆP VỤ BẮT BUỘC:
+1. BỎ QUA HOÀN TOÀN hình mờ watermark ("26479 - Đào Bá Linh",...).
+2. Nếu đơn vị là "DT" hoặc "DOANH THU": số liệu tính bằng Triệu đồng (ví dụ 31.47 hoặc 15964), giữ nguyên số, TUYỆT ĐỐI không tự ý nhân một triệu.
+3. Nếu đơn vị là "SL" hoặc "SỐ LƯỢNG": lấy số nguyên tương ứng.
+4. Trích xuất TẤT CẢ các thẻ/chương trình có trong ảnh.
+
+Định dạng JSON trả về duy nhất:
+{
+  "programs": [
+    {
+      "programName": "T11 - Trả chậm Homecredit",
+      "unit": "DOANH THU",
+      "actual": 31.47,
+      "target": 57.29,
+      "completionRate": 54.9
+    }
+  ]
+}`;
+
+    const parsed = await callGeminiVision(apiKey, prepared.data, prepared.mimeType, prompt, keySource);
+    const rawProgs = Array.isArray(parsed?.programs) ? parsed.programs : [];
+
+    const cleaned = rawProgs
+        .filter((p: any) => p && (p.programName || p.name))
+        .map((p: any) => {
+            const pName = String(p.programName || p.name || '').trim();
+            const u = String(p.unit || 'DOANH THU').toUpperCase().includes('SL') ? 'SỐ LƯỢNG' : 'DOANH THU';
+            const act = cleanBiNumber(p.actual);
+            const tg = cleanBiNumber(p.target);
+            let pct = cleanBiNumber(p.completionRate);
+            if (!pct && tg > 0) {
+                pct = Number(((act / tg) * 100).toFixed(1));
+            }
+            return {
+                programName: pName,
+                unit: u,
+                actual: act,
+                target: tg,
+                completionRate: pct
+            };
+        });
+
+    return { programs: cleaned };
+}
+
+/**
  * 4. TỔNG HỢP VÀ GHÉP NỐI TOÀN DIỆN TỪ 3 NHÓM ẢNH
  */
 export async function extractAndMergeAllImages(
@@ -506,6 +600,8 @@ export async function extractAndMergeAllImages(
         qdFile?: File | null;
         realFile?: File | null;
         emulationFiles?: File[];
+        emulationMode?: EmulationUploadMode;
+        singleStoreEmulations?: SingleStoreEmulationEntry[];
     },
     onProgress?: (msg: string, percent: number) => void,
     keySource: GeminiKeySource = 'ADMIN'
@@ -560,100 +656,110 @@ export async function extractAndMergeAllImages(
         return newStore;
     }
 
-    // Bước 1: Trích xuất ảnh Doanh thu quy đổi
-    if (files.qdFile) {
-        onProgress?.('Đang phân tích ảnh Doanh thu quy đổi (DT-QĐ)...', 20);
-        try {
-            const qdRes = await extractRevenueQdImage(apiKey, files.qdFile, keySource);
-            if (qdRes.reportDate) detectedReportDate = qdRes.reportDate;
-            if (qdRes.reportTime) detectedReportTime = qdRes.reportTime;
+    // Bước 1 & 2: Phân tích đồng thời cả ảnh Doanh thu quy đổi (DT-QĐ) và Doanh thu thực (DT-THỰC)
+    onProgress?.('Đang nén ảnh và phân tích doanh thu qua Canvas & AI...', 25);
 
-            qdRes.stores.forEach(st => {
-                if (!st.storeRawName) return;
-                const store = getOrCreateStore(st.storeRawName);
-                if (st.revenueQd !== undefined) store.revenueQd = cleanBiNumber(st.revenueQd);
-                if (st.targetQd !== undefined) store.targetQd = cleanBiNumber(st.targetQd);
-                if (st.quantityQd !== undefined) store.quantityQd = cleanBiNumber(st.quantityQd);
-
-                // Nếu ảnh DT-QĐ cũng có cả cột Doanh thu thực
-                if (st.revenueReal !== undefined && cleanBiNumber(st.revenueReal) > 0) {
-                    store.revenueReal = cleanBiNumber(st.revenueReal);
-                }
-                if (st.targetReal !== undefined && cleanBiNumber(st.targetReal) > 0) {
-                    store.targetReal = cleanBiNumber(st.targetReal);
-                }
-                if (st.installmentReal !== undefined && cleanBiNumber(st.installmentReal) > 0) {
-                    store.installmentReal = cleanBiNumber(st.installmentReal);
-                }
-                if (st.avg3MonthsReal !== undefined && cleanBiNumber(st.avg3MonthsReal) > 0) {
-                    store.avg3MonthsReal = cleanBiNumber(st.avg3MonthsReal);
-                }
-                if (store.revenueReal > 0 && store.installmentReal > 0) {
-                    store.installmentRateReal = Number(((store.installmentReal / store.revenueReal) * 100).toFixed(2));
-                }
-            });
-        } catch (err: any) {
+    const [qdRes, realRes] = await Promise.all([
+        files.qdFile ? extractRevenueQdImage(apiKey, files.qdFile, keySource).catch(err => {
             if (err?.isQuotaExceeded || err instanceof GeminiQuotaExceededError) throw err;
             errors.push(`Lỗi đọc ảnh DT-QĐ: ${err?.message}`);
-        }
-    }
-
-    // Bước 2: Trích xuất ảnh Doanh thu thực
-    if (files.realFile) {
-        onProgress?.('Đang phân tích ảnh Doanh thu thực (DT-THỰC)...', 45);
-        try {
-            const realRes = await extractRevenueRealImage(apiKey, files.realFile, keySource);
-            if (!detectedReportDate && realRes.reportDate) detectedReportDate = realRes.reportDate;
-            if (!detectedReportTime && realRes.reportTime) detectedReportTime = realRes.reportTime;
-
-            realRes.stores.forEach(st => {
-                if (!st.storeRawName) return;
-                const store = getOrCreateStore(st.storeRawName);
-                if (st.revenueReal !== undefined) store.revenueReal = cleanBiNumber(st.revenueReal);
-                if (st.targetReal !== undefined) store.targetReal = cleanBiNumber(st.targetReal);
-                if (st.quantityReal !== undefined) store.quantityReal = cleanBiNumber(st.quantityReal);
-                if (st.installmentReal !== undefined) store.installmentReal = cleanBiNumber(st.installmentReal);
-                if (st.avg3MonthsReal !== undefined) store.avg3MonthsReal = cleanBiNumber(st.avg3MonthsReal);
-
-                // Nếu ảnh DT Thực có cột DT-QĐ mà trước đó chưa có
-                if (st.revenueQd !== undefined && cleanBiNumber(st.revenueQd) > 0 && store.revenueQd === 0) {
-                    store.revenueQd = cleanBiNumber(st.revenueQd);
-                }
-                if (st.targetQd !== undefined && cleanBiNumber(st.targetQd) > 0 && store.targetQd === 0) {
-                    store.targetQd = cleanBiNumber(st.targetQd);
-                }
-
-                if (store.revenueReal > 0 && store.installmentReal > 0) {
-                    store.installmentRateReal = Number(((store.installmentReal / store.revenueReal) * 100).toFixed(2));
-                }
-            });
-        } catch (err: any) {
+            return null;
+        }) : Promise.resolve(null),
+        files.realFile ? extractRevenueRealImage(apiKey, files.realFile, keySource).catch(err => {
             if (err?.isQuotaExceeded || err instanceof GeminiQuotaExceededError) throw err;
             errors.push(`Lỗi đọc ảnh DT Thực: ${err?.message}`);
-        }
+            return null;
+        }) : Promise.resolve(null)
+    ]);
+
+    if (qdRes) {
+        if (qdRes.reportDate) detectedReportDate = qdRes.reportDate;
+        if (qdRes.reportTime) detectedReportTime = qdRes.reportTime;
+
+        qdRes.stores.forEach(st => {
+            if (!st.storeRawName) return;
+            const store = getOrCreateStore(st.storeRawName);
+            if (st.revenueQd !== undefined) store.revenueQd = cleanBiNumber(st.revenueQd);
+            if (st.targetQd !== undefined) store.targetQd = cleanBiNumber(st.targetQd);
+            if (st.quantityQd !== undefined) store.quantityQd = cleanBiNumber(st.quantityQd);
+
+            if (st.revenueReal !== undefined && cleanBiNumber(st.revenueReal) > 0) {
+                store.revenueReal = cleanBiNumber(st.revenueReal);
+            }
+            if (st.targetReal !== undefined && cleanBiNumber(st.targetReal) > 0) {
+                store.targetReal = cleanBiNumber(st.targetReal);
+            }
+            if (st.installmentReal !== undefined && cleanBiNumber(st.installmentReal) > 0) {
+                store.installmentReal = cleanBiNumber(st.installmentReal);
+            }
+            if (st.avg3MonthsReal !== undefined && cleanBiNumber(st.avg3MonthsReal) > 0) {
+                store.avg3MonthsReal = cleanBiNumber(st.avg3MonthsReal);
+            }
+            if (store.revenueReal > 0 && store.installmentReal > 0) {
+                store.installmentRateReal = Number(((store.installmentReal / store.revenueReal) * 100).toFixed(2));
+            }
+        });
     }
 
-    // Bước 3: Trích xuất danh sách ảnh Thi đua lũy kế
-    if (files.emulationFiles && files.emulationFiles.length > 0) {
-        const totalEmu = files.emulationFiles.length;
-        for (let i = 0; i < totalEmu; i++) {
-            const emuFile = files.emulationFiles[i];
-            const currentPct = 50 + Math.round(((i + 1) / totalEmu) * 45);
-            onProgress?.(`Đang phân tích bảng thi đua (${i + 1}/${totalEmu}): ${emuFile.name}...`, currentPct);
+    if (realRes) {
+        if (!detectedReportDate && realRes.reportDate) detectedReportDate = realRes.reportDate;
+        if (!detectedReportTime && realRes.reportTime) detectedReportTime = realRes.reportTime;
 
-            try {
-                const emuRes = await extractSingleEmulationImage(apiKey, emuFile, keySource);
-                (emuRes.programs || []).forEach(prog => {
-                    const pName = prog.programName.trim();
-                    const pUnit = prog.unit || 'DOANH THU';
+        realRes.stores.forEach(st => {
+            if (!st.storeRawName) return;
+            const store = getOrCreateStore(st.storeRawName);
+            if (st.revenueReal !== undefined) store.revenueReal = cleanBiNumber(st.revenueReal);
+            if (st.targetReal !== undefined) store.targetReal = cleanBiNumber(st.targetReal);
+            if (st.quantityReal !== undefined) store.quantityReal = cleanBiNumber(st.quantityReal);
+            if (st.installmentReal !== undefined) store.installmentReal = cleanBiNumber(st.installmentReal);
+            if (st.avg3MonthsReal !== undefined) store.avg3MonthsReal = cleanBiNumber(st.avg3MonthsReal);
 
-                    (prog.stores || []).forEach(stRow => {
-                        if (!stRow.storeRawName) return;
-                        const store = getOrCreateStore(stRow.storeRawName);
+            if (st.revenueQd !== undefined && cleanBiNumber(st.revenueQd) > 0 && store.revenueQd === 0) {
+                store.revenueQd = cleanBiNumber(st.revenueQd);
+            }
+            if (st.targetQd !== undefined && cleanBiNumber(st.targetQd) > 0 && store.targetQd === 0) {
+                store.targetQd = cleanBiNumber(st.targetQd);
+            }
 
-                        const act = cleanBiNumber(stRow.actual);
-                        const tg = cleanBiNumber(stRow.target);
-                        const pct = tg > 0 ? Number(((act / tg) * 100).toFixed(1)) : 0;
+            if (store.revenueReal > 0 && store.installmentReal > 0) {
+                store.installmentRateReal = Number(((store.installmentReal / store.revenueReal) * 100).toFixed(2));
+            }
+        });
+    }
+
+    // Bước 3: Trích xuất ảnh Thi đua lũy kế (Hỗ trợ switch: CẢ CỤM hoặc ĐÍCH DANH TỪNG ST)
+    const isSingleStoreMode = files.emulationMode === 'SINGLE_STORE';
+
+    if (isSingleStoreMode && files.singleStoreEmulations && files.singleStoreEmulations.length > 0) {
+        // Chế độ: Nạp đích danh theo từng ST có thể nạp
+        const validEntries = files.singleStoreEmulations.filter(e => e.storeName && e.files && e.files.length > 0);
+        const totalFiles = validEntries.reduce((sum, e) => sum + e.files.length, 0);
+
+        if (totalFiles > 0) {
+            onProgress?.(`Đang bóc tách ${totalFiles} ảnh thi đua đích danh cho ${validEntries.length} ST...`, 60);
+
+            for (const entry of validEntries) {
+                const store = getOrCreateStore(entry.storeName);
+                const fileResults = await Promise.all(
+                    entry.files.map(async (file, idx) => {
+                        try {
+                            return await extractSingleStoreEmulationImage(apiKey, file, entry.storeName, keySource);
+                        } catch (err: any) {
+                            if (err?.isQuotaExceeded || err instanceof GeminiQuotaExceededError) throw err;
+                            errors.push(`Lỗi đọc ảnh thi đua ${file.name || `#${idx + 1}`} (ST: ${entry.storeName}): ${err?.message}`);
+                            return null;
+                        }
+                    })
+                );
+
+                fileResults.forEach(res => {
+                    if (!res) return;
+                    (res.programs || []).forEach(p => {
+                        const pName = p.programName.trim();
+                        const pUnit = p.unit || 'DOANH THU';
+                        const act = cleanBiNumber(p.actual);
+                        const tg = cleanBiNumber(p.target);
+                        const pct = p.completionRate !== undefined ? cleanBiNumber(p.completionRate) : (tg > 0 ? Number(((act / tg) * 100).toFixed(1)) : 0);
 
                         store.emulations[pName] = {
                             programName: pName,
@@ -664,11 +770,49 @@ export async function extractAndMergeAllImages(
                         };
                     });
                 });
-            } catch (err: any) {
-                if (err?.isQuotaExceeded || err instanceof GeminiQuotaExceededError) throw err;
-                errors.push(`Lỗi đọc ảnh thi đua ${emuFile.name}: ${err?.message}`);
             }
         }
+    } else if (files.emulationFiles && files.emulationFiles.length > 0) {
+        // Chế độ mặc định: Nạp cả cụm (nhiều ST đồng thời trong bảng Dark Mode)
+        const totalEmu = files.emulationFiles.length;
+        onProgress?.(`Đang bóc tách đồng thời ${totalEmu} bảng thi đua cụm qua Canvas & AI...`, 60);
+
+        const emuResults = await Promise.all(
+            files.emulationFiles.map(async (emuFile, i) => {
+                try {
+                    return await extractSingleEmulationImage(apiKey, emuFile, keySource);
+                } catch (err: any) {
+                    if (err?.isQuotaExceeded || err instanceof GeminiQuotaExceededError) throw err;
+                    errors.push(`Lỗi đọc ảnh thi đua ${emuFile.name}: ${err?.message}`);
+                    return null;
+                }
+            })
+        );
+
+        emuResults.forEach(emuRes => {
+            if (!emuRes) return;
+            (emuRes.programs || []).forEach(prog => {
+                const pName = prog.programName.trim();
+                const pUnit = prog.unit || 'DOANH THU';
+
+                (prog.stores || []).forEach(stRow => {
+                    if (!stRow.storeRawName) return;
+                    const store = getOrCreateStore(stRow.storeRawName);
+
+                    const act = cleanBiNumber(stRow.actual);
+                    const tg = cleanBiNumber(stRow.target);
+                    const pct = tg > 0 ? Number(((act / tg) * 100).toFixed(1)) : 0;
+
+                    store.emulations[pName] = {
+                        programName: pName,
+                        unit: pUnit,
+                        actual: act,
+                        target: tg,
+                        completionRate: pct
+                    };
+                });
+            });
+        });
     }
 
     onProgress?.('Tổng hợp số liệu hoàn tất!', 100);

@@ -29,7 +29,8 @@ interface Props {
     onCopyAllZaloText: () => void;
     onOpenSqlModal: () => void;
     isCloudReady: boolean;
-    cloudSource: 'cloud' | 'local';
+    cloudSource?: 'cloud' | 'local';
+    isAdmin?: boolean;
     canManage: boolean;
     isExporting: boolean;
     isCopyingImage?: boolean;
@@ -55,7 +56,8 @@ export default function CampaignDirectoryHeader({
     onCopyAllZaloText,
     onOpenSqlModal,
     isCloudReady,
-    cloudSource,
+    cloudSource = 'cloud',
+    isAdmin = false,
     canManage,
     isExporting,
     isCopyingImage = false,
@@ -81,20 +83,34 @@ export default function CampaignDirectoryHeader({
                             Thể lệ & Định hướng
                         </span>
 
-                        {/* Cloud Status Pill */}
-                        <button
-                            type="button"
-                            onClick={onOpenSqlModal}
-                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10.5px] font-bold border transition cursor-pointer ${
-                                isCloudReady && cloudSource === 'cloud'
-                                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
-                                    : 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100'
-                            }`}
-                            title="Bấm để xem trạng thái kết nối Cloud và mã SQL DDL"
-                        >
-                            <Database className="w-3 h-3 shrink-0" />
-                            <span>{isCloudReady && cloudSource === 'cloud' ? '🟢 Cloud' : '🟡 Local Cache (SQL)'}</span>
-                        </button>
+                        {/* Cloud Status Pill: Button xem SQL chỉ khả dụng với Admin theo Quy chuẩn 12 */}
+                        {isAdmin ? (
+                            <button
+                                type="button"
+                                onClick={onOpenSqlModal}
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10.5px] font-bold border transition cursor-pointer ${
+                                    isCloudReady
+                                        ? 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
+                                        : 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100'
+                                }`}
+                                title="Bấm để xem trạng thái kết nối Cloud và mã SQL DDL (Chỉ dành cho Admin)"
+                            >
+                                <Database className="w-3 h-3 shrink-0" />
+                                <span>{isCloudReady ? '🟢 Cloud (SQL)' : '🟡 Cần tạo bảng (SQL)'}</span>
+                            </button>
+                        ) : (
+                            <span
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10.5px] font-bold border ${
+                                    isCloudReady
+                                        ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                        : 'bg-slate-100 text-slate-600 border-slate-200'
+                                }`}
+                                title={isCloudReady ? 'Dữ liệu kết nối trực tiếp Supabase Cloud' : 'Đang kết nối Cloud'}
+                            >
+                                <Database className="w-3 h-3 shrink-0" />
+                                <span>{isCloudReady ? '🟢 Cloud' : '⚪ Đang kết nối'}</span>
+                            </span>
+                        )}
                     </div>
 
                     <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">

@@ -16,8 +16,11 @@ import {
     Copy,
     Check,
     RefreshCw,
-    Camera
+    Camera,
+    BarChart3,
+    ArrowRight
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import type { StoreReportingData, EmulationOcrItem } from '../types/ocrTypes';
 import type { StoreItem, CampaignDictItem } from '../../../core/lib/storage';
 import { getShortStoreName, normalizeToMillion, formatDate } from '../../../core/lib/formatters';
@@ -36,6 +39,7 @@ interface Props {
     onOpenQuickEmulationModal?: (storeName?: string) => void;
     onLoadFromCloud?: () => void;
     isLoadingExisting?: boolean;
+    isSaved?: boolean;
 }
 
 export default function ManualDataEntryModule({
@@ -51,7 +55,8 @@ export default function ManualDataEntryModule({
     existingRecordCount = 0,
     onOpenQuickEmulationModal,
     onLoadFromCloud,
-    isLoadingExisting = false
+    isLoadingExisting = false,
+    isSaved = false
 }: Props) {
     const [selectedStoreIndex, setSelectedStoreIndex] = useState<number>(0);
     const [newProgramName, setNewProgramName] = useState('');
@@ -302,6 +307,20 @@ export default function ManualDataEntryModule({
                                     : `Lưu Chốt Ngày ${formatDate(reportDate)}`}
                         </span>
                     </button>
+
+                    <Link
+                        to="/bc-thang/tong-quan"
+                        className={`px-3.5 py-1.5 text-white rounded-xl text-xs font-black transition cursor-pointer shadow-xs flex items-center gap-1.5 active:scale-95 shrink-0 ${
+                            isSaved 
+                                ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 ring-2 ring-emerald-300 ring-offset-1 shadow-md'
+                                : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700'
+                        }`}
+                        title="Mở Báo Cáo Tháng (Tổng Quan) để xem kết quả số liệu"
+                    >
+                        <BarChart3 className="w-3.5 h-3.5 text-amber-300" />
+                        <span>Xem Báo Cáo Tháng</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                    </Link>
                 </div>
             </div>
 

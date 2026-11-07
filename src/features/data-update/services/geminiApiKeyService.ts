@@ -252,8 +252,31 @@ export async function testAllGeminiApiKeys(rawKeys: string): Promise<KeyTestDeta
     return results;
 }
 
+export const STANDARD_GEMINI_MODELS = [
+    'gemini-3.5-flash',
+    'gemini-3.5-flash-lite',
+    'gemini-flash-lite-latest',
+    'gemini-3.8-flash'
+];
+
 /**
- * 6. Kiểm tra tính hợp lệ và hạn ngạch của API Key (Tự động thử chuỗi model: 3.8-flash -> 2.5-flash -> 2.0-flash -> 1.5-flash)
+ * Xóa cache model nếu lưu phải model cũ đã bị Google ngừng hỗ trợ (404)
+ */
+export function sanitizeCachedGeminiModel(): string | null {
+    try {
+        const cached = localStorage.getItem('SALESHUB_ACTIVE_GEMINI_MODEL');
+        if (cached && !STANDARD_GEMINI_MODELS.includes(cached)) {
+            localStorage.removeItem('SALESHUB_ACTIVE_GEMINI_MODEL');
+            return null;
+        }
+        return cached;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * 6. Kiểm tra tính hợp lệ và hạn ngạch của API Key (Tự động thử chuỗi model chuẩn Google: 3.5-flash -> 3.5-flash-lite -> flash-lite-latest -> 3.8-flash)
  */
 export async function testGeminiApiKey(
     apiKey: string
@@ -263,12 +286,7 @@ export async function testGeminiApiKey(
         return { success: false, message: 'API Key không được để trống' };
     }
 
-    const candidateModels = [
-        'gemini-3.5-flash',
-        'gemini-flash-lite-latest',
-        'gemini-3.8-flash',
-        'gemini-2.5-flash'
-    ];
+    const candidateModels = STANDARD_GEMINI_MODELS;
     let lastMsg = '';
 
     for (const model of candidateModels) {
