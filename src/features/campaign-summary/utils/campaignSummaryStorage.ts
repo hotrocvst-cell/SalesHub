@@ -10,25 +10,45 @@ import type { EmployeeBonusItem } from '../../../core/lib/employeeBonusService';
 /**
  * Chuẩn hóa chuỗi định danh thi đua để đối chiếu linh hoạt:
  * - Bỏ dấu tiếng Việt, chuyển chữ thường
- * - Bỏ tiền tố tháng (T09 -, T10 -, ...)
- * - Bỏ ký tự đặc biệt, gạch dưới, khoảng trắng
+ * - Bỏ tiền tố tháng (T09 -, T10 -, T11 -, ...)
+ * - Chuẩn hóa các từ viết tắt / từ đồng nghĩa thông dụng (Loa PK <-> Loa Phụ Kiện, Cáp sạc <-> Cáp - Sạc, ...)
+ * - Bỏ ký tự đặc biệt, gạch dưới, khoảng trắng thừa
  */
 export function normalizeCampaignToken(str: string): string {
     if (!str) return '';
-    return str
+    let s = str
         .toLowerCase()
         .normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '') // Bỏ dấu tiếng Việt
         .replace(/đ/g, 'd')
         .replace(/^t\d{1,2}\s*-\s*(t\d{1,2}\s*)?/i, '') // Bỏ tiền tố tháng kiểu T10 -, T09 - T10 -
-        .replace(/[^a-z0-9]/g, '')
+        .replace(/[^a-z0-9]/g, ' ')
         .trim();
+
+    // Chuẩn hóa từ viết tắt và từ đồng nghĩa ngành bán lẻ
+    s = s
+        .replace(/\bphu\s*kien\b/g, 'pk')
+        .replace(/\bdien\s*may\s*xanh\b/g, 'dmx')
+        .replace(/\bbao\s*hiem\b/g, 'bh')
+        .replace(/\btho\s*(dmx|ict)?\b/g, 'thoict')
+        .replace(/\bcap\s*sac\b/g, 'capsac')
+        .replace(/\bday\s*sac\b/g, 'capsac')
+        .replace(/\bcap\b/g, 'capsac')
+        .replace(/\bsac\s*du\s*phong\b/g, 'pinsdp')
+        .replace(/\bpin\s*sdp\b/g, 'pinsdp')
+        .replace(/\bnap\s*rut\b/g, 'naprut')
+        .replace(/\bvi\s*tra\s*sau\b/g, 'vitrasau')
+        .replace(/\bvay\s*tien\s*mat\b/g, 'vaytienmat')
+        .replace(/\s+/g, '');
+
+    return s;
 }
 
 /**
  * Tìm NHÓM thi đua chuẩn (canonical campaign) từ rawKey dựa vào campaignDict:
  * - Ưu tiên khớp chính xác với NHÓM thi đua ĐANG HOẠT ĐỘNG (is_active)
- * - Tiếp theo đối chiếu token chuẩn hóa (để gom "Ví trả sau", "T10 - VÍ TRẢ SAU", "VÍ_TRẢ_SAU" về cùng 1 NHÓM thi đua chuẩn)
+ * - Tự động ưu tiên nhóm có tiền tố tháng hiện hành (T11 -, T10 -, ...) hoặc order_index nhỏ hơn
+ * - Đối chiếu token chuẩn hóa (để gom "Loa PK", "Loa Phụ Kiện", "T11 - Loa Phụ Kiện" về cùng 1 NHÓM chuẩn)
  * - Nếu không có trong active, tìm trong toàn bộ từ điển
  */
 export function resolveCanonicalCampaign(
@@ -44,49 +64,66 @@ export function resolveCanonicalCampaign(
     const upper = trimmed.toUpperCase();
     const token = normalizeCampaignToken(trimmed);
 
-    const activeItems = campaignDict.filter(d => d.is_active);
+    // Sắp xếp active items: ưu tiên mục có tiền tố tháng (T11 -, T10 -) và order_index nhỏ hơn
+    const activeItems = campaignDict
+        .filter(d => d.is_active)
+        .sort((a, b) => {
+            const aHasPrefix = /^t\d{1,2}\s*-/i.test(a.raw_key) ? 1 : 0;
+            const bHasPrefix = /^t\d{1,2}\s*-/i.test(b.raw_key) ? 1 : 0;
+            if (aHasPrefix !== bHasPrefix) return bHasPrefix - aHasPrefix;
+            return (a.order_index ?? 999) - (b.order_index ?? 999);
+        });
 
-    // 1. Khớp tuyệt đối theo raw_key trong active
+    // 1. Khớp qua token chuẩn hóa trong active (ưu tiên kết nối token giữa raw_key / display_name với mục có tiền tố tháng)
+    if (token) {
+        const tokenActive = activeItems.find(d => {
+            const dRawToken = normalizeCampaignToken(d.raw_key);
+            const dDisplayToken = normalizeCampaignToken(d.display_name);
+            return dRawToken === token || dDisplayToken === token;
+        });
+        if (tokenActive) return { canonicalKey: tokenActive.raw_key, dictItem: tokenActive };
+    }
+
+    // 2. Khớp tuyệt đối theo raw_key trong active
     const exactActiveRaw = activeItems.find(d => d.raw_key.trim().toUpperCase() === upper);
     if (exactActiveRaw) return { canonicalKey: exactActiveRaw.raw_key, dictItem: exactActiveRaw };
 
-    // 2. Khớp tuyệt đối theo display_name trong active
+    // 3. Khớp tuyệt đối theo display_name trong active
     const exactActiveDisplay = activeItems.find(d => d.display_name.trim().toUpperCase() === upper);
     if (exactActiveDisplay) return { canonicalKey: exactActiveDisplay.raw_key, dictItem: exactActiveDisplay };
 
-    // 3. Khớp qua token chuẩn hóa trong active (loại bỏ T10 -, dấu tiếng Việt, gạch dưới)
-    const tokenActive = activeItems.find(d => {
-        const dRawToken = normalizeCampaignToken(d.raw_key);
-        const dDisplayToken = normalizeCampaignToken(d.display_name);
-        return dRawToken === token || dDisplayToken === token;
-    });
-    if (tokenActive) return { canonicalKey: tokenActive.raw_key, dictItem: tokenActive };
-
     // 4. Nếu rawKey trùng với một mục inactive, kiểm tra xem mục inactive đó có cùng display_name / token với mục active nào không
-    const inactiveMatch = campaignDict.find(d => !d.is_active && (
-        d.raw_key.trim().toUpperCase() === upper ||
-        d.display_name.trim().toUpperCase() === upper ||
-        normalizeCampaignToken(d.raw_key) === token ||
-        normalizeCampaignToken(d.display_name) === token
-    ));
-    if (inactiveMatch) {
-        const inactToken = normalizeCampaignToken(inactiveMatch.display_name) || normalizeCampaignToken(inactiveMatch.raw_key);
-        const linkedActive = activeItems.find(d =>
-            normalizeCampaignToken(d.display_name) === inactToken ||
-            normalizeCampaignToken(d.raw_key) === inactToken
+    const inactiveItems = campaignDict
+        .filter(d => !d.is_active)
+        .sort((a, b) => (a.order_index ?? 999) - (b.order_index ?? 999));
+
+    if (token) {
+        const inactiveMatch = inactiveItems.find(d =>
+            normalizeCampaignToken(d.raw_key) === token ||
+            normalizeCampaignToken(d.display_name) === token
         );
-        if (linkedActive) return { canonicalKey: linkedActive.raw_key, dictItem: linkedActive };
+        if (inactiveMatch) {
+            const inactToken = normalizeCampaignToken(inactiveMatch.display_name) || normalizeCampaignToken(inactiveMatch.raw_key);
+            const linkedActive = activeItems.find(d =>
+                normalizeCampaignToken(d.display_name) === inactToken ||
+                normalizeCampaignToken(d.raw_key) === inactToken
+            );
+            if (linkedActive) return { canonicalKey: linkedActive.raw_key, dictItem: linkedActive };
+            return { canonicalKey: inactiveMatch.raw_key, dictItem: inactiveMatch };
+        }
     }
 
     // 5. Nếu không khớp được với active item nào, tìm trong tất cả các item (kể cả inactive)
     const anyExact = campaignDict.find(d => d.raw_key.trim().toUpperCase() === upper || d.display_name.trim().toUpperCase() === upper);
     if (anyExact) return { canonicalKey: anyExact.raw_key, dictItem: anyExact };
 
-    const anyToken = campaignDict.find(d =>
-        normalizeCampaignToken(d.raw_key) === token ||
-        normalizeCampaignToken(d.display_name) === token
-    );
-    if (anyToken) return { canonicalKey: anyToken.raw_key, dictItem: anyToken };
+    if (token) {
+        const anyToken = campaignDict.find(d =>
+            normalizeCampaignToken(d.raw_key) === token ||
+            normalizeCampaignToken(d.display_name) === token
+        );
+        if (anyToken) return { canonicalKey: anyToken.raw_key, dictItem: anyToken };
+    }
 
     // 6. Fallback giữ nguyên rawKey
     return { canonicalKey: trimmed };

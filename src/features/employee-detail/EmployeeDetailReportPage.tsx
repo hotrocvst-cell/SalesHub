@@ -21,7 +21,7 @@ import {
     getShortenedEmployeeName,
     cleanEmployeeName
 } from '../employee-performance/utils/performanceConfig';
-import { resolveCanonicalCampaign } from '../campaign-summary/utils/campaignSummaryStorage';
+import { resolveCanonicalCampaign, normalizeCampaignToken } from '../campaign-summary/utils/campaignSummaryStorage';
 import {
     fetchCampaignOffsets,
     type CampaignOffsetItem
@@ -688,18 +688,47 @@ export default function EmployeeDetailReportPage() {
         allKeys.forEach(rawKey => {
             const resolved = resolveCanonicalCampaign(rawKey, campaignDict);
             const cKey = resolved.canonicalKey;
+            const token = normalizeCampaignToken(cKey) || normalizeCampaignToken(rawKey);
 
-            if (!canonicalGroups.has(cKey)) {
+            // Tìm xem đã có nhóm nào có canonicalKey trùng hoặc token trùng chưa để tránh phân mảnh dòng
+            let existingKey: string | undefined;
+            if (canonicalGroups.has(cKey)) {
+                existingKey = cKey;
+            } else {
+                for (const [k, grp] of canonicalGroups.entries()) {
+                    const grpToken = normalizeCampaignToken(k) || normalizeCampaignToken(grp.displayName);
+                    if (grpToken && token && grpToken === token) {
+                        existingKey = k;
+                        break;
+                    }
+                }
+            }
+
+            if (existingKey) {
+                canonicalGroups.get(existingKey)!.rawKeys.add(rawKey);
+                // Nếu cKey hiện tại có tiền tố tháng (T11 -, T10 -) mà existingKey chưa có, nâng cấp làm khóa chính
+                if (/^t\d{1,2}\s*-/i.test(cKey) && !/^t\d{1,2}\s*-/i.test(existingKey)) {
+                    const oldGroup = canonicalGroups.get(existingKey)!;
+                    canonicalGroups.delete(existingKey);
+                    canonicalGroups.set(cKey, {
+                        ...oldGroup,
+                        canonicalKey: cKey,
+                        displayName: resolved.dictItem?.display_name || oldGroup.displayName,
+                        unit: resolved.dictItem?.unit || oldGroup.unit,
+                        orderIndex: resolved.dictItem?.order_index ?? oldGroup.orderIndex
+                    });
+                    canonicalGroups.get(cKey)!.rawKeys.add(rawKey);
+                }
+            } else {
                 const dictItem = resolved.dictItem;
                 canonicalGroups.set(cKey, {
                     canonicalKey: cKey,
                     displayName: dictItem?.display_name || cKey,
                     unit: dictItem?.unit || '',
                     orderIndex: dictItem?.order_index ?? dictItem?.sort_order ?? 999,
-                    rawKeys: new Set<string>()
+                    rawKeys: new Set<string>([rawKey])
                 });
             }
-            canonicalGroups.get(cKey)!.rawKeys.add(rawKey);
         });
 
         const rows: CampaignDetailRow[] = [];
@@ -707,8 +736,10 @@ export default function EmployeeDetailReportPage() {
 
         canonicalGroups.forEach((group, cKey) => {
             const aliasKeys = Array.from(group.rawKeys);
+            const groupToken = normalizeCampaignToken(cKey);
+            const displayToken = normalizeCampaignToken(group.displayName);
 
-            // 1. Taget: Tìm trong empTargets
+            // 1. Taget: Tìm trong empTargets (thử theo cKey -> alias -> token chuẩn hóa)
             let targetVal = Number(empTargets[cKey]) || 0;
             if (targetVal <= 0) {
                 for (const alias of aliasKeys) {
@@ -719,8 +750,20 @@ export default function EmployeeDetailReportPage() {
                     }
                 }
             }
+            if (targetVal <= 0) {
+                for (const [tKey, tVal] of Object.entries(empTargets)) {
+                    const tToken = normalizeCampaignToken(tKey);
+                    if (tToken && (tToken === groupToken || tToken === displayToken)) {
+                        const v = Number(tVal) || 0;
+                        if (v > 0) {
+                            targetVal = v;
+                            break;
+                        }
+                    }
+                }
+            }
 
-            // 2. L.Kế: Tìm trong empCampaigns
+            // 2. L.Kế: Tìm trong empCampaigns (thử theo cKey -> alias -> canonical match -> token chuẩn hóa)
             let actualVal = 0;
             if (empCampaigns[cKey] !== undefined) {
                 actualVal = Number(empCampaigns[cKey]) || 0;
@@ -736,7 +779,17 @@ export default function EmployeeDetailReportPage() {
             if (actualVal === 0) {
                 for (const [sessKey, sessVal] of Object.entries(empCampaigns)) {
                     const sessResolved = resolveCanonicalCampaign(sessKey, campaignDict);
-                    if (sessResolved.canonicalKey === cKey) {
+                    if (sessResolved.canonicalKey === cKey || aliasKeys.includes(sessResolved.canonicalKey)) {
+                        actualVal = Number(sessVal) || 0;
+                        break;
+                    }
+                }
+            }
+
+            if (actualVal === 0) {
+                for (const [sessKey, sessVal] of Object.entries(empCampaigns)) {
+                    const sToken = normalizeCampaignToken(sessKey);
+                    if (sToken && (sToken === groupToken || sToken === displayToken)) {
                         actualVal = Number(sessVal) || 0;
                         break;
                     }
@@ -750,10 +803,13 @@ export default function EmployeeDetailReportPage() {
                 if (o.employee_id.trim() === empId) {
                     const toKey = (o.to_campaign_key || '').trim();
                     const fromKey = (o.from_campaign_key || '').trim();
-                    if (toKey === cKey || aliasKeys.includes(toKey)) {
+                    const toToken = normalizeCampaignToken(toKey);
+                    const fromToken = normalizeCampaignToken(fromKey);
+
+                    if (toKey === cKey || aliasKeys.includes(toKey) || (toToken && (toToken === groupToken || toToken === displayToken))) {
                         offsetIn += Number(o.offset_quantity) || 0;
                     }
-                    if (fromKey === cKey || aliasKeys.includes(fromKey)) {
+                    if (fromKey === cKey || aliasKeys.includes(fromKey) || (fromToken && (fromToken === groupToken || fromToken === displayToken))) {
                         offsetOut += Number(o.offset_quantity) || 0;
                     }
                 }
@@ -784,7 +840,8 @@ export default function EmployeeDetailReportPage() {
             // Tìm điểm thưởng gắn liền với ngành hàng này (nếu có)
             const matchedBonuses = currentEmpBonuses.filter(b => {
                 const bKey = (b.campaign_key || '').trim();
-                return bKey === cKey || aliasKeys.includes(bKey);
+                const bToken = normalizeCampaignToken(bKey);
+                return bKey === cKey || aliasKeys.includes(bKey) || (bToken && (bToken === groupToken || bToken === displayToken));
             });
             const campBonusPts = matchedBonuses.reduce((sum, b) => sum + (Number(b.bonus_points) || 0), 0);
             if (campBonusPts > 0) {

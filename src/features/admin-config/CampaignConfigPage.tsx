@@ -16,6 +16,7 @@ import {
     syncStoreCampaignScoresFromCloud,
     checkSupabaseCampaignConnection
 } from '../../core/lib/storeCampaignScoreService';
+import { normalizeCampaignToken } from '../campaign-summary/utils/campaignSummaryStorage';
 import SupabaseSyncStatusBar, { type CloudSyncStatus } from './components/SupabaseSyncStatusBar';
 import {
     BookOpen,
@@ -441,14 +442,30 @@ export default function CampaignConfigPage() {
                 const rawKey = p[0];
                 const displayName = p[1];
                 const unit = p[2] || 'Cái';
+                const token = normalizeCampaignToken(rawKey);
 
-                newItems.push({
-                    raw_key: rawKey,
-                    display_name: displayName,
-                    unit,
-                    is_active: true,
-                    order_index: campaignList.length + idx + 1
-                });
+                // Kiểm tra xem đã có mục đang hoạt động trùng raw_key hoặc token chưa để tránh tạo mục trùng lặp
+                const existing = campaignList.find(c =>
+                    c.raw_key.trim().toUpperCase() === rawKey.toUpperCase() ||
+                    (c.is_active && token && normalizeCampaignToken(c.raw_key) === token)
+                );
+
+                if (existing) {
+                    newItems.push({
+                        ...existing,
+                        raw_key: existing.raw_key,
+                        display_name: displayName || existing.display_name,
+                        unit: unit || existing.unit
+                    });
+                } else {
+                    newItems.push({
+                        raw_key: rawKey,
+                        display_name: displayName,
+                        unit,
+                        is_active: true,
+                        order_index: campaignList.length + idx + 1
+                    });
+                }
             }
         });
 

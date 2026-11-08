@@ -18,7 +18,9 @@
 export interface ExtractedStoreRevenue {
     revenueQd: number;          // Doanh thu quy đổi (Triệu đồng)
     revenueActual: number;      // Doanh thu thực (Triệu đồng)
-    revenueTarget?: number;     // Target chuẩn (Triệu đồng)
+    revenueTarget?: number;     // Target chuẩn DTQĐ (Triệu đồng)
+    targetQd?: number;          // Target DTQĐ (Triệu đồng)
+    targetReal?: number;        // Target DT Thực (Triệu đồng)
     avg3Months?: number;        // TB 3 Tháng (Triệu đồng)
     pctGrowth?: number;         // % Tăng trưởng so với TB 3 tháng
     installmentRevenue?: number;// DT trả góp (Triệu đồng)
@@ -34,8 +36,8 @@ export function extractStoreRevenueDetails(
     const lines = rawRevenue.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
 
     // Xử lý chuỗi riêng lẻ 1 ST (được tạo bởi hệ thống OCR hoặc nhập liệu ngắn)
-    if (lines.length <= 6 && (rawRevenue.includes('DTQĐ:') || rawRevenue.includes('DT Thực:') || rawRevenue.includes('DT Thuc:'))) {
-        const qdMatch = rawRevenue.match(/DTQĐ:\s*([\d,.]+)/i);
+    if (lines.length <= 6 && (rawRevenue.includes('DTQĐ:') || rawRevenue.includes('DTQD:') || rawRevenue.includes('DT Thực:') || rawRevenue.includes('DT Thuc:'))) {
+        const qdMatch = rawRevenue.match(/DTQĐ:\s*([\d,.]+)/i) || rawRevenue.match(/DTQD:\s*([\d,.]+)/i);
         const realMatch = rawRevenue.match(/DT\s*Th[ựu]c:\s*([\d,.]+)/i);
         const tgMatch = rawRevenue.match(/Target:\s*([\d,.]+)/i);
         const instMatch = rawRevenue.match(/Tr[ảa]\s*g[óo]p:\s*([\d,.]+)/i);
@@ -49,11 +51,30 @@ export function extractStoreRevenueDetails(
         const instRateVal = instRateMatch ? parseFloat(instRateMatch[1].replace(/,/g, '')) || undefined : undefined;
         const avg3Val = avg3Match ? parseFloat(avg3Match[1].replace(/,/g, '')) || undefined : undefined;
 
+        // Trích xuất riêng biệt Target DTQĐ vs Target DT Thực nếu chuỗi chứa cả 2
+        let targetQd: number | undefined;
+        let targetReal: number | undefined;
+
+        for (const line of lines) {
+            if (line.includes('DTQĐ:') || line.includes('DTQD:')) {
+                const tgQdMatch = line.match(/Target:\s*([\d,.]+)/i);
+                if (tgQdMatch) targetQd = parseFloat(tgQdMatch[1].replace(/,/g, '')) || undefined;
+            }
+            if (line.includes('DT Thực:') || line.includes('DT Thuc:')) {
+                const tgRealMatch = line.match(/Target:\s*([\d,.]+)/i);
+                if (tgRealMatch) targetReal = parseFloat(tgRealMatch[1].replace(/,/g, '')) || undefined;
+            }
+        }
+
+        const primaryTarget = targetQd || tgVal || targetReal;
+
         if (qdVal > 0 || realVal > 0) {
             return {
                 revenueQd: qdVal || realVal,
                 revenueActual: realVal || qdVal,
-                revenueTarget: tgVal,
+                revenueTarget: primaryTarget,
+                targetQd,
+                targetReal,
                 avg3Months: avg3Val,
                 installmentRevenue: instVal,
                 installmentRate: instRateVal
@@ -122,33 +143,51 @@ export function extractStoreRevenueDetails(
             if (i + 1 < lines.length) candidateLines.push(lines[i + 1]);
             if (i + 2 < lines.length) candidateLines.push(lines[i + 2]);
 
+            let cQdVal = 0;
+            let cRealVal = 0;
+            let cTargetQd: number | undefined;
+            let cTargetReal: number | undefined;
+            let cAvg3Val: number | undefined;
+            let cInstVal: number | undefined;
+            let cInstRateVal: number | undefined;
+            let hasCandidateMatch = false;
+
             for (const cLine of candidateLines) {
-                if (cLine.includes('DTQĐ:') || cLine.includes('DT Thực:') || cLine.includes('DT Thuc:')) {
-                    const qdMatch = cLine.match(/DTQĐ:\s*([\d,.]+)/i);
+                if (cLine.includes('DTQĐ:') || cLine.includes('DTQD:')) {
+                    const qdMatch = cLine.match(/DTQĐ:\s*([\d,.]+)/i) || cLine.match(/DTQD:\s*([\d,.]+)/i);
+                    const tgMatch = cLine.match(/Target:\s*([\d,.]+)/i);
+                    if (qdMatch) cQdVal = parseFloat(qdMatch[1].replace(/,/g, '')) || 0;
+                    if (tgMatch) cTargetQd = parseFloat(tgMatch[1].replace(/,/g, '')) || undefined;
+                    hasCandidateMatch = true;
+                }
+                if (cLine.includes('DT Thực:') || cLine.includes('DT Thuc:')) {
                     const realMatch = cLine.match(/DT\s*Th[ựu]c:\s*([\d,.]+)/i);
                     const tgMatch = cLine.match(/Target:\s*([\d,.]+)/i);
                     const instMatch = cLine.match(/Tr[ảa]\s*g[óo]p:\s*([\d,.]+)/i);
                     const instRateMatch = cLine.match(/(?:%|Tỷ lệ)\s*Tr[ảa]\s*g[óo]p:\s*([\d,.]+)%?/i);
                     const avg3Match = cLine.match(/TB\s*3\s*Th[áa]ng:\s*([\d,.]+)/i);
 
-                    const qdVal = qdMatch ? parseFloat(qdMatch[1].replace(/,/g, '')) || 0 : 0;
-                    const realVal = realMatch ? parseFloat(realMatch[1].replace(/,/g, '')) || 0 : 0;
-                    const tgVal = tgMatch ? parseFloat(tgMatch[1].replace(/,/g, '')) || undefined : undefined;
-                    const instVal = instMatch ? parseFloat(instMatch[1].replace(/,/g, '')) || undefined : undefined;
-                    const instRateVal = instRateMatch ? parseFloat(instRateMatch[1].replace(/,/g, '')) || undefined : undefined;
-                    const avg3Val = avg3Match ? parseFloat(avg3Match[1].replace(/,/g, '')) || undefined : undefined;
-
-                    if (qdVal > 0 || realVal > 0) {
-                        return {
-                            revenueQd: qdVal || realVal,
-                            revenueActual: realVal || qdVal,
-                            revenueTarget: tgVal,
-                            avg3Months: avg3Val,
-                            installmentRevenue: instVal,
-                            installmentRate: instRateVal
-                        };
-                    }
+                    if (realMatch) cRealVal = parseFloat(realMatch[1].replace(/,/g, '')) || 0;
+                    if (tgMatch) cTargetReal = parseFloat(tgMatch[1].replace(/,/g, '')) || undefined;
+                    if (instMatch) cInstVal = parseFloat(instMatch[1].replace(/,/g, '')) || undefined;
+                    if (instRateMatch) cInstRateVal = parseFloat(instRateMatch[1].replace(/,/g, '')) || undefined;
+                    if (avg3Match) cAvg3Val = parseFloat(avg3Match[1].replace(/,/g, '')) || undefined;
+                    hasCandidateMatch = true;
                 }
+            }
+
+            if (hasCandidateMatch && (cQdVal > 0 || cRealVal > 0)) {
+                return {
+                    revenueQd: cQdVal || cRealVal,
+                    revenueActual: cRealVal || cQdVal,
+                    // Luôn ưu tiên Target DTQĐ cho revenueTarget
+                    revenueTarget: cTargetQd || cTargetReal,
+                    targetQd: cTargetQd,
+                    targetReal: cTargetReal,
+                    avg3Months: cAvg3Val,
+                    installmentRevenue: cInstVal,
+                    installmentRate: cInstRateVal
+                };
             }
 
             // Xác định dòng chứa số liệu: có thể nằm cùng dòng (inline) hoặc ở dòng kế tiếp
@@ -240,10 +279,17 @@ export function extractStoreRevenueDetailsWithReal(
                 realInstRate = Number(((instRev / realRevActual) * 100).toFixed(2));
             }
 
+            // Target chuẩn hệ thống LUÔN LÀ TARGET DTQĐ:
+            const targetQd = qdExtracted.targetQd || qdExtracted.revenueTarget;
+            const targetReal = realExtracted.targetReal || realExtracted.revenueTarget;
+
             return {
                 revenueQd: qdExtracted.revenueQd,
                 revenueActual: realRevActual,
-                revenueTarget: realExtracted.revenueTarget || qdExtracted.revenueTarget,
+                // ƯU TIÊN TARGET DTQĐ (Target chuẩn hệ thống tính %HT và %ĐKHT)
+                revenueTarget: targetQd || targetReal,
+                targetQd,
+                targetReal,
                 avg3Months: realExtracted.avg3Months ?? qdExtracted.avg3Months,
                 pctGrowth: realExtracted.pctGrowth ?? qdExtracted.pctGrowth,
                 installmentRevenue: instRev,

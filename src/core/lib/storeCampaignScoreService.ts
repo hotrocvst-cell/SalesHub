@@ -89,14 +89,31 @@ export function getStoreCampaignScoreConfig(
 
 function normalizeScoreToken(str: string): string {
     if (!str) return '';
-    return str
+    let s = str
         .toLowerCase()
         .normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '')
         .replace(/đ/g, 'd')
         .replace(/^t\d{1,2}\s*-\s*(t\d{1,2}\s*)?/i, '')
-        .replace(/[^a-z0-9]/g, '')
+        .replace(/[^a-z0-9]/g, ' ')
         .trim();
+
+    s = s
+        .replace(/\bphu\s*kien\b/g, 'pk')
+        .replace(/\bdien\s*may\s*xanh\b/g, 'dmx')
+        .replace(/\bbao\s*hiem\b/g, 'bh')
+        .replace(/\btho\s*(dmx|ict)?\b/g, 'thoict')
+        .replace(/\bcap\s*sac\b/g, 'capsac')
+        .replace(/\bday\s*sac\b/g, 'capsac')
+        .replace(/\bcap\b/g, 'capsac')
+        .replace(/\bsac\s*du\s*phong\b/g, 'pinsdp')
+        .replace(/\bpin\s*sdp\b/g, 'pinsdp')
+        .replace(/\bnap\s*rut\b/g, 'naprut')
+        .replace(/\bvi\s*tra\s*sau\b/g, 'vitrasau')
+        .replace(/\bvay\s*tien\s*mat\b/g, 'vaytienmat')
+        .replace(/\s+/g, '');
+
+    return s;
 }
 
 /**

@@ -110,9 +110,9 @@ export default function EmployeeExtractOcrPage() {
     // 3. Tab chuyển đổi
     const [activeTab, setActiveTab] = useState<'ocr' | 'manual'>('ocr');
 
-    // 4. File tải lên
-    const [qdFile, setQdFile] = useState<File | null>(null);
-    const [realFile, setRealFile] = useState<File | null>(null);
+    // 4. File tải lên (Hỗ trợ tải nhiều ảnh cho cả DT-QĐ, DT-Thực và Thi đua)
+    const [qdFiles, setQdFiles] = useState<File[]>([]);
+    const [realFiles, setRealFiles] = useState<File[]>([]);
     const [emulationFiles, setEmulationFiles] = useState<File[]>([]);
 
     // 5. Cấu hình Gemini Key
@@ -262,7 +262,7 @@ export default function EmployeeExtractOcrPage() {
             return;
         }
 
-        if (!qdFile && !realFile && emulationFiles.length === 0) {
+        if (qdFiles.length === 0 && realFiles.length === 0 && emulationFiles.length === 0) {
             showToast('⚠️ Vui lòng chọn ít nhất 1 ảnh (DT-QĐ, DT-THỰC hoặc Thi đua)!');
             return;
         }
@@ -287,7 +287,7 @@ export default function EmployeeExtractOcrPage() {
         try {
             const result = await extractAndMergeEmployeeImages(
                 activeKey,
-                { qdFile, realFile, emulationFiles },
+                { qdFiles, realFiles, emulationFiles },
                 storeEmployees.length > 0 ? storeEmployees : systemEmployees,
                 (msg, pct) => {
                     setProgressText(msg);
@@ -885,10 +885,10 @@ export default function EmployeeExtractOcrPage() {
                 <div className="space-y-4">
                     <OcrUploadZone
                         mode="EMPLOYEE"
-                        qdFile={qdFile}
-                        onQdFileChange={setQdFile}
-                        realFile={realFile}
-                        onRealFileChange={setRealFile}
+                        qdFiles={qdFiles}
+                        onQdFilesChange={setQdFiles}
+                        realFiles={realFiles}
+                        onRealFilesChange={setRealFiles}
                         emulationFiles={emulationFiles}
                         onEmulationFilesChange={setEmulationFiles}
                         hasGeminiKey={Boolean(keyInfo.key)}

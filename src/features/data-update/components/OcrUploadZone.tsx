@@ -18,10 +18,14 @@ import { formatStoreDisplayName } from '../../../core/lib/formatters';
 
 interface Props {
     mode?: 'STORE' | 'EMPLOYEE';
-    qdFile: File | null;
-    onQdFileChange: (file: File | null) => void;
-    realFile: File | null;
-    onRealFileChange: (file: File | null) => void;
+    qdFile?: File | null;
+    qdFiles?: File[];
+    onQdFileChange?: (file: File | null) => void;
+    onQdFilesChange?: (files: File[]) => void;
+    realFile?: File | null;
+    realFiles?: File[];
+    onRealFileChange?: (file: File | null) => void;
+    onRealFilesChange?: (files: File[]) => void;
     emulationFiles: File[];
     onEmulationFilesChange: (files: File[]) => void;
     engineType?: OcrEngineType;
@@ -46,9 +50,13 @@ interface Props {
 export default function OcrUploadZone({
     mode = 'STORE',
     qdFile,
+    qdFiles,
     onQdFileChange,
+    onQdFilesChange,
     realFile,
+    realFiles,
     onRealFileChange,
+    onRealFilesChange,
     emulationFiles,
     onEmulationFilesChange,
     hasGeminiKey,
@@ -68,6 +76,60 @@ export default function OcrUploadZone({
     const qdInputRef = useRef<HTMLInputElement>(null);
     const realInputRef = useRef<HTMLInputElement>(null);
     const emuInputRef = useRef<HTMLInputElement>(null);
+
+    const isMultiQd = Boolean(onQdFilesChange || qdFiles !== undefined);
+    const isMultiReal = Boolean(onRealFilesChange || realFiles !== undefined);
+
+    const currentQdFiles: File[] = qdFiles ?? (qdFile ? [qdFile] : []);
+    const currentRealFiles: File[] = realFiles ?? (realFile ? [realFile] : []);
+
+    const handleAddQdFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!e.target.files) return;
+        const newFiles = Array.from(e.target.files);
+        if (onQdFilesChange) {
+            onQdFilesChange([...currentQdFiles, ...newFiles]);
+        } else if (onQdFileChange) {
+            onQdFileChange(newFiles[0] || null);
+        }
+        if (qdInputRef.current) qdInputRef.current.value = '';
+    };
+
+    const handleRemoveQdFile = (index: number) => {
+        if (onQdFilesChange) {
+            onQdFilesChange(currentQdFiles.filter((_, idx) => idx !== index));
+        } else if (onQdFileChange) {
+            onQdFileChange(null);
+        }
+    };
+
+    const handleClearAllQdFiles = () => {
+        if (onQdFilesChange) onQdFilesChange([]);
+        if (onQdFileChange) onQdFileChange(null);
+    };
+
+    const handleAddRealFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!e.target.files) return;
+        const newFiles = Array.from(e.target.files);
+        if (onRealFilesChange) {
+            onRealFilesChange([...currentRealFiles, ...newFiles]);
+        } else if (onRealFileChange) {
+            onRealFileChange(newFiles[0] || null);
+        }
+        if (realInputRef.current) realInputRef.current.value = '';
+    };
+
+    const handleRemoveRealFile = (index: number) => {
+        if (onRealFilesChange) {
+            onRealFilesChange(currentRealFiles.filter((_, idx) => idx !== index));
+        } else if (onRealFileChange) {
+            onRealFileChange(null);
+        }
+    };
+
+    const handleClearAllRealFiles = () => {
+        if (onRealFilesChange) onRealFilesChange([]);
+        if (onRealFileChange) onRealFileChange(null);
+    };
 
     const handleAddEmulationFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!e.target.files) return;
@@ -137,7 +199,9 @@ export default function OcrUploadZone({
         ? emulationFiles.length > 0
         : singleStoreEmulations.some(e => e.files.length > 0);
 
-    const canExtract = Boolean(qdFile || realFile || hasEmulation);
+    const hasQd = currentQdFiles.length > 0;
+    const hasReal = currentRealFiles.length > 0;
+    const canExtract = Boolean(hasQd || hasReal || hasEmulation);
 
     const totalEmulationFiles = emulationMode === 'CLUSTER'
         ? emulationFiles.length
@@ -193,8 +257,10 @@ export default function OcrUploadZone({
                                 <FileImage className="w-3.5 h-3.5 text-blue-600" />
                                 <span>1. Doanh Thu QĐ</span>
                             </span>
-                            <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-blue-100 text-blue-800">
-                                1 file
+                            <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded font-mono ${
+                                currentQdFiles.length > 0 ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-800'
+                            }`}>
+                                {isMultiQd ? `${currentQdFiles.length} ảnh` : (qdFile ? '1 file' : '0 file')}
                             </span>
                         </div>
                     </div>
@@ -203,44 +269,99 @@ export default function OcrUploadZone({
                         ref={qdInputRef}
                         type="file"
                         accept="image/*"
+                        multiple={isMultiQd}
                         className="hidden"
-                        onChange={e => onQdFileChange(e.target.files?.[0] || null)}
+                        onChange={handleAddQdFiles}
                     />
 
-                    {qdFile ? (
-                        <div className="bg-white border border-blue-200 rounded-xl p-2.5 flex items-center justify-between gap-2 shadow-2xs">
-                            <div className="flex items-center gap-2 min-w-0">
-                                <div className="w-7 h-7 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
-                                    <CheckCircle2 className="w-4 h-4" />
+                    {isMultiQd ? (
+                        <div className="space-y-1.5">
+                            {currentQdFiles.length > 0 && (
+                                <div className="space-y-1">
+                                    <div className="max-h-24 overflow-y-auto space-y-1 pr-1">
+                                        {currentQdFiles.map((file, idx) => (
+                                            <div
+                                                key={idx}
+                                                className="bg-white border border-blue-200 rounded-lg px-2 py-1 flex items-center justify-between gap-1 text-[11px] shadow-2xs"
+                                            >
+                                                <span className="truncate text-slate-800 font-medium" title={file.name}>
+                                                    #{idx + 1}. {file.name}
+                                                </span>
+                                                <div className="flex items-center gap-1 shrink-0">
+                                                    <span className="text-[10px] text-slate-400 font-mono">
+                                                        {(file.size / 1024).toFixed(0)} KB
+                                                    </span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleRemoveQdFile(idx)}
+                                                        className="text-slate-400 hover:text-rose-600 transition cursor-pointer p-0.5"
+                                                        title="Xóa ảnh này"
+                                                    >
+                                                        <X className="w-3 h-3" />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    {currentQdFiles.length > 1 && (
+                                        <div className="flex justify-end">
+                                            <button
+                                                type="button"
+                                                onClick={handleClearAllQdFiles}
+                                                className="text-[10px] text-rose-500 hover:text-rose-700 font-bold transition cursor-pointer"
+                                            >
+                                                Xóa tất cả ({currentQdFiles.length} ảnh)
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
-                                <div className="min-w-0">
-                                    <p className="text-xs font-bold text-slate-800 truncate" title={qdFile.name}>
-                                        {qdFile.name}
-                                    </p>
-                                    <p className="text-[10px] text-slate-400">
-                                        {(qdFile.size / 1024).toFixed(1)} KB
-                                    </p>
-                                </div>
-                            </div>
+                            )}
+
                             <button
                                 type="button"
-                                onClick={() => onQdFileChange(null)}
-                                className="p-1 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition cursor-pointer"
-                                title="Xóa ảnh này"
+                                onClick={() => qdInputRef.current?.click()}
+                                className="w-full py-2.5 px-3 border-2 border-dashed border-blue-200 hover:border-blue-400 hover:bg-blue-50/40 rounded-xl text-center cursor-pointer transition flex items-center justify-center gap-1.5 text-blue-700 text-xs font-black"
                             >
-                                <Trash2 className="w-3.5 h-3.5" />
+                                <Plus className="w-4 h-4 text-blue-600" />
+                                <span>{currentQdFiles.length > 0 ? '+ Thêm ảnh DT-QĐ khác...' : 'Nạp ảnh DT-QĐ (chọn 1 hoặc nhiều)'}</span>
                             </button>
                         </div>
                     ) : (
-                        <button
-                            type="button"
-                            onClick={() => qdInputRef.current?.click()}
-                            className="w-full py-4 px-3 border-2 border-dashed border-blue-200 hover:border-blue-400 hover:bg-blue-50/40 rounded-xl text-center cursor-pointer transition flex flex-col items-center justify-center gap-1 text-blue-700"
-                        >
-                            <UploadCloud className="w-5 h-5 text-blue-500" />
-                            <span className="text-xs font-black">Chọn ảnh DT-QĐ</span>
-                            <span className="text-[10px] text-slate-400">Chụp hoặc tải ảnh màn hình</span>
-                        </button>
+                        qdFile ? (
+                            <div className="bg-white border border-blue-200 rounded-xl p-2.5 flex items-center justify-between gap-2 shadow-2xs">
+                                <div className="flex items-center gap-2 min-w-0">
+                                    <div className="w-7 h-7 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
+                                        <CheckCircle2 className="w-4 h-4" />
+                                    </div>
+                                    <div className="min-w-0">
+                                        <p className="text-xs font-bold text-slate-800 truncate" title={qdFile.name}>
+                                            {qdFile.name}
+                                        </p>
+                                        <p className="text-[10px] text-slate-400">
+                                            {(qdFile.size / 1024).toFixed(1)} KB
+                                        </p>
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => onQdFileChange?.(null)}
+                                    className="p-1 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition cursor-pointer"
+                                    title="Xóa ảnh này"
+                                >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                            </div>
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={() => qdInputRef.current?.click()}
+                                className="w-full py-4 px-3 border-2 border-dashed border-blue-200 hover:border-blue-400 hover:bg-blue-50/40 rounded-xl text-center cursor-pointer transition flex flex-col items-center justify-center gap-1 text-blue-700"
+                            >
+                                <UploadCloud className="w-5 h-5 text-blue-500" />
+                                <span className="text-xs font-black">Chọn ảnh DT-QĐ</span>
+                                <span className="text-[10px] text-slate-400">Chụp hoặc tải ảnh màn hình</span>
+                            </button>
+                        )
                     )}
                 </div>
 
@@ -252,8 +373,10 @@ export default function OcrUploadZone({
                                 <FileImage className="w-3.5 h-3.5 text-emerald-600" />
                                 <span>2. Doanh Thu Thực</span>
                             </span>
-                            <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800">
-                                1 file
+                            <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded font-mono ${
+                                currentRealFiles.length > 0 ? 'bg-emerald-600 text-white' : 'bg-emerald-100 text-emerald-800'
+                            }`}>
+                                {isMultiReal ? `${currentRealFiles.length} ảnh` : (realFile ? '1 file' : '0 file')}
                             </span>
                         </div>
                     </div>
@@ -262,44 +385,99 @@ export default function OcrUploadZone({
                         ref={realInputRef}
                         type="file"
                         accept="image/*"
+                        multiple={isMultiReal}
                         className="hidden"
-                        onChange={e => onRealFileChange(e.target.files?.[0] || null)}
+                        onChange={handleAddRealFiles}
                     />
 
-                    {realFile ? (
-                        <div className="bg-white border border-emerald-200 rounded-xl p-2.5 flex items-center justify-between gap-2 shadow-2xs">
-                            <div className="flex items-center gap-2 min-w-0">
-                                <div className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
-                                    <CheckCircle2 className="w-4 h-4" />
+                    {isMultiReal ? (
+                        <div className="space-y-1.5">
+                            {currentRealFiles.length > 0 && (
+                                <div className="space-y-1">
+                                    <div className="max-h-24 overflow-y-auto space-y-1 pr-1">
+                                        {currentRealFiles.map((file, idx) => (
+                                            <div
+                                                key={idx}
+                                                className="bg-white border border-emerald-200 rounded-lg px-2 py-1 flex items-center justify-between gap-1 text-[11px] shadow-2xs"
+                                            >
+                                                <span className="truncate text-slate-800 font-medium" title={file.name}>
+                                                    #{idx + 1}. {file.name}
+                                                </span>
+                                                <div className="flex items-center gap-1 shrink-0">
+                                                    <span className="text-[10px] text-slate-400 font-mono">
+                                                        {(file.size / 1024).toFixed(0)} KB
+                                                    </span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleRemoveRealFile(idx)}
+                                                        className="text-slate-400 hover:text-rose-600 transition cursor-pointer p-0.5"
+                                                        title="Xóa ảnh này"
+                                                    >
+                                                        <X className="w-3 h-3" />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    {currentRealFiles.length > 1 && (
+                                        <div className="flex justify-end">
+                                            <button
+                                                type="button"
+                                                onClick={handleClearAllRealFiles}
+                                                className="text-[10px] text-rose-500 hover:text-rose-700 font-bold transition cursor-pointer"
+                                            >
+                                                Xóa tất cả ({currentRealFiles.length} ảnh)
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
-                                <div className="min-w-0">
-                                    <p className="text-xs font-bold text-slate-800 truncate" title={realFile.name}>
-                                        {realFile.name}
-                                    </p>
-                                    <p className="text-[10px] text-slate-400">
-                                        {(realFile.size / 1024).toFixed(1)} KB
-                                    </p>
-                                </div>
-                            </div>
+                            )}
+
                             <button
                                 type="button"
-                                onClick={() => onRealFileChange(null)}
-                                className="p-1 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition cursor-pointer"
-                                title="Xóa ảnh này"
+                                onClick={() => realInputRef.current?.click()}
+                                className="w-full py-2.5 px-3 border-2 border-dashed border-emerald-200 hover:border-emerald-400 hover:bg-emerald-50/40 rounded-xl text-center cursor-pointer transition flex items-center justify-center gap-1.5 text-emerald-700 text-xs font-black"
                             >
-                                <Trash2 className="w-3.5 h-3.5" />
+                                <Plus className="w-4 h-4 text-emerald-600" />
+                                <span>{currentRealFiles.length > 0 ? '+ Thêm ảnh DT Thực khác...' : 'Nạp ảnh DT Thực (chọn 1 hoặc nhiều)'}</span>
                             </button>
                         </div>
                     ) : (
-                        <button
-                            type="button"
-                            onClick={() => realInputRef.current?.click()}
-                            className="w-full py-4 px-3 border-2 border-dashed border-emerald-200 hover:border-emerald-400 hover:bg-emerald-50/40 rounded-xl text-center cursor-pointer transition flex flex-col items-center justify-center gap-1 text-emerald-700"
-                        >
-                            <UploadCloud className="w-5 h-5 text-emerald-500" />
-                            <span className="text-xs font-black">Chọn ảnh DT Thực</span>
-                            <span className="text-[10px] text-slate-400">Lấy DT thực &amp; Trả góp</span>
-                        </button>
+                        realFile ? (
+                            <div className="bg-white border border-emerald-200 rounded-xl p-2.5 flex items-center justify-between gap-2 shadow-2xs">
+                                <div className="flex items-center gap-2 min-w-0">
+                                    <div className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                                        <CheckCircle2 className="w-4 h-4" />
+                                    </div>
+                                    <div className="min-w-0">
+                                        <p className="text-xs font-bold text-slate-800 truncate" title={realFile.name}>
+                                            {realFile.name}
+                                        </p>
+                                        <p className="text-[10px] text-slate-400">
+                                            {(realFile.size / 1024).toFixed(1)} KB
+                                        </p>
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => onRealFileChange?.(null)}
+                                    className="p-1 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition cursor-pointer"
+                                    title="Xóa ảnh này"
+                                >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                            </div>
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={() => realInputRef.current?.click()}
+                                className="w-full py-4 px-3 border-2 border-dashed border-emerald-200 hover:border-emerald-400 hover:bg-emerald-50/40 rounded-xl text-center cursor-pointer transition flex flex-col items-center justify-center gap-1 text-emerald-700"
+                            >
+                                <UploadCloud className="w-5 h-5 text-emerald-500" />
+                                <span className="text-xs font-black">Chọn ảnh DT Thực</span>
+                                <span className="text-[10px] text-slate-400">Lấy DT thực &amp; Trả góp</span>
+                            </button>
+                        )
                     )}
                 </div>
 

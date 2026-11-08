@@ -346,12 +346,33 @@ export default function ClusterReportPage() {
                 revActual = revQd;
             }
 
-            // Target Gốc (Base Target): Ưu tiên cấu hình -> parsed Target -> rec.revenueTarget -> revQd
-            const baseTarget = (cfg?.baseTarget && cfg.baseTarget > 0)
-                ? cfg.baseTarget
-                : ((extracted?.revenueTarget && extracted.revenueTarget > 0)
-                    ? extracted.revenueTarget
-                    : (rec.revenueTarget > 0 ? rec.revenueTarget : revQd));
+            // Target DT Thực để đối soát & phân biệt với Target DTQĐ
+            const targetRealFromSummary = Number(realInfo?.targetReal ?? realInfo?.targetActual) || 0;
+            const targetReal = targetRealFromSummary > 0 ? targetRealFromSummary : (extracted?.targetReal || 0);
+
+            // Target DTQĐ: Ưu tiên bóc tách từ phần DTQĐ hoặc cột rec.revenueTarget (chuẩn hệ thống lưu DTQĐ)
+            const targetQd = (extracted?.targetQd && extracted.targetQd > 0)
+                ? extracted.targetQd
+                : (Number(rec.revenueTarget) > 0
+                    ? Number(rec.revenueTarget)
+                    : ((extracted?.revenueTarget && extracted.revenueTarget > 0 && (targetReal === 0 || Math.abs(extracted.revenueTarget - targetReal) > 0.05))
+                        ? extracted.revenueTarget
+                        : 0));
+
+            // Target Gốc (Base Target): Chuẩn mục tiêu kinh doanh LUÔN LÀ TARGET DTQĐ
+            // 1. targetQd (bóc tách DTQĐ hoặc cột rec.revenueTarget)
+            // 2. cfg.baseTarget (nếu có và không bị dính targetReal cũ)
+            // 3. Fallback revQd
+            let baseTarget = targetQd;
+            if (!baseTarget || baseTarget <= 0) {
+                if (cfg?.baseTarget && cfg.baseTarget > 0 && (targetReal === 0 || Math.abs(cfg.baseTarget - targetReal) > 0.05)) {
+                    baseTarget = cfg.baseTarget;
+                } else if (extracted?.revenueTarget && extracted.revenueTarget > 0 && (targetReal === 0 || Math.abs(extracted.revenueTarget - targetReal) > 0.05)) {
+                    baseTarget = extracted.revenueTarget;
+                } else {
+                    baseTarget = revQd;
+                }
+            }
 
             // DT Trả góp & Tỷ lệ trả góp (%TG = DT Trả góp / DT Thực)
             let revInstallment = 0;
@@ -401,9 +422,20 @@ export default function ClusterReportPage() {
             const targetRate = cfg?.targetRate && cfg.targetRate > 0
                 ? cfg.targetRate
                 : globalPaceRate;
-            const targetOver = cfg?.targetOver && cfg.targetOver > 0
+            let targetOver = cfg?.targetOver && cfg.targetOver > 0
                 ? cfg.targetOver
                 : Number(((baseTarget * targetRate) / 100).toFixed(3));
+
+            // Tự động kiểm tra và đồng bộ lại targetOver nếu targetOver cũ bị tính theo targetReal (lỗi cũ)
+            if (cfg?.targetOver && cfg?.targetRate && targetReal > 0) {
+                const impliedBase = (cfg.targetOver / cfg.targetRate) * 100;
+                if (Math.abs(impliedBase - targetReal) < 0.1 && Math.abs(impliedBase - baseTarget) > 0.5) {
+                    targetOver = Number(((baseTarget * targetRate) / 100).toFixed(3));
+                }
+            } else if (targetReal > 0 && Math.abs(targetOver - targetReal) < 0.05 && baseTarget !== targetReal) {
+                targetOver = Number(((baseTarget * targetRate) / 100).toFixed(3));
+            }
+
             const pctHtOver = targetOver > 0 ? (revQd / targetOver) * 100 : 0;
             const targetRemainingOver = Math.max(0, targetOver - revQd);
             const pctDkhtOver = targetOver > 0 ? (forecastRevenueQd / targetOver) * 100 : 0;
@@ -422,7 +454,7 @@ export default function ClusterReportPage() {
                 ? cfg.avg3Months
                 : ((extracted?.avg3Months && extracted.avg3Months > 0)
                     ? extracted.avg3Months
-                    : (rec.revenueTarget > 0 ? rec.revenueTarget * 0.9 : revQd * 0.95));
+                    : (baseTarget > 0 ? baseTarget * 0.9 : revQd * 0.95));
             const pctGrowth = avg3Months > 0 ? ((forecastRevenueQd - avg3Months) / avg3Months) * 100 : 0;
 
             rows.push({
@@ -435,6 +467,7 @@ export default function ClusterReportPage() {
                 revenueActual: revActual,
                 revenueQd: revQd,
                 baseTarget,
+                targetReal: targetReal > 0 ? targetReal : undefined,
                 pctHtStandard,
                 targetRemainingStandard,
                 forecastRevenueQd,
@@ -1236,8 +1269,11 @@ export default function ClusterReportPage() {
                                                             {formatNumberVal(row.revenueQd)}
                                                         </td>
 
-                                                        {/* 5. TARGET */}
-                                                        <td className="py-2.5 px-2 text-center font-black border-r border-slate-100 text-slate-900">
+                                                        {/* 5. TARGET (Target DTQĐ Chuẩn Hệ Thống) */}
+                                                        <td
+                                                            className="py-2.5 px-2 text-center font-black border-r border-slate-100 text-slate-900"
+                                                            title={row.targetReal ? `Target DTQĐ: ${formatNumberVal(row.baseTarget)} • Target DT Thực: ${formatNumberVal(row.targetReal)}` : `Target DTQĐ: ${formatNumberVal(row.baseTarget)}`}
+                                                        >
                                                             {formatNumberVal(row.baseTarget)}
                                                         </td>
 

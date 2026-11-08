@@ -7,7 +7,8 @@ export interface ClusterStoreRow {
     // === BẢNG 1: DỮ LIỆU CHUẨN CỦA HỆ THỐNG ===
     revenueActual: number;           // DT thực
     revenueQd: number;               // Lũy kế DTQĐ
-    baseTarget: number;              // Target (Target chuẩn hệ thống)
+    baseTarget: number;              // Target (Target chuẩn DTQĐ hệ thống)
+    targetReal?: number;             // Target DT Thực (đối soát)
     pctHtStandard: number;           // %HT chuẩn
     targetRemainingStandard: number; // Target còn lại
     forecastRevenueQd: number;       // DTQĐ Dự kiến

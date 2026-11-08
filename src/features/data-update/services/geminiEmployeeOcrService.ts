@@ -71,11 +71,19 @@ const CANDIDATE_MODELS = STANDARD_GEMINI_MODELS;
 /**
  * Prompt chuyên biệt cho trích xuất DOANH THU (DT-QĐ và DT-THỰC)
  */
-function buildRevenueOcrPrompt(): string {
+function buildRevenueOcrPrompt(mode: 'QD' | 'REAL' | 'ALL' = 'ALL'): string {
+    const isQd = mode === 'QD';
+    const isReal = mode === 'REAL';
+
     return `
 Bạn là chuyên gia phân tích dữ liệu kinh doanh bán lẻ từ ảnh chụp màn hình BI.
-Hình ảnh được gửi gồm bảng DOANH THU QUY ĐỔI (DT-QĐ) và/hoặc DOANH THU THỰC (DT-THỰC) theo nhân viên.
-(LƯU Ý: Một ảnh có thể chứa đồng thời CẢ 2 BẢNG XẾP CHỒNG: Bảng trên là DOANH THU QĐ, bảng dưới là DOANH THU THỰC & DT TRẢ GÓP).
+${isQd 
+    ? 'Hình ảnh được gửi gồm các trang ảnh chụp màn hình bảng DOANH THU QUY ĐỔI (DT-QĐ) theo nhân viên (có thể gồm nhiều ảnh chụp cuộn nối tiếp nhau do ST có đông nhân viên).' 
+    : isReal 
+        ? 'Hình ảnh được gửi gồm các trang ảnh chụp màn hình bảng DOANH THU THỰC & TRẢ GÓP (DT-THỰC) theo nhân viên (có thể gồm nhiều ảnh chụp cuộn nối tiếp nhau do ST có đông nhân viên).' 
+        : 'Hình ảnh được gửi gồm bảng DOANH THU QUY ĐỔI (DT-QĐ) và/hoặc DOANH THU THỰC (DT-THỰC) theo nhân viên.'
+}
+(LƯU Ý QUAN TRỌNG: Hãy trích xuất TẤT CẢ các nhân viên xuất hiện trên TẤT CẢ các ảnh được cung cấp).
 
 YÊU CẦU TRÍCH XUẤT:
 1. Nhận diện từng nhân viên qua Mã NV (ví dụ "260732", "27560", "249041", "267997", "22838", "4614").
@@ -83,8 +91,8 @@ YÊU CẦU TRÍCH XUẤT:
 3. DOANH THU & ĐỊNH DẠNG SỐ QUAN TRỌNG:
    - DẤU PHẨY ',' LÀ DẤU PHÂN CÁCH HÀNG NGHÌN. KHÔNG PHẢI DẤU PHẨY THẬP PHÂN.
    - VÍ DỤ: "4,237" -> 4237; "4,146" -> 4146; "3,405" -> 3405; "3,361" -> 3361; "3,221" -> 3221; "3,143" -> 3143; "1,799" -> 1799; "1,172" -> 1172.
-   - revenueQd: lấy từ cột DOANH THU QĐ (ví dụ "4,237" -> 4237).
-   - revenueReal: lấy từ cột DOANH THU thực (ví dụ "3,221" -> 3221).
+   - revenueQd: lấy từ cột DOANH THU QĐ (ví dụ "4,237" -> 4237). ${isReal ? '(Nếu ảnh chỉ có DT Thực thì để 0)' : ''}
+   - revenueReal: lấy từ cột DOANH THU thực (ví dụ "3,221" -> 3221). ${isQd ? '(Nếu ảnh chỉ có DT-QĐ thì để 0)' : ''}
    - installmentReal: lấy từ cột DT TRẢ GÓP (ví dụ "1,799" -> 1799).
    - installmentRate: tính tỷ lệ % = (installmentReal / revenueReal) * 100. Làm tròn 2 chữ số thập phân.
    - ĐƠN VỊ TIỀN TỆ: Giữ nguyên đơn vị trên ảnh (triệu đồng), không nhân 1,000,000.
@@ -463,8 +471,10 @@ function processEmulationChunkResult(
 export async function extractAndMergeEmployeeImages(
     apiKey: string,
     files: {
-        qdFile: File | null;
-        realFile: File | null;
+        qdFile?: File | null;
+        qdFiles?: File[];
+        realFile?: File | null;
+        realFiles?: File[];
         emulationFiles: File[];
     },
     systemEmployees: EmployeeItem[] = [],
@@ -475,26 +485,36 @@ export async function extractAndMergeEmployeeImages(
         campaignDict?: Array<{ raw_key: string; display_name: string }>;
     }
 ): Promise<EmployeeOcrResult> {
-    const { qdFile, realFile, emulationFiles } = files;
-    const hasRevenue = Boolean(qdFile || realFile);
+    const qdFilesList: File[] = files.qdFiles && files.qdFiles.length > 0
+        ? files.qdFiles
+        : (files.qdFile ? [files.qdFile] : []);
+    const realFilesList: File[] = files.realFiles && files.realFiles.length > 0
+        ? files.realFiles
+        : (files.realFile ? [files.realFile] : []);
+    const emulationFiles = files.emulationFiles || [];
+
+    const totalRevenueFiles = qdFilesList.length + realFilesList.length;
     const totalEmulation = emulationFiles.length;
 
-    if (!hasRevenue && totalEmulation === 0) {
+    if (totalRevenueFiles === 0 && totalEmulation === 0) {
         return { success: false, employees: [], errors: ['Chưa chọn hình ảnh nào để trích xuất.'] };
     }
 
     onProgress?.('Đang nén và tối ưu hóa kích thước hình ảnh...', 5);
 
-    // 1. Nén ảnh Doanh thu
-    const revenueImages: Array<{ data: string; mimeType: string }> = [];
-    if (qdFile) {
-        revenueImages.push(await prepareImageForOcr(qdFile));
-    }
-    if (realFile) {
-        revenueImages.push(await prepareImageForOcr(realFile));
+    // 1. Nén ảnh Doanh thu QĐ
+    const preparedQdImages: Array<{ data: string; mimeType: string }> = [];
+    for (let i = 0; i < qdFilesList.length; i++) {
+        preparedQdImages.push(await prepareImageForOcr(qdFilesList[i]));
     }
 
-    // 2. Nén ảnh Thi đua
+    // 2. Nén ảnh Doanh thu Thực
+    const preparedRealImages: Array<{ data: string; mimeType: string }> = [];
+    for (let i = 0; i < realFilesList.length; i++) {
+        preparedRealImages.push(await prepareImageForOcr(realFilesList[i]));
+    }
+
+    // 3. Nén ảnh Thi đua
     const preparedEmulationImages: Array<{ data: string; mimeType: string }> = [];
     for (let i = 0; i < emulationFiles.length; i++) {
         preparedEmulationImages.push(await prepareImageForOcr(emulationFiles[i]));
@@ -505,51 +525,32 @@ export async function extractAndMergeEmployeeImages(
     const detectedMappings = new Map<string, CampaignMappingItem>();
     let detectedTimestamp: string | undefined;
 
-    // Chia nhỏ danh sách ảnh thi đua thành các lô (Mỗi lô 3 ảnh)
-    const CHUNK_SIZE = 3;
-    const emuChunks: Array<Array<{ data: string; mimeType: string }>> = [];
-    for (let i = 0; i < preparedEmulationImages.length; i += CHUNK_SIZE) {
-        emuChunks.push(preparedEmulationImages.slice(i, i + CHUNK_SIZE));
-    }
+    // Helper merge nhân sự từ các lô doanh thu
+    const mergeRevenueEmployees = (revEmployees: any[]) => {
+        revEmployees.forEach(e => {
+            const empId = String(e.employeeId || '').trim();
+            const name = String(e.fullName || '').trim();
+            if (!empId || empId === 'online' || name.toLowerCase().includes('online - 18001060')) return;
 
-    const totalSteps = (hasRevenue ? 1 : 0) + emuChunks.length;
-    let currentStep = 0;
+            const revQd = cleanBiNumber(e.revenueQd);
+            const revReal = cleanBiNumber(e.revenueReal);
+            const instReal = cleanBiNumber(e.installmentReal);
+            const instRate = e.installmentRate !== undefined && e.installmentRate !== null
+                ? cleanBiNumber(e.installmentRate)
+                : (revReal > 0 ? Number(((instReal / revReal) * 100).toFixed(2)) : 0);
 
-    // =========================================================================
-    // GIAI ĐOẠN 1: TRÍCH XUẤT DOANH THU CỐT LÕI (DT-QĐ & DT-THỰC)
-    // =========================================================================
-    if (hasRevenue) {
-        currentStep++;
-        const pct = Math.round((currentStep / (totalSteps + 1)) * 90);
-        onProgress?.(`Đang trích xuất Doanh thu DT-QĐ & DT-Thực (Đợt ${currentStep}/${totalSteps})...`, pct);
-
-        try {
-            const revParsed = await callGeminiVisionJson(
-                apiKey,
-                buildRevenueOcrPrompt(),
-                revenueImages,
-                60000,
-                keySource,
-                (msg) => onProgress?.(`Doanh thu: ${msg}`, pct)
-            );
-
-            if (revParsed.screenshotTimestamp) {
-                detectedTimestamp = revParsed.screenshotTimestamp;
-            }
-
-            const revEmployees: any[] = Array.isArray(revParsed.employees) ? revParsed.employees : [];
-            revEmployees.forEach(e => {
-                const empId = String(e.employeeId || '').trim();
-                const name = String(e.fullName || '').trim();
-                if (!empId || empId === 'online' || name.toLowerCase().includes('online - 18001060')) return;
-
-                const revQd = cleanBiNumber(e.revenueQd);
-                const revReal = cleanBiNumber(e.revenueReal);
-                const instReal = cleanBiNumber(e.installmentReal);
-                const instRate = e.installmentRate !== undefined && e.installmentRate !== null
-                    ? cleanBiNumber(e.installmentRate)
-                    : (revReal > 0 ? Number(((instReal / revReal) * 100).toFixed(2)) : 0);
-
+            if (employeeMap.has(empId)) {
+                const existing = employeeMap.get(empId)!;
+                if (revQd > 0) existing.revenueQd = revQd;
+                if (revReal > 0) existing.revenueReal = revReal;
+                if (instReal > 0) {
+                    existing.installmentReal = instReal;
+                    existing.installmentRate = instRate;
+                }
+                if (name && (name.length > existing.fullName.length || existing.fullName.includes('...')) && !name.includes('...')) {
+                    existing.fullName = name;
+                }
+            } else {
                 employeeMap.set(empId, {
                     employeeId: empId,
                     fullName: name,
@@ -560,10 +561,107 @@ export async function extractAndMergeEmployeeImages(
                     campaigns: {},
                     campaignDetails: []
                 });
-            });
+            }
+        });
+    };
+
+    // Chia nhỏ danh sách ảnh theo lô (Mỗi lô 2-3 ảnh để xử lý ổn định, không timeout)
+    const REV_CHUNK_SIZE = 2;
+    const qdChunks: Array<Array<{ data: string; mimeType: string }>> = [];
+    for (let i = 0; i < preparedQdImages.length; i += REV_CHUNK_SIZE) {
+        qdChunks.push(preparedQdImages.slice(i, i + REV_CHUNK_SIZE));
+    }
+
+    const realChunks: Array<Array<{ data: string; mimeType: string }>> = [];
+    for (let i = 0; i < preparedRealImages.length; i += REV_CHUNK_SIZE) {
+        realChunks.push(preparedRealImages.slice(i, i + REV_CHUNK_SIZE));
+    }
+
+    // Chia nhỏ danh sách ảnh thi đua thành các lô (Mỗi lô 3 ảnh)
+    const CHUNK_SIZE = 3;
+    const emuChunks: Array<Array<{ data: string; mimeType: string }>> = [];
+    for (let i = 0; i < preparedEmulationImages.length; i += CHUNK_SIZE) {
+        emuChunks.push(preparedEmulationImages.slice(i, i + CHUNK_SIZE));
+    }
+
+    const totalSteps = qdChunks.length + realChunks.length + emuChunks.length;
+    let currentStep = 0;
+
+    // =========================================================================
+    // GIAI ĐOẠN 1A: TRÍCH XUẤT DOANH THU QUY ĐỔI (DT-QĐ)
+    // =========================================================================
+    for (let qIdx = 0; qIdx < qdChunks.length; qIdx++) {
+        currentStep++;
+        const chunk = qdChunks[qIdx];
+        const fromImg = qIdx * REV_CHUNK_SIZE + 1;
+        const toImg = Math.min((qIdx + 1) * REV_CHUNK_SIZE, qdFilesList.length);
+        const pct = Math.round((currentStep / (totalSteps + 1)) * 90);
+
+        onProgress?.(
+            `Đang trích xuất Doanh thu QĐ (ảnh ${fromImg}${toImg > fromImg ? ` - ${toImg}` : ''}/${qdFilesList.length})...`,
+            pct
+        );
+
+        try {
+            const revParsed = await callGeminiVisionJson(
+                apiKey,
+                buildRevenueOcrPrompt('QD'),
+                chunk,
+                60000,
+                keySource,
+                (msg) => onProgress?.(`DT-QĐ (đợt ${qIdx + 1}): ${msg}`, pct)
+            );
+
+            if (revParsed.screenshotTimestamp && !detectedTimestamp) {
+                detectedTimestamp = revParsed.screenshotTimestamp;
+            }
+
+            const revEmployees: any[] = Array.isArray(revParsed.employees) ? revParsed.employees : [];
+            mergeRevenueEmployees(revEmployees);
         } catch (err: any) {
-            console.error('Lỗi khi quét ảnh Doanh thu:', err);
-            if (emuChunks.length === 0) throw err;
+            console.error(`Lỗi khi quét ảnh DT-QĐ đợt ${qIdx + 1}:`, err);
+            if (qdChunks.length === 1 && realChunks.length === 0 && emuChunks.length === 0) {
+                throw err;
+            }
+        }
+    }
+
+    // =========================================================================
+    // GIAI ĐOẠN 1B: TRÍCH XUẤT DOANH THU THỰC & TRẢ GÓP (DT-THỰC)
+    // =========================================================================
+    for (let rIdx = 0; rIdx < realChunks.length; rIdx++) {
+        currentStep++;
+        const chunk = realChunks[rIdx];
+        const fromImg = rIdx * REV_CHUNK_SIZE + 1;
+        const toImg = Math.min((rIdx + 1) * REV_CHUNK_SIZE, realFilesList.length);
+        const pct = Math.round((currentStep / (totalSteps + 1)) * 90);
+
+        onProgress?.(
+            `Đang trích xuất Doanh thu Thực & Trả góp (ảnh ${fromImg}${toImg > fromImg ? ` - ${toImg}` : ''}/${realFilesList.length})...`,
+            pct
+        );
+
+        try {
+            const revParsed = await callGeminiVisionJson(
+                apiKey,
+                buildRevenueOcrPrompt('REAL'),
+                chunk,
+                60000,
+                keySource,
+                (msg) => onProgress?.(`DT-Thực (đợt ${rIdx + 1}): ${msg}`, pct)
+            );
+
+            if (revParsed.screenshotTimestamp && !detectedTimestamp) {
+                detectedTimestamp = revParsed.screenshotTimestamp;
+            }
+
+            const revEmployees: any[] = Array.isArray(revParsed.employees) ? revParsed.employees : [];
+            mergeRevenueEmployees(revEmployees);
+        } catch (err: any) {
+            console.error(`Lỗi khi quét ảnh DT-Thực đợt ${rIdx + 1}:`, err);
+            if (realChunks.length === 1 && qdChunks.length === 0 && emuChunks.length === 0) {
+                throw err;
+            }
         }
     }
 

@@ -82,12 +82,12 @@ export default function ClusterTargetConfigModal({
                 const initial: Record<string, StoreItemState> = {};
                 rows.forEach(r => {
                     const cfg = loadedConfigs.find(c => c.storeName === r.storeName);
-                    // Xác định Target Gốc tham chiếu (nếu r.revenueTarget có thì lấy, hoặc ước lượng)
-                    const baseTarget = cfg?.baseTarget && cfg.baseTarget > 0
-                        ? cfg.baseTarget
-                        : (r.baseTarget && r.baseTarget > 0
-                            ? r.baseTarget
-                            : (r.revenueActual > 0 ? Number((r.revenueActual * 1.3).toFixed(3)) : 4.5));
+                    // Xác định Target Gốc tham chiếu (LUÔN LẤY TARGET DTQĐ TỪ r.baseTarget)
+                    const baseTarget = r.baseTarget && r.baseTarget > 0
+                        ? r.baseTarget
+                        : (cfg?.baseTarget && cfg.baseTarget > 0
+                            ? cfg.baseTarget
+                            : (r.revenueQd > 0 ? r.revenueQd : (r.revenueActual > 0 ? Number((r.revenueActual * 1.3).toFixed(3)) : 4.5)));
 
                     // % Nhịp Target (mặc định theo cloudPace hoặc 100)
                     const targetRate = cfg?.targetRate && cfg.targetRate > 0
@@ -95,9 +95,17 @@ export default function ClusterTargetConfigModal({
                         : cloudPace;
 
                     // Target Vượt Trội
-                    const targetOver = cfg?.targetOver && cfg.targetOver > 0
+                    let targetOver = cfg?.targetOver && cfg.targetOver > 0
                         ? cfg.targetOver
                         : Number(((baseTarget * targetRate) / 100).toFixed(3));
+
+                    if (cfg?.targetOver && cfg?.targetRate) {
+                        const impliedBase = (cfg.targetOver / cfg.targetRate) * 100;
+                        if (Math.abs(impliedBase - baseTarget) > 0.5) {
+                            // Target Vượt Trội cũ bị tính theo targetReal sai lệch, tự động tính lại theo baseTarget DTQĐ
+                            targetOver = Number(((baseTarget * targetRate) / 100).toFixed(3));
+                        }
+                    }
 
                     // Doanh thu TB 3 tháng
                     const avg3Months = cfg?.avg3Months && cfg.avg3Months > 0
