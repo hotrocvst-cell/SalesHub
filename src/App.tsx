@@ -33,6 +33,7 @@ const UserStorePermissionPage = lazy(() => import('./features/admin-config/UserS
 const DataStatusPage = lazy(() => import('./features/data-status/DataStatusPage'));
 const VoucherClaimPage = lazy(() => import('./features/voucher/VoucherClaimPage'));
 const VoucherAdminPage = lazy(() => import('./features/voucher/VoucherAdminPage'));
+const OrderCodeGeneratorPage = lazy(() => import('./features/order-code-generator/OrderCodeGeneratorPage'));
 const XmusicPlaylistPage = lazy(() => import('./features/xmusic-playlist/XmusicPlaylistPage'));
 const GameArenaPage = lazy(() => import('./features/game-arena/GameArenaPage'));
 const SupportTicketPage = lazy(() => import('./features/support-ticket/SupportTicketPage'));
@@ -228,6 +229,11 @@ export default function App() {
                                 <Route path="/quan-ly-voucher" element={
                                     <ProtectedRoute path="/quan-ly-voucher">
                                         <VoucherAdminPage />
+                                    </ProtectedRoute>
+                                } />
+                                <Route path="/tao-ma-don-hang" element={
+                                    <ProtectedRoute path="/tao-ma-don-hang">
+                                        <OrderCodeGeneratorPage />
                                     </ProtectedRoute>
                                 } />
                                 <Route path="/xmusic-playlist" element={

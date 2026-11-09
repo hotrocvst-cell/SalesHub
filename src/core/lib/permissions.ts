@@ -434,6 +434,22 @@ const RAW_DEFAULT_PAGE_PERMISSIONS: SystemPagePermission[] = [
         allowed_excel_roles: ['ADMIN']
     },
     {
+        page_key: 'tao_ma_don_hang',
+        page_name: 'Sinh Mã Đơn Hàng',
+        path: '/tao-ma-don-hang',
+        group_title: 'TIỆN ÍCH BÁN HÀNG',
+        description: 'Công cụ tự động sinh hàng loạt mã đơn hàng tăng lũy kế ngẫu nhiên phục vụ kiểm thử và nghiệp vụ',
+        is_enabled: true,
+        allowed_roles: ['ADMIN'], // Theo Rule 4 GEMINI.MD: Mặc định chỉ duy nhất ADMIN
+        order_index: 11.5,
+        badge_enabled: true,
+        badge_icon: '⚡',
+        badge_text: 'Mới',
+        badge_color: 'blue',
+        allow_excel_export: false,
+        allowed_excel_roles: ['ADMIN']
+    },
+    {
         page_key: 'xmusic_playlist',
         page_name: 'Xmusic Playlist',
         path: '/xmusic-playlist',

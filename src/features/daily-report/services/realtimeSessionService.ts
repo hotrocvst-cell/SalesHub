@@ -373,6 +373,62 @@ export function convertStoreReportingDataToSessions(
 }
 
 /**
+ * Chuyển đổi ngược lại danh sách phiên RealtimeStoreSessionRecord[] từ Cloud thành StoreReportingData[]
+ * phục vụ việc rà soát và chỉnh sửa số liệu trên giao diện ManualDataEntryModule
+ */
+export function convertSessionsToStoreReportingData(
+    sessions: RealtimeStoreSessionRecord[]
+): StoreReportingData[] {
+    if (!sessions || sessions.length === 0) return [];
+
+    return sessions.map(sess => {
+        const rev = (sess.revenue_data || {}) as any;
+        const emus: Record<string, EmulationOcrItem> = {};
+
+        if (Array.isArray(sess.emulation_data)) {
+            sess.emulation_data.forEach((item: any) => {
+                const progName = item.rawHeader || item.label || '';
+                if (progName) {
+                    emus[progName] = {
+                        programName: progName,
+                        unit: item.unit || 'DOANH THU',
+                        target: Number(item.target) || 0,
+                        actual: Number(item.actual) || 0,
+                        completionRate: item.pctHT !== undefined && item.pctHT !== null ? Number(item.pctHT) : undefined,
+                        forecastRate: item.pctDK !== undefined && item.pctDK !== null ? Number(item.pctDK) : undefined
+                    };
+                }
+            });
+        }
+
+        const revQd = Number(rev.rev ?? rev.rawRev ?? 0);
+        const tgQd = Number(rev.target ?? 0);
+        const qQd = Number(rev.sl ?? 0);
+        const revReal = Number(rev.revenueActual ?? 0);
+        const tgReal = Number(rev.targetActual ?? 0);
+        const qReal = Number(rev.quantityActual ?? 0);
+        const instReal = Number(rev.installmentActual ?? rev.dtTraGop ?? 0);
+        const instRateReal = Number(rev.installmentRateActual ?? rev.pctTraGop ?? 0);
+
+        return {
+            storeCode: '',
+            storeRawName: sess.store_name,
+            storeShortName: rev.shortName || getShortStoreName(sess.store_name),
+            revenueQd: revQd,
+            targetQd: tgQd,
+            quantityQd: qQd,
+            completionRateQd: rev.pct !== undefined ? Number(rev.pct) : (tgQd > 0 ? (revQd / tgQd) * 100 : 0),
+            revenueReal: revReal,
+            targetReal: tgReal,
+            quantityReal: qReal,
+            installmentReal: instReal,
+            installmentRateReal: instRateReal,
+            emulations: emus
+        };
+    });
+}
+
+/**
  * Trích xuất dữ liệu Báo cáo (CampaignItem[], RevenueItem map, RevenueItem list) từ danh sách sessions
  */
 export function convertSessionsToDailyReportState(

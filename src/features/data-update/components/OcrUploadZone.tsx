@@ -257,9 +257,8 @@ export default function OcrUploadZone({
                                 <FileImage className="w-3.5 h-3.5 text-blue-600" />
                                 <span>1. Doanh Thu QĐ</span>
                             </span>
-                            <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded font-mono ${
-                                currentQdFiles.length > 0 ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-800'
-                            }`}>
+                            <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded font-mono ${currentQdFiles.length > 0 ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-800'
+                                }`}>
                                 {isMultiQd ? `${currentQdFiles.length} ảnh` : (qdFile ? '1 file' : '0 file')}
                             </span>
                         </div>
@@ -373,9 +372,8 @@ export default function OcrUploadZone({
                                 <FileImage className="w-3.5 h-3.5 text-emerald-600" />
                                 <span>2. Doanh Thu Thực</span>
                             </span>
-                            <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded font-mono ${
-                                currentRealFiles.length > 0 ? 'bg-emerald-600 text-white' : 'bg-emerald-100 text-emerald-800'
-                            }`}>
+                            <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded font-mono ${currentRealFiles.length > 0 ? 'bg-emerald-600 text-white' : 'bg-emerald-100 text-emerald-800'
+                                }`}>
                                 {isMultiReal ? `${currentRealFiles.length} ảnh` : (realFile ? '1 file' : '0 file')}
                             </span>
                         </div>
@@ -496,11 +494,10 @@ export default function OcrUploadZone({
                                     <button
                                         type="button"
                                         onClick={() => onEmulationModeChange('CLUSTER')}
-                                        className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition cursor-pointer flex items-center gap-1 ${
-                                            emulationMode === 'CLUSTER'
-                                                ? 'bg-purple-600 text-white shadow-2xs font-black'
-                                                : 'text-purple-800 hover:text-purple-950'
-                                        }`}
+                                        className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition cursor-pointer flex items-center gap-1 ${emulationMode === 'CLUSTER'
+                                            ? 'bg-purple-600 text-white shadow-2xs font-black'
+                                            : 'text-purple-800 hover:text-purple-950'
+                                            }`}
                                         title="Nạp cả cụm (dữ liệu ảnh có đồng thời tên nhiều ST)"
                                     >
                                         <span>🌐 Cả Cụm</span>
@@ -508,11 +505,10 @@ export default function OcrUploadZone({
                                     <button
                                         type="button"
                                         onClick={() => onEmulationModeChange('SINGLE_STORE')}
-                                        className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition cursor-pointer flex items-center gap-1 ${
-                                            emulationMode === 'SINGLE_STORE'
-                                                ? 'bg-purple-600 text-white shadow-2xs font-black'
-                                                : 'text-purple-800 hover:text-purple-950'
-                                        }`}
+                                        className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition cursor-pointer flex items-center gap-1 ${emulationMode === 'SINGLE_STORE'
+                                            ? 'bg-purple-600 text-white shadow-2xs font-black'
+                                            : 'text-purple-800 hover:text-purple-950'
+                                            }`}
                                         title="Nạp đích danh theo từng ST có thể nạp"
                                     >
                                         <span>🏪 Từng ST</span>
@@ -529,7 +525,7 @@ export default function OcrUploadZone({
                             <p className="text-[10px] text-purple-800 bg-purple-50/80 border border-purple-200 px-2 py-1 rounded-lg mt-1 font-medium leading-relaxed">
                                 {mode === 'STORE' ? (
                                     <>
-                                        🌐 <strong>Ảnh bảng thi đua cụm:</strong> Dữ liệu có đồng thời tên nhiều ST. AI tự động tách và gán cho từng ST.
+                                        🌐 <strong>Ảnh bảng thi đua cụm:</strong> Dữ liệu có đồng thời tên nhiều ST.
                                     </>
                                 ) : (
                                     <>
@@ -539,7 +535,7 @@ export default function OcrUploadZone({
                             </p>
                         ) : (
                             <p className="text-[10px] text-purple-900 bg-purple-50/90 border border-purple-200 px-2 py-1 rounded-lg mt-1 font-medium leading-relaxed">
-                                🏪 <strong>Đích danh từng ST:</strong> Chọn ST bạn có quyền nạp, sau đó nạp ảnh thẻ Mobile (2 cột) hoặc bảng BI của ST đó.
+                                🏪 <strong>Đích danh từng ST:</strong> Tải lên ảnh theo đúng ST cần nạp.
                             </p>
                         )}
 
@@ -678,7 +674,7 @@ export default function OcrUploadZone({
                                             <Plus className="w-3.5 h-3.5" />
                                             <span>
                                                 {entry.files && entry.files.length > 0
-                                                    ? `+ Thêm ảnh thi đua (${entry.files.length} ảnh)...`
+                                                    ? `Thêm ảnh thi đua (${entry.files.length} ảnh)...`
                                                     : 'Tải ảnh thi đua cho ST này'}
                                             </span>
                                         </label>

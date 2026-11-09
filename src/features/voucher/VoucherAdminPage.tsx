@@ -23,8 +23,10 @@ import {
     FileSpreadsheet,
     Eye,
     EyeOff,
-    Edit3
+    Edit3,
+    Hash
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../../shared/contexts/AuthContext';
 import { useExcelExportPermission } from '../../shared/hooks/useExcelExportPermission';
 import CloudDataSyncStatusBanner from '../../shared/components/report/CloudDataSyncStatusBanner';
@@ -637,6 +639,15 @@ export default function VoucherAdminPage() {
                             <Code className="w-4 h-4" />
                         </button>
                     )}
+
+                    <Link
+                        to="/tao-ma-don-hang"
+                        className="px-2.5 py-1.5 rounded-xl border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700 transition cursor-pointer text-xs font-bold flex items-center gap-1.5 shrink-0"
+                        title="Mở công cụ tự động sinh mã đơn hàng hàng loạt"
+                    >
+                        <Hash className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Sinh Mã Đơn</span>
+                    </Link>
 
                     <button
                         type="button"

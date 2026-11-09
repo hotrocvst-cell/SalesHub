@@ -27,20 +27,14 @@ import {
     Store,
     Info,
     Edit3,
-    Camera,
-    Sparkles,
-    KeyRound
+    Camera
 } from 'lucide-react';
 import ReportActionButtons from '../../shared/components/report/ReportActionButtons';
 import CloudDataSyncStatusBanner from '../../shared/components/report/CloudDataSyncStatusBanner';
 import type { AssessmentTemplate } from '../../shared/components/report/ReportAssessmentModal';
-import GeminiApiKeyModal from '../data-update/components/GeminiApiKeyModal';
-import { resolveActiveGeminiKey, type ActiveKeyInfo } from '../data-update/services/geminiApiKeyService';
 
 import {
     DAILY_REPORT_STORAGE_KEYS,
-    parseEmulationData,
-    parseRevenueData,
     type CampaignItem,
     type RevenueItem
 } from './utils/dailyReportParsers';
@@ -53,12 +47,10 @@ import {
 } from './services/realtimeSessionService';
 import RealtimeSessionBanner from './components/RealtimeSessionBanner';
 import RealtimeDataUpdateModal from './components/RealtimeDataUpdateModal';
-import QuickStoreEmulationModal from './components/QuickStoreEmulationModal';
 import RealtimeSessionManagerModal from './components/RealtimeSessionManagerModal';
 
 import DailyRealtimeTable from './components/DailyRealtimeTable';
 import DailyRemainingTable from './components/DailyRemainingTable';
-import DailyReportInputSection from './components/DailyReportInputSection';
 import { useDailyRemainingData } from './hooks/useDailyRemainingData';
 
 export default function DailyReportPage() {
@@ -78,30 +70,9 @@ export default function DailyReportPage() {
     const [isLoadingSessions, setIsLoadingSessions] = useState<boolean>(false);
     const [isTableMissing, setIsTableMissing] = useState<boolean>(false);
     const [isUpdateModalOpen, setIsUpdateModalOpen] = useState<boolean>(false);
-    const [isQuickEmulationModalOpen, setIsQuickEmulationModalOpen] = useState<boolean>(false);
+    const [updateModalInitialTab, setUpdateModalInitialTab] = useState<'ocr' | 'manual'>('ocr');
     const [isManagerModalOpen, setIsManagerModalOpen] = useState<boolean>(false);
-    const [isKeyModalOpen, setIsKeyModalOpen] = useState<boolean>(false);
-    const [keyInfo, setKeyInfo] = useState<ActiveKeyInfo>(() => resolveActiveGeminiKey());
-    const [isQuotaExceeded, setIsQuotaExceeded] = useState<boolean>(false);
     const [availableStores, setAvailableStores] = useState<StoreItem[]>([]);
-    const [showLegacyPasteInput, setShowLegacyPasteInput] = useState<boolean>(false);
-
-    // Input states đồng bộ LocalStorage toàn hệ thống
-    const [emulationText, setEmulationText] = useState<string>(() => {
-        try {
-            return localStorage.getItem(DAILY_REPORT_STORAGE_KEYS.EMULATION) || '';
-        } catch { return ''; }
-    });
-    const [revenueText, setRevenueText] = useState<string>(() => {
-        try {
-            return localStorage.getItem(DAILY_REPORT_STORAGE_KEYS.REVENUE) || '';
-        } catch { return ''; }
-    });
-    const [realRevenueText, setRealRevenueText] = useState<string>(() => {
-        try {
-            return localStorage.getItem(DAILY_REPORT_STORAGE_KEYS.REAL_REVENUE) || '';
-        } catch { return ''; }
-    });
 
     // Dữ liệu bóc tách
     const [allData, setAllData] = useState<CampaignItem[]>([]);
@@ -114,7 +85,6 @@ export default function DailyReportPage() {
     });
 
     // Tùy chọn giao diện
-    const [isInputCollapsed, setIsInputCollapsed] = useState<boolean>(false);
     const [isPointsEnabled, setIsPointsEnabled] = useState<boolean>(false);
     const [summaryMode, setSummaryMode] = useState<number>(0);
     const [isExporting, setIsExporting] = useState<boolean>(false);
@@ -128,28 +98,6 @@ export default function DailyReportPage() {
         setToastMessage(msg);
         setTimeout(() => setToastMessage(null), 2500);
     };
-
-    // Tự động lưu LocalStorage
-    useEffect(() => {
-        try {
-            if (emulationText) localStorage.setItem(DAILY_REPORT_STORAGE_KEYS.EMULATION, emulationText);
-            else localStorage.removeItem(DAILY_REPORT_STORAGE_KEYS.EMULATION);
-        } catch { }
-    }, [emulationText]);
-
-    useEffect(() => {
-        try {
-            if (revenueText) localStorage.setItem(DAILY_REPORT_STORAGE_KEYS.REVENUE, revenueText);
-            else localStorage.removeItem(DAILY_REPORT_STORAGE_KEYS.REVENUE);
-        } catch { }
-    }, [revenueText]);
-
-    useEffect(() => {
-        try {
-            if (realRevenueText) localStorage.setItem(DAILY_REPORT_STORAGE_KEYS.REAL_REVENUE, realRevenueText);
-            else localStorage.removeItem(DAILY_REPORT_STORAGE_KEYS.REAL_REVENUE);
-        } catch { }
-    }, [realRevenueText]);
 
     useEffect(() => {
         try {
@@ -173,17 +121,6 @@ export default function DailyReportPage() {
                 setSessionSummary(parsed.sessionSummary);
                 setIsLoadingSessions(false);
                 return;
-            }
-        }
-
-        // Dự phòng: Nếu trên Cloud chưa có dữ liệu, nhưng có text cũ trong localStorage thì bóc tách
-        if (emulationText.trim() || revenueText.trim()) {
-            const emuParsed = parseEmulationData(emulationText, currentDict);
-            const { revMap, revList } = parseRevenueData(revenueText, realRevenueText);
-            if (emuParsed.length > 0 || Object.keys(revMap).length > 0) {
-                setAllData(emuParsed);
-                setRevenueData(revMap);
-                setRevenueStores(revList);
             }
         }
         setIsLoadingSessions(false);
@@ -218,39 +155,6 @@ export default function DailyReportPage() {
         showToast(`🎉 Đã cập nhật phiên Realtime mới cho ${savedSessions.length} ST từ Cloud!`);
     };
 
-    // Xử lý nút bóc tách
-    const handleProcessData = () => {
-        const emuParsed = parseEmulationData(emulationText, campaignsDict);
-        const { revMap, revList } = parseRevenueData(revenueText, realRevenueText);
-
-        if (emuParsed.length === 0 && Object.keys(revMap).length === 0) {
-            showToast('⚠️ Vui lòng dán dữ liệu Thi đua hoặc Doanh thu!');
-            return;
-        }
-
-        setAllData(emuParsed);
-        setRevenueData(revMap);
-        setRevenueStores(revList);
-        showToast(`✅ Đã bóc tách ${emuParsed.length} mục thi đua & ${revList.length} ST!`);
-    };
-
-    // Xóa trắng dữ liệu dán
-    const handleClearData = () => {
-        if (!window.confirm('Bạn có chắc muốn xóa trắng dữ liệu đang dán để nhập phiên mới?')) return;
-        setEmulationText('');
-        setRevenueText('');
-        setRealRevenueText('');
-        setAllData([]);
-        setRevenueData({});
-        setRevenueStores([]);
-        try {
-            localStorage.removeItem(DAILY_REPORT_STORAGE_KEYS.EMULATION);
-            localStorage.removeItem(DAILY_REPORT_STORAGE_KEYS.REVENUE);
-            localStorage.removeItem(DAILY_REPORT_STORAGE_KEYS.REAL_REVENUE);
-        } catch { }
-        showToast('Đã làm mới vùng dán số liệu!');
-    };
-
     // Doanh thu ST đang chọn
     const currentRevenue = useMemo(() => {
         const isCluster = selectedStore === 'Tổng' || selectedStore === 'all';
@@ -266,9 +170,8 @@ export default function DailyReportPage() {
     }, [revenueData, revenueStores, selectedStore, availableStores]);
 
     const hasInstallmentData = useMemo(() => {
-        if (realRevenueText.trim()) return true;
         return Object.values(revenueData).some(r => (r.dtTraGop || 0) > 0 || (r.pctTraGop || 0) > 0);
-    }, [realRevenueText, revenueData]);
+    }, [revenueData]);
 
     // Danh sách ST khả dụng (khử trùng lặp và phân quyền theo vai trò)
     const storeOptions = useMemo(() => {
@@ -533,7 +436,6 @@ export default function DailyReportPage() {
                 isAdmin={isAdmin}
                 onRefresh={() => loadRealtimeSessions()}
                 onOpenUpdateModal={() => setIsUpdateModalOpen(true)}
-                onOpenQuickEmulationModal={() => setIsQuickEmulationModalOpen(true)}
                 onOpenManagerModal={() => setIsManagerModalOpen(true)}
             />
 
@@ -595,37 +497,6 @@ export default function DailyReportPage() {
                 </div>
             </div>
 
-            {/* TÙY CHỌN DỰ PHÒNG: VÙNG DÁN VĂN BẢN CŨ (TẠM ẨN THEO YÊU CẦU) */}
-            <div className="flex items-center justify-between px-1" data-html2canvas-ignore="true" data-export-ignore="true">
-                <span className="text-[11px] text-slate-500 font-medium">
-                    Phương thức nhập liệu chính: <strong className="text-blue-700">OCR Hình Ảnh</strong>
-                </span>
-                <button
-                    type="button"
-                    onClick={() => setShowLegacyPasteInput(!showLegacyPasteInput)}
-                    className="text-[11px] text-slate-400 hover:text-blue-600 font-semibold transition cursor-pointer flex items-center gap-1"
-                >
-                    <Edit3 className="w-3 h-3" />
-                    <span>{showLegacyPasteInput ? '▲ Ẩn vùng dán text dự phòng' : '▼ Mở vùng dán text dự phòng'}</span>
-                </button>
-            </div>
-
-            {showLegacyPasteInput && (
-                <DailyReportInputSection
-                    emulationText={emulationText}
-                    setEmulationText={setEmulationText}
-                    revenueText={revenueText}
-                    setRevenueText={setRevenueText}
-                    realRevenueText={realRevenueText}
-                    setRealRevenueText={setRealRevenueText}
-                    onProcessData={handleProcessData}
-                    onClearData={handleClearData}
-                    isCollapsed={isInputCollapsed}
-                    onToggleCollapse={() => setIsInputCollapsed(!isInputCollapsed)}
-                    hasData={allData.length > 0 || Object.keys(revenueData).length > 0}
-                />
-            )}
-
             {/* THANH ĐIỀU KHIỂN & BỘ LỌC (QUY CHUẨN 10: ST NẰM HÀNG ĐẦU TIÊN) */}
             <div className="bg-slate-50/90 border border-slate-200/90 rounded-2xl p-3.5 sm:p-4 space-y-3">
                 {/* Dòng 1: Chọn ST & Nút Hành Động */}
@@ -637,44 +508,31 @@ export default function DailyReportPage() {
                                 <span>Cụm / ST</span>
                             </label>
                             <div className="flex items-center gap-1.5 flex-wrap">
+                                {realtimeSessions.length > 0 && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setUpdateModalInitialTab('manual');
+                                            setIsUpdateModalOpen(true);
+                                        }}
+                                        className="text-[11px] font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded-lg flex items-center gap-1 transition cursor-pointer"
+                                        title="Chỉnh sửa số liệu DTQĐ, DT Thực, Trả góp hoặc thi đua của phiên hiện tại trên Cloud"
+                                    >
+                                        <Edit3 className="w-3 h-3 text-emerald-600" />
+                                        <span>✏️ Sửa Số Liệu Phiên ({realtimeSessions.length} ST)</span>
+                                    </button>
+                                )}
                                 <button
                                     type="button"
-                                    onClick={() => setIsUpdateModalOpen(true)}
+                                    onClick={() => {
+                                        setUpdateModalInitialTab('ocr');
+                                        setIsUpdateModalOpen(true);
+                                    }}
                                     className="text-[11px] font-bold text-blue-700 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2 py-0.5 rounded-lg flex items-center gap-1 transition cursor-pointer"
-                                    title="Nạp doanh thu (DTQĐ, DT Thực, Trả góp) và thi đua qua OCR hoặc nhập tay trực quan"
+                                    title="Nạp doanh thu (DTQĐ, DT Thực, Trả góp) và thi đua qua OCR hoặc nhập tay (hỗ trợ nạp cả Cụm hoặc từng ST đích danh)"
                                 >
                                     <Camera className="w-3 h-3 text-blue-600" />
-                                    <span>📸 Nhập theo Cụm</span>
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setIsQuickEmulationModalOpen(true)}
-                                    className="text-[11px] font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded-lg flex items-center gap-1 transition cursor-pointer"
-                                    title="Nhập thi đua cho ST (hỗ trợ Ctrl+V hoặc kéo thả ảnh)"
-                                >
-                                    <Sparkles className="w-3 h-3 text-emerald-600" />
-                                    <span>📸 Thi Đua Từng ST</span>
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setIsKeyModalOpen(true)}
-                                    className={`text-[11px] font-bold px-2 py-0.5 rounded-lg flex items-center gap-1 transition cursor-pointer border ${
-                                        isQuotaExceeded
-                                            ? 'bg-amber-100 text-amber-900 border-amber-300 animate-pulse'
-                                            : !keyInfo.key
-                                            ? 'bg-rose-50 text-rose-700 border-rose-300'
-                                            : 'text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 border-slate-200'
-                                    }`}
-                                    title="Quản lý & kiểm tra hạn mức Google Gemini API Key (Hỗ trợ cấu hình nhiều Key dự phòng)"
-                                >
-                                    <KeyRound className={`w-3 h-3 ${isQuotaExceeded ? 'text-amber-700' : !keyInfo.key ? 'text-rose-600' : 'text-amber-600'}`} />
-                                    <span>
-                                        {isQuotaExceeded
-                                            ? '⚠️ Hết hạn ngạch'
-                                            : !keyInfo.key
-                                            ? 'Cài Key AI'
-                                            : `API Key AI${keyInfo.totalKeysCount > 1 ? ` (${keyInfo.totalKeysCount} key)` : ''}`}
-                                    </span>
+                                    <span>📸 Nạp Doanh Thu & Thi Đua</span>
                                 </button>
                             </div>
                         </div>
@@ -904,20 +762,10 @@ export default function DailyReportPage() {
                 campaignDict={campaignsDict}
                 isAdmin={isAdmin}
                 currentUserName={currentUser?.full_name || currentUser?.employee_id || 'ADMIN'}
+                existingSessions={realtimeSessions}
+                initialTab={updateModalInitialTab}
             />
 
-            {/* MODAL NẠP NHANH THI ĐUA TỪNG ST (THẺ MOBILE - HỖ TRỢ CTRL+V) */}
-            <QuickStoreEmulationModal
-                isOpen={isQuickEmulationModalOpen}
-                onClose={() => setIsQuickEmulationModalOpen(false)}
-                availableStores={availableStores}
-                existingSessions={realtimeSessions}
-                campaignDict={campaignsDict}
-                defaultSelectedStore={selectedStore}
-                isAdmin={isAdmin}
-                currentUserName={currentUser?.full_name || currentUser?.employee_id || 'ADMIN'}
-                onSavedSuccessfully={handleSavedSuccessfully}
-            />
 
             {/* MODAL QUẢN LÝ CÁC PHIÊN REALTIME CLOUD (DÀNH RIÊNG CHO ADMIN) */}
             {isAdmin && (
@@ -930,17 +778,6 @@ export default function DailyReportPage() {
                     onSessionsUpdated={() => loadRealtimeSessions()}
                 />
             )}
-            {/* MODAL CÀI ĐẶT & KIỂM TRA HẠN MỨC GEMINI API KEY */}
-            <GeminiApiKeyModal
-                isOpen={isKeyModalOpen}
-                onClose={() => setIsKeyModalOpen(false)}
-                isAdmin={isAdmin}
-                isQuotaExceeded={isQuotaExceeded}
-                onKeySaved={() => {
-                    setKeyInfo(resolveActiveGeminiKey());
-                    setIsQuotaExceeded(false);
-                }}
-            />
         </div>
     );
 }

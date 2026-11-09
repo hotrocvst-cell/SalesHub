@@ -29,6 +29,7 @@ import { formatDate, formatStoreDisplayName, getShortStoreName } from '../../../
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import {
     convertStoreReportingDataToSessions,
+    convertSessionsToStoreReportingData,
     saveRealtimeStoreSessions,
     type RealtimeStoreSessionRecord
 } from '../services/realtimeSessionService';
@@ -41,6 +42,8 @@ interface Props {
     campaignDict: CampaignDictItem[];
     isAdmin: boolean;
     currentUserName?: string;
+    existingSessions?: RealtimeStoreSessionRecord[];
+    initialTab?: 'ocr' | 'manual';
 }
 
 export default function RealtimeDataUpdateModal({
@@ -50,7 +53,9 @@ export default function RealtimeDataUpdateModal({
     availableStores,
     campaignDict,
     isAdmin,
-    currentUserName = 'ADMIN'
+    currentUserName = 'ADMIN',
+    existingSessions = [],
+    initialTab = 'ocr'
 }: Props) {
     if (!isOpen) return null;
 
@@ -58,7 +63,14 @@ export default function RealtimeDataUpdateModal({
     const effectiveIsAdmin = Boolean(isAdmin || authIsAdmin);
 
     // Tab chuyển đổi: 'ocr' (Tải ảnh trích xuất) hoặc 'manual' (Rà soát & Nhập trực quan)
-    const [activeTab, setActiveTab] = useState<'ocr' | 'manual'>('ocr');
+    const [activeTab, setActiveTab] = useState<'ocr' | 'manual'>(initialTab);
+
+    // Đồng bộ tab khi mở modal
+    useEffect(() => {
+        if (isOpen && initialTab) {
+            setActiveTab(initialTab);
+        }
+    }, [isOpen, initialTab]);
 
     // 1. Files upload
     const [qdFile, setQdFile] = useState<File | null>(null);
@@ -113,6 +125,31 @@ export default function RealtimeDataUpdateModal({
     const [storesData, setStoresData] = useState<StoreReportingData[]>([]);
     const [isSaving, setIsSaving] = useState<boolean>(false);
     const [modalToast, setModalToast] = useState<string>('');
+
+    // Tự động nạp số liệu từ existingSessions khi mở modal ở tab rà soát & chỉnh sửa (manual)
+    useEffect(() => {
+        if (isOpen && initialTab === 'manual' && storesData.length === 0 && existingSessions && existingSessions.length > 0) {
+            const converted = convertSessionsToStoreReportingData(existingSessions);
+            setStoresData(converted);
+            if (existingSessions[0]?.screenshot_time_str) {
+                setScreenshotTimestamp(existingSessions[0].screenshot_time_str);
+            }
+        }
+    }, [isOpen, initialTab, existingSessions]);
+
+    // Nạp thủ công số liệu phiên Cloud hiện tại vào bảng chỉnh sửa
+    const handleLoadFromCloudSession = () => {
+        if (!existingSessions || existingSessions.length === 0) {
+            showToast('⚠️ Không có phiên dữ liệu nào trên Cloud để nạp!');
+            return;
+        }
+        const converted = convertSessionsToStoreReportingData(existingSessions);
+        setStoresData(converted);
+        if (existingSessions[0]?.screenshot_time_str) {
+            setScreenshotTimestamp(existingSessions[0].screenshot_time_str);
+        }
+        showToast(`✅ Đã nạp thành công số liệu ${converted.length} ST từ phiên Cloud!`);
+    };
 
     // Nạp key từ cloud khi mở modal
     useEffect(() => {
@@ -382,6 +419,34 @@ export default function RealtimeDataUpdateModal({
                         </div>
                     ) : (
                         <div className="space-y-4">
+                            {existingSessions && existingSessions.length > 0 && (
+                                <div className="flex items-center justify-between p-3 sm:px-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/90 rounded-2xl flex-wrap gap-2.5 shadow-2xs">
+                                    <div className="flex items-center gap-2.5">
+                                        <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                                            <Database className="w-4 h-4" />
+                                        </div>
+                                        <div>
+                                            <span className="text-xs text-blue-900 font-bold block">
+                                                Phiên Cloud hiện tại: <strong className="text-blue-700">{existingSessions.length} ST</strong>
+                                                {existingSessions[0]?.screenshot_time_str ? ` • Giờ chụp: ${existingSessions[0].screenshot_time_str}` : ''}
+                                            </span>
+                                            <span className="text-[11px] text-slate-500">
+                                                Có thể nạp toàn bộ số liệu phiên Cloud vào bảng để rà soát hoặc điều chỉnh số liệu
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={handleLoadFromCloudSession}
+                                        className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                                        title="Nạp toàn bộ số liệu của các ST từ phiên Cloud vào giao diện để chỉnh sửa"
+                                    >
+                                        <RefreshCw className="w-3.5 h-3.5" />
+                                        <span>Nạp số liệu phiên Cloud</span>
+                                    </button>
+                                </div>
+                            )}
+
                             <ManualDataEntryModule
                                 storesData={storesData}
                                 onChangeStoresData={setStoresData}
@@ -392,6 +457,8 @@ export default function RealtimeDataUpdateModal({
                                 reportDate={formatDate(new Date())}
                                 onSaveToSupabase={handleSaveToCloud}
                                 isSaving={isSaving}
+                                isRealtime={true}
+                                showMonthReportLink={false}
                             />
                         </div>
                     )}

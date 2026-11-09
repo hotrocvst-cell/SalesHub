@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import {
     Clock,
     RefreshCw,
-    Sparkles,
     Camera,
     Database,
     CheckCircle2,
@@ -24,7 +23,6 @@ interface Props {
     isAdmin: boolean;
     onRefresh: () => void;
     onOpenUpdateModal: () => void;
-    onOpenQuickEmulationModal?: () => void;
     onOpenManagerModal?: () => void;
 }
 
@@ -36,7 +34,6 @@ export default function RealtimeSessionBanner({
     isAdmin,
     onRefresh,
     onOpenUpdateModal,
-    onOpenQuickEmulationModal,
     onOpenManagerModal
 }: Props) {
     const [showSqlModal, setShowSqlModal] = useState(false);
@@ -98,13 +95,6 @@ export default function RealtimeSessionBanner({
                                     }
                                 </strong>
                             </span>
-                            <span className="text-slate-500">•</span>
-                            <span>
-                                {sessionSummary
-                                    ? `${sessionSummary.storeCount} ST • ${sessionSummary.campaignCount} mục thi đua`
-                                    : 'Chưa có phiên dữ liệu nào trên Cloud'
-                                }
-                            </span>
                             {sessionSummary && (
                                 <>
                                     <span className="text-slate-500">•</span>
@@ -155,28 +145,15 @@ export default function RealtimeSessionBanner({
                         </button>
                     )}
 
-                    {/* Nút Nạp Nhanh Thi Đua Từng ST (Thẻ Mobile) */}
-                    {onOpenQuickEmulationModal && (
-                        <button
-                            type="button"
-                            onClick={onOpenQuickEmulationModal}
-                            className="px-3.5 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition shadow-sm border border-emerald-400/40 cursor-pointer"
-                            title="Nhập Thi đua cho từng ST (hỗ trợ Ctrl+V hoặc kéo thả ảnh)"
-                        >
-                            <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                            <span>📸 Thi Đua Từng ST</span>
-                        </button>
-                    )}
-
                     {/* Nút Nạp Phiên Realtime (OCR / Nhập tay Doanh Thu & Thi Đua) */}
                     <button
                         type="button"
                         onClick={onOpenUpdateModal}
                         className="px-3.5 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition shadow-sm border border-blue-400/30 cursor-pointer"
-                        title={isAdmin ? "Nạp dữ liệu OCR/Nhập tay cả cụm ST (Admin)" : "Nạp doanh thu & thi đua realtime cho ST phụ trách"}
+                        title="Nạp doanh thu (DTQĐ, DT Thực, Trả góp) và thi đua qua OCR hoặc nhập tay (hỗ trợ nạp cả Cụm hoặc từng ST đích danh)"
                     >
                         <Camera className="w-3.5 h-3.5" />
-                        <span>{isAdmin ? '📸 Nạp Cả Cụm' : '📸 Nhập theo Cụm'}</span>
+                        <span>📸 Nạp Doanh Thu & Thi Đua</span>
                     </button>
                 </div>
             </div>

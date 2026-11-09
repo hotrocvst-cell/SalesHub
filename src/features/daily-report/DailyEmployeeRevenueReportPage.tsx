@@ -224,11 +224,32 @@ export default function DailyEmployeeRevenueReportPage() {
         }
     }, [selectedStore, reportDate]);
 
-    // Danh sách nhân sự cấu hình của ST đang chọn
+    // Kiểm tra nhân sự có đang làm việc (loại bỏ nhân sự đã cập nhật nghỉ việc)
+    const isEmployeeActive = (e: EmployeeItem) => {
+        if (e.is_active === false) return false;
+        const status = (e.status || '').toLowerCase().trim();
+        if (status === 'inactive' || status === 'nghi_viec' || status === 'nghỉ việc' || status === 'nghỉ' || status === 'đã nghỉ' || status.includes('nghỉ')) {
+            return false;
+        }
+        return true;
+    };
+
+    // Danh sách nhân sự cấu hình của ST đang chọn (chỉ lấy nhân sự đang làm việc, loại bỏ nhân sự đã cập nhật nghỉ việc)
     const currentStoreEmployees = useMemo(() => {
-        if (selectedStore === 'all') return employees;
-        return employees.filter(e => isStoreMatch(e.store_name, selectedStore, stores));
+        const activeEmployees = employees.filter(isEmployeeActive);
+        if (selectedStore === 'all') return activeEmployees;
+        return activeEmployees.filter(e => isStoreMatch(e.store_name, selectedStore, stores));
     }, [employees, selectedStore, stores]);
+
+    // Số lượng nhân sự đang làm việc của ST được tích chọn đi làm trong ca
+    const activeShiftSelectedCount = useMemo(() => {
+        const currentIds = new Set(currentStoreEmployees.map(e => e.employee_id.trim()));
+        let count = 0;
+        manualShiftEmpIds.forEach(id => {
+            if (currentIds.has(id)) count++;
+        });
+        return count;
+    }, [currentStoreEmployees, manualShiftEmpIds]);
 
     // MẶC ĐỊNH: Lọc nhân viên theo ST đã chọn và CHỈ TỰ ĐỘNG CHỌN các bạn có DTQĐ khác 0
     useEffect(() => {
@@ -420,12 +441,12 @@ export default function DailyEmployeeRevenueReportPage() {
         });
     };
 
-    // Chọn tất cả nhân sự của shop đi làm
+    // Chọn tất cả nhân sự đang làm việc của shop đi làm
     const handleSelectAllStoreShift = () => {
         const next = new Set(manualShiftEmpIds);
         currentStoreEmployees.forEach(e => next.add(e.employee_id.trim()));
         setManualShiftEmpIds(next);
-        showToast(`✅ Đã chọn tất cả ${currentStoreEmployees.length} nhân sự đi làm trong ca!`);
+        showToast(`✅ Đã chọn tất cả ${currentStoreEmployees.length} nhân sự đang làm việc đi làm trong ca!`);
     };
 
     // Đặt lại mặc định: chỉ chọn nhân sự thuộc ST có DTQĐ khác 0
@@ -840,7 +861,7 @@ export default function DailyEmployeeRevenueReportPage() {
                                 title="Điểm danh và chọn thêm nhân viên đi làm nhưng chưa có biến động doanh thu"
                             >
                                 <UserCheck className="w-4 h-4 text-emerald-600" />
-                                <span>Điểm danh ca ({manualShiftEmpIds.size}/{currentStoreEmployees.length})</span>
+                                <span>Điểm danh ca ({activeShiftSelectedCount}/{currentStoreEmployees.length})</span>
                                 {isRosterModalOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                             </button>
                         </div>
@@ -997,7 +1018,7 @@ export default function DailyEmployeeRevenueReportPage() {
                             <div>
                                 <h4 className="text-xs font-black text-slate-900 uppercase flex items-center gap-1.5">
                                     <Users className="w-4 h-4 text-blue-600" />
-                                    <span>Danh sách nhân sự thuộc ST ({currentStoreEmployees.length} nhân sự)</span>
+                                    <span>Danh sách nhân sự thuộc ST ({currentStoreEmployees.length} nhân sự đang làm việc)</span>
                                 </h4>
                                 <p className="text-[11px] text-slate-500">
                                     Tích chọn các nhân viên <b>có đi làm trong ca</b> hôm nay nhưng <b>không có biến động doanh thu</b> để hiển thị đầy đủ trên báo cáo.

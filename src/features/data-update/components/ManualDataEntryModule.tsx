@@ -40,6 +40,8 @@ interface Props {
     onLoadFromCloud?: () => void;
     isLoadingExisting?: boolean;
     isSaved?: boolean;
+    showMonthReportLink?: boolean;
+    isRealtime?: boolean;
 }
 
 export default function ManualDataEntryModule({
@@ -56,7 +58,9 @@ export default function ManualDataEntryModule({
     onOpenQuickEmulationModal,
     onLoadFromCloud,
     isLoadingExisting = false,
-    isSaved = false
+    isSaved = false,
+    showMonthReportLink = false,
+    isRealtime = false
 }: Props) {
     const [selectedStoreIndex, setSelectedStoreIndex] = useState<number>(0);
     const [newProgramName, setNewProgramName] = useState('');
@@ -257,7 +261,11 @@ export default function ManualDataEntryModule({
                         </span>
                     </div>
                     <p className="text-[11px] text-slate-500">
-                        Số liệu lưu trữ lũy kế tính đến ngày <strong>{formatDate(reportDate)}</strong>. Đơn vị doanh thu &amp; target tính theo <strong>Triệu VNĐ</strong>.
+                        {isRealtime ? (
+                            <>Số liệu Realtime ngày <strong>{formatDate(reportDate)}</strong>.</>
+                        ) : (
+                            <>Số liệu lũy kế tính đến ngày <strong>{formatDate(reportDate)}</strong>. Đơn vị doanh thu &amp; target tính theo <strong>Triệu VNĐ</strong>.</>
+                        )}
                     </p>
                 </div>
 
@@ -289,8 +297,8 @@ export default function ManualDataEntryModule({
                         onClick={onSaveToSupabase}
                         disabled={isSaving || storesData.length === 0}
                         className={`px-4 py-1.5 text-white rounded-xl text-xs font-black transition cursor-pointer shadow-xs flex items-center gap-1.5 disabled:opacity-50 active:scale-95 ${existingRecordCount > 0
-                                ? 'bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500'
-                                : 'bg-emerald-600 hover:bg-emerald-700'
+                            ? 'bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500'
+                            : 'bg-emerald-600 hover:bg-emerald-700'
                             }`}
                         title={existingRecordCount > 0 ? `Ngày ${formatDate(reportDate)} đã có số liệu ${existingRecordCount} ST, bấm để ghi đè và làm mới số liệu` : ''}
                     >
@@ -308,19 +316,20 @@ export default function ManualDataEntryModule({
                         </span>
                     </button>
 
-                    <Link
-                        to="/bc-thang/tong-quan"
-                        className={`px-3.5 py-1.5 text-white rounded-xl text-xs font-black transition cursor-pointer shadow-xs flex items-center gap-1.5 active:scale-95 shrink-0 ${
-                            isSaved 
+                    {showMonthReportLink && (
+                        <Link
+                            to="/bc-thang/tong-quan"
+                            className={`px-3.5 py-1.5 text-white rounded-xl text-xs font-black transition cursor-pointer shadow-xs flex items-center gap-1.5 active:scale-95 shrink-0 ${isSaved
                                 ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 ring-2 ring-emerald-300 ring-offset-1 shadow-md'
                                 : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700'
-                        }`}
-                        title="Mở Báo Cáo Tháng (Tổng Quan) để xem kết quả số liệu"
-                    >
-                        <BarChart3 className="w-3.5 h-3.5 text-amber-300" />
-                        <span>Xem Báo Cáo Tháng</span>
-                        <ArrowRight className="w-3.5 h-3.5" />
-                    </Link>
+                                }`}
+                            title="Mở Báo Cáo Tháng (Tổng Quan) để xem kết quả số liệu"
+                        >
+                            <BarChart3 className="w-3.5 h-3.5 text-amber-300" />
+                            <span>Xem Báo Cáo Tháng</span>
+                            <ArrowRight className="w-3.5 h-3.5" />
+                        </Link>
+                    )}
                 </div>
             </div>
 
@@ -332,8 +341,8 @@ export default function ManualDataEntryModule({
                         type="button"
                         onClick={() => setSelectedStoreIndex(idx)}
                         className={`px-3 py-2 rounded-2xl text-xs font-black transition flex items-center gap-2 cursor-pointer shrink-0 border ${selectedStoreIndex === idx
-                                ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
-                                : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                            ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                            : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                             }`}
                     >
                         <Building2 className="w-3.5 h-3.5" />
@@ -512,12 +521,12 @@ export default function ManualDataEntryModule({
                         </div>
                     </div>
 
-                    {/* KHỐI 2: CÁC CHƯƠNG TRÌNH THI ĐUA LŨY KẾ CỦA ST NÀY */}
+                    {/* KHỐI 2: CÁC CHƯƠNG TRÌNH THI ĐUA CỦA ST NÀY */}
                     <div className="border border-slate-200 rounded-2xl p-3.5 space-y-3">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-100">
                             <div className="flex items-center gap-1.5 text-xs font-black text-purple-900 uppercase tracking-wide">
                                 <Trophy className="w-4 h-4 text-purple-600" />
-                                <span>Chương Trình Thi Đua Lũy Kế ({Object.keys(activeStore.emulations || {}).length} Chương Trình)</span>
+                                <span>{isRealtime ? 'Realtime Thi Đua' : 'Lũy Kế Thi Đua'} ({Object.keys(activeStore.emulations || {}).length} Chương Trình)</span>
                             </div>
 
                             <div className="flex items-center gap-2 flex-wrap">

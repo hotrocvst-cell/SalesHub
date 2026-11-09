@@ -39,7 +39,8 @@ import {
     Shuffle,
     FileSpreadsheet,
     Camera,
-    Crosshair
+    Crosshair,
+    Hash
 } from 'lucide-react';
 
 export interface NavItem {
@@ -237,6 +238,12 @@ export const NAVIGATION_GROUPS: NavGroup[] = [
                 path: '/quan-ly-voucher',
                 icon: Tag,
                 badge: '🔑 QL'
+            },
+            {
+                name: 'Sinh Mã Đơn Hàng',
+                path: '/tao-ma-don-hang',
+                icon: Hash,
+                badge: '⚡ Mới'
             },
             {
                 name: 'Xmusic Playlist',

@@ -921,6 +921,7 @@ export default function DataExtractOcrPage() {
                         existingRecordCount={existingRecordCount}
                         onLoadFromCloud={handleLoadExistingRecords}
                         isLoadingExisting={isLoadingExisting}
+                        showMonthReportLink={true}
                         onOpenQuickEmulationModal={(st) => {
                             setQuickModalSelectedStore(st || storesData[0]?.storeRawName || availableStores[0]?.name || '');
                             setIsQuickEmulationModalOpen(true);
