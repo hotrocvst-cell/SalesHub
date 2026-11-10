@@ -40,7 +40,8 @@ import {
     FileSpreadsheet,
     Camera,
     Crosshair,
-    Hash
+    Hash,
+    Bot
 } from 'lucide-react';
 
 export interface NavItem {
@@ -55,6 +56,7 @@ export interface NavGroup {
     icon?: React.ComponentType<{ className?: string }>;
     colorClass?: string;
     bgClass?: string;
+    directSingleLink?: boolean;
     items: NavItem[];
 }
 
@@ -103,6 +105,21 @@ export const NAVIGATION_GROUPS: NavGroup[] = [
                 name: 'Nhịp Doanh Thu',
                 path: '/nhip-doanh-thu',
                 icon: TrendingUp
+            }
+        ]
+    },
+    {
+        groupTitle: 'TRỢ LÝ AI',
+        icon: Bot,
+        colorClass: 'text-indigo-700',
+        bgClass: 'bg-indigo-100 text-indigo-700',
+        directSingleLink: true,
+        items: [
+            {
+                name: 'Trợ Lý AI',
+                path: '/tro-ly-ai',
+                icon: Bot,
+                badge: '🤖 AI'
             }
         ]
     },
@@ -429,13 +446,14 @@ export default function SidebarNav({ isCollapsed, onToggleCollapse, onItemClick 
         });
 
         // 2. Bản đồ lưu icon và màu sắc của từng nhóm mặc định
-        const staticGroupStyleMap = new Map<string, { icon?: React.ComponentType<{ className?: string }>; colorClass?: string; bgClass?: string }>();
+        const staticGroupStyleMap = new Map<string, { icon?: React.ComponentType<{ className?: string }>; colorClass?: string; bgClass?: string; directSingleLink?: boolean }>();
         NAVIGATION_GROUPS.forEach(g => {
             if (g.groupTitle) {
                 staticGroupStyleMap.set(g.groupTitle, {
                     icon: g.icon,
                     colorClass: g.colorClass,
-                    bgClass: g.bgClass
+                    bgClass: g.bgClass,
+                    directSingleLink: g.directSingleLink
                 });
             }
         });
@@ -518,7 +536,8 @@ export default function SidebarNav({ isCollapsed, onToggleCollapse, onItemClick 
             const style = staticGroupStyleMap.get(gTitle) || {
                 icon: Layers,
                 colorClass: 'text-indigo-700',
-                bgClass: 'bg-indigo-100 text-indigo-700'
+                bgClass: 'bg-indigo-100 text-indigo-700',
+                directSingleLink: false
             };
 
             resultGroups.push({
@@ -526,6 +545,7 @@ export default function SidebarNav({ isCollapsed, onToggleCollapse, onItemClick 
                 icon: style.icon || Layers,
                 colorClass: style.colorClass || 'text-indigo-700',
                 bgClass: style.bgClass || 'bg-indigo-100 text-indigo-700',
+                directSingleLink: style.directSingleLink,
                 items: sortedItems,
                 visibleItems: sortedItems,
                 minGroupOrder
@@ -540,9 +560,9 @@ export default function SidebarNav({ isCollapsed, onToggleCollapse, onItemClick 
         });
     }, [canAccessPage, permissions]);
 
-    // Đếm số lượng group có groupTitle mà user có quyền truy cập
+    // Đếm số lượng group có groupTitle dạng xổ con mà user có quyền truy cập
     const permittedGroupTitlesCount = useMemo(() => {
-        return permittedGroups.filter(g => Boolean(g.groupTitle)).length;
+        return permittedGroups.filter(g => Boolean(g.groupTitle) && !g.directSingleLink).length;
     }, [permittedGroups]);
 
     // Trạng thái nhóm mở rộng khi có từ 3 grouptitle trở lên (mặc định thu gọn, chỉ mở nhóm chứa trang active)
@@ -611,6 +631,55 @@ export default function SidebarNav({ isCollapsed, onToggleCollapse, onItemClick 
                     const GroupIcon = group.icon;
                     const isGroupCollapsed = checkIsGroupCollapsed(group.groupTitle);
                     const hasActiveChild = isGroupActive(visibleItems);
+                    const isDirectSingle = Boolean(group.directSingleLink && visibleItems.length === 1);
+
+                    // Nhóm click mở thẳng 1 trang duy nhất (không có trang con) khi Sidebar đang mở rộng
+                    if (isDirectSingle && !isCollapsed) {
+                        const directItem = visibleItems[0];
+                        const DirectIcon = GroupIcon || directItem.icon;
+                        const directBadge = resolveBadge(directItem);
+
+                        return (
+                            <div key={group.groupTitle || directItem.path} className="space-y-1">
+                                <NavLink
+                                    to={directItem.path}
+                                    end={true}
+                                    onClick={handleItemClick}
+                                    className={({ isActive }) => `w-full flex items-center justify-between gap-1.5 px-2.5 py-1.5 rounded-lg transition-all select-none cursor-pointer ${
+                                        isActive
+                                            ? 'bg-blue-600 text-white shadow-xs'
+                                            : 'hover:bg-slate-100/80 text-slate-700'
+                                    }`}
+                                >
+                                    {({ isActive }) => (
+                                        <>
+                                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                                                {DirectIcon && (
+                                                    <span className={`p-1 rounded-md shrink-0 shadow-2xs ${
+                                                        isActive ? 'bg-white/20 text-white' : (group.bgClass || 'bg-indigo-100 text-indigo-700')
+                                                    }`}>
+                                                        <DirectIcon className="w-3.5 h-3.5" />
+                                                    </span>
+                                                )}
+                                                <span className={`text-[10.5px] font-black uppercase tracking-wider truncate ${
+                                                    isActive ? 'text-white' : (group.colorClass || 'text-indigo-700')
+                                                }`}>
+                                                    {group.groupTitle || directItem.name}
+                                                </span>
+                                            </div>
+                                            {directBadge.enabled && directBadge.fullBadge && (
+                                                <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-black tracking-tight shrink-0 shadow-2xs ${
+                                                    getBadgeStyles(directBadge.color, isActive)
+                                                }`}>
+                                                    {directBadge.fullBadge}
+                                                </span>
+                                            )}
+                                        </>
+                                    )}
+                                </NavLink>
+                            </div>
+                        );
+                    }
 
                     return (
                         <div key={group.groupTitle || gIdx} className="space-y-1">

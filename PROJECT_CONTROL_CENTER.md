@@ -17,7 +17,7 @@
 - **Routing**: React Router DOM (Lazy loading).
 - **Styling**: Tailwind CSS + Icon Lucide-react.
 - **Backend / Database**: Supabase Free (PostgreSQL 15+, Supabase Auth, RLS).
-- **Hosting / CI-CD**: GitHub Free + Netlify Free.
+- **Hosting / CI-CD**: GitHub Free + Cloudflare Pages Free (Kênh chính) / Netlify Free (Kênh dự phòng).
 
 ## 3. TIÊU CHUẨN GIAO DIỆN & BẢNG BIỂU SMARTPHONE (MOBILE-FIRST UI STANDARDS)
 - **Cấu trúc phân tầng dọc**: Header -> Thẻ KPI/Tổng quan -> Biểu đồ / Thẻ phân tích -> Bảng chi tiết.

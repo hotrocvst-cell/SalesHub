@@ -17,11 +17,12 @@
 
 3. **Build & Deployment System:**
 * VCS: GitHub Free repository.
-* CI/CD: Netlify Continuous Deployment tự động trigger theo luồng Git webhook từ branch `main`.
+* CI/CD chính: Cloudflare Pages Continuous Deployment tự động trigger theo luồng Git webhook từ branch `main` (hỗ trợ Cloudflare Pages Functions miễn phí).
+* Kênh dự phòng (Backup): Netlify Continuous Deployment.
 
 
-4. **Netlify Configuration:**
-* File cấu hình `netlify.toml` đã thiết lập publish thư mục `dist` và rewrite `/* -> /index.html (200)` cho SPA routing. Cần tiếp tục duy trì cấu hình này.
+4. **Backup Hosting Configuration (Netlify):**
+* File cấu hình `netlify.toml` đã thiết lập publish thư mục `dist` và rewrite `/* -> /index.html (200)` cho SPA routing (duy trì làm kênh dự phòng khi cần, không dùng làm kênh deploy chính do giới hạn credit build hằng tháng).
 
 
 
@@ -64,8 +65,9 @@ src/
 
 ## III. CHIẾN LƯỢC VẬN HÀNH FREE-FIRST (ZERO-INFRA-COST)
 
-* **Netlify Free Tier**: Giới hạn 100GB Bandwidth/tháng và 300 phút build/tháng.
-* *Giải pháp*: 100% Client-Side Rendering (CSR). Không dùng Serverless Compute nặng. Tách nhỏ chunk bằng Vite `dynamic import()` (Lazy Loading các route lớn).
+* **Cloudflare Pages Free Tier (Chính)**: Giới hạn 500 builds/tháng, Unlimited Bandwidth (không giới hạn băng thông tĩnh) và 100,000 requests/ngày cho Pages Functions.
+* **Netlify Free Tier (Dự phòng)**: Giới hạn credit deploy/băng thông mỗi tháng (chỉ dùng backup).
+* *Giải pháp*: 100% Client-Side Rendering (CSR), tách nhỏ chunk bằng Vite `dynamic import()` (Lazy Loading các route lớn), kết hợp Cloudflare Pages Functions nhẹ khi cần proxy API bảo mật.
 
 
 * **Supabase Free Tier**: Giới hạn 500MB PostgreSQL, 50,000 MAU, 1GB Storage.

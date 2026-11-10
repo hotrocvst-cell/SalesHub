@@ -175,6 +175,22 @@ const RAW_DEFAULT_PAGE_PERMISSIONS: SystemPagePermission[] = [
         badge_color: 'rose'
     },
     {
+        page_key: 'tro_ly_ai',
+        page_name: 'Trợ Lý AI',
+        path: '/tro-ly-ai',
+        group_title: 'TRỢ LÝ AI',
+        description: 'Trợ lý AI tra cứu tài liệu, quy trình ST & giải đáp kiến thức nội bộ theo phân quyền 4 cấp',
+        is_enabled: true,
+        allowed_roles: ['ADMIN'], // MẶC ĐỊNH CHỈ DUY NHẤT ADMIN THEO QUY CHUẨN 4
+        order_index: 2,
+        badge_enabled: true,
+        badge_icon: '🤖',
+        badge_text: 'AI',
+        badge_color: 'indigo',
+        allow_excel_export: false,
+        allowed_excel_roles: ['ADMIN']
+    },
+    {
         page_key: 'tong_hop_xep_hang_nv',
         page_name: 'Tổng hợp Xếp hạng NV',
         path: '/tong-hop-xep-hang-nhan-vien',

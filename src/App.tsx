@@ -34,6 +34,7 @@ const DataStatusPage = lazy(() => import('./features/data-status/DataStatusPage'
 const VoucherClaimPage = lazy(() => import('./features/voucher/VoucherClaimPage'));
 const VoucherAdminPage = lazy(() => import('./features/voucher/VoucherAdminPage'));
 const OrderCodeGeneratorPage = lazy(() => import('./features/order-code-generator/OrderCodeGeneratorPage'));
+const AiAssistantPage = lazy(() => import('./features/ai-assistant/AiAssistantPage'));
 const XmusicPlaylistPage = lazy(() => import('./features/xmusic-playlist/XmusicPlaylistPage'));
 const GameArenaPage = lazy(() => import('./features/game-arena/GameArenaPage'));
 const SupportTicketPage = lazy(() => import('./features/support-ticket/SupportTicketPage'));
@@ -259,6 +260,11 @@ export default function App() {
                                 <Route path="/kiem-quy" element={
                                     <ProtectedRoute path="/kiem-quy">
                                         <CashCounterPage />
+                                    </ProtectedRoute>
+                                } />
+                                <Route path="/tro-ly-ai" element={
+                                    <ProtectedRoute path="/tro-ly-ai">
+                                        <AiAssistantPage />
                                     </ProtectedRoute>
                                 } />
 
