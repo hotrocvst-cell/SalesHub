@@ -40,9 +40,10 @@ export function extractStoreRevenueDetails(
         const qdMatch = rawRevenue.match(/DTQĐ:\s*([\d,.]+)/i) || rawRevenue.match(/DTQD:\s*([\d,.]+)/i);
         const realMatch = rawRevenue.match(/DT\s*Th[ựu]c:\s*([\d,.]+)/i);
         const tgMatch = rawRevenue.match(/Target:\s*([\d,.]+)/i);
-        const instMatch = rawRevenue.match(/Tr[ảa]\s*g[óo]p:\s*([\d,.]+)/i);
-        const instRateMatch = rawRevenue.match(/(?:%|Tỷ lệ)\s*Tr[ảa]\s*g[óo]p:\s*([\d,.]+)%?/i);
+        const instMatch = rawRevenue.match(/(?:^|[|\n])\s*(?:DT\s*)?Tr[ảa]\s*g[óo]p(?:\s*QĐ|\s*QD)?:\s*([\d,.]+)/i);
+        const instRateMatch = rawRevenue.match(/(?:%|Tỷ lệ|Tỷ trọng)\s*(?:Tỷ trọng\s*)?Tr[ảa]\s*g[óo]p:\s*([\d,.]+)%?/i);
         const avg3Match = rawRevenue.match(/TB\s*3\s*Th[áa]ng:\s*([\d,.]+)/i);
+        const pctGrowthMatch = rawRevenue.match(/%\s*TT\s*Doanh\s*thu:\s*([+-]?\s*[\d,.]+)%?/i);
 
         const qdVal = qdMatch ? parseFloat(qdMatch[1].replace(/,/g, '')) || 0 : 0;
         const realVal = realMatch ? parseFloat(realMatch[1].replace(/,/g, '')) || 0 : 0;
@@ -50,6 +51,7 @@ export function extractStoreRevenueDetails(
         const instVal = instMatch ? parseFloat(instMatch[1].replace(/,/g, '')) || undefined : undefined;
         const instRateVal = instRateMatch ? parseFloat(instRateMatch[1].replace(/,/g, '')) || undefined : undefined;
         const avg3Val = avg3Match ? parseFloat(avg3Match[1].replace(/,/g, '')) || undefined : undefined;
+        const pctGrowthVal = pctGrowthMatch ? parseFloat(pctGrowthMatch[1].replace(/\s+/g, '').replace(/,/g, '')) : undefined;
 
         // Trích xuất riêng biệt Target DTQĐ vs Target DT Thực nếu chuỗi chứa cả 2
         let targetQd: number | undefined;
@@ -76,6 +78,7 @@ export function extractStoreRevenueDetails(
                 targetQd,
                 targetReal,
                 avg3Months: avg3Val,
+                pctGrowth: (pctGrowthVal !== undefined && !isNaN(pctGrowthVal)) ? pctGrowthVal : undefined,
                 installmentRevenue: instVal,
                 installmentRate: instRateVal
             };

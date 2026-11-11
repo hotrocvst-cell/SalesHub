@@ -30,22 +30,19 @@ export interface StoreReportingData {
     storeCode?: string;
     storeRawName: string;
     storeShortName: string;
-    
-    // 1. Doanh thu quy đổi (DTQĐ)
-    revenueQd: number;
-    targetQd: number;
-    quantityQd: number;
+
+    // 1. Doanh thu quy đổi (Ảnh 1 - Doanh thu hợp nhất)
+    revenueQd: number;          // Doanh thu QĐ (triệu đồng)
+    installmentQd: number;      // DT Trả góp QĐ (triệu đồng)
+    targetQd: number;           // Target (triệu đồng)
+    avg3Months: number;         // TB 3 Tháng (triệu đồng)
+    pctGrowth: number;          // % TT Doanh thu (%)
+    quantityQd?: number;
     completionRateQd?: number;
     forecastRateQd?: number;
 
-    // 2. Doanh thu thực
-    revenueReal: number;
-    targetReal: number;
-    quantityReal: number;
-    installmentReal: number;
-    installmentRateReal: number;
-    avg3MonthsReal?: number;
-    growthReal?: number;
+    // 2. Tỷ trọng trả góp (Ảnh 2 - Báo cáo trả chậm)
+    installmentRate: number;    // % Tỷ trọng trả góp (%)
 
     // 3. Thi đua lũy kế (Tên chương trình -> Chi tiết)
     emulations: Record<string, EmulationOcrItem>;

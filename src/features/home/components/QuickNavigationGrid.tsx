@@ -133,14 +133,14 @@ export default function QuickNavigationGrid() {
             {/* KHU VỰC 1: TOP 6 LỐI TẮT THƯỜNG DÙNG NHẤT (CÁ NHÂN HÓA)         */}
             {/* ============================================================== */}
             {top6Cards.length > 0 && (
-                <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-br from-amber-500/5 via-orange-500/5 to-transparent border border-amber-200/70 shadow-xs">
+                <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-br from-amber-500/5 via-orange-500/5 to-transparent border border-amber-200/70 shadow-sm">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
                         <div className="flex items-center gap-2.5">
-                            <span className="p-1.5 rounded-xl bg-amber-500 text-white shadow-xs">
+                            <span className="p-1.5 rounded-xl bg-amber-500 text-white shadow-sm shrink-0" aria-hidden="true">
                                 <Flame className="w-4 h-4 fill-white" />
                             </span>
                             <div>
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 flex-wrap">
                                     <h2 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
                                         Top Thường Dùng
                                     </h2>
@@ -148,13 +148,13 @@ export default function QuickNavigationGrid() {
                                         Top 6 Cá nhân hóa
                                     </span>
                                 </div>
-                                <p className="text-[11px] font-medium text-slate-500">
+                                <p className="text-[11px] font-medium text-slate-600">
                                     Tự động xếp hạng theo tần suất truy cập thực tế của bạn
                                 </p>
                             </div>
                         </div>
 
-                        <span className="text-[11px] font-bold text-slate-400 self-start sm:self-auto">
+                        <span className="text-[11px] font-bold text-slate-500 self-start sm:self-auto">
                             Tự động cập nhật tức thì
                         </span>
                     </div>
@@ -169,22 +169,22 @@ export default function QuickNavigationGrid() {
                                 <Link
                                     key={`top-${card.path}`}
                                     to={card.path}
-                                    className={`group relative p-3.5 sm:p-4 rounded-2xl bg-white border border-slate-200/90 hover:border-amber-400 shadow-2xs hover:shadow-md transition-all duration-200 flex flex-col justify-between overflow-hidden bg-gradient-to-br ${card.gradient}`}
+                                    className={`group relative p-3.5 sm:p-4 rounded-2xl bg-white border border-slate-200/90 hover:border-amber-400 shadow-sm hover:shadow-md transition-all duration-200 flex flex-col justify-between overflow-hidden bg-gradient-to-br ${card.gradient} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500`}
                                 >
                                     <div>
                                         <div className="flex items-start justify-between gap-2 mb-2.5">
                                             <div className="flex items-center gap-2">
-                                                <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black shrink-0 transition group-hover:scale-105 ${card.iconBg}`}>
+                                                <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black shrink-0 transition group-hover:scale-105 ${card.iconBg}`} aria-hidden="true">
                                                     <IconComponent className="w-4 h-4" />
                                                 </div>
-                                                <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-md ${rank.bg}`}>
+                                                <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-md tabular-nums ${rank.bg}`}>
                                                     {rank.label}
                                                 </span>
                                             </div>
 
                                             <div className="flex items-center gap-1">
                                                 {visits > 0 && (
-                                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200/60" title={`Đã mở ${visits} lần`}>
+                                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200/60 tabular-nums" title={`Đã mở ${visits} lần`}>
                                                         {visits} lượt
                                                     </span>
                                                 )}
@@ -200,17 +200,17 @@ export default function QuickNavigationGrid() {
                                             {card.title}
                                         </h3>
 
-                                        <p className="text-[11px] text-slate-500 mt-1 line-clamp-2 leading-relaxed">
+                                        <p className="text-[11px] text-slate-600 mt-1 line-clamp-2 leading-relaxed">
                                             {card.description}
                                         </p>
                                     </div>
 
-                                    <div className="pt-2 mt-2.5 border-t border-slate-100/90 flex items-center justify-between text-[11px] font-bold text-slate-400 group-hover:text-blue-600 transition">
+                                    <div className="pt-2 mt-2.5 border-t border-slate-100/90 flex items-center justify-between text-[11px] font-bold text-slate-500 group-hover:text-blue-600 transition">
                                         <span className="flex items-center gap-1">
-                                            <TrendingUp className="w-3 h-3 text-amber-500" />
+                                            <TrendingUp className="w-3 h-3 text-amber-500 shrink-0" aria-hidden="true" />
                                             <span>Mở nhanh</span>
                                         </span>
-                                        <ArrowRight className="w-3.5 h-3.5 transition group-hover:translate-x-1" />
+                                        <ArrowRight className="w-3.5 h-3.5 transition group-hover:translate-x-1 shrink-0" aria-hidden="true" />
                                     </div>
                                 </Link>
                             );
@@ -225,50 +225,56 @@ export default function QuickNavigationGrid() {
             <div className="space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div className="flex items-center gap-2">
-                        <Layers className="w-4 h-4 text-blue-600" />
+                        <Layers className="w-4 h-4 text-blue-600 shrink-0" aria-hidden="true" />
                         <h2 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
                             Lối Tắt Theo Chuyên Mục
                         </h2>
-                        <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200/60">
+                        <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200/60 tabular-nums">
                             {visibleCards.length} lối tắt
                         </span>
                     </div>
 
                     {/* Ô tìm kiếm nhanh */}
                     <div className="relative w-full sm:w-64">
-                        <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                        <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" aria-hidden="true" />
                         <input
+                            id="home-quicknav-search"
+                            name="quickNavSearch"
                             type="text"
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
+                            aria-label="Tìm kiếm màn hình chức năng"
                             placeholder="Tìm kiếm màn hình..."
-                            className="w-full pl-8 pr-7 py-1.5 text-xs bg-white rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium"
+                            className="w-full pl-8 pr-8 py-1.5 text-xs bg-white rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 font-medium"
                         />
                         {searchQuery && (
                             <button
                                 type="button"
                                 onClick={() => setSearchQuery('')}
-                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                                aria-label="Xóa từ khóa tìm kiếm màn hình"
+                                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded text-slate-500 hover:text-slate-800 cursor-pointer"
                             >
-                                <X className="w-3.5 h-3.5" />
+                                <X className="w-3.5 h-3.5" aria-hidden="true" />
                             </button>
                         )}
                     </div>
                 </div>
 
                 {/* Thanh chọn Tabs nhóm chuyên mục */}
-                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar select-none">
+                <div className="flex items-center gap-1.5 overflow-x-auto sm:overflow-visible sm:flex-wrap pb-1 no-scrollbar select-none" role="tablist" aria-label="Nhóm màn hình chức năng">
                     <button
                         type="button"
+                        role="tab"
+                        aria-selected={selectedGroup === 'ALL'}
                         onClick={() => setSelectedGroup('ALL')}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 transition flex items-center gap-1.5 cursor-pointer ${
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 transition flex items-center gap-1.5 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                             selectedGroup === 'ALL'
-                                ? 'bg-blue-600 text-white shadow-xs'
-                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80 hover:text-slate-900'
+                                ? 'bg-blue-600 text-white shadow-sm'
+                                : 'bg-slate-100 text-slate-700 hover:bg-slate-200/80 hover:text-slate-900'
                         }`}
                     >
                         <span>Tất cả</span>
-                        <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${selectedGroup === 'ALL' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600'}`}>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full tabular-nums ${selectedGroup === 'ALL' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'}`}>
                             {visibleCards.length}
                         </span>
                     </button>
@@ -281,16 +287,18 @@ export default function QuickNavigationGrid() {
                             <button
                                 key={grp.groupTitle}
                                 type="button"
+                                role="tab"
+                                aria-selected={isSelected}
                                 onClick={() => setSelectedGroup(grp.groupTitle)}
-                                className={`px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 transition flex items-center gap-1.5 cursor-pointer ${
+                                className={`px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 transition flex items-center gap-1.5 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                                     isSelected
-                                        ? 'bg-blue-600 text-white shadow-xs'
-                                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80 hover:text-slate-900'
+                                        ? 'bg-blue-600 text-white shadow-sm'
+                                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200/80 hover:text-slate-900'
                                 }`}
                             >
-                                <Icon className="w-3.5 h-3.5" />
+                                <Icon className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
                                 <span>{grp.config.label}</span>
-                                <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${isSelected ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600'}`}>
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded-full tabular-nums ${isSelected ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'}`}>
                                     {grp.count}
                                 </span>
                             </button>
@@ -300,10 +308,22 @@ export default function QuickNavigationGrid() {
 
                 {/* Danh sách thẻ theo nhóm */}
                 {filteredCards.length === 0 ? (
-                    <div className="p-8 text-center bg-slate-50 rounded-2xl border border-slate-200/60">
-                        <p className="text-xs font-bold text-slate-500">
-                            Không tìm thấy màn hình nào phù hợp với từ khóa "{searchQuery}"
+                    <div className="p-8 text-center bg-slate-50 rounded-2xl border border-slate-200/60 space-y-2.5">
+                        <p className="text-xs font-bold text-slate-600">
+                            Không tìm thấy màn hình nào phù hợp với từ khóa &quot;{searchQuery}&quot;
                         </p>
+                        {searchQuery && (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setSearchQuery('');
+                                    setSelectedGroup('ALL');
+                                }}
+                                className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-xs font-bold text-slate-700 transition cursor-pointer"
+                            >
+                                Xóa bộ lọc tìm kiếm
+                            </button>
+                        )}
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
@@ -315,17 +335,17 @@ export default function QuickNavigationGrid() {
                                 <Link
                                     key={card.path}
                                     to={card.path}
-                                    className={`group relative p-4 sm:p-4.5 rounded-2xl bg-white border border-slate-200 shadow-xs hover:shadow-md transition-all duration-200 flex flex-col justify-between overflow-hidden bg-gradient-to-br ${card.gradient}`}
+                                    className={`group relative p-4 sm:p-5 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md transition-all duration-200 flex flex-col justify-between overflow-hidden bg-gradient-to-br ${card.gradient} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500`}
                                 >
                                     <div>
                                         <div className="flex items-start justify-between gap-2 mb-2.5">
-                                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black shrink-0 transition group-hover:scale-105 ${card.iconBg}`}>
-                                                <IconComponent className="w-4.5 h-4.5" />
+                                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black shrink-0 transition group-hover:scale-105 ${card.iconBg}`} aria-hidden="true">
+                                                <IconComponent className="w-4 h-4" />
                                             </div>
 
                                             <div className="flex items-center gap-1">
                                                 {visits > 0 && (
-                                                    <span className="text-[10px] font-semibold text-slate-400 px-1.5 py-0.5 rounded bg-slate-100">
+                                                    <span className="text-[10px] font-semibold text-slate-600 px-1.5 py-0.5 rounded bg-slate-100 tabular-nums">
                                                         {visits} lượt
                                                     </span>
                                                 )}
@@ -341,14 +361,14 @@ export default function QuickNavigationGrid() {
                                             {card.title}
                                         </h3>
 
-                                        <p className="text-xs text-slate-500 mt-1 line-clamp-2 leading-relaxed">
+                                        <p className="text-xs text-slate-600 mt-1 line-clamp-2 leading-relaxed">
                                             {card.description}
                                         </p>
                                     </div>
 
-                                    <div className="pt-2.5 mt-2.5 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-slate-400 group-hover:text-blue-600 transition">
+                                    <div className="pt-2.5 mt-2.5 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-slate-500 group-hover:text-blue-600 transition">
                                         <span>Truy cập</span>
-                                        <ArrowRight className="w-3.5 h-3.5 transition group-hover:translate-x-1" />
+                                        <ArrowRight className="w-3.5 h-3.5 transition group-hover:translate-x-1 shrink-0" aria-hidden="true" />
                                     </div>
                                 </Link>
                             );

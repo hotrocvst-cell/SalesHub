@@ -79,17 +79,32 @@ export async function fetchStoreKnownCampaignTargets(
 }
 
 /**
- * Tự động ánh xạ tên chương trình thi đua (đặc biệt khi bị cắt ngắn "...")
- * dựa vào Target ST và tiền tố tên chương trình.
+ * Chuẩn hóa tên chương trình (loại bỏ tiền tố tháng như "T11 - ", đơn vị "(DT)"/"(SL)" ở cuối) để so khớp chính xác
+ */
+function normalizeCampaignTitleForMatch(name: string): string {
+    return (name || '')
+        .trim()
+        .replace(/^t\d{1,2}\s*[-–—]\s*(t\d{1,2}\s*[-–—]\s*)?/i, '')
+        .replace(/\s*[\(\[\{](DT|DTQĐ|DTQD|SL|SLQĐ|SLQD|SỐ LƯỢNG|SO LUONG)[\)\]\}]\s*$/i, '')
+        .replace(/\s+/g, ' ')
+        .toLowerCase();
+}
+
+/**
+ * Tự động ánh xạ tên chương trình thi đua (đặc biệt khi bị cắt ngắn "..." hoặc không có tiền tố tháng T11 -)
+ * dựa vào tên chuẩn, Target ST và danh mục hệ thống.
  */
 export function resolveCampaignNameByTarget(
     rawName: string,
     storeTarget: number,
-    storeActual: number | undefined,
+    _storeActual: number | undefined,
     knownCampaigns: KnownStoreCampaignTarget[],
     campaignDictionary: Array<{ raw_key: string; display_name: string; unit?: string }> = []
 ): { resolvedName: string; isAutoMatched: boolean; reason?: string; unit?: string } {
-    const cleanRaw = rawName.trim();
+    const cleanRaw = rawName
+        .trim()
+        .replace(/\s*[\(\[\{](DT|DTQĐ|DTQD|SL|SLQĐ|SLQD|SỐ LƯỢNG|SO LUONG)[\)\]\}]\s*$/i, '')
+        .trim();
     if (!cleanRaw) return { resolvedName: 'Chương trình khác', isAutoMatched: false };
 
     const isTruncated = cleanRaw.endsWith('...') || cleanRaw.endsWith('…') || cleanRaw.length <= 15;
@@ -98,11 +113,25 @@ export function resolveCampaignNameByTarget(
         .replace(/…$/g, '')
         .trim()
         .toLowerCase();
+    const normTitle = normalizeCampaignTitleForMatch(cleanRaw);
 
-    // 1. Nếu tên đầy đủ và trùng khớp 100% với một mục đã biết
+    // 1. Nếu tên trùng khớp 100% với một mục đã biết trong ST
     const exactMatch = knownCampaigns.find(k => k.campaignName.toLowerCase() === cleanRaw.toLowerCase());
     if (exactMatch && !isTruncated) {
         return { resolvedName: exactMatch.campaignName, isAutoMatched: false, unit: exactMatch.unit };
+    }
+
+    // 1b. Khớp chính xác sau khi bỏ tiền tố tháng ("T11 - Tai nghe" <-> "Tai nghe")
+    const strippedMatch = knownCampaigns.find(
+        k => normalizeCampaignTitleForMatch(k.campaignName) === normTitle
+    );
+    if (strippedMatch) {
+        return {
+            resolvedName: strippedMatch.campaignName,
+            isAutoMatched: strippedMatch.campaignName.toLowerCase() !== cleanRaw.toLowerCase(),
+            reason: `Khớp chương trình ST: ${strippedMatch.campaignName}`,
+            unit: strippedMatch.unit
+        };
     }
 
     // 2. Nếu tên bị cắt ngắn hoặc cần đối chiếu qua Target ST:
@@ -137,21 +166,37 @@ export function resolveCampaignNameByTarget(
         }
     }
 
-    // 3. Nếu chưa khớp trong knownCampaigns của ST, tra cứu trong campaignDictionary
-    if (isTruncated && campaignDictionary.length > 0) {
-        const dictCandidate = campaignDictionary.find(d => {
-            const rawKeyLower = (d.raw_key || '').toLowerCase();
-            const dispLower = (d.display_name || '').toLowerCase();
-            return rawKeyLower.startsWith(cleanPrefix) || dispLower.startsWith(cleanPrefix);
-        });
-
-        if (dictCandidate) {
+    // 3. Tra cứu trong danh mục từ điển hệ thống (campaignDictionary) theo tên chuẩn hóa hoặc tiền tố
+    if (campaignDictionary.length > 0) {
+        const dictExact = campaignDictionary.find(d =>
+            normalizeCampaignTitleForMatch(d.raw_key || '') === normTitle ||
+            normalizeCampaignTitleForMatch(d.display_name || '') === normTitle
+        );
+        if (dictExact) {
+            const targetName = dictExact.raw_key || dictExact.display_name;
             return {
-                resolvedName: dictCandidate.raw_key || dictCandidate.display_name,
-                isAutoMatched: true,
-                reason: `Khớp tiền tố trong danh mục hệ thống: ${dictCandidate.display_name}`,
-                unit: dictCandidate.unit
+                resolvedName: targetName,
+                isAutoMatched: targetName.toLowerCase() !== cleanRaw.toLowerCase(),
+                reason: `Khớp danh mục hệ thống: ${dictExact.display_name || dictExact.raw_key}`,
+                unit: dictExact.unit
             };
+        }
+
+        if (isTruncated) {
+            const dictCandidate = campaignDictionary.find(d => {
+                const rawKeyLower = (d.raw_key || '').toLowerCase();
+                const dispLower = (d.display_name || '').toLowerCase();
+                return rawKeyLower.startsWith(cleanPrefix) || dispLower.startsWith(cleanPrefix);
+            });
+
+            if (dictCandidate) {
+                return {
+                    resolvedName: dictCandidate.raw_key || dictCandidate.display_name,
+                    isAutoMatched: true,
+                    reason: `Khớp tiền tố trong danh mục hệ thống: ${dictCandidate.display_name}`,
+                    unit: dictCandidate.unit
+                };
+            }
         }
     }
 

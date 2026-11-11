@@ -686,14 +686,14 @@ export default function EmployeeRankingSummaryPage() {
         const botWarningCount = rankingRows.filter(r => r.rescue_status === 'BOT_WARNING').length;
         const safeCount = rankingRows.filter(r => r.rescue_status === 'SAFE').length;
 
-        let modeLabel = 'Tùy biến từng shop';
+        let modeLabel = 'Tùy biến từng ST';
         if (selectedStore !== 'all') {
             const curCfg = getStoreCampaignScoreConfig(selectedStore, stores);
             modeLabel = curCfg.scoring_mode === 'POINTS' ? 'Tính Điểm' : 'Tính Số NH';
         } else {
             const allPoints = rankingRows.every(r => r.scoring_mode === 'POINTS');
             const allCount = rankingRows.every(r => r.scoring_mode === 'COUNT');
-            modeLabel = allPoints ? 'Tính Điểm' : allCount ? 'Tính Số NH' : 'Tự động theo từng Shop';
+            modeLabel = allPoints ? 'Tính Điểm' : allCount ? 'Tính Số NH' : 'Tự động theo từng ST';
         }
 
         return {
@@ -919,66 +919,69 @@ export default function EmployeeRankingSummaryPage() {
     };
 
     return (
-        <div className="min-h-screen bg-slate-50/70 p-2 sm:p-4 md:p-6 font-avo" style={{ fontFamily: "'UTM Avo', 'UTM-Avo', sans-serif" }}>
+        <div className="min-h-screen bg-slate-50/70 p-2 sm:p-4 md:p-6">
             {/* THÔNG BÁO TOAST */}
             {toastMessage && (
-                <div className="fixed top-4 right-4 z-50 bg-slate-900/95 text-white px-4 py-2.5 rounded-xl shadow-xl border border-slate-700 text-xs font-bold flex items-center gap-2 animate-fade-in backdrop-blur-md">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <div role="status" aria-live="polite" className="fixed top-4 right-4 z-50 bg-slate-900/95 text-white px-4 py-2.5 rounded-xl shadow-xl border border-slate-700 text-xs font-bold flex items-center gap-2 backdrop-blur-md">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" aria-hidden="true" />
                     <span>{toastMessage}</span>
                 </div>
             )}
 
             {/* THANH ĐIỀU KHIỂN & BỘ LỌC (CONTROLS BAR) */}
-            <div className="max-w-[960px] mx-auto mb-4 bg-white rounded-2xl border border-slate-200 shadow-2xs p-3 sm:p-4">
-                <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+            <div className="max-w-[960px] mx-auto mb-4 bg-white rounded-2xl border border-slate-200 shadow-sm p-3 sm:p-4">
+                <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
                     {/* TIÊU ĐỀ & TRẠNG THÁI */}
                     <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-blue-600 flex items-center justify-center text-white shadow-md shadow-indigo-200 shrink-0">
-                            <Trophy className="w-5 h-5" />
+                        <div className="w-10 h-10 rounded-xl bg-blue-700 flex items-center justify-center text-white shadow-sm shrink-0">
+                            <Trophy className="w-5 h-5" aria-hidden="true" />
                         </div>
                         <div>
                             <div className="flex items-center gap-2 flex-wrap">
                                 <h1 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
                                     TỔNG HỢP XẾP HẠNG NHÂN VIÊN
                                 </h1>
-                                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-50 text-blue-800 border border-blue-200">
                                     Sức Khỏe Nhân Sự
                                 </span>
                             </div>
-                            <p className="text-[11px] text-slate-500 font-medium">
-                                Tổng hợp đa chiều: Xếp hạng Doanh thu & Tiến độ Thi đua tổng hợp
+                            <p className="text-[11px] text-slate-600 font-medium">
+                                Tổng hợp đa chiều: Xếp hạng Doanh thu &amp; Tiến độ Thi đua tổng hợp
                             </p>
                         </div>
                     </div>
 
                     {/* HÀNG CÔNG CỤ NÚT BẤM */}
-                    <div className="flex items-center gap-2 flex-wrap justify-end">
+                    <div className="flex items-center gap-2 flex-wrap justify-start lg:justify-end">
                         {canManage && (
                             <>
                                 <button
+                                    type="button"
                                     onClick={() => setIsRescueModalOpen(true)}
-                                    className="px-3 py-2 rounded-2xl bg-teal-50 hover:bg-teal-100 text-teal-800 font-bold text-xs flex items-center gap-1.5 transition border border-teal-200 select-none shadow-2xs"
+                                    className="px-3 py-2 rounded-2xl bg-teal-50 hover:bg-teal-100 text-teal-800 font-bold text-xs flex items-center gap-1.5 transition border border-teal-200 select-none shadow-sm cursor-pointer"
                                     title="Cấu hình tiêu chí cứu BOT & danh sách thai sản/chế độ"
                                 >
-                                    <ShieldCheck className="w-3.5 h-3.5 text-teal-600" />
+                                    <ShieldCheck className="w-3.5 h-3.5 text-teal-700" aria-hidden="true" />
                                     <span>Tiêu Chí Cứu</span>
                                 </button>
 
                                 <button
+                                    type="button"
                                     onClick={() => navigate('/can-tru-thi-dua')}
-                                    className="px-3 py-2 rounded-2xl bg-purple-50 hover:bg-purple-100 text-purple-800 font-bold text-xs flex items-center gap-1.5 transition border border-purple-200 select-none shadow-2xs"
+                                    className="px-3 py-2 rounded-2xl bg-slate-100 hover:bg-blue-50 text-slate-800 hover:text-blue-900 font-bold text-xs flex items-center gap-1.5 transition border border-slate-200 hover:border-blue-300 select-none shadow-sm cursor-pointer"
                                     title="Quản lý cấn trừ thi đua cuối tháng giữa các ngành hàng"
                                 >
-                                    <Shuffle className="w-3.5 h-3.5 text-purple-600" />
+                                    <Shuffle className="w-3.5 h-3.5 text-blue-700" aria-hidden="true" />
                                     <span>Cấn Trừ ({campaignOffsets.length})</span>
                                 </button>
 
                                 <button
+                                    type="button"
                                     onClick={() => setIsConfigModalOpen(true)}
-                                    className="px-3 py-2 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center gap-1.5 transition border border-slate-200 select-none shadow-2xs"
+                                    className="px-3 py-2 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs flex items-center gap-1.5 transition border border-slate-200 select-none shadow-sm cursor-pointer"
                                     title="Cấu hình tỷ lệ TOP / BOT và ngày giờ hoạt động (dùng chung cho cả hệ thống)"
                                 >
-                                    <Settings className="w-3.5 h-3.5 text-slate-600" />
+                                    <Settings className="w-3.5 h-3.5 text-slate-600" aria-hidden="true" />
                                     <span>Cấu hình TOP/BOT</span>
                                 </button>
                             </>
@@ -999,26 +1002,30 @@ export default function EmployeeRankingSummaryPage() {
                         />
 
                         <button
+                            type="button"
                             onClick={loadAllData}
-                            className="p-2 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-600 transition border border-slate-200"
+                            aria-label="Làm mới dữ liệu"
+                            className="p-2 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition border border-slate-200 cursor-pointer shadow-sm"
                             title="Làm mới dữ liệu"
                         >
-                            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-indigo-600' : ''}`} />
+                            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-blue-700' : ''}`} aria-hidden="true" />
                         </button>
                     </div>
                 </div>
 
                 {/* BỘ LỌC ST / CỤM RIÊNG LẺ ĐẦU TIÊN (RULE 10 CONVENTION) */}
                 <div className="mt-3 pt-3 border-t border-slate-100 pb-2.5 border-b">
-                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">
+                    <label htmlFor="ranking-store-select" className="block text-[10px] font-black text-slate-600 uppercase tracking-wider mb-1 cursor-pointer">
                         ST / Đơn Vị Phụ Trách
                     </label>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                         <select
+                            id="ranking-store-select"
+                            name="ranking_store"
                             value={selectedStore}
                             disabled={isLockedToSingleStore}
                             onChange={(e) => setSelectedStore(e.target.value)}
-                            className="w-full sm:max-w-md text-xs font-black bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-100 disabled:text-slate-500 cursor-pointer shadow-2xs"
+                            className="w-full sm:max-w-md text-xs font-black bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 disabled:bg-slate-100 disabled:text-slate-600 cursor-pointer shadow-sm"
                         >
                             {canViewAllStores && <option value="all">🏢 Toàn Cụm ST</option>}
                             {allowedStores.map(st => (
@@ -1028,8 +1035,8 @@ export default function EmployeeRankingSummaryPage() {
                             ))}
                         </select>
                         {isLockedToSingleStore && (
-                            <span className="text-[10px] bg-amber-100 text-amber-800 border border-amber-200 px-2 py-1 rounded-lg font-bold uppercase tracking-wider shrink-0">
-                                {currentUser?.is_guest ? 'Trải nghiệm (10335)' : 'Đã khóa theo shop'}
+                            <span className="text-[10px] bg-amber-100 text-amber-900 border border-amber-200 px-2 py-1 rounded-lg font-bold uppercase tracking-wider shrink-0">
+                                {currentUser?.is_guest ? 'Trải nghiệm (10335)' : 'Đã khóa theo ST'}
                             </span>
                         )}
                     </div>
@@ -1039,13 +1046,15 @@ export default function EmployeeRankingSummaryPage() {
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2.5">
                     {/* 1. Chọn Tháng */}
                     <div>
-                        <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">
+                        <label htmlFor="ranking-month-select" className="block text-[10px] font-black text-slate-600 uppercase tracking-wider mb-1 cursor-pointer">
                             Tháng
                         </label>
                         <select
+                            id="ranking-month-select"
+                            name="ranking_month"
                             value={selectedMonth}
                             onChange={(e) => setSelectedMonth(Number(e.target.value))}
-                            className="w-full text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                            className="w-full text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-600 cursor-pointer"
                         >
                             {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
                                 <option key={m} value={m}>Tháng {m}</option>
@@ -1055,13 +1064,15 @@ export default function EmployeeRankingSummaryPage() {
 
                     {/* 2. Chọn Năm */}
                     <div>
-                        <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">
+                        <label htmlFor="ranking-year-select" className="block text-[10px] font-black text-slate-600 uppercase tracking-wider mb-1 cursor-pointer">
                             Năm
                         </label>
                         <select
+                            id="ranking-year-select"
+                            name="ranking_year"
                             value={selectedYear}
                             onChange={(e) => setSelectedYear(Number(e.target.value))}
-                            className="w-full text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                            className="w-full text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-600 cursor-pointer"
                         >
                             {[selectedYear - 1, selectedYear, selectedYear + 1].map(y => (
                                 <option key={y} value={y}>{y}</option>
@@ -1071,13 +1082,15 @@ export default function EmployeeRankingSummaryPage() {
 
                     {/* 3. Đơn vị hiển thị tiền */}
                     <div>
-                        <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">
+                        <label htmlFor="ranking-unit-select" className="block text-[10px] font-black text-slate-600 uppercase tracking-wider mb-1 cursor-pointer">
                             Đơn Vị Tiền
                         </label>
                         <select
+                            id="ranking-unit-select"
+                            name="ranking_unit"
                             value={displayUnit}
                             onChange={(e) => setDisplayUnit(e.target.value as any)}
-                            className="w-full text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                            className="w-full text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-600 cursor-pointer"
                         >
                             <option value="MILLION">Triệu VNĐ</option>
                             <option value="BILLION">Tỷ VNĐ</option>
@@ -1086,13 +1099,15 @@ export default function EmployeeRankingSummaryPage() {
 
                     {/* 4. Lọc TOP / BOT nhanh */}
                     <div>
-                        <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">
+                        <label htmlFor="ranking-category-select" className="block text-[10px] font-black text-slate-600 uppercase tracking-wider mb-1 cursor-pointer">
                             Phân Loại
                         </label>
                         <select
+                            id="ranking-category-select"
+                            name="ranking_category"
                             value={filterCategory}
                             onChange={(e) => setFilterCategory(e.target.value as any)}
-                            className="w-full text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                            className="w-full text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-600 cursor-pointer"
                         >
                             <option value="ALL">Tất cả ({rankingRows.length})</option>
                             <option value="TOP_REV">🏆 Top DT ({summary.topRevenueCount})</option>
@@ -1107,18 +1122,23 @@ export default function EmployeeRankingSummaryPage() {
 
                 {/* TÌM KIẾM NHÂN SỰ */}
                 <div className="mt-2.5 relative">
-                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" aria-hidden="true" />
                     <input
+                        id="ranking-search-input"
+                        name="ranking_search"
                         type="text"
+                        aria-label="Tìm theo tên nhân viên hoặc mã số NV"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         placeholder="Tìm theo tên nhân viên hoặc mã số NV..."
-                        className="w-full pl-9 pr-4 py-1.5 text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        className="w-full pl-9 pr-8 py-1.5 text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-600"
                     />
                     {searchQuery && (
                         <button
+                            type="button"
                             onClick={() => setSearchQuery('')}
-                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-black"
+                            aria-label="Xóa từ khóa tìm kiếm nhân viên"
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-800 text-xs font-black cursor-pointer"
                         >
                             ✕
                         </button>
@@ -1148,8 +1168,8 @@ export default function EmployeeRankingSummaryPage() {
                 {/* 1. HEADER BÁO CÁO (TÊN ST, KỲ BÁO CÁO) */}
                 <div className="border-b border-slate-100 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div>
-                        <div className="text-[11px] font-black uppercase text-indigo-600 tracking-wider flex items-center gap-1.5">
-                            <Trophy className="w-3.5 h-3.5 text-amber-500" />
+                        <div className="text-[11px] font-black uppercase text-blue-700 tracking-wider flex items-center gap-1.5">
+                            <Trophy className="w-3.5 h-3.5 text-amber-600" aria-hidden="true" />
                             <span>BÁO CÁO XẾP HẠNG TỔNG HỢP</span>
                         </div>
                         <h2 className="text-base sm:text-xl font-black text-slate-900 tracking-tight mt-0.5">
@@ -1158,13 +1178,13 @@ export default function EmployeeRankingSummaryPage() {
                     </div>
 
                     <div className="flex items-center gap-2 flex-wrap text-right sm:text-right">
-                        <div className="px-2.5 py-1 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 text-xs font-black">
+                        <div className="px-2.5 py-1 rounded-xl bg-slate-100 border border-slate-200 text-slate-800 text-xs font-black">
                             📅 Tháng {selectedMonth}/{selectedYear}
                         </div>
-                        <div className="px-2.5 py-1 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-900 text-xs font-black">
+                        <div className="px-2.5 py-1 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 text-xs font-black">
                             👥 {summary.totalEmployees} Nhân sự
                         </div>
-                        <div className="px-2.5 py-1 rounded-xl bg-purple-50 border border-purple-200 text-purple-900 text-xs font-black" title="Chế độ tính điểm thi đua của ST">
+                        <div className="px-2.5 py-1 rounded-xl bg-teal-50 border border-teal-200 text-teal-900 text-xs font-black" title="Chế độ tính điểm thi đua của ST">
                             🎯 {summary.scoringModeLabel}
                         </div>
                     </div>
@@ -1185,33 +1205,33 @@ export default function EmployeeRankingSummaryPage() {
 
                 {/* 4. KHỐI NHẬN XÉT TÓM TẮT KẾT QUẢ (TRANG TRỌNG, THẨM MỸ, XUẤT HIỆN TRONG ẢNH CHỤP) */}
                 {assessmentData && assessmentData.comment && showAssessment && (
-                    <div className="bg-gradient-to-r from-purple-50/80 via-indigo-50/50 to-blue-50/60 border border-purple-200 rounded-2xl p-3.5 sm:p-4 text-xs shadow-2xs">
-                        <div className="flex items-center justify-between pb-2 mb-2 border-b border-purple-200/70">
+                    <div className="bg-blue-50/70 border border-blue-200 rounded-2xl p-3.5 sm:p-4 text-xs shadow-sm">
+                        <div className="flex items-center justify-between pb-2 mb-2 border-b border-blue-200/80">
                             <div className="flex items-center gap-2">
-                                <div className="w-6 h-6 rounded-lg bg-gradient-to-tr from-purple-600 to-indigo-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
-                                    <MessageSquare className="w-3.5 h-3.5 stroke-[2.5]" />
+                                <div className="w-6 h-6 rounded-lg bg-blue-700 text-white flex items-center justify-center shrink-0 shadow-sm">
+                                    <MessageSquare className="w-3.5 h-3.5 stroke-[2.5]" aria-hidden="true" />
                                 </div>
-                                <span className="font-black text-purple-950 uppercase tracking-wider text-[11px]">
-                                    NHẬN XÉT & HƯỚNG DẪN HÀNH ĐỘNG
+                                <span className="font-black text-blue-950 uppercase tracking-wider text-[11px]">
+                                    NHẬN XÉT &amp; HƯỚNG DẪN HÀNH ĐỘNG
                                 </span>
                             </div>
                             <div className="flex items-center gap-2" data-html2canvas-ignore="true">
                                 <button
                                     type="button"
                                     onClick={() => setIsAssessmentModalOpen(true)}
-                                    className="text-[10.5px] font-bold text-purple-700 hover:text-purple-950 flex items-center gap-1 cursor-pointer transition"
+                                    className="text-[10.5px] font-bold text-blue-800 hover:text-blue-950 flex items-center gap-1 cursor-pointer transition"
                                     title="Chỉnh sửa nội dung nhận xét"
                                 >
-                                    <Edit3 className="w-3 h-3" />
+                                    <Edit3 className="w-3 h-3" aria-hidden="true" />
                                     <span>Sửa</span>
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => setShowAssessment(false)}
-                                    className="text-[10.5px] font-bold text-slate-400 hover:text-slate-700 flex items-center gap-1 cursor-pointer transition"
+                                    className="text-[10.5px] font-bold text-slate-600 hover:text-slate-900 flex items-center gap-1 cursor-pointer transition"
                                     title="Tạm ẩn nhận xét này khỏi báo cáo"
                                 >
-                                    <EyeOff className="w-3 h-3" />
+                                    <EyeOff className="w-3 h-3" aria-hidden="true" />
                                     <span>Ẩn</span>
                                 </button>
                             </div>
@@ -1227,10 +1247,10 @@ export default function EmployeeRankingSummaryPage() {
             {assessmentData && assessmentData.comment && !showAssessment && (
                 <div
                     data-html2canvas-ignore="true"
-                    className="max-w-[960px] mx-auto mt-2.5 bg-purple-50/70 border border-purple-200 rounded-2xl p-2.5 px-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-purple-950 shadow-2xs"
+                    className="max-w-[960px] mx-auto mt-2.5 bg-blue-50/70 border border-blue-200 rounded-2xl p-2.5 px-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-blue-950 shadow-sm"
                 >
                     <div className="flex items-center gap-2">
-                        <MessageSquare className="w-4 h-4 text-purple-600 shrink-0" />
+                        <MessageSquare className="w-4 h-4 text-blue-700 shrink-0" aria-hidden="true" />
                         <span className="font-medium text-[11.5px]">
                             Đã có nhận xét tóm tắt kết quả xếp hạng (đang ẩn theo tùy chọn).
                         </span>
@@ -1238,9 +1258,9 @@ export default function EmployeeRankingSummaryPage() {
                     <button
                         type="button"
                         onClick={() => setShowAssessment(true)}
-                        className="px-3 py-1 bg-white hover:bg-purple-100 border border-purple-300 rounded-xl text-purple-900 font-bold text-[11px] flex items-center gap-1.5 cursor-pointer shadow-2xs self-start sm:self-auto"
+                        className="px-3 py-1 bg-white hover:bg-blue-100 border border-blue-300 rounded-xl text-blue-900 font-bold text-[11px] flex items-center gap-1.5 cursor-pointer shadow-sm self-start sm:self-auto"
                     >
-                        <Eye className="w-3.5 h-3.5 text-purple-600" />
+                        <Eye className="w-3.5 h-3.5 text-blue-700" aria-hidden="true" />
                         <span>Hiển thị vào báo cáo</span>
                     </button>
                 </div>

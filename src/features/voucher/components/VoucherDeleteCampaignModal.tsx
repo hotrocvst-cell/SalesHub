@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
     X,
     Trash2,
@@ -68,6 +69,15 @@ export default function VoucherDeleteCampaignModal({
     const [selectedCampaigns, setSelectedCampaigns] = useState<Set<string>>(new Set());
     const [isProcessing, setIsProcessing] = useState<boolean>(false);
     const [singleDeletingCamp, setSingleDeletingCamp] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape' && !isProcessing && !singleDeletingCamp) onClose();
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isOpen, isProcessing, singleDeletingCamp, onClose]);
 
     const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
@@ -328,23 +338,32 @@ export default function VoucherDeleteCampaignModal({
     const isAllDisplayedSelected = filteredCampaigns.length > 0 &&
         filteredCampaigns.every(c => selectedCampaigns.has(c.campaign_name));
 
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/75 backdrop-blur-xs font-avo animate-in fade-in duration-150">
-            <div className="bg-white rounded-3xl max-w-2xl w-full border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[92vh] animate-in zoom-in-95 duration-150">
+    return createPortal(
+        <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="voucher-delete-camp-modal-title"
+            className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/75 backdrop-blur-sm"
+            onClick={() => !isProcessing && !singleDeletingCamp && onClose()}
+        >
+            <div
+                className="bg-white rounded-3xl max-w-2xl w-full border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[92vh]"
+                onClick={(e) => e.stopPropagation()}
+            >
                 {/* Header modal */}
                 <div className="bg-gradient-to-r from-rose-900 via-rose-950 to-slate-950 p-4 sm:p-5 text-white flex items-center justify-between gap-3 shrink-0">
                     <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-2xl bg-rose-500 text-white flex items-center justify-center font-black shadow-md shrink-0">
-                            <Trash2 className="w-5 h-5" />
+                        <div className="w-10 h-10 rounded-2xl bg-rose-600 text-white flex items-center justify-center font-black shadow-md shrink-0">
+                            <Trash2 className="w-5 h-5" aria-hidden="true" />
                         </div>
                         <div>
-                            <h2 className="text-sm sm:text-base font-black uppercase tracking-wide text-rose-200 flex items-center gap-2 flex-wrap">
+                            <h2 id="voucher-delete-camp-modal-title" className="text-sm sm:text-base font-black uppercase tracking-wide text-rose-200 flex items-center gap-2 flex-wrap">
                                 <span>Lựa Chọn Xóa Chương Trình PMH</span>
                                 <span className="text-[10px] font-bold bg-rose-500/30 text-rose-200 px-2 py-0.5 rounded-full border border-rose-400/30">
                                     Đã Kết Thúc / Hết Hạn
                                 </span>
                             </h2>
-                            <p className="text-xs text-rose-300/80 mt-0.5">
+                            <p className="text-xs text-rose-200 mt-0.5">
                                 Phạm vi: <strong>{currentStoreName === 'all' ? 'Toàn Cụm ST' : currentStoreName}</strong>
                             </p>
                         </div>
@@ -353,15 +372,16 @@ export default function VoucherDeleteCampaignModal({
                         type="button"
                         onClick={onClose}
                         disabled={isProcessing}
+                        aria-label="Đóng hộp thoại xóa chương trình"
                         className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 text-rose-200 hover:text-white flex items-center justify-center transition cursor-pointer shrink-0 disabled:opacity-50"
                     >
-                        <X className="w-4 h-4" />
+                        <X className="w-4 h-4" aria-hidden="true" />
                     </button>
                 </div>
 
                 {/* Banner cảnh báo an toàn */}
                 <div className="bg-gradient-to-r from-rose-50 to-orange-50 border-b border-rose-100 p-3 sm:px-5 flex items-start gap-2.5 text-xs text-rose-950 shrink-0">
-                    <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                    <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" aria-hidden="true" />
                     <div className="leading-relaxed">
                         <strong className="text-rose-900">Lưu ý quan trọng:</strong> Thao tác xóa sẽ loại bỏ vĩnh viễn toàn bộ mã voucher và trạng thái của chương trình được chọn khỏi kho Cloud &amp; máy này. Nếu bạn chỉ muốn thu gọn giao diện mà vẫn giữ lịch sử, hãy dùng tính năng <strong>Ẩn Chương Trình</strong>.
                     </div>
@@ -370,13 +390,16 @@ export default function VoucherDeleteCampaignModal({
                 {/* Thanh tìm kiếm và bộ lọc tab */}
                 <div className="p-3 sm:px-5 border-b border-slate-200 bg-slate-50 space-y-2.5 shrink-0">
                     <div className="relative">
-                        <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                        <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" aria-hidden="true" />
                         <input
+                            id="delete-campaign-search"
+                            name="delete_campaign_search"
                             type="text"
+                            aria-label="Tìm kiếm theo tên chương trình PMH"
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             placeholder="Tìm kiếm theo tên chương trình PMH..."
-                            className="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-rose-500 shadow-2xs"
+                            className="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 placeholder:text-slate-500 focus:outline-none focus:border-rose-500 shadow-sm"
                         />
                     </div>
 
@@ -387,8 +410,8 @@ export default function VoucherDeleteCampaignModal({
                             onClick={() => setFilterTab('ENDED_OR_EXPIRED')}
                             className={`px-2.5 py-1 rounded-xl font-black transition cursor-pointer text-xs ${
                                 filterTab === 'ENDED_OR_EXPIRED'
-                                    ? 'bg-rose-600 text-white shadow-2xs'
-                                    : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
+                                    ? 'bg-rose-600 text-white shadow-sm'
+                                    : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
                             }`}
                         >
                             Đã Kết Thúc / Hết Hạn ({tabCounts.endedOrExpired})
@@ -399,8 +422,8 @@ export default function VoucherDeleteCampaignModal({
                             onClick={() => setFilterTab('ENDED_ONLY')}
                             className={`px-2.5 py-1 rounded-xl font-bold transition cursor-pointer text-xs ${
                                 filterTab === 'ENDED_ONLY'
-                                    ? 'bg-rose-700 text-white shadow-2xs'
-                                    : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
+                                    ? 'bg-rose-700 text-white shadow-sm'
+                                    : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
                             }`}
                         >
                             Đã Kết Thúc ({tabCounts.endedOnly})
@@ -411,8 +434,8 @@ export default function VoucherDeleteCampaignModal({
                             onClick={() => setFilterTab('EXPIRED_ONLY')}
                             className={`px-2.5 py-1 rounded-xl font-bold transition cursor-pointer text-xs ${
                                 filterTab === 'EXPIRED_ONLY'
-                                    ? 'bg-amber-600 text-white shadow-2xs'
-                                    : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
+                                    ? 'bg-amber-400 text-slate-950 border border-amber-500 shadow-sm'
+                                    : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
                             }`}
                         >
                             Có Mã Quá Hạn ({tabCounts.expiredOnly})
@@ -423,8 +446,8 @@ export default function VoucherDeleteCampaignModal({
                             onClick={() => setFilterTab('HIDDEN_ONLY')}
                             className={`px-2.5 py-1 rounded-xl font-bold transition cursor-pointer text-xs ${
                                 filterTab === 'HIDDEN_ONLY'
-                                    ? 'bg-slate-800 text-white shadow-2xs'
-                                    : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
+                                    ? 'bg-slate-800 text-white shadow-sm'
+                                    : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
                             }`}
                         >
                             Đã Ẩn ({tabCounts.hiddenOnly})
@@ -435,8 +458,8 @@ export default function VoucherDeleteCampaignModal({
                             onClick={() => setFilterTab('ALL')}
                             className={`px-2.5 py-1 rounded-xl font-bold transition cursor-pointer text-xs ${
                                 filterTab === 'ALL'
-                                    ? 'bg-slate-900 text-white shadow-2xs'
-                                    : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
+                                    ? 'bg-slate-900 text-white shadow-sm'
+                                    : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
                             }`}
                         >
                             Tất Cả ({tabCounts.all})
@@ -487,7 +510,7 @@ export default function VoucherDeleteCampaignModal({
                                     key={camp.campaign_name}
                                     className={`p-3 rounded-2xl border transition flex items-center justify-between gap-3 flex-wrap sm:flex-nowrap ${
                                         isSelected
-                                            ? 'bg-rose-50/80 border-rose-300 shadow-2xs ring-1 ring-rose-300'
+                                            ? 'bg-rose-50/80 border-rose-300 shadow-sm ring-1 ring-rose-300'
                                             : camp.is_ended
                                             ? 'bg-rose-50/30 border-rose-200/80 hover:bg-rose-50/50'
                                             : camp.expired > 0
@@ -500,13 +523,14 @@ export default function VoucherDeleteCampaignModal({
                                         <button
                                             type="button"
                                             onClick={() => handleToggleSelect(camp.campaign_name)}
-                                            className="mt-0.5 text-slate-400 hover:text-rose-600 transition cursor-pointer shrink-0"
+                                            aria-label={isSelected ? `Bỏ chọn ${camp.campaign_name}` : `Chọn ${camp.campaign_name} để xóa`}
+                                            className="mt-0.5 text-slate-500 hover:text-rose-600 transition cursor-pointer shrink-0"
                                             title={isSelected ? 'Bỏ chọn' : 'Chọn để xóa'}
                                         >
                                             {isSelected ? (
-                                                <CheckSquare className="w-4 h-4 text-rose-600" />
+                                                <CheckSquare className="w-4 h-4 text-rose-600" aria-hidden="true" />
                                             ) : (
-                                                <Square className="w-4 h-4 text-slate-400" />
+                                                <Square className="w-4 h-4 text-slate-500" aria-hidden="true" />
                                             )}
                                         </button>
 
@@ -520,22 +544,22 @@ export default function VoucherDeleteCampaignModal({
                                                 </span>
 
                                                 {camp.is_ended && (
-                                                    <span className="text-[9.5px] font-bold px-1.5 py-0.2 rounded bg-rose-100 text-rose-800 border border-rose-200 inline-flex items-center gap-0.5">
-                                                        <Ban className="w-3 h-3 text-rose-600" />
+                                                    <span className="text-[9.5px] font-bold px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 border border-rose-200 inline-flex items-center gap-0.5">
+                                                        <Ban className="w-3 h-3 text-rose-600" aria-hidden="true" />
                                                         <span>Đã Kết Thúc</span>
                                                     </span>
                                                 )}
 
                                                 {camp.is_hidden && (
-                                                    <span className="text-[9.5px] font-bold px-1.5 py-0.2 rounded bg-slate-200 text-slate-700 border border-slate-300 inline-flex items-center gap-0.5">
-                                                        <EyeOff className="w-3 h-3 text-slate-500" />
+                                                    <span className="text-[9.5px] font-bold px-1.5 py-0.5 rounded bg-slate-200 text-slate-800 border border-slate-300 inline-flex items-center gap-0.5">
+                                                        <EyeOff className="w-3 h-3 text-slate-600" aria-hidden="true" />
                                                         <span>Đã Ẩn</span>
                                                     </span>
                                                 )}
 
                                                 {camp.expired > 0 && (
-                                                    <span className="text-[9.5px] font-bold px-1.5 py-0.2 rounded bg-amber-100 text-amber-900 border border-amber-300 inline-flex items-center gap-0.5">
-                                                        <Clock className="w-3 h-3 text-amber-600" />
+                                                    <span className="text-[9.5px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 inline-flex items-center gap-0.5">
+                                                        <Clock className="w-3 h-3 text-amber-700" aria-hidden="true" />
                                                         <span>{camp.expired} mã quá hạn</span>
                                                     </span>
                                                 )}
@@ -550,7 +574,7 @@ export default function VoucherDeleteCampaignModal({
                                                     Trị giá: {camp.totalValue.toLocaleString('vi-VN')}đ
                                                 </span>
                                                 {camp.latestExpiry && (
-                                                    <span className="text-slate-400 font-avo text-[10px]">
+                                                    <span className="text-slate-500 text-[10px]">
                                                         Hạn: {formatDate(camp.latestExpiry)}
                                                     </span>
                                                 )}
@@ -564,10 +588,10 @@ export default function VoucherDeleteCampaignModal({
                                             type="button"
                                             onClick={() => handleExecuteDeleteSingle(camp)}
                                             disabled={isProcessing || isDeletingSingle}
-                                            className="p-1.5 sm:px-2.5 sm:py-1 rounded-xl bg-white hover:bg-rose-50 text-rose-600 hover:text-rose-700 border border-rose-200 hover:border-rose-400 text-xs font-bold transition cursor-pointer inline-flex items-center gap-1 shadow-2xs active:scale-95 disabled:opacity-50"
+                                            className="p-1.5 sm:px-2.5 sm:py-1 rounded-xl bg-white hover:bg-rose-50 text-rose-700 hover:text-rose-800 border border-rose-200 hover:border-rose-400 text-xs font-bold transition cursor-pointer inline-flex items-center gap-1 shadow-sm active:scale-95 disabled:opacity-50"
                                             title={`Xóa riêng chương trình "${camp.campaign_name}" khỏi hệ thống`}
                                         >
-                                            <Trash2 className="w-3.5 h-3.5" />
+                                            <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                                             <span className="hidden sm:inline">
                                                 {isDeletingSingle ? 'Đang xóa...' : 'Xóa CT'}
                                             </span>
@@ -585,15 +609,15 @@ export default function VoucherDeleteCampaignModal({
                         {selectedStats.count > 0 ? (
                             <div className="space-y-0.5">
                                 <div className="font-black text-rose-700 flex items-center gap-1.5">
-                                    <AlertTriangle className="w-3.5 h-3.5" />
+                                    <AlertTriangle className="w-3.5 h-3.5" aria-hidden="true" />
                                     <span>Đang chọn {selectedStats.count} chương trình ({selectedStats.totalVouchers} mã)</span>
                                 </div>
-                                <div className="text-[11px] text-slate-500 font-mono">
+                                <div className="text-[11px] text-slate-600 font-mono">
                                     Tổng trị giá: <strong>{selectedStats.totalValue.toLocaleString('vi-VN')}đ</strong>
                                 </div>
                             </div>
                         ) : (
-                            <span className="text-slate-500 font-bold">
+                            <span className="text-slate-600 font-bold">
                                 Chưa chọn chương trình nào để xóa ({filteredCampaigns.length} CT hiển thị)
                             </span>
                         )}
@@ -604,7 +628,7 @@ export default function VoucherDeleteCampaignModal({
                             type="button"
                             onClick={onClose}
                             disabled={isProcessing}
-                            className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-200/80 transition cursor-pointer disabled:opacity-50"
+                            className="px-4 py-2 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-200/80 transition cursor-pointer disabled:opacity-50"
                         >
                             Đóng
                         </button>
@@ -616,7 +640,7 @@ export default function VoucherDeleteCampaignModal({
                             className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 active:scale-[0.98] text-white font-black text-xs transition cursor-pointer shadow-sm flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
                             title={selectedStats.count > 0 ? `Xóa vĩnh viễn ${selectedStats.count} chương trình đã chọn` : 'Vui lòng tích chọn chương trình cần xóa'}
                         >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                             <span>
                                 {isProcessing
                                     ? 'Đang tiến hành xóa...'
@@ -626,7 +650,8 @@ export default function VoucherDeleteCampaignModal({
                     </div>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 }
 

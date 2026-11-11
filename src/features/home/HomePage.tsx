@@ -10,7 +10,7 @@ export default function HomePage() {
     }, []);
 
     return (
-        <div className="space-y-6 pb-12 animate-in fade-in duration-300 max-w-7xl mx-auto">
+        <div className="space-y-6 pb-12 max-w-7xl mx-auto">
             {/* 1. Hero Clock & Lời chào người dùng thời gian thực */}
             <ClockWidget />
 

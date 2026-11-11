@@ -322,15 +322,15 @@ export function convertStoreReportingDataToSessions(
         const revItem: RevenueItem = {
             store: s.storeRawName,
             shortName: s.storeShortName || getShortStoreName(s.storeRawName),
-            sl: Number(s.quantityQd || s.quantityReal || 0),
+            sl: Number(s.quantityQd || 0),
             rev: Number(s.revenueQd || 0),
             rawRev: Number(s.revenueQd || 0),
             target: Number(s.targetQd || 0),
             pct: s.completionRateQd !== undefined && s.completionRateQd !== null
                 ? Number(s.completionRateQd)
                 : (s.targetQd > 0 ? (s.revenueQd / s.targetQd) * 100 : 0),
-            pctTraGop: Number(s.installmentRateReal || 0),
-            dtTraGop: Number(s.installmentReal || 0),
+            pctTraGop: Number(s.installmentRate || 0),
+            dtTraGop: Number(s.installmentQd || 0),
             isNewFormat: true
         };
 
@@ -362,9 +362,10 @@ export function convertStoreReportingDataToSessions(
             revenue_data: revItem,
             emulation_data: emulationList,
             raw_ocr_info: {
-                revenueReal: s.revenueReal,
-                targetReal: s.targetReal,
-                quantityReal: s.quantityReal
+                installmentQd: s.installmentQd || 0,
+                avg3Months: s.avg3Months || 0,
+                pctGrowth: s.pctGrowth || 0,
+                installmentRate: s.installmentRate || 0
             },
             updated_at: nowIso,
             updated_by: userName
@@ -383,6 +384,7 @@ export function convertSessionsToStoreReportingData(
 
     return sessions.map(sess => {
         const rev = (sess.revenue_data || {}) as any;
+        const ocrInfo = (sess.raw_ocr_info || {}) as any;
         const emus: Record<string, EmulationOcrItem> = {};
 
         if (Array.isArray(sess.emulation_data)) {
@@ -403,26 +405,22 @@ export function convertSessionsToStoreReportingData(
 
         const revQd = Number(rev.rev ?? rev.rawRev ?? 0);
         const tgQd = Number(rev.target ?? 0);
-        const qQd = Number(rev.sl ?? 0);
-        const revReal = Number(rev.revenueActual ?? 0);
-        const tgReal = Number(rev.targetActual ?? 0);
-        const qReal = Number(rev.quantityActual ?? 0);
-        const instReal = Number(rev.installmentActual ?? rev.dtTraGop ?? 0);
-        const instRateReal = Number(rev.installmentRateActual ?? rev.pctTraGop ?? 0);
+        const instQd = Number(ocrInfo.installmentQd ?? rev.dtTraGop ?? 0);
+        const instRate = Number(ocrInfo.installmentRate ?? rev.pctTraGop ?? 0);
+        const avg3M = Number(ocrInfo.avg3Months ?? 0);
+        const pctGr = Number(ocrInfo.pctGrowth ?? 0);
 
         return {
-            storeCode: '',
+            storeCode: sess.store_name.match(/^(\d{3,6})/)?.[1] || '',
             storeRawName: sess.store_name,
             storeShortName: rev.shortName || getShortStoreName(sess.store_name),
             revenueQd: revQd,
+            installmentQd: instQd,
             targetQd: tgQd,
-            quantityQd: qQd,
+            avg3Months: avg3M,
+            pctGrowth: pctGr,
+            installmentRate: instRate,
             completionRateQd: rev.pct !== undefined ? Number(rev.pct) : (tgQd > 0 ? (revQd / tgQd) * 100 : 0),
-            revenueReal: revReal,
-            targetReal: tgReal,
-            quantityReal: qReal,
-            installmentReal: instReal,
-            installmentRateReal: instRateReal,
             emulations: emus
         };
     });

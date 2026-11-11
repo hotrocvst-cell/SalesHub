@@ -76,12 +76,12 @@ export default function KnowledgeDocEditor({
                 const upRes = await uploadKnowledgeImage(file, 'docs');
                 if (upRes.success && upRes.storagePath) {
                     setImagePaths((prev) => [...prev, upRes.storagePath!]);
-                    onToast(`✅ Đã đọc ảnh & lưu ảnh gốc (${upRes.sizeKb || 0} KB) lên Supabase Storage!`);
+                    onToast(`Đã đọc ảnh & lưu ảnh gốc (${upRes.sizeKb || 0} KB) lên Supabase Storage!`);
                 } else {
                     onToast(`⚠️ Đã đọc chữ nhưng chưa lưu được ảnh gốc: ${upRes.error}`);
                 }
             } else {
-                onToast(`✅ Đã bóc tách thành công file ${parsed.sourceType}! Hãy rà soát lại nội dung trước khi lưu.`);
+                onToast(`Đã bóc tách thành công file ${parsed.sourceType}! Hãy rà soát lại nội dung trước khi lưu.`);
             }
         } catch (err: any) {
             onToast(`⚠️ ${err?.message || 'Lỗi đọc file tài liệu'}`);
@@ -107,7 +107,7 @@ export default function KnowledgeDocEditor({
             }
         }
         if (added > 0) {
-            onToast(`🖼️ Đã nén và tải ${added} ảnh gốc lên Supabase Storage!`);
+            onToast(`Đã nén và tải ${added} ảnh gốc lên Supabase Storage!`);
         }
         setIsUploadingImg(false);
     };
@@ -137,19 +137,24 @@ export default function KnowledgeDocEditor({
             onToast(`⚠️ Lỗi lưu tài liệu: ${res.error}`);
             return;
         }
-        onToast(`🎉 Đã lưu tài liệu "${title}" (${res.chunkCount} phân đoạn tri thức)!`);
+        onToast(`Đã lưu tài liệu "${title}" (${res.chunkCount} phân đoạn tri thức)!`);
         onSaved();
     };
 
     return (
-        <form onSubmit={handleSubmit} className="bg-white rounded-3xl border border-slate-200 p-4 sm:p-5 shadow-xs space-y-4">
+        <form onSubmit={handleSubmit} className="bg-white rounded-3xl border border-slate-200 p-4 sm:p-5 shadow-sm space-y-4">
             <div className="flex items-center justify-between pb-2.5 border-b border-slate-100">
                 <div className="flex items-center gap-2 text-xs font-black text-slate-900 uppercase">
-                    <FileText className="w-4 h-4 text-blue-600" />
+                    <FileText className="w-4 h-4 text-blue-600 shrink-0" aria-hidden="true" />
                     <span>{editingDoc ? 'Chỉnh Sửa Tài Liệu Tri Thức' : 'Nạp Tài Liệu / Ảnh Mới Vào Kho'}</span>
                 </div>
-                <button type="button" onClick={onCancel} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 cursor-pointer">
-                    <X className="w-4 h-4" />
+                <button
+                    type="button"
+                    onClick={onCancel}
+                    aria-label="Đóng trình soạn tài liệu"
+                    className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-600 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                >
+                    <X className="w-4 h-4" aria-hidden="true" />
                 </button>
             </div>
 
@@ -157,48 +162,35 @@ export default function KnowledgeDocEditor({
             <div className="p-3 bg-blue-50/60 border border-dashed border-blue-300 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                 <div className="text-xs text-blue-900 space-y-0.5">
                     <div className="font-bold flex items-center gap-1.5">
-                        <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                        <Sparkles className="w-3.5 h-3.5 text-blue-600 shrink-0" aria-hidden="true" />
                         <span>Tải lên đa nguồn (Word, Excel, PDF, Ảnh, Text)</span>
                     </div>
-                    <p className="text-[11px] text-blue-700/80">
-                        Hỗ trợ `.docx`, `.xlsx`, `.pdf`, `.txt`, `.md` và ảnh chụp `.jpg/.png` (tự động nén &amp; trích xuất chữ).
+                    <p className="text-[11px] text-blue-800/85">
+                        Hỗ trợ .docx, .xlsx, .pdf, .txt, .md và ảnh chụp .jpg/.png (tự động nén &amp; trích xuất chữ).
                     </p>
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0 flex-wrap">
-                    <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept=".txt,.md,.csv,.xlsx,.xls,.docx,.pdf,image/*"
-                        className="hidden"
-                        onChange={handleUploadDocumentFile}
-                    />
+                    <input ref={fileInputRef} type="file" accept=".txt,.md,.csv,.xlsx,.xls,.docx,.pdf,image/*" className="hidden" onChange={handleUploadDocumentFile} />
                     <button
                         type="button"
                         disabled={isParsingFile}
                         onClick={() => fileInputRef.current?.click()}
-                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer disabled:opacity-60"
+                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                     >
-                        {isParsingFile ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UploadCloud className="w-3.5 h-3.5" />}
+                        {isParsingFile ? <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" aria-hidden="true" /> : <UploadCloud className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />}
                         <span>{isParsingFile ? 'Đang bóc tách...' : 'Chọn File / Ảnh'}</span>
                     </button>
 
-                    <input
-                        ref={extraImageInputRef}
-                        type="file"
-                        accept="image/*"
-                        multiple
-                        className="hidden"
-                        onChange={handleUploadExtraImages}
-                    />
+                    <input ref={extraImageInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleUploadExtraImages} />
                     <button
                         type="button"
                         disabled={isUploadingImg}
                         onClick={() => extraImageInputRef.current?.click()}
-                        className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer disabled:opacity-60"
+                        className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                         title="Đính kèm thêm hình ảnh gốc minh họa (không OCR lại chữ)"
                     >
-                        {isUploadingImg ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ImageIcon className="w-3.5 h-3.5 text-emerald-600" />}
+                        {isUploadingImg ? <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" aria-hidden="true" /> : <ImageIcon className="w-3.5 h-3.5 text-emerald-600 shrink-0" aria-hidden="true" />}
                         <span>+ Ảnh minh họa</span>
                     </button>
                 </div>
@@ -207,22 +199,24 @@ export default function KnowledgeDocEditor({
             {/* Tiêu đề & Danh mục */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="sm:col-span-2 space-y-1">
-                    <label className="text-[11px] font-bold text-slate-700">Tiêu đề tài liệu: <span className="text-rose-500">*</span></label>
+                    <label htmlFor="doc-title" className="block text-[11px] font-bold text-slate-700">Tiêu đề tài liệu: <span className="text-rose-500">*</span></label>
                     <input
+                        id="doc-title"
                         type="text"
                         required
                         value={title}
                         onChange={(e) => setTitle(e.target.value)}
                         placeholder="Ví dụ: Quy định thưởng thi đua ngành hàng Gia dụng T11..."
-                        className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:bg-white"
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white"
                     />
                 </div>
                 <div className="space-y-1">
-                    <label className="text-[11px] font-bold text-slate-700">Chuyên mục:</label>
+                    <label htmlFor="doc-category" className="block text-[11px] font-bold text-slate-700">Chuyên mục:</label>
                     <select
+                        id="doc-category"
                         value={category}
                         onChange={(e) => setCategory(e.target.value)}
-                        className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-800 cursor-pointer"
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-800 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
                         {KNOWLEDGE_CATEGORIES.map((c) => (
                             <option key={c} value={c}>{c}</option>
@@ -243,22 +237,23 @@ export default function KnowledgeDocEditor({
             {/* Xem trước ảnh đính kèm nếu có */}
             {imagePaths.length > 0 && (
                 <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-slate-700">Hình ảnh gốc đính kèm ({imagePaths.length}):</label>
+                    <div className="text-[11px] font-bold text-slate-700 tabular-nums">Hình ảnh gốc đính kèm ({imagePaths.length}):</div>
                     <div className="flex items-center gap-2 flex-wrap">
                         {imagePaths.map((p, idx) => (
                             <div key={p + idx} className="relative w-20 h-20 rounded-xl overflow-hidden border border-slate-300 bg-slate-100">
                                 {previewUrls[p] ? (
-                                    <img src={previewUrls[p]} alt="preview" className="w-full h-full object-cover" />
+                                    <img src={previewUrls[p]} alt={`Ảnh đính kèm #${idx + 1}`} className="w-full h-full object-cover" />
                                 ) : (
-                                    <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-400">Ảnh #{idx + 1}</div>
+                                    <div className="w-full h-full flex items-center justify-center text-[10px] font-semibold text-slate-600 tabular-nums">Ảnh #{idx + 1}</div>
                                 )}
                                 <button
                                     type="button"
                                     onClick={() => setImagePaths((prev) => prev.filter((_, i) => i !== idx))}
-                                    className="absolute top-1 right-1 p-1 bg-rose-600 text-white rounded-full shadow cursor-pointer"
+                                    aria-label={`Gỡ ảnh đính kèm #${idx + 1}`}
+                                    className="absolute top-1 right-1 w-6 h-6 flex items-center justify-center bg-rose-600 hover:bg-rose-700 text-white rounded-full shadow cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
                                     title="Gỡ ảnh khỏi tài liệu"
                                 >
-                                    <Trash2 className="w-2.5 h-2.5" />
+                                    <Trash2 className="w-3 h-3" aria-hidden="true" />
                                 </button>
                             </div>
                         ))}
@@ -268,14 +263,15 @@ export default function KnowledgeDocEditor({
 
             {/* Nội dung văn bản Markdown */}
             <div className="space-y-1">
-                <label className="text-[11px] font-bold text-slate-700">Nội dung chi tiết (hỗ trợ Markdown &amp; Bảng): <span className="text-rose-500">*</span></label>
+                <label htmlFor="doc-content" className="block text-[11px] font-bold text-slate-700">Nội dung chi tiết (hỗ trợ Markdown &amp; Bảng): <span className="text-rose-500">*</span></label>
                 <textarea
+                    id="doc-content"
                     required
                     rows={8}
                     value={rawContent}
                     onChange={(e) => setRawContent(e.target.value)}
                     placeholder="Dán nội dung quy định, hướng dẫn hoặc tải file phía trên để AI tự bóc tách vào đây..."
-                    className="w-full p-3 bg-slate-50 border border-slate-300 rounded-2xl text-xs font-mono leading-relaxed text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:bg-white"
+                    className="w-full p-3 bg-slate-50 border border-slate-300 rounded-2xl text-xs font-mono leading-relaxed text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white"
                 />
             </div>
 
@@ -283,16 +279,16 @@ export default function KnowledgeDocEditor({
                 <button
                     type="button"
                     onClick={onCancel}
-                    className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                    className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                 >
                     Hủy
                 </button>
                 <button
                     type="submit"
                     disabled={isSaving}
-                    className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black flex items-center gap-1.5 shadow-xs transition cursor-pointer disabled:opacity-60"
+                    className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black flex items-center gap-1.5 shadow-sm transition cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1"
                 >
-                    {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                    {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" aria-hidden="true" /> : <Save className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />}
                     <span>{isSaving ? 'Đang lưu Cloud...' : 'Lưu Kho Tri Thức'}</span>
                 </button>
             </div>

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Printer, X, Copy, Check, CopyCheck } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { DENOMINATIONS } from '../types';
@@ -32,6 +32,21 @@ export const CashReceiptPrintModal: React.FC<CashReceiptPrintModalProps> = ({
     const [copiedBill, setCopiedBill] = useState(false);
     const [isCopyingBill, setIsCopyingBill] = useState(false);
     const billPaperRef = useRef<HTMLDivElement>(null);
+    const closeBtnRef = useRef<HTMLButtonElement>(null);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        const prevFocused = document.activeElement as HTMLElement | null;
+        closeBtnRef.current?.focus();
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') onClose();
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+            prevFocused?.focus?.();
+        };
+    }, [isOpen, onClose]);
 
     if (!isOpen) return null;
 
@@ -230,37 +245,48 @@ export const CashReceiptPrintModal: React.FC<CashReceiptPrintModalProps> = ({
     };
 
     return (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-2xs z-50 flex items-center justify-center p-3 sm:p-4">
-            <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
+        <div
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4"
+            onClick={onClose}
+        >
+            <div
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="cash-print-modal-title"
+                className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]"
+                onClick={e => e.stopPropagation()}
+            >
                 {/* Modal Header */}
                 <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
-                    <div className="flex items-center gap-2">
-                        <span className="p-1.5 bg-emerald-100 text-emerald-700 rounded-lg">
+                    <div className="flex items-center gap-2 min-w-0">
+                        <span className="p-1.5 bg-emerald-100 text-emerald-700 rounded-lg shrink-0" aria-hidden="true">
                             <Printer className="w-4 h-4" />
                         </span>
-                        <div>
-                            <h3 className="text-xs sm:text-sm font-black text-slate-800">
+                        <div className="min-w-0">
+                            <h2 id="cash-print-modal-title" className="text-xs sm:text-sm font-black text-slate-800">
                                 Xem Trước Phiếu In Khổ 80mm
-                            </h3>
-                            <p className="text-[10px] text-slate-500">
+                            </h2>
+                            <p className="text-[10px] text-slate-600">
                                 Chuẩn in nhiệt POS 72mm-80mm (Khổ hoá đơn ST)
                             </p>
                         </div>
                     </div>
                     <button
+                        ref={closeBtnRef}
                         type="button"
                         onClick={onClose}
-                        className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 transition cursor-pointer"
+                        aria-label="Đóng xem trước phiếu in"
+                        className="p-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-200/70 transition cursor-pointer shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
                     >
-                        <X className="w-4 h-4" />
+                        <X className="w-4 h-4" aria-hidden="true" />
                     </button>
                 </div>
 
                 {/* Bill Paper Preview */}
-                <div className="p-4 overflow-y-auto flex-1 bg-slate-100/70 flex justify-center">
+                <div className="p-4 overflow-y-auto overscroll-contain flex-1 bg-slate-100/70 flex justify-center">
                     <div
                         ref={billPaperRef}
-                        className="bg-white border border-slate-300 shadow-sm p-3.5 sm:p-4 w-[280px] sm:w-[310px] text-[11px] font-mono text-slate-900 leading-snug rounded-sm"
+                        className="bg-white border border-slate-300 shadow-sm p-3.5 sm:p-4 w-[280px] sm:w-[310px] text-[11px] font-mono tabular-nums text-slate-900 leading-snug rounded-sm"
                     >
                         <div className="text-center font-bold text-xs uppercase text-slate-900">
                             PHIẾU KIỂM QUỸ CA TRỰC
@@ -268,7 +294,7 @@ export const CashReceiptPrintModal: React.FC<CashReceiptPrintModalProps> = ({
                         <div className="text-center font-bold text-[11px] text-slate-800 mt-0.5">
                             {storeName || 'ST SALES HUB'}
                         </div>
-                        <div className="text-center text-[10px] text-slate-500 mt-0.5">
+                        <div className="text-center text-[10px] text-slate-600 mt-0.5">
                             Ngày in: {printTime}
                         </div>
 
@@ -284,7 +310,7 @@ export const CashReceiptPrintModal: React.FC<CashReceiptPrintModalProps> = ({
 
                         <div className="space-y-1">
                             {activeRows.length === 0 ? (
-                                <div className="text-center py-2 text-slate-400 italic">
+                                <div className="text-center py-2 text-slate-500 italic">
                                     Chưa có tờ tiền nào
                                 </div>
                             ) : (
@@ -312,7 +338,7 @@ export const CashReceiptPrintModal: React.FC<CashReceiptPrintModalProps> = ({
                             <span>Tiền cần nộp:</span>
                             <b className="text-slate-900">{targetCash.toLocaleString('vi-VN')} đ</b>
                         </div>
-                        <div className="flex justify-between font-bold mt-1.5 pt-1 border-t border-slate-200">
+                        <div className="flex justify-between font-bold mt-1.5 pt-1 border-t border-slate-200 gap-2">
                             <span>➜ Kết quả:</span>
                             <span className={difference === 0 ? 'text-emerald-700' : (difference > 0 ? 'text-blue-700' : 'text-rose-700')}>
                                 {diffText}
@@ -329,12 +355,12 @@ export const CashReceiptPrintModal: React.FC<CashReceiptPrintModalProps> = ({
                         <div className="grid grid-cols-2 gap-2 text-center text-[10px] mt-4 pt-1">
                             <div>
                                 <b className="text-slate-800">Người kiểm</b>
-                                <div className="text-[9px] text-slate-400 italic">(Ký ghi rõ họ tên)</div>
+                                <div className="text-[9px] text-slate-500 italic">(Ký ghi rõ họ tên)</div>
                                 <div className="h-8"></div>
                             </div>
                             <div>
                                 <b className="text-slate-800">Trưởng ca / QL</b>
-                                <div className="text-[9px] text-slate-400 italic">(Ký ghi rõ họ tên)</div>
+                                <div className="text-[9px] text-slate-500 italic">(Ký ghi rõ họ tên)</div>
                                 <div className="h-8"></div>
                             </div>
                         </div>
@@ -348,18 +374,18 @@ export const CashReceiptPrintModal: React.FC<CashReceiptPrintModalProps> = ({
                             type="button"
                             onClick={handleCopyBillImage}
                             disabled={isCopyingBill}
-                            className="px-3 py-2 rounded-xl text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50"
+                            className="px-3 py-2 rounded-xl text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                         >
-                            {copiedBill ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <CopyCheck className="w-3.5 h-3.5 text-indigo-600" />}
+                            {copiedBill ? <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" aria-hidden="true" /> : <CopyCheck className="w-3.5 h-3.5 text-indigo-600 shrink-0" aria-hidden="true" />}
                             <span>{isCopyingBill ? 'Đang Chép...' : (copiedBill ? 'Đã Chép Ảnh' : 'Copy Ảnh Phiếu')}</span>
                         </button>
 
                         <button
                             type="button"
                             onClick={handleCopyText}
-                            className="px-3 py-2 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 flex items-center gap-1.5 transition cursor-pointer"
+                            className="px-3 py-2 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 flex items-center gap-1.5 transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                         >
-                            {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                            {copied ? <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" aria-hidden="true" /> : <Copy className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />}
                             <span>{copied ? 'Đã chép text' : 'Sao chép dạng Text'}</span>
                         </button>
                     </div>
@@ -368,16 +394,16 @@ export const CashReceiptPrintModal: React.FC<CashReceiptPrintModalProps> = ({
                         <button
                             type="button"
                             onClick={onClose}
-                            className="px-3 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                            className="px-3 py-2 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 border border-transparent transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                         >
                             Đóng
                         </button>
                         <button
                             type="button"
                             onClick={handlePrintDirect}
-                            className="px-4 py-2 rounded-xl text-xs font-black text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm flex items-center gap-1.5 transition cursor-pointer"
+                            className="px-4 py-2 rounded-xl text-xs font-black text-white bg-emerald-600 hover:bg-emerald-700 border border-emerald-600 shadow-sm flex items-center gap-1.5 transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
                         >
-                            <Printer className="w-3.5 h-3.5" />
+                            <Printer className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
                             In Ra Máy In Nhiệt
                         </button>
                     </div>

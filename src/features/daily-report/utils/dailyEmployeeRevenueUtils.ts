@@ -172,9 +172,31 @@ export function processDailyEmployeeRevenueData(
     const activeActualRevenue = activeList.reduce((s, e) => s + (e.revenue_actual || 0), 0);
     const avgRevenueQd = activeCount > 0 ? Number((activeRevenueQd / activeCount).toFixed(2)) : 0;
     const avgActualRevenue = activeCount > 0 ? Number((activeActualRevenue / activeCount).toFixed(2)) : 0;
-    const avgInstallmentRate = totalActualRevenue > 0
-        ? Number(((totalInstallmentRevenue / totalActualRevenue) * 100).toFixed(1))
-        : 0;
+
+    // % Tỷ trọng trả góp trung bình toàn ca: ưu tiên tỷ trọng theo DTQĐ (khi không có DT Thực), giữ fallback dữ liệu cũ nếu có
+    let avgInstallmentRate = 0;
+    if (totalActualRevenue > 0) {
+        avgInstallmentRate = Number(((totalInstallmentRevenue / totalActualRevenue) * 100).toFixed(1));
+    } else {
+        const rateWeightSum = mergedList.reduce(
+            (s, e) => s + ((Number(e.revenue_qd) || 0) > 0 ? Number(e.revenue_qd) : 0),
+            0
+        );
+        if (rateWeightSum > 0) {
+            const weightedSum = mergedList.reduce(
+                (s, e) => s + ((Number(e.revenue_qd) || 0) > 0 ? (Number(e.installment_rate) || 0) * Number(e.revenue_qd) : 0),
+                0
+            );
+            avgInstallmentRate = Number((weightedSum / rateWeightSum).toFixed(1));
+        } else {
+            const rateEntries = mergedList.filter(e => (Number(e.installment_rate) || 0) > 0);
+            if (rateEntries.length > 0) {
+                avgInstallmentRate = Number(
+                    (rateEntries.reduce((s, e) => s + Number(e.installment_rate), 0) / rateEntries.length).toFixed(1)
+                );
+            }
+        }
+    }
 
     // 5. Sắp xếp nhóm có doanh thu giảm dần theo DTQĐ
     const sortedActive = [...activeList].sort((a, b) => b.revenue_qd - a.revenue_qd);
@@ -193,7 +215,7 @@ export function processDailyEmployeeRevenueData(
         const isTop30 = rank <= top30Count;
         const isBelowAvg = emp.revenue_qd < avgRevenueQd && emp.revenue_qd > 0;
         const isZeroOrNeg = false;
-        const isZeroInstallment = (emp.installment_revenue <= 0 || emp.installment_rate === 0);
+        const isZeroInstallment = ((emp.installment_revenue || 0) <= 0 && (emp.installment_rate || 0) <= 0);
 
         return {
             ...emp,
@@ -228,7 +250,7 @@ export function processDailyEmployeeRevenueData(
             is_top_30: false,
             is_below_avg: false,
             is_zero_or_negative: true,
-            is_zero_installment: true,
+            is_zero_installment: ((emp.installment_revenue || 0) <= 0 && (emp.installment_rate || 0) <= 0),
             is_manual_shift_addition: isManual
         };
     });
@@ -297,7 +319,7 @@ export function generateDailyZaloText(
         if (hasInstallmentData) {
             return `   ${medal} ${e.display_name}: ${formatValue(e.revenue_qd)} tr | ${formatValue(e.installment_revenue)} tr (${e.installment_rate}%)`;
         }
-        return `   ${medal} ${e.display_name}: ${formatValue(e.revenue_qd)} tr (Thực: ${formatValue(e.revenue_actual)} tr)`;
+        return `   ${medal} ${e.display_name}: ${formatValue(e.revenue_qd)} tr`;
     }).join('\n');
 
     // Dưới trung bình text
@@ -332,7 +354,6 @@ export function generateDailyZaloText(
     let txt = `📢 DOANH THU NHÂN VIÊN (${formattedDate})
 🏢 ${storeName}
 
-💰 Doanh Thu Thực: ${formatValue(summary.totalActualRevenue)} tr
 💎 DTQĐ: ${formatValue(summary.totalRevenueQd)} tr (TB: ${formatValue(summary.avgRevenueQd)} tr/nv)`;
 
     if (summary.totalRevenueReturnQd !== 0) {
@@ -340,10 +361,10 @@ export function generateDailyZaloText(
     }
 
     if (hasInstallmentData) {
-        txt += `\n💳 DT Trả Chậm: ${formatValue(summary.totalInstallmentRevenue)} tr (${summary.avgInstallmentRate}%)`;
+        txt += `\n💳 DT Trả Góp QĐ: ${formatValue(summary.totalInstallmentRevenue)} tr (Tỷ trọng TG: ${summary.avgInstallmentRate}%)`;
     }
 
-    txt += `\n\n🏆 TOP DẪN ĐẦU: ${hasInstallmentData ? '(DTQĐ | Trả chậm)' : '(DTQĐ | DT Thực)'}\n${topText}`;
+    txt += `\n\n🏆 TOP DẪN ĐẦU: ${hasInstallmentData ? '(DTQĐ | Trả góp QĐ)' : '(DTQĐ)'}\n${topText}`;
 
     txt += `\n\n⚡ CẦN QUAN TÂM:
 ⚠️ 1. Nhóm DTQĐ dưới trung bình (${summary.belowAvgCount} bạn < ${formatValue(summary.avgRevenueQd)} tr):

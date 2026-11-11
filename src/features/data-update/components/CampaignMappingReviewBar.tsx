@@ -82,7 +82,7 @@ export default function CampaignMappingReviewBar({
                             </span>
                         </div>
                         <p className="text-[11px] text-slate-500 mt-0.5">
-                            AI tự động bóc tách cấu trúc ST &amp; mapping tên chính xác qua Target ST (giải quyết tên bị cắt ba chấm &quot;...&quot;)
+                            Đối chiếu tên chương trình thi đua đọc từ ảnh với danh mục chuẩn của ST (tự loại bỏ hậu tố đơn vị / tiền tố tháng)
                         </p>
                     </div>
                 </div>
@@ -118,21 +118,31 @@ export default function CampaignMappingReviewBar({
                                     {/* Trạng thái mapping */}
                                     {item.isAutoMatched ? (
                                         <div className="flex items-center gap-1 text-[10px] text-emerald-700 font-bold mt-0.5 flex-wrap">
-                                            <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
-                                            <span>Khớp qua Target:</span>
-                                            <span className="font-mono bg-emerald-50 px-1 rounded text-emerald-800 border border-emerald-200">
-                                                {formatValue(item.storeTarget)} {item.unit || 'tr'}
-                                            </span>
-                                            {isTruncatedRaw && (
-                                                <span className="text-slate-400 font-normal">
-                                                    (Gốc: {item.rawName})
+                                            <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" aria-hidden="true" />
+                                            {Number(item.storeTarget) > 0 ? (
+                                                <>
+                                                    <span>Khớp qua Target:</span>
+                                                    <span className="font-mono bg-emerald-50 px-1 rounded text-emerald-800 border border-emerald-200 tabular-nums">
+                                                        {formatValue(item.storeTarget)} {displayUnit}
+                                                    </span>
+                                                </>
+                                            ) : (
+                                                <span>{item.mappedReason || 'Đã khớp danh mục chuẩn'}</span>
+                                            )}
+                                            {(isTruncatedRaw || item.rawName !== cName) && (
+                                                <span className="text-slate-500 font-normal">
+                                                    (Ảnh: {item.rawName})
                                                 </span>
                                             )}
                                         </div>
                                     ) : item.storeTarget ? (
-                                        <div className="text-[10px] text-slate-500 mt-0.5 flex items-center gap-1.5">
-                                            <span>Target ST: <strong className="font-mono text-slate-700">{formatValue(item.storeTarget)}</strong></span>
+                                        <div className="text-[10px] text-slate-600 mt-0.5 flex items-center gap-1.5 tabular-nums">
+                                            <span>Target ST: <strong className="font-mono text-slate-800">{formatValue(item.storeTarget)}</strong></span>
                                             <span>• Thực hiện: <strong className="font-mono text-emerald-700">{formatValue(item.storeActual)}</strong></span>
+                                        </div>
+                                    ) : Number(item.storeActual) > 0 ? (
+                                        <div className="text-[10px] text-slate-600 mt-0.5 tabular-nums">
+                                            <span>Tổng ST (TỔNG): <strong className="font-mono text-emerald-800">{formatValue(item.storeActual)} {displayUnit}</strong></span>
                                         </div>
                                     ) : null}
                                 </div>

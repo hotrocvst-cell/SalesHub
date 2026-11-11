@@ -22,6 +22,7 @@ export function extractPeriodActiveCampaigns(
     businessRecords.forEach(br => {
         if (br.emulationSummary) {
             Object.entries(br.emulationSummary).forEach(([k, v]: [string, any]) => {
+                if (k.startsWith('__')) return;
                 if ((Number(v?.target) || 0) > 0 || (Number(v?.actual) || 0) > 0) {
                     activeRawKeys.add(k.trim());
                 }

@@ -80,22 +80,22 @@ export default function ClockWidget() {
                     {/* Huy hiệu thông tin người dùng & ST */}
                     {isAuthenticated && (
                         <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
-                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-white/10 text-white font-bold backdrop-blur-xs border border-white/15">
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-white/10 text-white font-bold backdrop-blur-sm border border-white/15">
                                 {currentUser.role === 'ADMIN' ? (
-                                    <Crown className="w-3.5 h-3.5 text-amber-400" />
+                                    <Crown className="w-3.5 h-3.5 text-amber-400 shrink-0" aria-hidden="true" />
                                 ) : currentUser.role === 'QUAN_LY' ? (
-                                    <Star className="w-3.5 h-3.5 text-blue-400" />
+                                    <Star className="w-3.5 h-3.5 text-blue-400 shrink-0" aria-hidden="true" />
                                 ) : currentUser.role === 'TRUONG_CA' ? (
-                                    <Shield className="w-3.5 h-3.5 text-emerald-400" />
+                                    <Shield className="w-3.5 h-3.5 text-emerald-400 shrink-0" aria-hidden="true" />
                                 ) : (
-                                    <User className="w-3.5 h-3.5 text-slate-300" />
+                                    <User className="w-3.5 h-3.5 text-slate-300 shrink-0" aria-hidden="true" />
                                 )}
                                 <span>{ROLE_LABELS[currentUser.role] || currentUser.role_title}</span>
                             </span>
 
                             {currentUser.store_name && (
-                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-blue-500/20 text-blue-200 font-bold backdrop-blur-xs border border-blue-400/30 truncate max-w-md" title={currentUser.store_name}>
-                                    <Store className="w-3.5 h-3.5 text-blue-300 shrink-0" />
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-blue-500/20 text-blue-200 font-bold backdrop-blur-sm border border-blue-400/30 truncate max-w-md" title={currentUser.store_name}>
+                                    <Store className="w-3.5 h-3.5 text-blue-300 shrink-0" aria-hidden="true" />
                                     <span className="truncate">{currentUser.store_name}</span>
                                 </span>
                             )}
@@ -107,11 +107,11 @@ export default function ClockWidget() {
                 <div className="relative z-10 flex flex-col items-start md:items-end justify-center shrink-0">
                     {/* Hộp số Digital Clock */}
                     <div className="bg-black/35 backdrop-blur-md px-5 py-3 rounded-2xl border border-white/15 shadow-inner flex items-baseline gap-2">
-                        <div className="flex items-center font-mono font-black text-3xl sm:text-4xl lg:text-5xl text-white tracking-wider">
+                        <div className="flex items-center font-mono tabular-nums font-black text-3xl sm:text-4xl lg:text-5xl text-white tracking-wider">
                             <span>{String(displayHours).padStart(2, '0')}</span>
-                            <span className="animate-pulse mx-0.5 text-blue-400">:</span>
+                            <span className="animate-pulse mx-0.5 text-blue-400" aria-hidden="true">:</span>
                             <span>{String(minutes).padStart(2, '0')}</span>
-                            <span className="animate-pulse mx-0.5 text-blue-400">:</span>
+                            <span className="animate-pulse mx-0.5 text-blue-400" aria-hidden="true">:</span>
                             <span className="text-blue-300 text-2xl sm:text-3xl lg:text-4xl">{String(seconds).padStart(2, '0')}</span>
                         </div>
 
@@ -125,7 +125,8 @@ export default function ClockWidget() {
                         <button
                             type="button"
                             onClick={() => setUse24Hour(!use24Hour)}
-                            className="ml-2 px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 text-[10px] text-slate-300 hover:text-white font-mono cursor-pointer transition"
+                            aria-label={`Chuyển định dạng giờ (hiện tại ${use24Hour ? '24 giờ' : '12 giờ'})`}
+                            className="ml-2 px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 text-[10px] text-slate-200 hover:text-white font-mono cursor-pointer transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                             title="Chuyển đổi định dạng 12H / 24H"
                         >
                             {use24Hour ? '24H' : '12H'}
@@ -133,19 +134,19 @@ export default function ClockWidget() {
                     </div>
 
                     {/* Dòng thứ ngày tháng năm */}
-                    <div className="flex items-center gap-1.5 mt-2 text-xs font-bold text-slate-300">
-                        <Calendar className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                    <div className="flex items-center gap-1.5 mt-2 text-xs font-bold text-slate-200">
+                        <Calendar className="w-3.5 h-3.5 text-blue-400 shrink-0" aria-hidden="true" />
                         <span className="text-amber-300 font-extrabold">{dayOfWeekStr}</span>
-                        <span>•</span>
+                        <span aria-hidden="true">•</span>
                         <span>{dateStr}</span>
                     </div>
 
                     {/* Tiến độ năm & Tuần */}
-                    <div className="flex items-center gap-3 mt-1.5 text-[11px] text-slate-400">
+                    <div className="flex items-center gap-3 mt-1.5 text-[11px] text-slate-300 tabular-nums">
                         <span>Tuần thứ <b className="text-white font-mono">{weekOfYear}</b> / 52</span>
-                        <span>•</span>
+                        <span aria-hidden="true">•</span>
                         <span>Ngày <b className="text-white font-mono">{dayOfYear}</b> / {daysInYear}</span>
-                        <span>•</span>
+                        <span aria-hidden="true">•</span>
                         <span className="text-emerald-400 font-mono font-bold">Năm {yearProgress}%</span>
                     </div>
                 </div>

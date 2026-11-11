@@ -221,11 +221,10 @@ export default function QuickStoreEmulationModal({
     const [isSaving, setIsSaving] = useState<boolean>(false);
     const [toastMessage, setToastMessage] = useState<string>('');
 
-    // 5. Doanh thu của ST đang chọn (DTQĐ, Target, DT Thực, Trả góp)
+    // 5. Doanh thu của ST đang chọn (DTQĐ, Target, DT Trả góp QĐ, % Tỷ trọng trả góp)
     const [revenueQd, setRevenueQd] = useState<number | string>('');
     const [targetQd, setTargetQd] = useState<number | string>('');
-    const [revenueReal, setRevenueReal] = useState<number | string>('');
-    const [installmentReal, setInstallmentReal] = useState<number | string>('');
+    const [installmentQd, setInstallmentQd] = useState<number | string>('');
     const [installmentRate, setInstallmentRate] = useState<number | string>('');
 
     // Tự động điền doanh thu hiện có khi đổi ST
@@ -239,26 +238,15 @@ export default function QuickStoreEmulationModal({
             const rev = currentSession.revenue_data as any;
             setRevenueQd(rev.rev !== undefined && rev.rev !== null ? rev.rev : '');
             setTargetQd(rev.target !== undefined && rev.target !== null ? rev.target : '');
-            setRevenueReal(rev.rawRev !== undefined && rev.rawRev !== null ? rev.rawRev : (rev.revenueReal || ''));
-            setInstallmentReal(rev.dtTraGop !== undefined && rev.dtTraGop !== null ? rev.dtTraGop : '');
+            setInstallmentQd(rev.dtTraGop !== undefined && rev.dtTraGop !== null ? rev.dtTraGop : '');
             setInstallmentRate(rev.pctTraGop !== undefined && rev.pctTraGop !== null ? rev.pctTraGop : '');
         } else {
             setRevenueQd('');
             setTargetQd('');
-            setRevenueReal('');
-            setInstallmentReal('');
+            setInstallmentQd('');
             setInstallmentRate('');
         }
     }, [selectedStore, existingSessions, activeAvailableStores]);
-
-    const handleUpdateInstallmentReal = (val: string) => {
-        setInstallmentReal(val);
-        const instNum = Number(val) || 0;
-        const realNum = Number(revenueReal) || Number(revenueQd) || 0;
-        if (realNum > 0) {
-            setInstallmentRate(Number(((instNum / realNum) * 100).toFixed(1)));
-        }
-    };
 
     // Đọc key từ Cloud khi mở modal
     useEffect(() => {
@@ -472,7 +460,9 @@ export default function QuickStoreEmulationModal({
             return;
         }
 
-        const hasRevenueInput = revenueQd !== '' || targetQd !== '' || revenueReal !== '' || installmentReal !== '';
+        const hasRevenueInput = mode !== 'DAILY_BUSINESS_RECORD' && (
+            revenueQd !== '' || targetQd !== '' || installmentQd !== '' || installmentRate !== ''
+        );
 
         if (cards.length === 0 && !hasRevenueInput) {
             showToast('⚠️ Vui lòng nhập số liệu Doanh thu hoặc nạp ảnh Thẻ thi đua để lưu!');
@@ -497,17 +487,16 @@ export default function QuickStoreEmulationModal({
             if (hasRevenueInput) {
                 const revNum = Number(revenueQd) || 0;
                 const tgNum = Number(targetQd) || 0;
-                const realNum = Number(revenueReal) || revNum;
-                const instNum = Number(installmentReal) || 0;
+                const instNum = Number(installmentQd) || 0;
                 const pctVal = tgNum > 0 ? Number(((revNum / tgNum) * 100).toFixed(1)) : 0;
-                const pctInst = Number(installmentRate) || (realNum > 0 ? Number(((instNum / realNum) * 100).toFixed(1)) : 0);
+                const pctInst = Number(installmentRate) || 0;
 
                 customRevenueItem = {
                     store: selectedStore,
                     shortName: getShortStoreName(selectedStore),
                     sl: 0,
                     rev: revNum,
-                    rawRev: realNum,
+                    rawRev: revNum,
                     target: tgNum,
                     pct: pctVal,
                     dtTraGop: instNum,
@@ -661,92 +650,94 @@ export default function QuickStoreEmulationModal({
                         </div>
                     </div>
 
-                    {/* KHỐI NHẬP & XEM DOANH THU ST */}
-                    <div className="bg-gradient-to-br from-blue-50/80 via-indigo-50/60 to-slate-50 border border-blue-200 rounded-2xl p-3.5 space-y-2.5">
-                        <div className="flex items-center justify-between">
-                            <span className="text-[11px] font-black uppercase text-blue-900 flex items-center gap-1.5">
-                                <DollarSign className="w-3.5 h-3.5 text-blue-600" />
-                                <span>Doanh Thu ST (Đơn vị: Triệu đồng)</span>
-                            </span>
-                            <span className="text-[10px] text-blue-700 bg-blue-100/80 px-2 py-0.5 rounded-md font-bold">
-                                {formatStoreDisplayName(selectedStore)}
-                            </span>
+                    {/* KHỐI NHẬP & XEM DOANH THU ST (CHỈ HIỆN TRONG CHẾ ĐỘ REALTIME_SESSION) */}
+                    {mode !== 'DAILY_BUSINESS_RECORD' && (
+                        <div className="bg-gradient-to-br from-blue-50/80 via-indigo-50/60 to-slate-50 border border-blue-200 rounded-2xl p-3.5 space-y-2.5">
+                            <div className="flex items-center justify-between">
+                                <span className="text-[11px] font-black uppercase text-blue-900 flex items-center gap-1.5">
+                                    <DollarSign className="w-3.5 h-3.5 text-blue-600" aria-hidden="true" />
+                                    <span>Doanh Thu ST (Đơn vị: Triệu đồng)</span>
+                                </span>
+                                <span className="text-[10px] text-blue-700 bg-blue-100/80 px-2 py-0.5 rounded-md font-bold">
+                                    {formatStoreDisplayName(selectedStore)}
+                                </span>
+                            </div>
+
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                                <div>
+                                    <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">
+                                        DT Quy Đổi (tr)
+                                    </label>
+                                    <input
+                                        type="number"
+                                        step="any"
+                                        value={revenueQd}
+                                        onChange={(e) => setRevenueQd(e.target.value)}
+                                        placeholder="0"
+                                        className="w-full bg-white border border-slate-300 text-slate-800 text-xs font-black py-1.5 px-2.5 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-right tabular-nums"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">
+                                        Target QĐ (tr)
+                                    </label>
+                                    <input
+                                        type="number"
+                                        step="any"
+                                        value={targetQd}
+                                        onChange={(e) => setTargetQd(e.target.value)}
+                                        placeholder="0"
+                                        className="w-full bg-white border border-slate-300 text-slate-800 text-xs font-black py-1.5 px-2.5 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-right tabular-nums"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">
+                                        DT Trả Góp QĐ (tr)
+                                    </label>
+                                    <input
+                                        type="number"
+                                        step="any"
+                                        value={installmentQd}
+                                        onChange={(e) => setInstallmentQd(e.target.value)}
+                                        placeholder="0"
+                                        className="w-full bg-white border border-slate-300 text-slate-800 text-xs font-black py-1.5 px-2.5 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-right tabular-nums"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">
+                                        % Tỷ Trọng TG (%)
+                                    </label>
+                                    <input
+                                        type="number"
+                                        step="any"
+                                        value={installmentRate}
+                                        onChange={(e) => setInstallmentRate(e.target.value)}
+                                        placeholder="0"
+                                        className="w-full bg-white border border-slate-300 text-purple-900 text-xs font-black py-1.5 px-2.5 rounded-xl outline-none focus:ring-2 focus:ring-purple-500 text-right tabular-nums"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Tỷ lệ tóm tắt tự động */}
+                            {(Number(revenueQd) > 0 || Number(targetQd) > 0 || Number(installmentRate) > 0) && (
+                                <div className="flex items-center gap-3 text-[11px] font-bold pt-1 border-t border-blue-200/60 text-slate-600 flex-wrap tabular-nums">
+                                    {Number(targetQd) > 0 && (
+                                        <span className="text-blue-800">
+                                            %HT Target: <strong className="text-blue-900 font-black">{((Number(revenueQd) / Number(targetQd)) * 100).toFixed(1)}%</strong>
+                                        </span>
+                                    )}
+                                    {Number(installmentRate) > 0 && (
+                                        <span className="text-purple-800">
+                                            % Tỷ trọng trả góp: <strong className="text-purple-900 font-black">{Number(installmentRate).toFixed(2)}%</strong>
+                                        </span>
+                                    )}
+                                </div>
+                            )}
                         </div>
-
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                            <div>
-                                <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">
-                                    DT Quy Đổi (tr)
-                                </label>
-                                <input
-                                    type="number"
-                                    step="any"
-                                    value={revenueQd}
-                                    onChange={(e) => setRevenueQd(e.target.value)}
-                                    placeholder="0"
-                                    className="w-full bg-white border border-slate-300 text-slate-800 text-xs font-black py-1.5 px-2.5 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-right"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">
-                                    Target QĐ (tr)
-                                </label>
-                                <input
-                                    type="number"
-                                    step="any"
-                                    value={targetQd}
-                                    onChange={(e) => setTargetQd(e.target.value)}
-                                    placeholder="0"
-                                    className="w-full bg-white border border-slate-300 text-slate-800 text-xs font-black py-1.5 px-2.5 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-right"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">
-                                    DT Thực (tr)
-                                </label>
-                                <input
-                                    type="number"
-                                    step="any"
-                                    value={revenueReal}
-                                    onChange={(e) => setRevenueReal(e.target.value)}
-                                    placeholder="0"
-                                    className="w-full bg-white border border-slate-300 text-slate-800 text-xs font-black py-1.5 px-2.5 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-right"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">
-                                    DT Trả Góp (tr)
-                                </label>
-                                <input
-                                    type="number"
-                                    step="any"
-                                    value={installmentReal}
-                                    onChange={(e) => handleUpdateInstallmentReal(e.target.value)}
-                                    placeholder="0"
-                                    className="w-full bg-white border border-slate-300 text-slate-800 text-xs font-black py-1.5 px-2.5 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-right"
-                                />
-                            </div>
-                        </div>
-
-                        {/* Tỷ lệ tóm tắt tự động */}
-                        {(Number(revenueQd) > 0 || Number(targetQd) > 0 || Number(installmentReal) > 0) && (
-                            <div className="flex items-center gap-3 text-[11px] font-bold pt-1 border-t border-blue-200/60 text-slate-600 flex-wrap">
-                                {Number(targetQd) > 0 && (
-                                    <span className="text-blue-800">
-                                        %HT Target: <strong className="text-blue-900 font-black">{((Number(revenueQd) / Number(targetQd)) * 100).toFixed(1)}%</strong>
-                                    </span>
-                                )}
-                                {Number(revenueReal || revenueQd) > 0 && Number(installmentReal) > 0 && (
-                                    <span className="text-purple-800">
-                                        % Trả Góp: <strong className="text-purple-900 font-black">{((Number(installmentReal) / Number(revenueReal || revenueQd)) * 100).toFixed(1)}%</strong>
-                                    </span>
-                                )}
-                            </div>
-                        )}
-                    </div>
+                    )}
 
                     {/* VÙNG KÉO THẢ & DÁN ẢNH (CTRL + V) */}
                     <div
@@ -1022,7 +1013,7 @@ export default function QuickStoreEmulationModal({
                                 <button
                                     type="button"
                                     onClick={() => handleSave(true)}
-                                    disabled={isSaving || (cards.length === 0 && revenueQd === '' && revenueReal === '')}
+                                    disabled={isSaving || cards.length === 0}
                                     className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-50 text-white rounded-xl text-xs font-black flex items-center gap-2 shadow-md transition cursor-pointer"
                                     title="Cập nhật vào bảng và đồng bộ ngay lên Cloud"
                                 >
@@ -1034,7 +1025,7 @@ export default function QuickStoreEmulationModal({
                             <button
                                 type="button"
                                 onClick={() => handleSave(true)}
-                                disabled={isSaving || (cards.length === 0 && revenueQd === '' && revenueReal === '')}
+                                disabled={isSaving || (cards.length === 0 && revenueQd === '' && targetQd === '' && installmentQd === '' && installmentRate === '')}
                                 className="px-5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-50 text-white rounded-xl text-xs font-black flex items-center gap-2 shadow-md transition cursor-pointer"
                             >
                                 <Save className={`w-4 h-4 ${isSaving ? 'animate-spin' : ''}`} />

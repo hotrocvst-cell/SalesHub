@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
     X,
     Sliders,
@@ -31,6 +32,15 @@ export default function VoucherRuleConfigModal({
 }: Props) {
     const [selectedRule, setSelectedRule] = useState<VoucherDistributionRule>(currentRule || 'FIFO');
     const [isSaving, setIsSaving] = useState<boolean>(false);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape' && !isSaving) onClose();
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isOpen, isSaving, onClose]);
 
     if (!isOpen) return null;
 
@@ -86,17 +96,26 @@ export default function VoucherRuleConfigModal({
         }
     ];
 
-    return (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-in fade-in">
-            <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl border border-slate-200 overflow-hidden my-auto">
+    return createPortal(
+        <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="voucher-rule-modal-title"
+            className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+            onClick={() => !isSaving && onClose()}
+        >
+            <div
+                className="bg-white rounded-3xl w-full max-w-lg shadow-2xl border border-slate-200 overflow-hidden my-auto"
+                onClick={(e) => e.stopPropagation()}
+            >
                 {/* Header */}
-                <div className="px-5 py-4 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex items-center justify-between">
+                <div className="px-5 py-4 bg-slate-900 text-white flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
                         <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-400/40 text-emerald-400 flex items-center justify-center">
-                            <Sliders className="w-5 h-5" />
+                            <Sliders className="w-5 h-5" aria-hidden="true" />
                         </div>
                         <div>
-                            <h2 className="text-sm sm:text-base font-black">Cài Đặt Quy Tắc Cấp Mã Voucher</h2>
+                            <h2 id="voucher-rule-modal-title" className="text-sm sm:text-base font-black">Cài Đặt Quy Tắc Cấp Mã Voucher</h2>
                             <p className="text-[11px] text-slate-300">
                                 Thứ tự ưu tiên xuất kho khi nhân viên bấm nhận mã
                             </p>
@@ -105,9 +124,11 @@ export default function VoucherRuleConfigModal({
                     <button
                         type="button"
                         onClick={onClose}
-                        className="p-1.5 rounded-xl hover:bg-white/10 text-slate-400 hover:text-white transition cursor-pointer"
+                        disabled={isSaving}
+                        aria-label="Đóng cài đặt quy tắc cấp mã"
+                        className="p-1.5 rounded-xl hover:bg-white/10 text-slate-300 hover:text-white transition cursor-pointer disabled:opacity-50"
                     >
-                        <X className="w-5 h-5" />
+                        <X className="w-5 h-5" aria-hidden="true" />
                     </button>
                 </div>
 
@@ -177,12 +198,12 @@ export default function VoucherRuleConfigModal({
                         })}
                     </div>
 
-                    <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-3 text-xs text-indigo-900 space-y-1">
+                    <div className="bg-blue-50 border border-blue-200 rounded-2xl p-3 text-xs text-blue-950 space-y-1">
                         <div className="flex items-center gap-1.5 font-bold">
-                            <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                            <Sparkles className="w-3.5 h-3.5 text-blue-700" aria-hidden="true" />
                             <span>Đồng bộ 100% Cloud-First:</span>
                         </div>
-                        <p className="text-[11px] text-indigo-800 leading-relaxed">
+                        <p className="text-[11px] text-blue-900 leading-relaxed">
                             Cấu hình sau khi lưu sẽ được cập nhật lên Supabase Cloud và áp dụng ngay lập tức cho toàn bộ điện thoại và máy tính của nhân viên khi thực hiện cấp mã.
                         </p>
                     </div>
@@ -194,7 +215,7 @@ export default function VoucherRuleConfigModal({
                         type="button"
                         onClick={onClose}
                         disabled={isSaving}
-                        className="px-4 py-2 rounded-xl text-slate-600 hover:text-slate-800 hover:bg-slate-200 text-xs font-bold transition cursor-pointer"
+                        className="px-4 py-2 rounded-xl text-slate-700 hover:text-slate-900 hover:bg-slate-200 text-xs font-bold transition cursor-pointer"
                     >
                         Hủy
                     </button>
@@ -203,13 +224,14 @@ export default function VoucherRuleConfigModal({
                         type="button"
                         onClick={handleSave}
                         disabled={isSaving}
-                        className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white text-xs font-black transition cursor-pointer shadow-sm flex items-center gap-1.5 disabled:opacity-50"
+                        className="px-5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 active:scale-[0.99] text-white text-xs font-black transition cursor-pointer shadow-sm flex items-center gap-1.5 disabled:opacity-50"
                     >
-                        <Save className="w-4 h-4" />
+                        <Save className="w-4 h-4" aria-hidden="true" />
                         <span>{isSaving ? 'Đang lưu...' : 'Lưu Quy Tắc Cấp Mã'}</span>
                     </button>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 }

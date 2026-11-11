@@ -174,18 +174,18 @@ export default function WorkTaskListWidget({
 
                 {/* Hàng dưới: 3 chặng kinh doanh thu gọn */}
                 <div className="relative z-10 grid grid-cols-3 gap-1.5 pt-1 border-t border-white/10 text-center text-[10px]">
-                    <div className={`p-1.5 rounded-xl border transition ${currentDay >= 1 && currentDay <= 10 ? 'bg-blue-500/30 border-blue-400/50 text-blue-100 font-black' : 'bg-black/20 border-white/5 text-slate-400'}`}>
-                        <div className="opacity-75 uppercase text-[9px]">Chặng 1 (01-10)</div>
+                    <div className={`p-1.5 rounded-xl border transition ${currentDay >= 1 && currentDay <= 10 ? 'bg-blue-500/30 border-blue-400/50 text-blue-100 font-black' : 'bg-black/20 border-white/5 text-slate-300'}`}>
+                        <div className="opacity-80 uppercase text-[9px]">Chặng 1 (01-10)</div>
                         <div>🚀 Khởi động</div>
                     </div>
 
-                    <div className={`p-1.5 rounded-xl border transition ${currentDay >= 11 && currentDay <= 20 ? 'bg-amber-500/30 border-amber-400/50 text-amber-100 font-black' : 'bg-black/20 border-white/5 text-slate-400'}`}>
-                        <div className="opacity-75 uppercase text-[9px]">Chặng 2 (11-20)</div>
+                    <div className={`p-1.5 rounded-xl border transition ${currentDay >= 11 && currentDay <= 20 ? 'bg-amber-500/30 border-amber-400/50 text-amber-100 font-black' : 'bg-black/20 border-white/5 text-slate-300'}`}>
+                        <div className="opacity-80 uppercase text-[9px]">Chặng 2 (11-20)</div>
                         <div>⚡ Tăng tốc</div>
                     </div>
 
-                    <div className={`p-1.5 rounded-xl border transition ${currentDay >= 21 ? 'bg-rose-500/30 border-rose-400/50 text-rose-100 font-black animate-pulse' : 'bg-black/20 border-white/5 text-slate-400'}`}>
-                        <div className="opacity-75 uppercase text-[9px]">Chặng 3 (21-{totalDaysInMonth})</div>
+                    <div className={`p-1.5 rounded-xl border transition ${currentDay >= 21 ? 'bg-rose-500/30 border-rose-400/50 text-rose-100 font-black' : 'bg-black/20 border-white/5 text-slate-300'}`}>
+                        <div className="opacity-80 uppercase text-[9px]">Chặng 3 (21-{totalDaysInMonth})</div>
                         <div>🎯 Về đích</div>
                     </div>
                 </div>
@@ -197,12 +197,12 @@ export default function WorkTaskListWidget({
             <div className="space-y-3 pb-2 border-b border-slate-100">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                     <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-black shadow-md shadow-blue-500/20 shrink-0">
-                            <span className="font-mono text-base">{selectedDate.getDate()}</span>
+                        <div className="w-10 h-10 rounded-2xl bg-blue-600 text-white flex items-center justify-center font-black shadow-md shadow-blue-500/20 shrink-0">
+                            <span className="font-mono tabular-nums text-base">{selectedDate.getDate()}</span>
                         </div>
                         <div className="min-w-0">
                             <div className="font-black text-slate-900 text-sm sm:text-base flex items-center gap-2 truncate">
-                                <span>
+                                <span className="tabular-nums">
                                     {['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'][selectedDate.getDay()]}, {selectedDate.toLocaleDateString('vi-VN')}
                                 </span>
                                 {isTodaySelected ? (
@@ -213,24 +213,24 @@ export default function WorkTaskListWidget({
                                     <button
                                         type="button"
                                         onClick={onJumpToday}
-                                        className="text-[10px] font-bold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer shrink-0"
+                                        className="text-[10px] font-bold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
                                     >
                                         (Về hôm nay)
                                     </button>
                                 )}
                             </div>
-                            <div className="text-xs text-slate-500 flex items-center gap-1.5 flex-wrap">
+                            <div className="text-xs text-slate-600 flex items-center gap-1.5 flex-wrap">
                                 <span className="font-bold text-amber-700">
                                     Âm lịch: Ngày {selectedLunar.day}/{selectedLunar.month} ({selectedLunar.canChiDay || ''})
                                 </span>
-                                <span>•</span>
-                                <span className="font-medium text-slate-500">
+                                <span aria-hidden="true">•</span>
+                                <span className="font-medium text-slate-600">
                                     {diffDaysFromToday === 0 ? (
-                                        <span className="text-emerald-600 font-bold">🎯 Đang là hôm nay</span>
+                                        <span className="text-emerald-700 font-bold">🎯 Đang là hôm nay</span>
                                     ) : diffDaysFromToday > 0 ? (
-                                        <span>Còn <b className="text-blue-600 font-mono">{diffDaysFromToday}</b> ngày nữa</span>
+                                        <span>Còn <b className="text-blue-600 font-mono tabular-nums">{diffDaysFromToday}</b> ngày nữa</span>
                                     ) : (
-                                        <span>Đã qua <b className="text-slate-600 font-mono">{Math.abs(diffDaysFromToday)}</b> ngày trước</span>
+                                        <span>Đã qua <b className="text-slate-700 font-mono tabular-nums">{Math.abs(diffDaysFromToday)}</b> ngày trước</span>
                                     )}
                                 </span>
                             </div>
@@ -242,20 +242,20 @@ export default function WorkTaskListWidget({
                         <button
                             type="button"
                             onClick={onOpenAddModal}
-                            className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black shadow-xs transition flex items-center gap-1.5 cursor-pointer shrink-0"
+                            className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black shadow-sm transition flex items-center gap-1.5 cursor-pointer shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1"
                             title="Tạo mới công việc cần làm cho ngày này"
                         >
-                            <Plus className="w-3.5 h-3.5" />
-                            <span>+ Thêm Việc</span>
+                            <Plus className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                            <span>Thêm Việc</span>
                         </button>
                     )}
                 </div>
 
                 {/* Bộ lọc ST */}
                 <div className="flex items-center justify-between gap-2 text-xs pt-1 flex-wrap">
-                    <span className="font-extrabold text-slate-700 flex items-center gap-1.5">
-                        <FileText className="w-3.5 h-3.5 text-blue-600" />
-                        <span>Việc Cần Làm & Sự Kiện ({currentDayNotes.length + systemEvents.length}):</span>
+                    <span className="font-extrabold text-slate-700 flex items-center gap-1.5 tabular-nums">
+                        <FileText className="w-3.5 h-3.5 text-blue-600 shrink-0" aria-hidden="true" />
+                        <span>Việc Cần Làm &amp; Sự Kiện ({currentDayNotes.length + systemEvents.length}):</span>
                     </span>
 
                     {isStaff ? (
@@ -264,11 +264,14 @@ export default function WorkTaskListWidget({
                         </span>
                     ) : (
                         <div className="flex items-center gap-1">
-                            <Store className="w-3 h-3 text-slate-400 shrink-0" />
+                            <Store className="w-3 h-3 text-slate-500 shrink-0" aria-hidden="true" />
                             <select
+                                id="home-task-store-filter"
+                                name="taskStoreFilter"
+                                aria-label="Lọc việc cần làm theo ST"
                                 value={selectedStore}
                                 onChange={(e) => onSelectStore(e.target.value)}
-                                className="px-2 py-0.5 rounded-lg bg-slate-50 border border-slate-200 text-xs font-bold text-slate-800 outline-none cursor-pointer max-w-[200px] truncate"
+                                className="px-2 py-0.5 rounded-lg bg-slate-50 border border-slate-200 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer max-w-[200px] truncate"
                             >
                                 <option value={ALL_ASSIGNED_STORE_KEY}>
                                     🏢 Toàn nhóm phụ trách
@@ -294,7 +297,7 @@ export default function WorkTaskListWidget({
                         {systemEvents.map((ev) => (
                             <div
                                 key={ev.id}
-                                className={`p-3 rounded-2xl border flex items-center justify-between gap-2.5 shadow-2xs ${
+                                className={`p-3 rounded-2xl border flex items-center justify-between gap-2.5 shadow-sm ${
                                     ev.rule_type === 'LUNAR_DAY'
                                         ? 'bg-amber-50/90 border-amber-300 text-amber-950'
                                         : ev.rule_type === 'SOLAR_LAST_DAY'
@@ -303,25 +306,25 @@ export default function WorkTaskListWidget({
                                 }`}
                             >
                                 <div className="flex items-center gap-2.5 min-w-0">
-                                    <span className="text-xl select-none shrink-0">{ev.icon}</span>
+                                    <span className="text-xl select-none shrink-0" aria-hidden="true">{ev.icon}</span>
                                     <div className="min-w-0">
                                         <div className="font-black text-xs sm:text-sm truncate flex items-center gap-1.5">
                                             <span>{ev.title}</span>
                                             {ev.rule_type === 'LUNAR_DAY' && (
-                                                <span className="text-[9.5px] px-1.5 py-0.2 rounded font-black bg-amber-200/80 text-amber-900 uppercase">
+                                                <span className="text-[9.5px] px-1.5 py-0.5 rounded font-black bg-amber-200/80 text-amber-900 uppercase">
                                                     Âm Lịch
                                                 </span>
                                             )}
                                         </div>
                                         {ev.description && (
-                                            <p className="text-[11px] opacity-80 line-clamp-1 mt-0.5">
+                                            <p className="text-[11px] opacity-85 line-clamp-1 mt-0.5">
                                                 {ev.description}
                                             </p>
                                         )}
                                     </div>
                                 </div>
 
-                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/80 font-black border border-current shrink-0 shadow-2xs">
+                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/85 font-black border border-current shrink-0 shadow-sm">
                                     Sự Kiện Lịch
                                 </span>
                             </div>
@@ -331,19 +334,19 @@ export default function WorkTaskListWidget({
 
                 {/* 2. DANH SÁCH CÔNG VIỆC NGHIỆP VỤ DO QUẢN LÝ TẠO */}
                 {currentDayNotes.length === 0 && systemEvents.length === 0 ? (
-                    <div className="p-5 rounded-2xl bg-slate-50 border border-dashed border-slate-200 text-center flex flex-col items-center justify-center gap-2 text-xs text-slate-500 min-h-[140px]">
-                        <span className="text-2xl">☕</span>
+                    <div className="p-5 rounded-2xl bg-slate-50 border border-dashed border-slate-200 text-center flex flex-col items-center justify-center gap-2 text-xs text-slate-600 min-h-[140px]">
+                        <span className="text-2xl" aria-hidden="true">☕</span>
                         <span className="font-bold text-slate-700">Chưa có công việc hoặc sự kiện nào trong ngày này</span>
-                        <p className="text-[11px] text-slate-400 max-w-xs">
-                            {canManage ? 'Bạn có thể bấm nút "+ Thêm Việc" để giao việc hoặc nhắc nhở cho ngày này.' : 'Ngày này không có chỉ đạo đặc biệt, tiếp tục kế hoạch bán hàng thường quy.'}
+                        <p className="text-[11px] text-slate-500 max-w-xs">
+                            {canManage ? 'Bạn có thể bấm nút "Thêm Việc" để giao việc hoặc nhắc nhở cho ngày này.' : 'Ngày này không có chỉ đạo đặc biệt, tiếp tục kế hoạch bán hàng thường quy.'}
                         </p>
                         {canManage && (
                             <button
                                 type="button"
                                 onClick={onOpenAddModal}
-                                className="mt-1 px-3 py-1 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold transition cursor-pointer flex items-center gap-1"
+                                className="mt-1 px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold transition cursor-pointer flex items-center gap-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                             >
-                                <Plus className="w-3 h-3" />
+                                <Plus className="w-3 h-3 shrink-0" aria-hidden="true" />
                                 <span>Thêm công việc ngay</span>
                             </button>
                         )}
@@ -358,9 +361,9 @@ export default function WorkTaskListWidget({
                                 <div
                                     key={note.id}
                                     onClick={() => onOpenEditModal(note)}
-                                    className={`p-3 rounded-2xl border transition shadow-2xs flex flex-col justify-between gap-2 cursor-pointer group ${
+                                    className={`p-3 rounded-2xl border transition shadow-sm flex flex-col justify-between gap-2 cursor-pointer group ${
                                         isCompleted
-                                            ? 'bg-slate-50 border-slate-200 opacity-70'
+                                            ? 'bg-slate-50 border-slate-200 opacity-75'
                                             : 'bg-white hover:bg-blue-50/30 border-slate-200/90 hover:border-blue-300'
                                     }`}
                                 >
@@ -370,49 +373,50 @@ export default function WorkTaskListWidget({
                                             <button
                                                 type="button"
                                                 onClick={(e) => handleToggleComplete(note, e)}
-                                                className={`mt-0.5 w-5 h-5 rounded-lg flex items-center justify-center transition cursor-pointer shrink-0 ${
+                                                aria-label={isCompleted ? `Đánh dấu chưa hoàn thành: ${note.title}` : `Đánh dấu hoàn thành: ${note.title}`}
+                                                className={`mt-0.5 w-5 h-5 rounded-lg flex items-center justify-center transition cursor-pointer shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                                                     isCompleted
                                                         ? 'bg-emerald-600 text-white'
-                                                        : 'border border-slate-300 hover:border-blue-500 text-transparent hover:text-slate-300'
+                                                        : 'border border-slate-300 hover:border-blue-500 text-transparent hover:text-slate-400'
                                                 }`}
                                                 title={isCompleted ? 'Đánh dấu chưa hoàn thành' : 'Đánh dấu đã hoàn thành'}
                                             >
-                                                <Check className="w-3.5 h-3.5" />
+                                                <Check className="w-3.5 h-3.5" aria-hidden="true" />
                                             </button>
 
                                             <div className="space-y-1 min-w-0">
                                                 <div className="flex items-center gap-1.5 flex-wrap">
-                                                    <span className={`font-black text-xs sm:text-sm text-slate-900 ${isCompleted ? 'line-through text-slate-400' : ''}`}>
+                                                    <span className={`font-black text-xs sm:text-sm text-slate-900 ${isCompleted ? 'line-through text-slate-500' : ''}`}>
                                                         {note.title}
                                                     </span>
 
                                                     {/* Badge Loại công việc */}
-                                                    <span className={`text-[9.5px] px-1.5 py-0.2 rounded font-bold border ${typeBadge.color}`}>
+                                                    <span className={`text-[9.5px] px-1.5 py-0.5 rounded font-bold border ${typeBadge.color}`}>
                                                         {typeBadge.label}
                                                     </span>
 
                                                     {/* Khẩn cấp / Quan trọng */}
                                                     {note.priority === 'URGENT' && (
-                                                        <span className="text-[9.5px] px-1.5 py-0.2 rounded font-black bg-rose-100 text-rose-700">
+                                                        <span className="text-[9.5px] px-1.5 py-0.5 rounded font-black bg-rose-100 text-rose-700">
                                                             Khẩn cấp
                                                         </span>
                                                     )}
                                                     {note.priority === 'HIGH' && (
-                                                        <span className="text-[9.5px] px-1.5 py-0.2 rounded font-bold bg-amber-100 text-amber-800">
+                                                        <span className="text-[9.5px] px-1.5 py-0.5 rounded font-bold bg-amber-100 text-amber-800">
                                                             Quan trọng
                                                         </span>
                                                     )}
 
                                                     {/* Lặp lại */}
                                                     {note.recurrence && note.recurrence !== 'NONE' && (
-                                                        <span className="text-[9.5px] px-1.5 py-0.2 rounded font-bold bg-indigo-100 text-indigo-700 flex items-center gap-0.5">
-                                                            <Repeat className="w-2.5 h-2.5" /> Lặp lại
+                                                        <span className="text-[9.5px] px-1.5 py-0.5 rounded font-bold bg-indigo-100 text-indigo-700 flex items-center gap-0.5">
+                                                            <Repeat className="w-2.5 h-2.5 shrink-0" aria-hidden="true" /> Lặp lại
                                                         </span>
                                                     )}
                                                 </div>
 
                                                 {note.content && (
-                                                    <p className={`text-xs text-slate-600 whitespace-pre-line leading-relaxed line-clamp-2 ${isCompleted ? 'line-through text-slate-400' : ''}`}>
+                                                    <p className={`text-xs text-slate-600 whitespace-pre-line leading-relaxed line-clamp-2 ${isCompleted ? 'line-through text-slate-500' : ''}`}>
                                                         {note.content}
                                                     </p>
                                                 )}
@@ -421,33 +425,35 @@ export default function WorkTaskListWidget({
 
                                         {/* Action buttons (cho Quản lý) */}
                                         {canManage && (
-                                            <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition">
+                                            <div className="flex items-center gap-1 shrink-0 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 transition">
                                                 <button
                                                     type="button"
                                                     onClick={(e) => {
                                                         e.stopPropagation();
                                                         onOpenEditModal(note);
                                                     }}
-                                                    className="p-1 rounded-lg hover:bg-blue-50 text-slate-400 hover:text-blue-600 transition"
+                                                    aria-label={`Chỉnh sửa công việc: ${note.title}`}
+                                                    className="p-1.5 rounded-lg hover:bg-blue-50 text-slate-500 hover:text-blue-600 transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                                                     title="Chỉnh sửa công việc này"
                                                 >
-                                                    <Edit2 className="w-3 h-3" />
+                                                    <Edit2 className="w-3.5 h-3.5" aria-hidden="true" />
                                                 </button>
                                                 <button
                                                     type="button"
                                                     onClick={(e) => handleDelete(note.id, e)}
-                                                    className="p-1 rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition"
+                                                    aria-label={`Xóa công việc: ${note.title}`}
+                                                    className="p-1.5 rounded-lg hover:bg-rose-50 text-slate-500 hover:text-rose-600 transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
                                                     title="Xóa công việc này"
                                                 >
-                                                    <Trash2 className="w-3 h-3" />
+                                                    <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                                                 </button>
                                             </div>
                                         )}
                                     </div>
 
                                     {/* Footer chi tiết */}
-                                    <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1 border-t border-slate-100 flex-wrap gap-1">
-                                        <span className="truncate max-w-[150px] font-bold text-slate-500">
+                                    <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1 border-t border-slate-100 flex-wrap gap-1">
+                                        <span className="truncate max-w-[150px] font-bold text-slate-600">
                                             {note.store_name === ALL_ASSIGNED_STORE_KEY ? '🏢 Toàn nhóm ST' : `📍 ${note.store_name}`}
                                         </span>
                                         <span>Tạo bởi: <b>{note.created_by_name}</b></span>

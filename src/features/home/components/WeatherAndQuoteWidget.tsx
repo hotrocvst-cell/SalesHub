@@ -15,7 +15,8 @@ import {
     Umbrella,
     Sparkles,
     Quote,
-    RotateCw
+    RotateCw,
+    X
 } from 'lucide-react';
 
 interface CityOption {
@@ -304,17 +305,18 @@ export default function WeatherAndQuoteWidget() {
         <div className="bg-white rounded-3xl border border-slate-200/90 shadow-sm overflow-hidden flex flex-col justify-between">
             {/* THÔNG BÁO VỊ TRÍ NẾU CÓ */}
             {locationNotice && (
-                <div className="px-4 py-2 bg-indigo-50 border-b border-indigo-100 text-indigo-900 text-xs font-bold flex items-center justify-between gap-2 animate-in fade-in duration-200">
+                <div role="status" aria-live="polite" className="px-4 py-2 bg-indigo-50 border-b border-indigo-100 text-indigo-900 text-xs font-bold flex items-center justify-between gap-2">
                     <div className="flex items-center gap-1.5 truncate">
-                        <MapPin className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                        <MapPin className="w-3.5 h-3.5 text-indigo-600 shrink-0" aria-hidden="true" />
                         <span className="truncate">{locationNotice}</span>
                     </div>
                     <button
                         type="button"
                         onClick={() => setLocationNotice('')}
-                        className="text-[11px] text-indigo-600 hover:text-indigo-900 font-bold shrink-0 cursor-pointer"
+                        aria-label="Đóng thông báo vị trí"
+                        className="p-1 rounded-lg text-indigo-700 hover:text-indigo-950 hover:bg-indigo-100 shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                     >
-                        ✕
+                        <X className="w-3.5 h-3.5" aria-hidden="true" />
                     </button>
                 </div>
             )}
@@ -326,14 +328,17 @@ export default function WeatherAndQuoteWidget() {
                     {/* Header chọn vị trí & Nút định vị GPS */}
                     <div className="flex items-center justify-between gap-2 flex-wrap">
                         <div className="flex items-center gap-1.5 min-w-0">
-                            <MapPin className="w-4 h-4 text-rose-500 shrink-0" />
+                            <MapPin className="w-4 h-4 text-rose-500 shrink-0" aria-hidden="true" />
                             <select
+                                id="home-weather-city"
+                                name="weatherCity"
+                                aria-label="Chọn thành phố xem thời tiết"
                                 value={selectedCity.name}
                                 onChange={(e) => {
                                     const found = POPULAR_CITIES.find(c => c.name === e.target.value);
                                     if (found) setSelectedCity(found);
                                 }}
-                                className="font-extrabold text-xs text-slate-800 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl px-2.5 py-1.5 outline-none cursor-pointer max-w-[190px] truncate transition"
+                                className="font-extrabold text-xs text-slate-800 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer max-w-[190px] truncate transition"
                             >
                                 {selectedCity.isCurrentLocation && (
                                     <option value={selectedCity.name}>
@@ -354,14 +359,15 @@ export default function WeatherAndQuoteWidget() {
                                 type="button"
                                 onClick={handleDetectCurrentLocation}
                                 disabled={isLocating}
-                                className={`px-2.5 py-1.5 rounded-xl border text-[11px] font-bold transition flex items-center gap-1 cursor-pointer shadow-2xs ${
+                                aria-label="Lấy vị trí hiện tại qua GPS"
+                                className={`px-2.5 py-1.5 rounded-xl border text-[11px] font-bold transition flex items-center gap-1 cursor-pointer shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-60 ${
                                     selectedCity.isCurrentLocation
                                         ? 'bg-blue-50 border-blue-300 text-blue-700'
                                         : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 hover:text-blue-700'
                                 }`}
                                 title="Lấy vị trí thực tế hiện tại của bạn qua GPS"
                             >
-                                <Navigation className={`w-3 h-3 ${isLocating ? 'animate-spin text-blue-600' : 'text-blue-500'}`} />
+                                <Navigation className={`w-3 h-3 shrink-0 ${isLocating ? 'animate-spin text-blue-600' : 'text-blue-500'}`} aria-hidden="true" />
                                 <span className="hidden sm:inline">Vị trí hiện tại</span>
                             </button>
 
@@ -369,10 +375,11 @@ export default function WeatherAndQuoteWidget() {
                                 type="button"
                                 onClick={() => fetchWeather(selectedCity)}
                                 disabled={isLoading}
-                                className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition cursor-pointer"
+                                aria-label="Cập nhật lại thời tiết"
+                                className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-50"
                                 title="Cập nhật lại thời tiết"
                             >
-                                <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-blue-600' : ''}`} />
+                                <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-blue-600' : ''}`} aria-hidden="true" />
                             </button>
                         </div>
                     </div>
@@ -381,24 +388,24 @@ export default function WeatherAndQuoteWidget() {
                     <div className="flex items-center justify-between gap-3 pt-1">
                         <div className="space-y-1">
                             <div className="flex items-baseline gap-1">
-                                <span className="font-mono font-black text-4xl sm:text-5xl text-slate-900 tracking-tight">
+                                <span className="font-mono tabular-nums font-black text-4xl sm:text-5xl text-slate-900 tracking-tight">
                                     {weather.temperature}
                                 </span>
-                                <span className="font-extrabold text-2xl text-slate-400">°C</span>
+                                <span className="font-extrabold text-2xl text-slate-500">°C</span>
                             </div>
 
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                                 <span className={`px-2.5 py-0.5 rounded-full text-xs font-black border ${weatherInfo.badgeBg}`}>
                                     {weatherInfo.label}
                                 </span>
-                                <span className="text-[11px] text-slate-500 font-medium">
+                                <span className="text-[11px] text-slate-600 font-medium tabular-nums">
                                     Cảm giác: <b>{weather.apparentTemperature}°C</b>
                                 </span>
                             </div>
                         </div>
 
-                        <div className="w-16 h-16 sm:w-18 sm:h-18 rounded-3xl bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100 flex items-center justify-center shrink-0 shadow-inner">
-                            <WeatherIconComponent className={`w-10 h-10 ${weatherInfo.color} transition-transform hover:scale-110 duration-200`} />
+                        <div className="w-16 h-16 rounded-3xl bg-blue-50 border border-blue-100 flex items-center justify-center shrink-0 shadow-inner">
+                            <WeatherIconComponent className={`w-9 h-9 ${weatherInfo.color} transition-transform hover:scale-110 duration-200`} aria-hidden="true" />
                         </div>
                     </div>
 
@@ -406,30 +413,30 @@ export default function WeatherAndQuoteWidget() {
                     <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100 text-center">
                         <div className="p-2 rounded-xl bg-slate-50 border border-slate-100">
                             <div className="flex items-center justify-center gap-1 text-blue-500 mb-0.5">
-                                <Droplets className="w-3 h-3" />
-                                <span className="text-[10px] uppercase font-bold text-slate-500">Độ ẩm</span>
+                                <Droplets className="w-3 h-3 shrink-0" aria-hidden="true" />
+                                <span className="text-[10px] uppercase font-bold text-slate-600">Độ ẩm</span>
                             </div>
-                            <span className="font-mono font-black text-xs text-slate-800">
+                            <span className="font-mono tabular-nums font-black text-xs text-slate-800">
                                 {weather.humidity}%
                             </span>
                         </div>
 
                         <div className="p-2 rounded-xl bg-slate-50 border border-slate-100">
                             <div className="flex items-center justify-center gap-1 text-cyan-600 mb-0.5">
-                                <Wind className="w-3 h-3" />
-                                <span className="text-[10px] uppercase font-bold text-slate-500">Sức gió</span>
+                                <Wind className="w-3 h-3 shrink-0" aria-hidden="true" />
+                                <span className="text-[10px] uppercase font-bold text-slate-600">Sức gió</span>
                             </div>
-                            <span className="font-mono font-black text-xs text-slate-800">
-                                {weather.windspeed} <span className="text-[10px] font-normal text-slate-500">km/h</span>
+                            <span className="font-mono tabular-nums font-black text-xs text-slate-800">
+                                {weather.windspeed} <span className="text-[10px] font-normal text-slate-600">km/h</span>
                             </span>
                         </div>
 
                         <div className="p-2 rounded-xl bg-slate-50 border border-slate-100">
                             <div className="flex items-center justify-center gap-1 text-indigo-500 mb-0.5">
-                                <Umbrella className="w-3 h-3" />
-                                <span className="text-[10px] uppercase font-bold text-slate-500">Tỷ lệ mưa</span>
+                                <Umbrella className="w-3 h-3 shrink-0" aria-hidden="true" />
+                                <span className="text-[10px] uppercase font-bold text-slate-600">Tỷ lệ mưa</span>
                             </div>
-                            <span className="font-mono font-black text-xs text-slate-800">
+                            <span className="font-mono tabular-nums font-black text-xs text-slate-800">
                                 {weather.precipitationProb}%
                             </span>
                         </div>
@@ -440,26 +447,26 @@ export default function WeatherAndQuoteWidget() {
                 <div className="md:col-span-6 p-5 sm:p-6 flex flex-col justify-between space-y-3 bg-gradient-to-br from-amber-50/50 via-white to-orange-50/30">
                     <div className="space-y-2.5">
                         {/* Header Thẻ Quote */}
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between gap-2">
                             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-200/80 text-xs font-black uppercase tracking-wider">
-                                <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                                <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0" aria-hidden="true" />
                                 <span>Động Lực Mỗi Ngày</span>
                             </span>
 
                             <button
                                 type="button"
                                 onClick={handleNextQuote}
-                                className="px-2.5 py-1 rounded-xl bg-white hover:bg-amber-50 border border-amber-200 text-[11px] font-bold text-amber-800 transition cursor-pointer flex items-center gap-1 shadow-2xs"
+                                className="px-2.5 py-1 rounded-xl bg-white hover:bg-amber-50 border border-amber-200 text-[11px] font-bold text-amber-800 transition cursor-pointer flex items-center gap-1 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
                                 title="Đổi câu trích dẫn truyền cảm hứng khác"
                             >
-                                <RotateCw className="w-3 h-3 text-amber-600" />
+                                <RotateCw className="w-3 h-3 text-amber-600 shrink-0" aria-hidden="true" />
                                 <span>Đổi câu khác</span>
                             </button>
                         </div>
 
                         {/* Nội dung câu Quote */}
                         <div className="relative pt-1">
-                            <Quote className="w-6 h-6 text-amber-300 absolute -top-1 -left-1 opacity-40 pointer-events-none" />
+                            <Quote className="w-6 h-6 text-amber-300 absolute -top-1 -left-1 opacity-40 pointer-events-none" aria-hidden="true" />
                             <p className="text-xs sm:text-sm font-semibold text-slate-800 italic leading-relaxed pl-4">
                                 "{currentQuote.quote}"
                             </p>
@@ -467,11 +474,11 @@ export default function WeatherAndQuoteWidget() {
                     </div>
 
                     {/* Nguồn / Tác giả & Cam kết phục vụ */}
-                    <div className="pt-2 border-t border-amber-100/80 flex items-center justify-between text-xs">
-                        <div className="text-[11px] text-amber-900/80 font-bold truncate">
+                    <div className="pt-2 border-t border-amber-100/80 flex items-center justify-between gap-2 text-xs">
+                        <div className="text-[11px] text-amber-900/85 font-bold truncate">
                             — {currentQuote.author}
                         </div>
-                        <span className="text-[10px] px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 font-extrabold border border-amber-200/60 shrink-0">
+                        <span className="text-[10px] px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 font-extrabold border border-amber-200/60 shrink-0">
                             🔥 Quyết tâm bứt phá
                         </span>
                     </div>

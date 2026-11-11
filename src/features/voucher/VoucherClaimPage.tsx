@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
     Ticket,
     Sparkles,
     ShoppingBag,
-    ShieldCheck,
     CheckCircle2,
     AlertCircle,
     ArrowUp,
@@ -13,7 +13,8 @@ import {
     ChevronDown,
     RotateCcw,
     X,
-    Cloud
+    Cloud,
+    Store
 } from 'lucide-react';
 import { useAuth } from '../../shared/contexts/AuthContext';
 import type { VoucherItem, VoucherCampaignSummary, VoucherCampaignStatusConfig } from './types';
@@ -47,6 +48,8 @@ export default function VoucherClaimPage() {
     const [voucherToReturn, setVoucherToReturn] = useState<VoucherItem | null>(null);
     const [isReturning, setIsReturning] = useState<boolean>(false);
     const [campaignStatuses, setCampaignStatuses] = useState<Record<string, VoucherCampaignStatusConfig>>({});
+    const toastTimerRef = useRef<number | null>(null);
+    const returnCloseBtnRef = useRef<HTMLButtonElement | null>(null);
 
     const userStoreName = currentUser.store_name || 'Toàn Cụm ST';
     const accessibleStores = useMemo(() => {
@@ -166,8 +169,31 @@ export default function VoucherClaimPage() {
 
     const showToast = (msg: string) => {
         setToastMessage(msg);
-        setTimeout(() => setToastMessage(''), 3000);
+        if (toastTimerRef.current) {
+            window.clearTimeout(toastTimerRef.current);
+        }
+        toastTimerRef.current = window.setTimeout(() => setToastMessage(''), 3000);
     };
+
+    useEffect(() => {
+        return () => {
+            if (toastTimerRef.current) {
+                window.clearTimeout(toastTimerRef.current);
+            }
+        };
+    }, []);
+
+    useEffect(() => {
+        if (!voucherToReturn) return;
+        returnCloseBtnRef.current?.focus();
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape' && !isReturning) {
+                setVoucherToReturn(null);
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [voucherToReturn, isReturning]);
 
     // Thao tác Cấp Mã
     const handleClaim = async (e: React.FormEvent) => {
@@ -273,34 +299,41 @@ export default function VoucherClaimPage() {
     const remainingHistoryCount = myClaimedVouchers.length - visibleHistoryCount;
 
     return (
-        <div ref={formTopRef} className="space-y-4 pb-16 font-avo max-w-lg mx-auto">
+        <div ref={formTopRef} className="space-y-4 pb-16 max-w-lg mx-auto">
             {toastMessage && (
-                <div className="fixed top-5 right-5 z-50 bg-slate-900 text-white px-4 py-2.5 rounded-xl shadow-xl text-xs font-bold flex items-center gap-2 border border-slate-700 animate-in fade-in">
-                    <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+                <div
+                    role="status"
+                    aria-live="polite"
+                    className="fixed top-5 right-5 z-50 bg-slate-900 text-white px-4 py-2.5 rounded-xl shadow-xl text-xs font-bold flex items-center gap-2 border border-slate-700"
+                >
+                    <Sparkles className="w-4 h-4 text-amber-400 shrink-0" aria-hidden="true" />
                     <span>{toastMessage}</span>
                 </div>
             )}
 
             {/* 1. HERO BANNER DI ĐỘNG */}
-            <div className="bg-gradient-to-r from-emerald-800 via-emerald-700 to-teal-800 text-white rounded-3xl p-5 shadow-md relative overflow-hidden">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
+            <div className="bg-gradient-to-r from-emerald-950 via-emerald-900 to-teal-900 text-white rounded-3xl p-5 shadow-md relative overflow-hidden">
+                <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2.5 min-w-0">
                         <div className="w-10 h-10 rounded-2xl bg-amber-400 text-slate-950 flex items-center justify-center font-black shadow-md shrink-0">
-                            <Ticket className="w-5 h-5" />
+                            <Ticket className="w-5 h-5" aria-hidden="true" />
                         </div>
-                        <div>
+                        <div className="min-w-0">
                             <h1 className="text-base sm:text-lg font-black text-amber-300 uppercase tracking-tight">
                                 CẤP MÃ PHIẾU MUA HÀNG
                             </h1>
-                            <div className="text-[11px] text-emerald-100 font-bold flex items-center gap-1.5 flex-wrap">
-                                <span>🏢 {userStoreName}</span>
+                            <div className="text-[11px] text-emerald-100 font-bold flex items-center gap-1.5 flex-wrap mt-0.5">
+                                <span className="inline-flex items-center gap-1 min-w-0">
+                                    <Store className="w-3.5 h-3.5 text-emerald-200 shrink-0" aria-hidden="true" />
+                                    <span className="truncate">{userStoreName}</span>
+                                </span>
                                 {accessibleStores.length > 1 && (
-                                    <span className="bg-emerald-950/80 text-amber-300 px-2 py-0.5 rounded-full text-[10px] font-black border border-emerald-600/70">
-                                        Cụm {accessibleStores.length} shop
+                                    <span className="bg-emerald-950/90 text-amber-200 px-2 py-0.5 rounded-full text-[10px] font-black border border-emerald-500/60 tabular-nums">
+                                        Cụm {accessibleStores.length} ST
                                     </span>
                                 )}
-                                <span className="bg-emerald-950/80 text-emerald-300 px-2 py-0.5 rounded-full text-[10px] font-black border border-emerald-500/60 flex items-center gap-1">
-                                    <Cloud className="w-2.5 h-2.5 text-emerald-400 animate-pulse" />
+                                <span className="bg-emerald-950/90 text-emerald-200 px-2 py-0.5 rounded-full text-[10px] font-black border border-emerald-500/60 flex items-center gap-1">
+                                    <Cloud className="w-3 h-3 text-emerald-300" aria-hidden="true" />
                                     <span>Cloud Realtime</span>
                                 </span>
                             </div>
@@ -308,24 +341,26 @@ export default function VoucherClaimPage() {
                     </div>
                     <button
                         type="button"
+                        aria-label="Tải lại kho mã"
                         onClick={loadData}
-                        className="p-2 rounded-xl bg-emerald-900/60 hover:bg-emerald-900 text-emerald-200 transition cursor-pointer"
+                        disabled={loading}
+                        className="p-2.5 min-w-[40px] min-h-[40px] flex items-center justify-center rounded-xl bg-emerald-950/70 hover:bg-emerald-950 text-emerald-100 border border-emerald-600/40 transition cursor-pointer shrink-0 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
                         title="Tải lại kho mã"
                     >
-                        <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                        <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
                     </button>
                 </div>
             </div>
 
             {/* 2. KẾT QUẢ VỪA CẤP THÀNH CÔNG (NẾU CÓ) */}
             {justClaimedVoucher && (
-                <div className="bg-emerald-50 border-2 border-emerald-500 rounded-3xl p-4 sm:p-5 shadow-lg space-y-3 animate-in fade-in zoom-in-95">
-                    <div className="flex items-center justify-between text-emerald-900">
+                <div className="bg-emerald-50 border-2 border-emerald-500 rounded-3xl p-4 sm:p-5 shadow-lg space-y-3">
+                    <div className="flex items-center justify-between text-emerald-950">
                         <div className="flex items-center gap-2 font-black text-sm">
-                            <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                            <CheckCircle2 className="w-5 h-5 text-emerald-700" aria-hidden="true" />
                             <span>CẤP MÃ VOUCHER THÀNH CÔNG!</span>
                         </div>
-                        <span className="text-[11px] font-bold bg-emerald-200/80 px-2.5 py-0.5 rounded-full">
+                        <span className="text-[11px] font-bold bg-emerald-200/80 text-emerald-950 px-2.5 py-0.5 rounded-full">
                             Sẵn Sàng Dùng
                         </span>
                     </div>
@@ -340,59 +375,59 @@ export default function VoucherClaimPage() {
                     <button
                         type="button"
                         onClick={handleRequestNewVoucher}
-                        className="w-full py-3 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-black text-xs transition cursor-pointer shadow-md flex items-center justify-center gap-2"
+                        className="w-full py-3 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-black text-xs transition cursor-pointer shadow-md flex items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
                     >
-                        <ArrowUp className="w-4 h-4 text-amber-400" />
+                        <ArrowUp className="w-4 h-4 text-amber-300" aria-hidden="true" />
                         <span>LẤY THÊM MÃ MỚI CHO ĐƠN TIẾP THEO</span>
                     </button>
                 </div>
             )}
 
             {/* 3. FORM THAO TÁC CẤP MÃ */}
-            <div className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200 shadow-2xs space-y-4">
+            <div className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200 shadow-sm space-y-4">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
                     <div className="flex items-center gap-2">
-                        <Tag className="w-4 h-4 text-emerald-600" />
+                        <Tag className="w-4 h-4 text-emerald-700" aria-hidden="true" />
                         <h2 className="text-xs font-black uppercase text-slate-800 tracking-wider">
                             Chọn PMH Cần Lấy
                         </h2>
                     </div>
-                    <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span className="text-[11px] font-bold text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-600" aria-hidden="true"></span>
                         <span>Kho Sẵn Sàng Cấp</span>
                     </span>
                 </div>
 
                 <form onSubmit={handleClaim} className="space-y-4 text-xs">
                     {errorMsg && (
-                        <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-2xl flex items-center gap-2 font-bold animate-shake">
-                            <AlertCircle className="w-4 h-4 shrink-0" />
+                        <div role="alert" className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-2xl flex items-center gap-2 font-bold">
+                            <AlertCircle className="w-4 h-4 shrink-0" aria-hidden="true" />
                             <span>{errorMsg}</span>
                         </div>
                     )}
 
                     {/* BƯỚC 1: CHỌN CHƯƠNG TRÌNH */}
                     <div>
-                        <label className="block text-[11px] font-black uppercase text-slate-600 mb-1.5">
+                        <div id="voucher-campaign-label" className="block text-[11px] font-black uppercase text-slate-700 mb-1.5">
                             1. Chương Trình Áp Dụng:
-                        </label>
-                        <div className="grid grid-cols-1 gap-1.5">
+                        </div>
+                        <div role="radiogroup" aria-labelledby="voucher-campaign-label" className="grid grid-cols-1 gap-1.5">
                             {loading ? (
-                                <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl text-center text-slate-500 font-bold text-xs flex items-center justify-center gap-2">
-                                    <RefreshCw className="w-4 h-4 animate-spin text-emerald-600" />
+                                <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl text-center text-slate-600 font-bold text-xs flex items-center justify-center gap-2">
+                                    <RefreshCw className="w-4 h-4 animate-spin text-emerald-700" aria-hidden="true" />
                                     <span>Đang đồng bộ kho mã từ hệ thống...</span>
                                 </div>
                             ) : campaignSummaries.length === 0 ? (
                                 <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl text-center space-y-2">
-                                    <div className="text-slate-500 font-bold text-xs">
+                                    <div className="text-slate-600 font-bold text-xs">
                                         Chưa có chương trình nào nạp mã khả dụng cho ST này.
                                     </div>
                                     <button
                                         type="button"
                                         onClick={loadData}
-                                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[11px] font-black inline-flex items-center gap-1.5 transition cursor-pointer shadow-xs"
+                                        className="px-3.5 py-2 min-h-[34px] bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-[11px] font-black inline-flex items-center gap-1.5 transition cursor-pointer shadow-sm"
                                     >
-                                        <RefreshCw className="w-3.5 h-3.5" />
+                                        <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
                                         <span>Tải lại kho mã</span>
                                     </button>
                                 </div>
@@ -406,27 +441,29 @@ export default function VoucherClaimPage() {
                                         <button
                                             key={c.campaign_name}
                                             type="button"
+                                            role="radio"
+                                            aria-checked={isSelected}
                                             onClick={() => handleSelectCampaign(c.campaign_name)}
-                                            className={`p-3 rounded-2xl border text-left transition cursor-pointer flex items-center justify-between ${
+                                            className={`p-3 rounded-2xl border text-left transition cursor-pointer flex items-center justify-between focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 ${
                                                 isSelected
-                                                    ? 'bg-emerald-50 border-emerald-500 ring-2 ring-emerald-500/20 text-emerald-950 font-black'
+                                                    ? 'bg-emerald-50 border-emerald-600 ring-2 ring-emerald-500/20 text-emerald-950 font-black'
                                                     : isEnded
-                                                    ? 'bg-slate-100/70 border-slate-200 text-slate-500 hover:bg-slate-100'
-                                                    : 'bg-slate-50/70 border-slate-200 hover:bg-slate-100 text-slate-700'
+                                                    ? 'bg-slate-100/70 border-slate-200 text-slate-700 hover:bg-slate-100'
+                                                    : 'bg-slate-50/70 border-slate-200 hover:bg-slate-100 text-slate-800'
                                             }`}
                                         >
                                             <div className="truncate pr-2">
                                                 <div className="text-xs font-black truncate">{c.campaign_name}</div>
-                                                <div className="text-[10px] text-slate-500 mt-0.5">
+                                                <div className="text-[10px] text-slate-600 mt-0.5 tabular-nums">
                                                     {c.denominations.length} mức mệnh giá
                                                 </div>
                                             </div>
                                             <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold shrink-0 ${
                                                 isEnded
-                                                    ? 'bg-slate-200 text-slate-700'
+                                                    ? 'bg-slate-200 text-slate-800'
                                                     : hasStock
-                                                    ? 'bg-emerald-100 text-emerald-800'
-                                                    : 'bg-rose-100 text-rose-700'
+                                                    ? 'bg-emerald-100 text-emerald-900'
+                                                    : 'bg-rose-100 text-rose-800'
                                             }`}>
                                                 {isEnded ? '⛔ Đã kết thúc' : hasStock ? '🟢 Còn mã' : '🔴 Tạm hết mã'}
                                             </span>
@@ -440,31 +477,31 @@ export default function VoucherClaimPage() {
                     {/* BƯỚC 2: CHỌN MỆNH GIÁ */}
                     {activeCampaignData && (
                         <div>
-                            <label className="block text-[11px] font-black uppercase text-slate-600 mb-1.5">
-                                2. Mệnh Giá Voucher & Điều Kiện Áp Dụng:
-                            </label>
+                            <div id="voucher-denom-label" className="block text-[11px] font-black uppercase text-slate-700 mb-1.5">
+                                2. Mệnh Giá Voucher &amp; Điều Kiện Áp Dụng:
+                            </div>
 
                             {/* Thông báo nếu toàn bộ chương trình đã kết thúc */}
                             {activeCampaignData.is_ended && (
-                                <div className="mb-2 p-2.5 rounded-xl bg-slate-100 border border-slate-300 text-slate-700 text-xs flex items-center gap-2">
-                                    <span className="text-sm shrink-0">⛔</span>
+                                <div className="mb-2 p-2.5 rounded-xl bg-slate-100 border border-slate-300 text-slate-800 text-xs flex items-center gap-2">
+                                    <span className="text-sm shrink-0" aria-hidden="true">⛔</span>
                                     <span>
-                                        Chương trình <strong>"{activeCampaignData.campaign_name}"</strong> đã hết mã hoàn toàn và chính thức kết thúc.
+                                        Chương trình <strong>&ldquo;{activeCampaignData.campaign_name}&rdquo;</strong> đã hết mã hoàn toàn và chính thức kết thúc.
                                     </span>
                                 </div>
                             )}
 
                             {/* Thông báo nếu có mệnh giá tạm hết mã */}
                             {!activeCampaignData.is_ended && activeCampaignData.denominations.some(d => !d.is_ended && d.available === 0) && (
-                                <div className="mb-2 p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-center gap-2">
-                                    <span className="text-sm shrink-0">💡</span>
+                                <div className="mb-2 p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-950 text-xs flex items-center gap-2">
+                                    <span className="text-sm shrink-0" aria-hidden="true">💡</span>
                                     <span>
                                         <strong>Lưu ý:</strong> Một số mệnh giá đang tạm hết mã. Nhân viên vui lòng liên hệ <strong>Quản lý hoặc Trưởng ca</strong> để nạp thêm tồn kho vào hệ thống.
                                     </span>
                                 </div>
                             )}
 
-                            <div className="grid grid-cols-2 gap-2">
+                            <div role="radiogroup" aria-labelledby="voucher-denom-label" className="grid grid-cols-2 gap-2">
                                 {activeCampaignData.denominations.map(d => {
                                     const isSelected = selectedDenomination === d.denomination;
                                     const isEnded = Boolean(d.is_ended || activeCampaignData.is_ended);
@@ -475,30 +512,32 @@ export default function VoucherClaimPage() {
                                         <button
                                             key={d.denomination}
                                             type="button"
+                                            role="radio"
+                                            aria-checked={isSelected}
                                             disabled={!isAvailable}
                                             onClick={() => setSelectedDenomination(d.denomination)}
-                                            className={`p-3 rounded-2xl border text-center transition cursor-pointer relative overflow-hidden flex flex-col justify-between ${
+                                            className={`p-3 rounded-2xl border text-center transition cursor-pointer relative overflow-hidden flex flex-col justify-between focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 ${
                                                 isSelected
                                                     ? hot.activeClass
                                                     : isAvailable
-                                                    ? `${hot.bgClass} ${hot.borderClass} hover:shadow-xs`
+                                                    ? `${hot.bgClass} ${hot.borderClass} hover:shadow-sm`
                                                     : isEnded
-                                                    ? 'bg-slate-100 border-slate-200 text-slate-400 opacity-60 cursor-not-allowed'
-                                                    : 'bg-rose-50/70 border-rose-200 text-rose-800 cursor-not-allowed'
+                                                    ? 'bg-slate-100 border-slate-300 text-slate-600 cursor-not-allowed'
+                                                    : 'bg-rose-50/70 border-rose-200 text-rose-900 cursor-not-allowed'
                                             }`}
                                         >
                                             {/* Tag độ hot của mệnh giá */}
                                             <div className="flex items-center justify-between gap-1 w-full mb-1">
-                                                <span className="text-[11px]">{hot.tagIcon}</span>
+                                                <span className="text-[11px]" aria-hidden="true">{hot.tagIcon}</span>
                                                 <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded border ${
-                                                    isSelected ? 'bg-white/20 text-white border-white/30' : hot.badgeClass
+                                                    isSelected ? 'bg-slate-950/35 text-white border-white/30' : hot.badgeClass
                                                 }`}>
                                                     {hot.label}
                                                 </span>
                                             </div>
 
                                             {/* Số tiền */}
-                                            <div className={`font-mono font-black text-sm my-0.5 ${isSelected ? 'text-white' : hot.textClass}`}>
+                                            <div className={`font-mono tabular-nums font-black text-sm my-0.5 ${isSelected ? 'text-white' : hot.textClass}`}>
                                                 {formatCurrency(d.denomination)}
                                             </div>
 
@@ -510,18 +549,18 @@ export default function VoucherClaimPage() {
                                                     <div
                                                         className={`text-[10px] my-1 p-1.5 rounded-lg text-left transition ${
                                                             isSelected
-                                                                ? 'bg-black/25 text-white'
-                                                                : 'bg-white/95 text-slate-700 border border-slate-200/80 shadow-2xs'
+                                                                ? 'bg-black/30 text-white'
+                                                                : 'bg-white/95 text-slate-800 border border-slate-200/90 shadow-sm'
                                                         }`}
                                                         title={d.description}
                                                     >
-                                                        <div className="font-bold text-[9px] uppercase tracking-wider opacity-85 mb-0.5 flex items-center gap-0.5">
-                                                            <span>📝</span> Điều kiện:
+                                                        <div className="font-bold text-[9px] uppercase tracking-wider mb-0.5">
+                                                            Điều kiện:
                                                         </div>
                                                         <div className="space-y-0.5">
                                                             {condLines.map((line, lIdx) => (
                                                                 <div key={lIdx} className="leading-tight flex items-start gap-1 font-medium">
-                                                                    <span className="opacity-70 text-[9px] font-bold shrink-0">•</span>
+                                                                    <span className="text-[9px] font-bold shrink-0" aria-hidden="true">•</span>
                                                                     <span className="line-clamp-2">{line}</span>
                                                                 </div>
                                                             ))}
@@ -533,21 +572,21 @@ export default function VoucherClaimPage() {
                                             {/* Trạng thái còn / tạm hết / hết mã hoàn toàn */}
                                             <div className={`text-[10px] font-black mt-1 ${
                                                 isSelected 
-                                                    ? 'text-white/95' 
+                                                    ? 'text-white' 
                                                     : isEnded 
-                                                    ? 'text-slate-500' 
+                                                    ? 'text-slate-600' 
                                                     : isAvailable 
-                                                    ? 'text-emerald-700' 
-                                                    : 'text-rose-600'
+                                                    ? 'text-emerald-800' 
+                                                    : 'text-rose-700'
                                             }`}>
                                                 {isEnded ? (
-                                                    <span>⛔ Hết mã - Kết thúc chương trình</span>
+                                                    <span>⛔ Hết mã - Kết thúc</span>
                                                 ) : isAvailable ? (
                                                     <span>🟢 Còn mã</span>
                                                 ) : (
                                                     <div className="flex flex-col items-center">
                                                         <span>🔴 Tạm hết mã</span>
-                                                        <span className="text-[9px] font-normal text-rose-500 mt-0.5 leading-tight">Liên hệ QL/TC để nạp thêm</span>
+                                                        <span className="text-[9px] font-semibold text-rose-700 mt-0.5 leading-tight">Liên hệ QL/TC để nạp thêm</span>
                                                     </div>
                                                 )}
                                             </div>
@@ -560,17 +599,19 @@ export default function VoucherClaimPage() {
 
                     {/* BƯỚC 3: MÃ ĐƠN HÀNG */}
                     <div>
-                        <label className="block text-[11px] font-black uppercase text-slate-600 mb-1">
-                            3. Mã Đơn Hàng: <span className="text-rose-500">*</span>
+                        <label htmlFor="voucher-order-id" className="block text-[11px] font-black uppercase text-slate-700 mb-1">
+                            3. Mã Đơn Hàng: <span className="text-rose-700">*</span>
                         </label>
                         <div className="relative">
-                            <ShoppingBag className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                            <ShoppingBag className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" aria-hidden="true" />
                             <input
+                                id="voucher-order-id"
+                                name="orderId"
                                 type="text"
                                 value={orderId}
                                 onChange={(e) => setOrderId(e.target.value)}
-                                placeholder="Nhập mã đơn hàng (VD: 00123SO26100703889)"
-                                className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl font-mono text-xs font-bold text-slate-900 focus:bg-white focus:outline-emerald-600 uppercase"
+                                placeholder="Nhập mã đơn (VD: 00123SO...)"
+                                className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-300 rounded-2xl font-mono text-sm font-bold text-slate-900 placeholder-slate-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-600 uppercase"
                                 required
                             />
                         </div>
@@ -578,14 +619,16 @@ export default function VoucherClaimPage() {
 
                     {/* BƯỚC 4: XÁC NHẬN ĐIỀU KHOẢN */}
                     <div className="bg-slate-50 rounded-2xl p-3 border border-slate-200">
-                        <label className="flex items-start gap-2.5 cursor-pointer">
+                        <label htmlFor="voucher-terms-agree" className="flex items-start gap-2.5 cursor-pointer">
                             <input
+                                id="voucher-terms-agree"
+                                name="termsAgreed"
                                 type="checkbox"
                                 checked={termsAgreed}
                                 onChange={(e) => setTermsAgreed(e.target.checked)}
-                                className="mt-0.5 w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                                className="mt-0.5 w-4 h-4 rounded text-emerald-700 focus:ring-emerald-600 cursor-pointer shrink-0"
                             />
-                            <span className="text-[11px] text-slate-600 font-medium leading-relaxed">
+                            <span className="text-[11px] text-slate-700 font-medium leading-relaxed">
                                 Tôi cam kết sử dụng voucher cho đúng đơn hàng thực tế của khách hàng, tuyệt đối <strong>không đầu cơ tích trữ mã</strong>.
                             </span>
                         </label>
@@ -595,9 +638,9 @@ export default function VoucherClaimPage() {
                     <button
                         type="submit"
                         disabled={isSubmitting || !termsAgreed || !selectedDenomination}
-                        className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 active:scale-[0.99] text-white font-black text-sm uppercase tracking-wider transition cursor-pointer shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                        className="w-full py-3.5 px-4 rounded-2xl bg-emerald-700 hover:bg-emerald-800 active:scale-[0.99] text-white font-black text-sm uppercase tracking-wider transition cursor-pointer shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
                     >
-                        <Ticket className="w-5 h-5 text-amber-300" />
+                        <Ticket className="w-5 h-5 text-white" aria-hidden="true" />
                         <span>{isSubmitting ? 'ĐANG CẤP MÃ...' : 'CẤP MÃ VOUCHER NGAY'}</span>
                     </button>
                 </form>
@@ -605,13 +648,13 @@ export default function VoucherClaimPage() {
 
             {/* 4. LỊCH SỬ MÃ ĐÃ NHẬN (MẶC ĐỊNH 5 MÃ, XEM THÊM MỞ RỘNG MỖI LẦN 5 MÃ) */}
             {myClaimedVouchers.length > 0 && (
-                <div className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200 shadow-2xs space-y-3 font-avo">
+                <div className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200 shadow-sm space-y-3">
                     <div className="flex items-center justify-between text-xs font-black text-slate-800 border-b border-slate-100 pb-2.5 flex-wrap gap-1">
                         <div className="flex items-center gap-1.5">
-                            <History className="w-4 h-4 text-emerald-600" />
+                            <History className="w-4 h-4 text-emerald-700" aria-hidden="true" />
                             <span>Lịch Sử Mã Voucher Bạn Đã Nhận:</span>
                         </div>
-                        <span className="text-[10px] text-emerald-800 bg-emerald-100/80 px-2.5 py-0.5 rounded-full font-bold">
+                        <span className="text-[10px] text-emerald-900 bg-emerald-100 px-2.5 py-0.5 rounded-full font-bold tabular-nums">
                             Hiển thị {displayedHistoryVouchers.length}/{myClaimedVouchers.length} mã
                         </span>
                     </div>
@@ -635,9 +678,9 @@ export default function VoucherClaimPage() {
                             <button
                                 type="button"
                                 onClick={() => setVisibleHistoryCount(prev => prev + 5)}
-                                className="w-full py-2.5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-black text-xs transition cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs active:scale-[0.99]"
+                                className="w-full py-2.5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-black text-xs transition cursor-pointer flex items-center justify-center gap-1.5 shadow-sm active:scale-[0.99]"
                             >
-                                <ChevronDown className="w-4 h-4 text-emerald-600" />
+                                <ChevronDown className="w-4 h-4 text-emerald-700" aria-hidden="true" />
                                 <span>Xem thêm 5 mã (còn {remainingHistoryCount} mã nữa)</span>
                             </button>
                         )}
@@ -645,7 +688,7 @@ export default function VoucherClaimPage() {
                             <button
                                 type="button"
                                 onClick={() => setVisibleHistoryCount(5)}
-                                className="py-2.5 px-4 rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 font-bold text-xs transition cursor-pointer"
+                                className="py-2.5 px-4 rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 font-bold text-xs transition cursor-pointer"
                             >
                                 Thu gọn
                             </button>
@@ -655,56 +698,63 @@ export default function VoucherClaimPage() {
             )}
 
             {/* 5. MODAL XÁC NHẬN HOÀN TRẢ MÃ VOUCHER VỀ KHO */}
-            {voucherToReturn && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs font-avo animate-in fade-in">
-                    <div className="bg-white rounded-3xl max-w-sm w-full border border-slate-200 shadow-2xl p-5 space-y-4 animate-in zoom-in-95">
+            {voucherToReturn && createPortal(
+                <div
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="voucher-return-modal-title"
+                    className="!mt-0 fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm"
+                >
+                    <div className="bg-white rounded-3xl max-w-sm w-full border border-slate-200 shadow-2xl p-5 space-y-4">
                         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                             <div className="flex items-center gap-2.5">
-                                <div className="w-8 h-8 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center font-bold shrink-0">
-                                    <RotateCcw className="w-4 h-4" />
+                                <div className="w-8 h-8 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center font-bold shrink-0">
+                                    <RotateCcw className="w-4 h-4" aria-hidden="true" />
                                 </div>
                                 <div>
-                                    <h3 className="font-black text-sm text-slate-900">
+                                    <h3 id="voucher-return-modal-title" className="font-black text-sm text-slate-900">
                                         Trả Lại Mã Phiếu Mua Hàng
                                     </h3>
-                                    <p className="text-[10.5px] text-slate-500 font-medium">
+                                    <p className="text-[10.5px] text-slate-600 font-medium">
                                         Hoàn trả về kho cho nhân viên khác
                                     </p>
                                 </div>
                             </div>
                             <button
+                                ref={returnCloseBtnRef}
                                 type="button"
+                                aria-label="Đóng hộp thoại trả lại mã voucher"
                                 onClick={() => !isReturning && setVoucherToReturn(null)}
-                                className="p-1 text-slate-400 hover:text-slate-700 cursor-pointer rounded-lg hover:bg-slate-100"
+                                className="p-1.5 text-slate-600 hover:text-slate-900 cursor-pointer rounded-lg hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
                             >
-                                <X className="w-4 h-4" />
+                                <X className="w-4 h-4" aria-hidden="true" />
                             </button>
                         </div>
 
                         {/* Thẻ thông tin mã cần trả */}
                         <div className="bg-amber-50/70 rounded-2xl p-3 border border-amber-200 space-y-1.5 text-xs text-slate-700">
                             <div className="flex items-center justify-between">
-                                <span className="text-[10px] uppercase font-bold text-slate-500">Mã voucher:</span>
-                                <span className="font-mono font-black text-amber-900 text-sm tracking-wider">
+                                <span className="text-[10px] uppercase font-bold text-slate-600">Mã voucher:</span>
+                                <span className="font-mono font-black text-amber-950 text-sm tracking-wider">
                                     {voucherToReturn.code}
                                 </span>
                             </div>
                             <div className="flex items-center justify-between">
-                                <span className="text-[10px] uppercase font-bold text-slate-500">Mệnh giá:</span>
-                                <span className="font-mono font-black text-rose-600">
+                                <span className="text-[10px] uppercase font-bold text-slate-600">Mệnh giá:</span>
+                                <span className="font-mono font-black text-rose-700 tabular-nums">
                                     {Number(voucherToReturn.denomination).toLocaleString('vi-VN')}đ
                                 </span>
                             </div>
                             <div className="flex items-center justify-between text-[11px]">
-                                <span className="text-[10px] uppercase font-bold text-slate-500">Chương trình:</span>
+                                <span className="text-[10px] uppercase font-bold text-slate-600">Chương trình:</span>
                                 <span className="font-bold text-slate-800 line-clamp-1 text-right max-w-[180px]">
                                     {voucherToReturn.campaign_name}
                                 </span>
                             </div>
                             {voucherToReturn.order_id && (
                                 <div className="flex items-center justify-between text-[11px] pt-1 border-t border-dashed border-amber-200">
-                                    <span className="text-[10px] uppercase font-bold text-slate-500">Đã gắn đơn:</span>
-                                    <span className="font-mono font-bold text-indigo-700">
+                                    <span className="text-[10px] uppercase font-bold text-slate-600">Đã gắn đơn:</span>
+                                    <span className="font-mono font-bold text-blue-800">
                                         {voucherToReturn.order_id}
                                     </span>
                                 </div>
@@ -712,9 +762,9 @@ export default function VoucherClaimPage() {
                         </div>
 
                         {/* Cảnh báo ghi chú */}
-                        <div className="bg-slate-50 rounded-2xl p-2.5 border border-slate-200 text-[11px] text-slate-600 leading-relaxed space-y-1">
-                            <p className="font-bold text-slate-800 flex items-center gap-1">
-                                <span>⚠️ Lưu ý:</span>
+                        <div className="bg-slate-50 rounded-2xl p-2.5 border border-slate-200 text-[11px] text-slate-700 leading-relaxed space-y-1">
+                            <p className="font-bold text-slate-900 flex items-center gap-1">
+                                <span>Lưu ý:</span>
                             </p>
                             <p>
                                 Chỉ hoàn trả khi mã này <strong>thực sự chưa áp dụng vào đơn thanh toán</strong> của khách hàng. Mã sẽ lập tức quay về trạng thái sẵn sàng để đồng nghiệp khác sử dụng.
@@ -735,14 +785,15 @@ export default function VoucherClaimPage() {
                                 type="button"
                                 onClick={handleConfirmReturn}
                                 disabled={isReturning}
-                                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black transition cursor-pointer shadow-sm flex items-center gap-1.5 disabled:opacity-50 active:scale-[0.98]"
+                                className="px-4 py-2 bg-rose-700 hover:bg-rose-800 text-white rounded-xl text-xs font-black transition cursor-pointer shadow-sm flex items-center gap-1.5 disabled:opacity-50 active:scale-[0.98]"
                             >
-                                <RotateCcw className={`w-3.5 h-3.5 ${isReturning ? 'animate-spin' : ''}`} />
+                                <RotateCcw className={`w-3.5 h-3.5 ${isReturning ? 'animate-spin' : ''}`} aria-hidden="true" />
                                 <span>{isReturning ? 'Đang Hoàn Trả...' : 'Xác Nhận Trả Lại'}</span>
                             </button>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );

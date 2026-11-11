@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Trash2, AlertTriangle, CheckCircle2, ShieldAlert, X, Sparkles, Filter, Archive } from 'lucide-react';
 import type { VoucherItem } from '../types';
 import { cleanVouchers, isVoucherInUserCluster } from '../services/voucherService';
@@ -31,6 +32,15 @@ export default function VoucherCleanModal({
     const [cleanMode, setCleanMode] = useState<'DELETE' | 'MARK_EXPIRED'>('DELETE');
     const [isProcessing, setIsProcessing] = useState<boolean>(false);
     const [selectedCampaign, setSelectedCampaign] = useState<string>('ALL');
+
+    useEffect(() => {
+        if (!isOpen) return;
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape' && !isProcessing) onClose();
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isOpen, isProcessing, onClose]);
 
     // Lọc danh sách mã áp dụng làm sạch
     const targetVouchers = useMemo(() => {
@@ -111,20 +121,29 @@ export default function VoucherCleanModal({
         }
     };
 
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs font-avo animate-in fade-in">
-            <div className="bg-white rounded-3xl max-w-xl w-full border border-slate-200 shadow-2xl p-5 sm:p-6 space-y-4 max-h-[92vh] overflow-y-auto">
+    return createPortal(
+        <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="voucher-clean-modal-title"
+            className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm"
+            onClick={() => !isProcessing && onClose()}
+        >
+            <div
+                className="bg-white rounded-3xl max-w-xl w-full border border-slate-200 shadow-2xl p-5 sm:p-6 space-y-4 max-h-[92vh] overflow-y-auto"
+                onClick={(e) => e.stopPropagation()}
+            >
                 {/* Header */}
                 <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                     <div className="flex items-center gap-2">
                         <div className="w-8 h-8 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center font-bold">
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="w-4 h-4" aria-hidden="true" />
                         </div>
                         <div>
-                            <h3 className="font-black text-sm text-slate-900">
+                            <h3 id="voucher-clean-modal-title" className="font-black text-sm text-slate-900">
                                 Làm Sạch Dữ Liệu Tồn Kho Coupon
                             </h3>
-                            <p className="text-[11px] text-slate-500 font-medium">
+                            <p className="text-[11px] text-slate-600 font-medium">
                                 Phạm vi: <strong>{currentStoreName === 'all' ? 'Toàn Cụm ST' : getShortStoreName(currentStoreName)}</strong>
                             </p>
                         </div>
@@ -132,9 +151,11 @@ export default function VoucherCleanModal({
                     <button
                         type="button"
                         onClick={onClose}
-                        className="p-1 text-slate-400 hover:text-slate-700 cursor-pointer rounded-lg hover:bg-slate-100"
+                        disabled={isProcessing}
+                        aria-label="Đóng hộp thoại làm sạch kho"
+                        className="p-1.5 text-slate-600 hover:text-slate-900 cursor-pointer rounded-lg hover:bg-slate-100 disabled:opacity-50"
                     >
-                        <X className="w-4 h-4" />
+                        <X className="w-4 h-4" aria-hidden="true" />
                     </button>
                 </div>
 
@@ -142,7 +163,7 @@ export default function VoucherCleanModal({
                 <div className="bg-gradient-to-r from-rose-50 to-orange-50 border border-rose-200 rounded-2xl p-3.5 space-y-2">
                     <div className="flex items-center justify-between">
                         <span className="text-xs font-black uppercase text-rose-900 tracking-wider flex items-center gap-1.5">
-                            <AlertTriangle className="w-4 h-4 text-rose-600" />
+                            <AlertTriangle className="w-4 h-4 text-rose-600" aria-hidden="true" />
                             <span>Mã Phát Hiện Cần Dọn Dẹp:</span>
                         </span>
                         <span className="text-sm font-black font-mono text-rose-700">
@@ -159,18 +180,18 @@ export default function VoucherCleanModal({
                 </div>
 
                 {/* Gợi ý tính năng Ẩn chương trình thay vì xóa */}
-                <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-3 text-xs text-indigo-950 flex items-start gap-2">
-                    <Sparkles className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
+                <div className="bg-blue-50 border border-blue-200 rounded-2xl p-3 text-xs text-blue-950 flex items-start gap-2">
+                    <Sparkles className="w-4 h-4 text-blue-700 shrink-0 mt-0.5" aria-hidden="true" />
                     <div className="leading-relaxed">
-                        <strong className="text-indigo-900">Gợi ý lưu trữ an toàn:</strong> Nếu bạn chỉ muốn tắt cảnh báo và thu gọn giao diện mà <strong>không làm mất dữ liệu lịch sử</strong>, hãy chọn giải pháp <strong>Ẩn Chương Trình</strong> thay vì xóa vĩnh viễn khỏi kho.
+                        <strong className="text-blue-900">Gợi ý lưu trữ an toàn:</strong> Nếu bạn chỉ muốn tắt cảnh báo và thu gọn giao diện mà <strong>không làm mất dữ liệu lịch sử</strong>, hãy chọn giải pháp <strong>Ẩn Chương Trình</strong> thay vì xóa vĩnh viễn khỏi kho.
                     </div>
                 </div>
 
                 {/* 1. Chọn loại mã cần làm sạch */}
                 <div className="space-y-1.5">
-                    <label className="block text-xs font-black uppercase tracking-wider text-slate-700">
+                    <span className="block text-xs font-black uppercase tracking-wider text-slate-700">
                         1. Loại PMH cần xử lý:
-                    </label>
+                    </span>
                     <div className="grid grid-cols-3 gap-2">
                         <button
                             type="button"
@@ -214,23 +235,25 @@ export default function VoucherCleanModal({
                 {campaignOptions.length > 0 && (
                     <div className="space-y-1.5">
                         <div className="flex items-center justify-between">
-                            <label className="block text-xs font-black uppercase tracking-wider text-slate-700">
+                            <label htmlFor="voucher-clean-campaign" className="block text-xs font-black uppercase tracking-wider text-slate-700 cursor-pointer">
                                 2. Chương trình áp dụng:
                             </label>
                             {selectedCampaign !== 'ALL' && (
                                 <button
                                     type="button"
                                     onClick={() => setSelectedCampaign('ALL')}
-                                    className="text-[10px] text-rose-600 hover:underline font-bold cursor-pointer"
+                                    className="text-[10px] text-rose-700 hover:underline font-bold cursor-pointer"
                                 >
                                     Xem tất cả
                                 </button>
                             )}
                         </div>
                         <select
+                            id="voucher-clean-campaign"
+                            name="voucher_clean_campaign"
                             value={selectedCampaign}
                             onChange={(e) => setSelectedCampaign(e.target.value)}
-                            className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:border-rose-500 shadow-2xs"
+                            className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:border-rose-500 shadow-sm"
                         >
                             <option value="ALL">🌟 Tất cả chương trình ({campaignOptions.length})</option>
                             {campaignOptions.map(camp => (
@@ -244,9 +267,9 @@ export default function VoucherCleanModal({
 
                 {/* 3. Chọn hình thức xử lý */}
                 <div className="space-y-1.5">
-                    <label className="block text-xs font-black uppercase tracking-wider text-slate-700">
+                    <span className="block text-xs font-black uppercase tracking-wider text-slate-700">
                         {campaignOptions.length > 0 ? '3. Hình thức dọn dẹp:' : '2. Hình thức dọn dẹp:'}
-                    </label>
+                    </span>
                     <div className="grid grid-cols-2 gap-2">
                         <button
                             type="button"
@@ -300,7 +323,7 @@ export default function VoucherCleanModal({
                                 </div>
                             ))}
                             {targetVouchers.length > 5 && (
-                                <div className="pt-1 text-[10px] text-slate-400 italic text-center font-avo">
+                                <div className="pt-1 text-[10px] text-slate-500 italic text-center">
                                     ... và còn {targetVouchers.length - 5} mã khác
                                 </div>
                             )}
@@ -314,7 +337,7 @@ export default function VoucherCleanModal({
                         type="button"
                         onClick={onClose}
                         disabled={isProcessing}
-                        className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                        className="px-4 py-2 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 transition cursor-pointer"
                     >
                         Đóng
                     </button>
@@ -323,18 +346,19 @@ export default function VoucherCleanModal({
                         type="button"
                         disabled={isProcessing || targetVouchers.length === 0}
                         onClick={handleExecuteClean}
-                        className={`px-4 py-2 rounded-xl text-xs font-black text-white transition cursor-pointer shadow-sm flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed ${cleanMode === 'DELETE'
-                                ? 'bg-rose-600 hover:bg-rose-700 active:scale-[0.99]'
-                                : 'bg-amber-600 hover:bg-amber-700 active:scale-[0.99]'
+                        className={`px-4 py-2 rounded-xl text-xs font-black transition cursor-pointer shadow-sm flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed ${cleanMode === 'DELETE'
+                                ? 'bg-rose-600 hover:bg-rose-700 text-white active:scale-[0.99]'
+                                : 'bg-amber-400 hover:bg-amber-500 text-slate-950 border border-amber-500 active:scale-[0.99]'
                             }`}
                     >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                         <span>
                             {isProcessing ? 'Đang dọn dẹp...' : `Tiến Hành Làm Sạch (${targetVouchers.length} mã)`}
                         </span>
                     </button>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 }

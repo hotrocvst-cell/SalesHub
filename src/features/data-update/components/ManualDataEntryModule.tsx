@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
     Store,
     Plus,
@@ -70,21 +70,27 @@ export default function ManualDataEntryModule({
     // ST đang chọn để xem / sửa
     const activeStore = storesData[selectedStoreIndex] || storesData[0];
 
+    // Giữ draft text cho % TT Doanh thu để hỗ trợ nhập số âm (-10.5) & thập phân mượt mà
+    const [pctGrowthInput, setPctGrowthInput] = useState<string>('');
+    useEffect(() => {
+        if (!activeStore) {
+            setPctGrowthInput('');
+            return;
+        }
+        const currentNum = Number(activeStore.pctGrowth) || 0;
+        const parsedDraft = parseFloat(pctGrowthInput);
+        if ((pctGrowthInput === '' || pctGrowthInput === '-') && currentNum === 0) return;
+        if (isNaN(parsedDraft) || parsedDraft !== currentNum) {
+            setPctGrowthInput(currentNum === 0 ? '' : String(currentNum));
+        }
+    }, [selectedStoreIndex, activeStore?.pctGrowth]);
+
     // Cập nhật trường Doanh thu của ST đang chọn
     const handleUpdateStoreField = (field: keyof StoreReportingData, value: any) => {
         if (!activeStore) return;
         const updated = [...storesData];
         const current = { ...updated[selectedStoreIndex] };
-
         (current as any)[field] = value;
-
-        // Tự động tính toán lại tỷ lệ trả góp nếu đổi doanh thu hoặc trả góp thực
-        if (field === 'revenueReal' || field === 'installmentReal') {
-            const rev = field === 'revenueReal' ? Number(value) || 0 : current.revenueReal;
-            const inst = field === 'installmentReal' ? Number(value) || 0 : current.installmentReal;
-            current.installmentRateReal = rev > 0 ? Number(((inst / rev) * 100).toFixed(2)) : 0;
-        }
-
         updated[selectedStoreIndex] = current;
         onChangeStoresData(updated);
     };
@@ -166,17 +172,15 @@ export default function ManualDataEntryModule({
         }
 
         const newStore: StoreReportingData = {
-            storeCode: storeCode || '',
+            storeCode: storeCode || storeName.trim().match(/^(\d{3,6})/)?.[1] || '',
             storeRawName: storeName.trim(),
             storeShortName: short,
             revenueQd: 0,
+            installmentQd: 0,
             targetQd: 0,
-            quantityQd: 0,
-            revenueReal: 0,
-            targetReal: 0,
-            quantityReal: 0,
-            installmentReal: 0,
-            installmentRateReal: 0,
+            avg3Months: 0,
+            pctGrowth: 0,
+            installmentRate: 0,
             emulations: {}
         };
 
@@ -205,8 +209,8 @@ export default function ManualDataEntryModule({
         let text = `BÁO CÁO KINH DOANH NGÀY ${reportDate} (Nhịp ${passedDays}/${totalDays})\n`;
         storesData.forEach(st => {
             text += `\n🏢 ST: ${st.storeRawName}\n`;
-            text += `- DT Quy Đổi: ${st.revenueQd} tr / Target: ${st.targetQd} tr (SL: ${st.quantityQd})\n`;
-            text += `- DT Thực: ${st.revenueReal} tr / Target: ${st.targetReal} tr (Trả góp: ${st.installmentReal} tr - ${st.installmentRateReal}%)\n`;
+            text += `- Doanh thu QĐ: ${st.revenueQd} tr | DT Trả góp QĐ: ${st.installmentQd} tr | Target: ${st.targetQd} tr\n`;
+            text += `- TB 3 Tháng: ${st.avg3Months} tr | % TT Doanh thu: ${st.pctGrowth >= 0 ? '+' : ''}${st.pctGrowth}% | % Tỷ trọng trả góp: ${st.installmentRate}%\n`;
             const emuList = Object.values(st.emulations || {});
             if (emuList.length > 0) {
                 text += `* Thi đua (${emuList.length} CT):\n`;
@@ -222,7 +226,7 @@ export default function ManualDataEntryModule({
 
     // Tính toán các tỷ lệ tự động cho ST đang chọn
     const activeStats = useMemo(() => {
-        if (!activeStore) return { htQd: 0, dkQd: 0, htReal: 0, dkReal: 0, pctQd: 0 };
+        if (!activeStore) return { htQd: 0, dkQd: 0 };
 
         const htQd = activeStore.targetQd > 0
             ? Number(((activeStore.revenueQd / activeStore.targetQd) * 100).toFixed(1))
@@ -231,18 +235,7 @@ export default function ManualDataEntryModule({
             ? Number((((activeStore.revenueQd / passedDays) * totalDays / activeStore.targetQd) * 100).toFixed(1))
             : 0;
 
-        const htReal = activeStore.targetReal > 0
-            ? Number(((activeStore.revenueReal / activeStore.targetReal) * 100).toFixed(1))
-            : 0;
-        const dkReal = (activeStore.targetReal > 0 && passedDays > 0)
-            ? Number((((activeStore.revenueReal / passedDays) * totalDays / activeStore.targetReal) * 100).toFixed(1))
-            : 0;
-
-        const pctQd = activeStore.revenueReal > 0
-            ? Number((((activeStore.revenueQd - activeStore.revenueReal) / activeStore.revenueReal) * 100).toFixed(1))
-            : 0;
-
-        return { htQd, dkQd, htReal, dkReal, pctQd };
+        return { htQd, dkQd };
     }, [activeStore, passedDays, totalDays]);
 
     return (
@@ -426,94 +419,112 @@ export default function ManualDataEntryModule({
                         </div>
                     </div>
 
-                    {/* KHỐI 1: DOANH THU QUY ĐỔI (DTQĐ) & DOANH THU THỰC */}
+                    {/* KHỐI 1: DOANH THU QUY ĐỔI (DTQĐ) & TỶ TRỌNG TRẢ GÓP / TĂNG TRƯỞNG */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         {/* 1A: DOANH THU QUY ĐỔI */}
                         <div className="bg-blue-50/60 border border-blue-200 rounded-2xl p-3.5 space-y-3">
-                            <div className="flex items-center justify-between">
+                            <div className="flex items-center justify-between gap-2 flex-wrap">
                                 <span className="text-xs font-black text-blue-900 uppercase tracking-wide flex items-center gap-1.5">
-                                    <Calculator className="w-4 h-4 text-blue-600" />
+                                    <Calculator className="w-4 h-4 text-blue-600" aria-hidden="true" />
                                     <span>Doanh Thu Quy Đổi (DTQĐ)</span>
                                 </span>
-                                <span className="text-[10.5px] font-black text-blue-800 bg-blue-100 px-2 py-0.5 rounded-md">
+                                <span className="text-[10.5px] font-black text-blue-900 bg-blue-100 px-2 py-0.5 rounded-md tabular-nums">
                                     %HT: {activeStats.htQd}% • %DK: {activeStats.dkQd}%
                                 </span>
                             </div>
 
-                            <div className="grid grid-cols-3 gap-2">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                                 <div className="space-y-1">
-                                    <label className="text-[10.5px] font-bold text-slate-600">DTQĐ (tr):</label>
+                                    <label className="text-[10.5px] font-bold text-slate-700 block">Doanh thu QĐ (tr):</label>
                                     <input
                                         type="number"
+                                        step="any"
                                         value={activeStore.revenueQd || ''}
-                                        onChange={e => handleUpdateStoreField('revenueQd', Number(e.target.value) || 0)}
-                                        className="w-full px-2.5 py-1.5 bg-white border border-blue-200 rounded-xl text-xs font-mono font-black text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                                        onChange={e => handleUpdateStoreField('revenueQd', parseFloat(e.target.value) || 0)}
+                                        className="w-full px-2.5 py-1.5 bg-white border border-blue-200 rounded-xl text-xs font-mono font-black tabular-nums text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                                         placeholder="0"
                                     />
                                 </div>
                                 <div className="space-y-1">
-                                    <label className="text-[10.5px] font-bold text-slate-600">Target QĐ (tr):</label>
+                                    <label className="text-[10.5px] font-bold text-slate-700 block">DT Trả góp QĐ (tr):</label>
                                     <input
                                         type="number"
+                                        step="any"
+                                        value={activeStore.installmentQd || ''}
+                                        onChange={e => handleUpdateStoreField('installmentQd', parseFloat(e.target.value) || 0)}
+                                        className="w-full px-2.5 py-1.5 bg-white border border-blue-200 rounded-xl text-xs font-mono font-black tabular-nums text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                                        placeholder="0"
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10.5px] font-bold text-slate-700 block">Target (tr):</label>
+                                    <input
+                                        type="number"
+                                        step="any"
                                         value={activeStore.targetQd || ''}
-                                        onChange={e => handleUpdateStoreField('targetQd', Number(e.target.value) || 0)}
-                                        className="w-full px-2.5 py-1.5 bg-white border border-blue-200 rounded-xl text-xs font-mono font-black text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
-                                        placeholder="0"
-                                    />
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="text-[10.5px] font-bold text-slate-600">Số lượng:</label>
-                                    <input
-                                        type="number"
-                                        value={activeStore.quantityQd || ''}
-                                        onChange={e => handleUpdateStoreField('quantityQd', Number(e.target.value) || 0)}
-                                        className="w-full px-2.5 py-1.5 bg-white border border-blue-200 rounded-xl text-xs font-mono font-bold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                                        onChange={e => handleUpdateStoreField('targetQd', parseFloat(e.target.value) || 0)}
+                                        className="w-full px-2.5 py-1.5 bg-white border border-blue-200 rounded-xl text-xs font-mono font-black tabular-nums text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                                         placeholder="0"
                                     />
                                 </div>
                             </div>
                         </div>
 
-                        {/* 1B: DOANH THU THỰC & TRẢ GÓP */}
+                        {/* 1B: TB 3 THÁNG, % TT DOANH THU & % TỶ TRỌNG TRẢ GÓP */}
                         <div className="bg-emerald-50/60 border border-emerald-200 rounded-2xl p-3.5 space-y-3">
-                            <div className="flex items-center justify-between">
+                            <div className="flex items-center justify-between gap-2 flex-wrap">
                                 <span className="text-xs font-black text-emerald-900 uppercase tracking-wide flex items-center gap-1.5">
-                                    <TrendingUp className="w-4 h-4 text-emerald-600" />
-                                    <span>Doanh Thu Thực &amp; Trả Góp</span>
+                                    <TrendingUp className="w-4 h-4 text-emerald-600" aria-hidden="true" />
+                                    <span>TB 3 Tháng &amp; Tỷ Trọng Trả Góp</span>
                                 </span>
-                                <span className="text-[10.5px] font-black text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-md">
-                                    %TG: {activeStore.installmentRateReal || 0}%{activeStore.revenueReal > 0 ? ` • %QĐ: ${activeStats.pctQd >= 0 ? '+' : ''}${activeStats.pctQd}%` : ''}
+                                <span className="text-[10.5px] font-black text-emerald-900 bg-emerald-100 px-2 py-0.5 rounded-md tabular-nums">
+                                    % TT: {activeStore.pctGrowth >= 0 ? '+' : ''}{activeStore.pctGrowth || 0}% • % TG: {activeStore.installmentRate || 0}%
                                 </span>
                             </div>
 
-                            <div className="grid grid-cols-3 gap-2">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                                 <div className="space-y-1">
-                                    <label className="text-[10.5px] font-bold text-slate-600">DT Thực (tr):</label>
+                                    <label className="text-[10.5px] font-bold text-slate-700 block">TB 3 Tháng (tr):</label>
                                     <input
                                         type="number"
-                                        value={activeStore.revenueReal || ''}
-                                        onChange={e => handleUpdateStoreField('revenueReal', Number(e.target.value) || 0)}
-                                        className="w-full px-2.5 py-1.5 bg-white border border-emerald-200 rounded-xl text-xs font-mono font-black text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
+                                        step="any"
+                                        value={activeStore.avg3Months || ''}
+                                        onChange={e => handleUpdateStoreField('avg3Months', parseFloat(e.target.value) || 0)}
+                                        className="w-full px-2.5 py-1.5 bg-white border border-emerald-200 rounded-xl text-xs font-mono font-black tabular-nums text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
                                         placeholder="0"
                                     />
                                 </div>
                                 <div className="space-y-1">
-                                    <label className="text-[10.5px] font-bold text-slate-600">Target Thực (tr):</label>
+                                    <label className="text-[10.5px] font-bold text-slate-700 block">% TT Doanh thu (%):</label>
                                     <input
-                                        type="number"
-                                        value={activeStore.targetReal || ''}
-                                        onChange={e => handleUpdateStoreField('targetReal', Number(e.target.value) || 0)}
-                                        className="w-full px-2.5 py-1.5 bg-white border border-emerald-200 rounded-xl text-xs font-mono font-black text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
+                                        type="text"
+                                        inputMode="decimal"
+                                        value={pctGrowthInput}
+                                        onChange={e => {
+                                            const raw = e.target.value.replace(/[^0-9.,\-+]/g, '').replace(',', '.');
+                                            setPctGrowthInput(raw);
+                                            const parsed = parseFloat(raw);
+                                            handleUpdateStoreField('pctGrowth', isNaN(parsed) ? 0 : parsed);
+                                        }}
+                                        onBlur={() => {
+                                            const num = Number(activeStore.pctGrowth) || 0;
+                                            setPctGrowthInput(num === 0 ? '' : String(num));
+                                        }}
+                                        className={`w-full px-2.5 py-1.5 bg-white border border-emerald-200 rounded-xl text-xs font-mono font-black tabular-nums focus:outline-hidden focus:ring-2 focus:ring-emerald-500 ${
+                                            (activeStore.pctGrowth || 0) < 0 ? 'text-rose-700' : 'text-slate-900'
+                                        }`}
                                         placeholder="0"
                                     />
                                 </div>
                                 <div className="space-y-1">
-                                    <label className="text-[10.5px] font-bold text-slate-600">Trả Góp Thực (tr):</label>
+                                    <label className="text-[10.5px] font-bold text-slate-700 block">% Tỷ trọng trả góp (%):</label>
                                     <input
                                         type="number"
-                                        value={activeStore.installmentReal || ''}
-                                        onChange={e => handleUpdateStoreField('installmentReal', Number(e.target.value) || 0)}
-                                        className="w-full px-2.5 py-1.5 bg-white border border-emerald-200 rounded-xl text-xs font-mono font-black text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
+                                        step="any"
+                                        min={0}
+                                        value={activeStore.installmentRate || ''}
+                                        onChange={e => handleUpdateStoreField('installmentRate', parseFloat(e.target.value) || 0)}
+                                        className="w-full px-2.5 py-1.5 bg-white border border-emerald-200 rounded-xl text-xs font-mono font-black tabular-nums text-purple-900 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
                                         placeholder="0"
                                     />
                                 </div>

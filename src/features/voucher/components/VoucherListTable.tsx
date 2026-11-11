@@ -360,25 +360,25 @@ export default function VoucherListTable({
     };
 
     return (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden font-avo">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
             {/* Thanh Công Cụ & Bộ Lọc Đa Chiều */}
             <div className="p-3 sm:p-4 border-b border-slate-200 space-y-3 bg-slate-50/50">
                 {/* Banner cảnh báo đang lọc theo NV (Kèm nút xóa lọc quay lại tức thì) */}
                 {prefilterEmployeeId && (
-                    <div className="bg-gradient-to-r from-indigo-50 to-blue-50 border-2 border-indigo-300 text-indigo-950 p-3 rounded-2xl flex items-center justify-between gap-3 flex-wrap animate-in fade-in">
+                    <div className="bg-blue-50 border border-blue-200 text-blue-950 p-3 rounded-2xl flex items-center justify-between gap-3 flex-wrap">
                         <div className="flex items-center gap-2.5">
-                            <span className="w-3 h-3 rounded-full bg-indigo-600 animate-ping shrink-0"></span>
+                            <span className="w-2.5 h-2.5 rounded-full bg-blue-600 shrink-0" />
                             <div>
                                 <div className="text-xs font-black flex items-center gap-1.5 flex-wrap">
                                     <span>👤 Đang lọc danh sách theo nhân sự:</span>
-                                    <span className="bg-white px-2 py-0.5 rounded-lg border border-indigo-200 font-black text-indigo-800">
+                                    <span className="bg-white px-2 py-0.5 rounded-lg border border-blue-200 font-black text-blue-800">
                                         {filteredEmployeeName}
                                     </span>
-                                    <span className="font-mono text-[11px] text-slate-500">
+                                    <span className="font-mono text-[11px] text-slate-600">
                                         (Mã: {prefilterEmployeeId})
                                     </span>
                                 </div>
-                                <div className="text-[11px] text-indigo-800 font-bold mt-0.5">
+                                <div className="text-[11px] text-blue-900 font-bold mt-0.5">
                                     Đang hiển thị {filteredList.length} mã đã nhận bởi nhân sự này
                                 </div>
                             </div>
@@ -387,26 +387,29 @@ export default function VoucherListTable({
                         <button
                             type="button"
                             onClick={() => onClearEmployeeFilter && onClearEmployeeFilter()}
-                            className="px-3.5 py-2 rounded-xl bg-white hover:bg-rose-50 text-rose-700 border-2 border-rose-200 hover:border-rose-400 text-xs font-black transition cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-[0.98]"
+                            className="px-3.5 py-2 rounded-xl bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 hover:border-rose-400 text-xs font-black transition cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-[0.98]"
                             title="Xóa bộ lọc để quay lại xem toàn bộ mã"
                         >
-                            <RotateCcw className="w-4 h-4 text-rose-600" />
+                            <RotateCcw className="w-4 h-4 text-rose-600" aria-hidden="true" />
                             <span>✕ Quay Lại Xem Tất Cả Mã</span>
                         </button>
                     </div>
                 )}
 
-                <div className="flex flex-wrap items-center justify-between gap-2.5">
-                    <div className="flex flex-wrap items-center gap-2 flex-1 min-w-[260px]">
+                <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center justify-between gap-2.5">
+                    <div className="grid grid-cols-1 sm:flex sm:flex-wrap items-center gap-2 w-full sm:flex-1 sm:min-w-[260px]">
                         {/* Tìm kiếm */}
-                        <div className="relative flex-1 min-w-[150px] max-w-xs">
-                            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                        <div className="relative w-full sm:flex-1 sm:min-w-[160px] sm:max-w-xs">
+                            <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" aria-hidden="true" />
                             <input
+                                id="voucher-list-search"
+                                name="voucher_list_search"
                                 type="text"
+                                aria-label="Tìm mã voucher, đơn hàng, nhân viên hoặc ST"
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 placeholder="Tìm mã, đơn, NV, ST..."
-                                className="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 placeholder:text-slate-400 focus:outline-emerald-600"
+                                className="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 placeholder:text-slate-500 focus:outline-emerald-600"
                             />
                         </div>
 
@@ -422,9 +425,12 @@ export default function VoucherListTable({
 
                             return (
                                 <select
+                                    id="voucher-filter-status"
+                                    name="voucher_filter_status"
+                                    aria-label="Lọc theo trạng thái voucher"
                                     value={filterStatus}
                                     onChange={(e) => setFilterStatus(e.target.value)}
-                                    className="bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 cursor-pointer"
+                                    className="w-full sm:w-auto bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 cursor-pointer"
                                 >
                                     <option value="ALL">📋 Tất cả TT ({vouchers.length})</option>
                                     <option value="AVAILABLE">✅ Khả dụng ({availableCount})</option>
@@ -440,9 +446,12 @@ export default function VoucherListTable({
 
                         {/* Lọc Chương trình */}
                         <select
+                            id="voucher-filter-campaign"
+                            name="voucher_filter_campaign"
+                            aria-label="Lọc theo chương trình khuyến mãi"
                             value={filterCampaign}
                             onChange={(e) => setFilterCampaign(e.target.value)}
-                            className="bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 cursor-pointer max-w-[170px] truncate"
+                            className="w-full sm:w-auto sm:max-w-[200px] truncate bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 cursor-pointer"
                         >
                             <option value="ALL">🎁 Tất cả CT</option>
                             {campaignOptions.map(c => {
@@ -457,9 +466,12 @@ export default function VoucherListTable({
 
                         {/* Lọc Mệnh giá */}
                         <select
+                            id="voucher-filter-denomination"
+                            name="voucher_filter_denomination"
+                            aria-label="Lọc theo mệnh giá voucher"
                             value={filterDenomination}
                             onChange={(e) => setFilterDenomination(e.target.value)}
-                            className="bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 cursor-pointer max-w-[140px] truncate font-mono"
+                            className="w-full sm:w-auto bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 cursor-pointer font-mono"
                         >
                             <option value="ALL">💵 Tất cả mệnh giá</option>
                             {denominationOptions.map(d => (
@@ -470,9 +482,12 @@ export default function VoucherListTable({
                         {/* Lọc ST thao tác của user */}
                         {storeOptions.length > 0 && (
                             <select
+                                id="voucher-filter-store"
+                                name="voucher_filter_store"
+                                aria-label="Lọc theo ST nhận"
                                 value={filterStore}
                                 onChange={(e) => setFilterStore(e.target.value)}
-                                className="bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 cursor-pointer max-w-[170px] truncate"
+                                className="w-full sm:w-auto sm:max-w-[190px] truncate bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 cursor-pointer"
                             >
                                 <option value="ALL">🏪 Tất cả ST nhận</option>
                                 {storeOptions.map(st => (
@@ -484,6 +499,9 @@ export default function VoucherListTable({
                         {/* Lọc theo Nhân Viên nhận mã trực tiếp */}
                         {employeeOptions.length > 0 && (
                             <select
+                                id="voucher-filter-employee"
+                                name="voucher_filter_employee"
+                                aria-label="Lọc theo nhân viên nhận"
                                 value={prefilterEmployeeId || 'ALL'}
                                 onChange={(e) => {
                                     const val = e.target.value;
@@ -493,9 +511,9 @@ export default function VoucherListTable({
                                         if (onFilterEmployee) onFilterEmployee(val);
                                     }
                                 }}
-                                className={`border rounded-xl px-2.5 py-1.5 text-xs font-bold cursor-pointer max-w-[180px] truncate ${
+                                className={`w-full sm:w-auto sm:max-w-[195px] truncate border rounded-xl px-2.5 py-1.5 text-xs font-bold cursor-pointer ${
                                     prefilterEmployeeId
-                                        ? 'bg-indigo-50 border-indigo-400 text-indigo-900 font-black'
+                                        ? 'bg-blue-50 border-blue-400 text-blue-900 font-black'
                                         : 'bg-white border-slate-200 text-slate-700'
                                 }`}
                                 title="Lọc danh sách mã theo nhân viên đã nhận"
@@ -511,9 +529,12 @@ export default function VoucherListTable({
 
                         {/* Lọc theo Thời gian nhập kho (Trọng tâm nhận diện mã nạp mới) */}
                         <select
+                            id="voucher-filter-import-time"
+                            name="voucher_filter_import_time"
+                            aria-label="Lọc theo thời gian nhập kho"
                             value={filterImportTime}
                             onChange={(e) => setFilterImportTime(e.target.value)}
-                            className={`border rounded-xl px-2.5 py-1.5 text-xs font-bold cursor-pointer max-w-[175px] truncate ${
+                            className={`w-full sm:w-auto border rounded-xl px-2.5 py-1.5 text-xs font-bold cursor-pointer ${
                                 filterImportTime !== 'ALL'
                                     ? 'bg-amber-50 border-amber-400 text-amber-950 font-black ring-1 ring-amber-300'
                                     : 'bg-white border-slate-200 text-slate-700'
@@ -530,9 +551,12 @@ export default function VoucherListTable({
 
                         {/* Sắp xếp danh sách */}
                         <select
+                            id="voucher-sort-by"
+                            name="voucher_sort_by"
+                            aria-label="Sắp xếp danh sách voucher"
                             value={sortBy}
                             onChange={(e) => setSortBy(e.target.value)}
-                            className="bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 cursor-pointer max-w-[170px] truncate"
+                            className="w-full sm:w-auto bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 cursor-pointer"
                             title="Sắp xếp danh sách voucher"
                         >
                             <option value="CREATED_DESC">⏱️ Mới nhập kho nhất</option>
@@ -542,7 +566,7 @@ export default function VoucherListTable({
                         </select>
                     </div>
 
-                    <div className="text-xs font-black text-slate-500 shrink-0">
+                    <div className="text-xs font-black text-slate-600 shrink-0 self-end sm:self-auto">
                         Hiển thị <span className="text-emerald-700">{filteredList.length}</span>/{vouchers.length} mã
                     </div>
                 </div>
@@ -557,12 +581,12 @@ export default function VoucherListTable({
                                 onClick={() => setFilterImportTime(prev => prev === 'TODAY' ? 'ALL' : 'TODAY')}
                                 className={`px-2.5 py-1.5 rounded-xl border text-xs font-black transition cursor-pointer flex items-center gap-1.5 active:scale-95 ${
                                     filterImportTime === 'TODAY'
-                                        ? 'bg-amber-500 text-slate-950 border-amber-600 shadow-sm'
+                                        ? 'bg-amber-400 text-slate-950 border-amber-500 shadow-sm'
                                         : 'bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-300'
                                 }`}
                                 title="Lọc nhanh toàn bộ voucher vừa nhập kho hôm nay để rà soát mệnh giá và chương trình"
                             >
-                                <Clock className="w-3.5 h-3.5 text-amber-700 fill-amber-300" />
+                                <Clock className="w-3.5 h-3.5 text-amber-800" aria-hidden="true" />
                                 <span>Mã nạp hôm nay ({todayImportCount})</span>
                             </button>
                         )}
@@ -575,7 +599,7 @@ export default function VoucherListTable({
                                 className="px-2.5 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 text-xs font-bold transition cursor-pointer flex items-center gap-1.5"
                                 title="Chọn nhanh các mã đang giữ chưa double check"
                             >
-                                <Zap className="w-3.5 h-3.5 text-amber-600 fill-amber-500" />
+                                <Zap className="w-3.5 h-3.5 text-amber-700 fill-amber-400" aria-hidden="true" />
                                 <span>Chọn mã Chưa Dùng ({unclaimedFilteredCodes.length})</span>
                             </button>
                         )}
@@ -588,12 +612,12 @@ export default function VoucherListTable({
                         >
                             {isAllFilteredSelected ? (
                                 <>
-                                    <CheckSquare className="w-3.5 h-3.5 text-emerald-600" />
+                                    <CheckSquare className="w-3.5 h-3.5 text-emerald-700" aria-hidden="true" />
                                     <span>Bỏ chọn tất cả</span>
                                 </>
                             ) : (
                                 <>
-                                    <Square className="w-3.5 h-3.5 text-slate-400" />
+                                    <Square className="w-3.5 h-3.5 text-slate-500" aria-hidden="true" />
                                     <span>Chọn tất cả ({filteredList.length})</span>
                                 </>
                             )}
@@ -601,12 +625,12 @@ export default function VoucherListTable({
 
                         {/* Badge số mã đang chọn */}
                         {selectedCodes.size > 0 && (
-                            <div className="flex items-center gap-1.5 bg-indigo-50 border border-indigo-200 text-indigo-900 px-2.5 py-1 rounded-xl text-xs font-bold">
+                            <div className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 text-blue-900 px-2.5 py-1 rounded-xl text-xs font-bold">
                                 <span>Đã chọn: <strong>{selectedCodes.size}</strong> mã</span>
                                 <button
                                     type="button"
                                     onClick={handleClearSelection}
-                                    className="text-slate-500 hover:text-slate-700 font-bold cursor-pointer text-[11px] underline"
+                                    className="text-slate-600 hover:text-slate-900 font-bold cursor-pointer text-[11px] underline"
                                 >
                                     Bỏ chọn
                                 </button>
@@ -621,10 +645,10 @@ export default function VoucherListTable({
                                     const targets = vouchers.filter(v => selectedCodes.has(v.code));
                                     onBatchEdit(targets);
                                 }}
-                                className="px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 active:scale-[0.99] text-white text-xs font-black transition cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                                className="px-2.5 py-1.5 rounded-xl bg-blue-700 hover:bg-blue-800 active:scale-[0.99] text-white text-xs font-black transition cursor-pointer flex items-center gap-1.5 shadow-sm border border-blue-800"
                                 title="Cập nhật hàng loạt cụm/kho, chương trình, mệnh giá, HSD cho các mã đã chọn"
                             >
-                                <Edit3 className="w-3.5 h-3.5 text-amber-300" />
+                                <Edit3 className="w-3.5 h-3.5 text-amber-300" aria-hidden="true" />
                                 <span>Sửa ({selectedCodes.size}) mã</span>
                             </button>
                         )}
@@ -640,10 +664,10 @@ export default function VoucherListTable({
                                         setSelectedCodes(new Set());
                                     }
                                 }}
-                                className="px-2.5 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-300 text-rose-700 text-xs font-bold transition cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                                className="px-2.5 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-300 text-rose-800 text-xs font-bold transition cursor-pointer flex items-center gap-1.5 shadow-sm"
                                 title="Xóa vĩnh viễn các mã đang chọn khỏi hệ thống"
                             >
-                                <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                                <Trash2 className="w-3.5 h-3.5 text-rose-700" aria-hidden="true" />
                                 <span>Xóa ({selectedCodes.size}) mã</span>
                             </button>
                         )}
@@ -656,7 +680,7 @@ export default function VoucherListTable({
                                 className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-rose-50 hover:border-rose-200 border border-slate-200 text-slate-700 hover:text-rose-700 text-xs font-bold transition cursor-pointer flex items-center gap-1"
                                 title="Làm sạch dữ liệu tồn kho quá hạn"
                             >
-                                <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                                <Trash2 className="w-3.5 h-3.5 text-rose-600" aria-hidden="true" />
                                 <span>Làm sạch kho</span>
                             </button>
                         )}
@@ -667,10 +691,10 @@ export default function VoucherListTable({
                                 type="button"
                                 onClick={onExportExcel}
                                 disabled={isExportingExcel}
-                                className="px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 text-xs font-black transition cursor-pointer flex items-center gap-1.5 shadow-2xs disabled:opacity-60"
+                                className="px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 text-xs font-black transition cursor-pointer flex items-center gap-1.5 shadow-sm disabled:opacity-60"
                                 title="Xuất toàn bộ data tồn kho mã voucher của cụm ST ra file Excel (.xlsx)"
                             >
-                                <FileSpreadsheet className={`w-3.5 h-3.5 text-emerald-600 ${isExportingExcel ? 'animate-bounce' : ''}`} />
+                                <FileSpreadsheet className={`w-3.5 h-3.5 text-emerald-700 ${isExportingExcel ? 'opacity-60' : ''}`} aria-hidden="true" />
                                 <span>{isExportingExcel ? 'Đang xuất...' : 'Xuất Excel'}</span>
                             </button>
                         )}
@@ -682,10 +706,10 @@ export default function VoucherListTable({
                             type="button"
                             onClick={handleLaunchQrModal}
                             disabled={filteredList.length === 0}
-                            className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 active:scale-[0.99] text-white text-xs font-black transition cursor-pointer shadow-sm flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="px-3.5 py-1.5 rounded-xl bg-blue-700 hover:bg-blue-800 active:scale-[0.99] text-white text-xs font-black transition cursor-pointer shadow-sm flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed border border-blue-800"
                             title="Tạo mã QR code quét trên máy POS để double check"
                         >
-                            <QrCode className="w-4 h-4 text-amber-300" />
+                            <QrCode className="w-4 h-4 text-amber-300" aria-hidden="true" />
                             <span>
                                 {selectedCodes.size > 0
                                     ? `Tạo QR Double Check (${selectedCodes.size} mã)`
@@ -699,9 +723,9 @@ export default function VoucherListTable({
 
                 {/* Banner Thông Báo Khi Đang Lọc Theo Thời Gian Nhập Kho */}
                 {filterImportTime !== 'ALL' && (
-                    <div className="bg-amber-50/90 border border-amber-200 text-amber-950 px-3 py-2 rounded-xl flex items-center justify-between text-xs font-bold animate-in fade-in">
+                    <div className="bg-amber-50/90 border border-amber-200 text-amber-950 px-3 py-2 rounded-xl flex items-center justify-between text-xs font-bold">
                         <div className="flex items-center gap-2">
-                            <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping shrink-0" />
+                            <span className="w-2 h-2 rounded-full bg-amber-600 shrink-0" />
                             <span>
                                 Đang lọc <strong>{filteredList.length}</strong> mã nạp kho{' '}
                                 {filterImportTime === '1H' ? 'trong 1 giờ qua' :
@@ -722,34 +746,43 @@ export default function VoucherListTable({
                 )}
             </div>
 
+            {/* Chỉ dẫn cuộn ngang trên mobile */}
+            <div className="sm:hidden px-3 py-1.5 bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-600 flex items-center justify-between">
+                <span>Danh sách chi tiết mã PMH</span>
+                <span className="text-emerald-700">Vuốt ngang →</span>
+            </div>
+
             {/* Bảng Dữ Liệu Tinh Gọn */}
             <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs border-collapse">
                     <thead>
-                        <tr className="bg-slate-100/80 border-b border-slate-200 text-[10.5px] font-black uppercase text-slate-600">
-                            <th className="py-2 px-2 text-center" style={{ width: '36px' }}>
+                        <tr className="bg-slate-100/80 border-b border-slate-200 text-[10.5px] font-black uppercase text-slate-700">
+                            <th className="py-2 px-1.5 text-center w-[30px]">
                                 <input
+                                    id="voucher-select-all-visible"
+                                    name="voucher_select_all_visible"
                                     type="checkbox"
+                                    aria-label={isAllDisplayedSelected ? 'Bỏ chọn tất cả mã đang hiển thị' : 'Chọn tất cả mã đang hiển thị'}
                                     checked={isAllDisplayedSelected}
                                     onChange={toggleSelectAllDisplayed}
                                     className="w-3.5 h-3.5 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
                                     title={isAllDisplayedSelected ? "Bỏ chọn tất cả mã đang hiển thị" : "Chọn tất cả mã đang hiển thị"}
                                 />
                             </th>
-                            <th className="py-2 px-1 text-center" style={{ width: '36px' }}>STT</th>
-                            <th className="py-2 px-2.5">Mã Voucher</th>
-                            <th className="py-2 px-2">Chương Trình</th>
-                            <th className="py-2 px-2 text-right">Mệnh Giá</th>
-                            <th className="py-2 px-2 text-center" style={{ width: '90px' }}>Hạn Dùng</th>
-                            <th className="py-2 px-2 text-center">Trạng Thái</th>
-                            <th className="py-2 px-2.5">Thời Gian Nhập Kho & Người Thao Tác</th>
-                            <th className="py-2 px-2 text-right">Thao Tác</th>
+                            <th className="py-2 px-1 text-center w-[32px]">STT</th>
+                            <th className="py-2 px-1.5 whitespace-nowrap">Mã Voucher</th>
+                            <th className="py-2 px-1.5">Chương Trình</th>
+                            <th className="py-2 px-1.5 text-right whitespace-nowrap">Mệnh Giá</th>
+                            <th className="py-2 px-1.5 text-center whitespace-nowrap w-[84px]">Hạn Dùng</th>
+                            <th className="py-2 px-1.5 text-center whitespace-nowrap">Trạng Thái</th>
+                            <th className="py-2 px-1.5 whitespace-nowrap">Nhập Kho &amp; Người Thao Tác</th>
+                            <th className="py-2 px-1.5 text-right whitespace-nowrap">Thao Tác</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                         {filteredList.length === 0 ? (
                             <tr>
-                                <td colSpan={9} className="py-8 text-center text-slate-400 font-bold">
+                                <td colSpan={9} className="py-8 text-center text-slate-600 font-bold">
                                     Không có mã voucher nào thỏa mãn điều kiện lọc.
                                 </td>
                             </tr>
@@ -767,24 +800,27 @@ export default function VoucherListTable({
                                 ) : false;
 
                                 return (
-                                    <tr key={item.id} className={`hover:bg-slate-50/70 transition ${isSelected ? 'bg-indigo-50/50' : ''}`}>
+                                    <tr key={item.id} className={`hover:bg-slate-50/70 transition ${isSelected ? 'bg-blue-50/50' : ''}`}>
                                         {/* Checkbox chọn dòng */}
-                                        <td className="py-2 px-2 text-center">
+                                        <td className="py-2 px-1.5 text-center">
                                             <input
+                                                id={`voucher-select-${item.code}`}
+                                                name={`voucher_select_${item.code}`}
                                                 type="checkbox"
+                                                aria-label={`Chọn mã voucher ${item.code}`}
                                                 checked={isSelected}
                                                 onChange={() => toggleSelectCode(item.code)}
                                                 className="w-3.5 h-3.5 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
                                             />
                                         </td>
 
-                                        <td className="py-2 px-1 text-center font-mono text-[11px] text-slate-400">
+                                        <td className="py-2 px-1 text-center font-mono text-[11px] text-slate-500">
                                             #{idx + 1}
                                         </td>
 
                                         {/* Mã voucher + click copy */}
-                                        <td className="py-2 px-2.5">
-                                            <div className="flex items-center gap-1.5">
+                                        <td className="py-2 px-1.5 whitespace-nowrap">
+                                            <div className="flex items-center gap-1">
                                                 <button
                                                     type="button"
                                                     onClick={() => handleCopy(item.code)}
@@ -793,21 +829,21 @@ export default function VoucherListTable({
                                                 >
                                                     <span>{item.code}</span>
                                                     {copiedCode === item.code ? (
-                                                        <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                                        <Check className="w-3.5 h-3.5 text-emerald-700 shrink-0" aria-hidden="true" />
                                                     ) : (
-                                                        <Copy className="w-3 h-3 text-slate-300 group-hover:text-slate-600 shrink-0" />
+                                                        <Copy className="w-3 h-3 text-slate-500 group-hover:text-slate-700 shrink-0" aria-hidden="true" />
                                                     )}
                                                 </button>
                                             </div>
                                         </td>
 
                                         {/* Chương trình & Điều kiện áp dụng */}
-                                        <td className="py-2 px-2 max-w-[170px]">
+                                        <td className="py-2 px-1.5 max-w-[148px]">
                                             <div className="font-bold text-slate-800 truncate flex items-center gap-1" title={item.campaign_name}>
                                                 <span className="truncate">{item.campaign_name}</span>
                                                 {isCampaignHidden(campaignStatuses, item.campaign_name) && (
-                                                    <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-slate-200 text-slate-700 border border-slate-300 inline-flex items-center gap-0.5 shrink-0" title="Chương trình này đã được ẩn">
-                                                        <EyeOff className="w-2.5 h-2.5 text-slate-500" />
+                                                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-200 text-slate-800 border border-slate-300 inline-flex items-center gap-0.5 shrink-0" title="Chương trình này đã được ẩn">
+                                                        <EyeOff className="w-2.5 h-2.5 text-slate-600" aria-hidden="true" />
                                                         <span>Đã ẩn</span>
                                                     </span>
                                                 )}
@@ -816,8 +852,8 @@ export default function VoucherListTable({
                                                 <div className="mt-0.5 space-y-0.5" title={item.description}>
                                                     {parseConditionLines(item.description).map((cond, cIdx) => (
                                                         <div key={cIdx} className="text-[9.5px] font-medium text-amber-950 flex items-start gap-1 leading-tight">
-                                                            <span className="text-amber-500 font-bold shrink-0">•</span>
-                                                            <span className="truncate max-w-[150px]">{cond}</span>
+                                                            <span className="text-amber-700 font-bold shrink-0">•</span>
+                                                            <span className="truncate max-w-[136px]">{cond}</span>
                                                         </div>
                                                     ))}
                                                 </div>
@@ -825,7 +861,7 @@ export default function VoucherListTable({
                                         </td>
 
                                         {/* Mệnh giá (Định dạng màu theo độ hot) */}
-                                        <td className="py-2 px-2 text-right">
+                                        <td className="py-2 px-1.5 text-right whitespace-nowrap">
                                             {(() => {
                                                 const hot = getDenominationHotStyle(item.denomination);
                                                 return (
@@ -833,7 +869,7 @@ export default function VoucherListTable({
                                                         <span className={`inline-block font-mono font-black text-xs px-1.5 py-0.5 rounded border ${hot.badgeClass}`}>
                                                             {formatCurrency(item.denomination)}
                                                         </span>
-                                                        <span className="text-[9px] font-bold text-slate-400 mt-0.5">
+                                                        <span className="text-[9px] font-bold text-slate-500 mt-0.5">
                                                             {hot.tagIcon} {hot.label}
                                                         </span>
                                                     </div>
@@ -842,14 +878,14 @@ export default function VoucherListTable({
                                         </td>
 
                                         {/* Hạn Dùng */}
-                                        <td className="py-2 px-2 text-center whitespace-nowrap">
+                                        <td className="py-2 px-1.5 text-center whitespace-nowrap">
                                             {item.expires_at ? (
                                                 <div className="space-y-0.5">
                                                     <span className={`inline-block font-mono text-[10.5px] font-bold px-1.5 py-0.5 rounded ${
                                                         isExpired
                                                             ? 'bg-rose-100 text-rose-800 border border-rose-200'
                                                             : isNearExpiry
-                                                            ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                                                            ? 'bg-amber-100 text-amber-900 border border-amber-200'
                                                             : 'bg-slate-100 text-slate-700'
                                                     }`}>
                                                         {formatDate(item.expires_at)}
@@ -858,26 +894,26 @@ export default function VoucherListTable({
                                                         <div className="text-[9px] font-black text-rose-600 uppercase">Quá hạn</div>
                                                     )}
                                                     {!isExpired && isNearExpiry && item.status !== 'USED' && (
-                                                        <div className="text-[9px] font-bold text-amber-600">Sắp hết hạn</div>
+                                                        <div className="text-[9px] font-bold text-amber-800">Sắp hết hạn</div>
                                                     )}
                                                 </div>
                                             ) : (
-                                                <span className="text-slate-400 text-[10.5px]">-</span>
+                                                <span className="text-slate-500 text-[10.5px]">-</span>
                                             )}
                                         </td>
 
                                         {/* Trạng thái */}
-                                        <td className="py-2 px-2 text-center">
+                                        <td className="py-2 px-1.5 text-center whitespace-nowrap">
                                             {isAvailable ? (
-                                                <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                                                <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-900">
                                                     Khả Dụng
                                                 </span>
                                             ) : isClaimed ? (
-                                                <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
+                                                <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900">
                                                     Đã Cấp (Chưa Dùng)
                                                 </span>
                                             ) : isUsed ? (
-                                                <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 text-slate-700">
+                                                <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 text-slate-800">
                                                     Đã Dùng
                                                 </span>
                                             ) : (
@@ -888,7 +924,7 @@ export default function VoucherListTable({
                                         </td>
 
                                         {/* Thông Tin Thao Tác & Người Nhận (Kèm Thời Gian Nhập Kho) */}
-                                        <td className="py-2 px-2.5">
+                                        <td className="py-2 px-1.5 max-w-[225px]">
                                             {(() => {
                                                 const importMeta = getImportMeta(item.created_at);
                                                 return item.claimed_by_name ? (
@@ -896,32 +932,32 @@ export default function VoucherListTable({
                                                         {/* Tên nhân viên & Mã NV */}
                                                         <div className="flex items-center gap-1.5 flex-wrap">
                                                             <span className="font-black text-slate-900">{item.claimed_by_name}</span>
-                                                            <span className="text-slate-400 font-mono text-[10px]">({item.claimed_by_id})</span>
+                                                            <span className="text-slate-500 font-mono text-[10px]">({item.claimed_by_id})</span>
                                                         </div>
 
                                                         {/* Tên ST của user thao tác */}
                                                         {item.claimed_by_store ? (
                                                             <div
-                                                                className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded max-w-[190px] truncate"
+                                                                className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded max-w-[165px] truncate"
                                                                 title={`ST thao tác: ${item.claimed_by_store}`}
                                                             >
                                                                 <span className="shrink-0">🏪</span>
                                                                 <span className="truncate">{getShortStoreName(item.claimed_by_store)}</span>
                                                             </div>
                                                         ) : (
-                                                            <div className="text-[10px] text-slate-400 italic">Chưa rõ ST</div>
+                                                            <div className="text-[10px] text-slate-500 italic">Chưa rõ ST</div>
                                                         )}
 
                                                         {/* Mã đơn hàng & Thời gian cấp */}
                                                         <div className="flex items-center gap-2 flex-wrap text-[10.5px]">
                                                             {item.order_id && (
-                                                                <span className="text-indigo-700 font-mono font-bold">
+                                                                <span className="text-blue-800 font-mono font-bold">
                                                                     Đơn: {item.order_id}
                                                                 </span>
                                                             )}
                                                             {item.claimed_at && (
-                                                                <span className="text-slate-500 text-[10px] flex items-center gap-0.5" title={`Thời gian cấp: ${formatDateTime(item.claimed_at, true)}`}>
-                                                                    <Clock className="w-3 h-3 text-slate-400 inline shrink-0" />
+                                                                <span className="text-slate-600 text-[10px] flex items-center gap-0.5" title={`Thời gian cấp: ${formatDateTime(item.claimed_at, true)}`}>
+                                                                    <Clock className="w-3 h-3 text-slate-500 inline shrink-0" aria-hidden="true" />
                                                                     <span>
                                                                         Cấp: {formatDateTime(item.claimed_at)}
                                                                     </span>
@@ -931,8 +967,8 @@ export default function VoucherListTable({
 
                                                         {/* Thời gian nhập kho ban đầu */}
                                                         {item.created_at && (
-                                                            <div className="text-[9.5px] text-slate-400 flex items-center gap-1 pt-0.5 border-t border-slate-100 font-mono" title={`Thời điểm nhập kho: ${formatDateTime(item.created_at, true)}`}>
-                                                                <Clock className="w-2.5 h-2.5 text-slate-400 shrink-0" />
+                                                            <div className="text-[9.5px] text-slate-500 flex items-center gap-1 pt-0.5 border-t border-slate-100 font-mono" title={`Thời điểm nhập kho: ${formatDateTime(item.created_at, true)}`}>
+                                                                <Clock className="w-2.5 h-2.5 text-slate-500 shrink-0" aria-hidden="true" />
                                                                 <span>Nhập kho: {formatDateTime(item.created_at)}</span>
                                                             </div>
                                                         )}
@@ -941,12 +977,12 @@ export default function VoucherListTable({
                                                     <div className="text-[11px] space-y-1">
                                                         {/* Cụm / Kho & Người nạp */}
                                                         <div className="flex items-center gap-1.5 flex-wrap">
-                                                            <span className="inline-block text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                                                            <span className="inline-block text-[10px] font-bold text-emerald-800 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
                                                                 🏢 {item.store_name === 'Toàn Cụm' || item.store_name === 'Toàn Cụm ST' ? 'Kho Toàn Cụm' : getShortStoreName(item.store_name)}
                                                             </span>
                                                             {item.created_by && (
-                                                                <div className="text-[10px] text-slate-500 font-medium">
-                                                                    Nạp bởi: <strong className="text-slate-700">{item.created_by}</strong>
+                                                                <div className="text-[10px] text-slate-600 font-medium">
+                                                                    Nạp bởi: <strong className="text-slate-800">{item.created_by}</strong>
                                                                 </div>
                                                             )}
                                                         </div>
@@ -961,7 +997,7 @@ export default function VoucherListTable({
                                                                 }`}
                                                                 title={`Thời gian thao tác nhập kho: ${item.created_at ? formatDateTime(item.created_at, true) : 'Chưa ghi nhận'}`}
                                                             >
-                                                                <Clock className="w-3 h-3 text-emerald-600 shrink-0" />
+                                                                <Clock className="w-3 h-3 text-emerald-700 shrink-0" aria-hidden="true" />
                                                                 <span>
                                                                     {item.created_at ? formatDateTime(item.created_at) : 'Chưa ghi nhận'}
                                                                 </span>
@@ -970,7 +1006,7 @@ export default function VoucherListTable({
                                                             {/* Huy hiệu nạp mới */}
                                                             {importMeta.isWithin24h && (
                                                                 <span
-                                                                    className="inline-flex items-center gap-0.5 text-[9.5px] font-black text-emerald-800 bg-emerald-100 border border-emerald-300 px-1.5 py-0.5 rounded-full"
+                                                                    className="inline-flex items-center gap-0.5 text-[9.5px] font-black text-emerald-900 bg-emerald-100 border border-emerald-300 px-1.5 py-0.5 rounded-full"
                                                                     title="Mã vừa được nhập kho gần đây"
                                                                 >
                                                                     ✨ {importMeta.relText || 'Mới nạp'}
@@ -983,17 +1019,17 @@ export default function VoucherListTable({
                                         </td>
 
                                         {/* Thao tác */}
-                                        <td className="py-2 px-2 text-right">
+                                        <td className="py-2 px-1.5 text-right whitespace-nowrap">
                                             <div className="flex items-center justify-end gap-1">
                                                 {/* Nút chỉnh sửa mã - luôn hiển thị */}
                                                 {onEditVoucher && (
                                                     <button
                                                         type="button"
                                                         onClick={() => onEditVoucher(item)}
-                                                        className="px-2 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 text-[10.5px] font-black transition cursor-pointer flex items-center gap-1 shadow-2xs hover:shadow-xs active:scale-95"
+                                                        className="px-2 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-800 text-[10.5px] font-black transition cursor-pointer flex items-center gap-1 shadow-sm active:scale-95 whitespace-nowrap"
                                                         title="Sửa mã này: Đổi mệnh giá, chương trình, HSD, kho..."
                                                     >
-                                                        <Pencil className="w-3 h-3 text-indigo-600" />
+                                                        <Pencil className="w-3 h-3 text-blue-700" aria-hidden="true" />
                                                         <span>Sửa</span>
                                                     </button>
                                                 )}
@@ -1001,10 +1037,10 @@ export default function VoucherListTable({
                                                     <button
                                                         type="button"
                                                         onClick={() => onResetVoucher(item.code)}
-                                                        className="px-2 py-1 rounded bg-amber-100 hover:bg-amber-200 text-amber-800 text-[10px] font-black transition cursor-pointer flex items-center gap-1 shadow-2xs"
+                                                        className="px-2 py-1 rounded bg-amber-100 hover:bg-amber-200 text-amber-900 text-[10px] font-black transition cursor-pointer flex items-center gap-1 shadow-sm whitespace-nowrap"
                                                         title="Reset mã này về danh sách chờ khả dụng"
                                                     >
-                                                        <RotateCcw className="w-3 h-3" />
+                                                        <RotateCcw className="w-3 h-3" aria-hidden="true" />
                                                         <span>Reset</span>
                                                     </button>
                                                 )}
@@ -1012,10 +1048,10 @@ export default function VoucherListTable({
                                                     <button
                                                         type="button"
                                                         onClick={() => onMarkUsed(item.code)}
-                                                        className="px-2 py-1 rounded bg-emerald-100 hover:bg-emerald-200 text-emerald-800 text-[10px] font-bold transition cursor-pointer flex items-center gap-1"
+                                                        className="px-2 py-1 rounded bg-emerald-100 hover:bg-emerald-200 text-emerald-900 text-[10px] font-bold transition cursor-pointer flex items-center gap-1 whitespace-nowrap"
                                                         title="Xác nhận mã đã thanh toán xong"
                                                     >
-                                                        <CheckCircle2 className="w-3 h-3" />
+                                                        <CheckCircle2 className="w-3 h-3" aria-hidden="true" />
                                                         <span>Đã Dùng</span>
                                                     </button>
                                                 )}
@@ -1027,10 +1063,11 @@ export default function VoucherListTable({
                                                                 onDeleteVoucher(item.code);
                                                             }
                                                         }}
-                                                        className="p-1 rounded bg-slate-100 hover:bg-rose-100 text-slate-400 hover:text-rose-600 transition cursor-pointer"
+                                                        aria-label={`Xóa mã voucher ${item.code}`}
+                                                        className="p-1 rounded bg-slate-100 hover:bg-rose-100 text-slate-600 hover:text-rose-700 transition cursor-pointer shrink-0"
                                                         title="Xóa mã voucher này khỏi hệ thống"
                                                     >
-                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                        <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                                                     </button>
                                                 )}
                                             </div>
@@ -1046,10 +1083,10 @@ export default function VoucherListTable({
             {/* Phân trang / Nạp thêm 20 mã tiếp theo */}
             {filteredList.length > 0 && (
                 <div className="p-3 sm:p-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-                    <div className="text-slate-500 font-medium text-center sm:text-left">
+                    <div className="text-slate-600 font-medium text-center sm:text-left">
                         Đang hiển thị <span className="font-black text-slate-900">{displayedList.length}</span> / <span className="font-black text-slate-900">{filteredList.length}</span> mã voucher mới nhất
                         {visibleCount < filteredList.length && (
-                            <span className="text-slate-400 ml-1">
+                            <span className="text-slate-500 ml-1">
                                 (còn {filteredList.length - visibleCount} mã chưa hiển thị)
                             </span>
                         )}
@@ -1060,11 +1097,11 @@ export default function VoucherListTable({
                             <button
                                 type="button"
                                 onClick={() => setVisibleCount(prev => Math.min(prev + 20, filteredList.length))}
-                                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white rounded-xl font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer text-xs"
+                                className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 active:scale-[0.98] text-white rounded-xl font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer text-xs"
                             >
-                                <ChevronDown className="w-3.5 h-3.5" />
+                                <ChevronDown className="w-3.5 h-3.5" aria-hidden="true" />
                                 <span>Nạp thêm 20 mã tiếp theo</span>
-                                <span className="bg-emerald-700/80 text-[10.5px] px-2 py-0.5 rounded-full font-black">
+                                <span className="bg-emerald-800 text-[10.5px] px-2 py-0.5 rounded-full font-black">
                                     +{Math.min(20, filteredList.length - visibleCount)}
                                 </span>
                             </button>
@@ -1073,7 +1110,7 @@ export default function VoucherListTable({
                             <button
                                 type="button"
                                 onClick={() => setVisibleCount(filteredList.length)}
-                                className="px-3 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl font-bold transition cursor-pointer text-xs shadow-2xs"
+                                className="px-3 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl font-bold transition cursor-pointer text-xs shadow-sm"
                                 title="Hiển thị tất cả mã voucher thỏa mãn bộ lọc"
                             >
                                 Xem tất cả ({filteredList.length})
@@ -1086,7 +1123,7 @@ export default function VoucherListTable({
                                 className="px-3 py-2 bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-xl font-medium transition cursor-pointer text-xs flex items-center gap-1"
                                 title="Thu gọn danh sách về 20 mã mới nhất"
                             >
-                                <ChevronUp className="w-3.5 h-3.5 text-slate-400" />
+                                <ChevronUp className="w-3.5 h-3.5 text-slate-500" aria-hidden="true" />
                                 <span>Thu gọn về 20 mã</span>
                             </button>
                         )}

@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
     X,
     Search,
@@ -38,6 +39,15 @@ export default function VoucherBulkCheckModal({
     const [filterTab, setFilterTab] = useState<'ALL' | 'EXISTING' | 'NEW'>('ALL');
     const [searchTableQuery, setSearchTableQuery] = useState<string>('');
     const [isCopied, setIsCopied] = useState<string>('');
+
+    useEffect(() => {
+        if (!isOpen) return;
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') onClose();
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isOpen, onClose]);
 
     // Bản đồ tra cứu nhanh theo mã (in hoa, bỏ khoảng trắng)
     const voucherMap = useMemo(() => {
@@ -147,36 +157,43 @@ export default function VoucherBulkCheckModal({
         }
     };
 
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs font-avo animate-in fade-in duration-200">
+    return createPortal(
+        <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="voucher-bulk-check-modal-title"
+            className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm"
+            onClick={onClose}
+        >
             <div
-                className="bg-white rounded-3xl max-w-4xl w-full border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[92vh] animate-in zoom-in-95 duration-200"
+                className="bg-white rounded-3xl max-w-4xl w-full border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[92vh]"
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* Header */}
-                <div className="px-5 py-4 bg-gradient-to-r from-blue-700 via-indigo-700 to-indigo-800 text-white flex items-center justify-between shadow-xs">
+                <div className="px-5 py-4 bg-slate-900 text-white flex items-center justify-between shadow-sm">
                     <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center text-amber-300 font-black shadow-inner">
-                            <Search className="w-5 h-5" />
+                        <div className="w-10 h-10 rounded-2xl bg-sky-600/30 border border-sky-400/30 flex items-center justify-center text-amber-300 font-black">
+                            <Search className="w-5 h-5" aria-hidden="true" />
                         </div>
                         <div>
-                            <h2 className="font-black text-sm sm:text-base uppercase tracking-wide flex items-center gap-2">
+                            <h2 id="voucher-bulk-check-modal-title" className="font-black text-sm sm:text-base uppercase tracking-wide flex items-center gap-2 flex-wrap">
                                 <span>Kiểm Tra Hàng Loạt Mã Voucher</span>
-                                <span className="text-[10px] bg-blue-500/40 text-blue-100 border border-blue-400/30 px-2 py-0.5 rounded-full font-bold">
+                                <span className="text-[10px] bg-sky-500/30 text-sky-100 border border-sky-400/30 px-2 py-0.5 rounded-full font-bold">
                                     Kho: {allVouchers.length} mã
                                 </span>
                             </h2>
-                            <p className="text-[11px] text-blue-200 mt-0.5">
-                                Đối soát nhanh danh sách mã xem đã tồn tại trong kho hay chưa, chi tiết chương trình & mệnh giá
+                            <p className="text-[11px] text-slate-300 mt-0.5">
+                                Đối soát nhanh danh sách mã xem đã tồn tại trong kho hay chưa, chi tiết chương trình &amp; mệnh giá
                             </p>
                         </div>
                     </div>
                     <button
                         type="button"
                         onClick={onClose}
+                        aria-label="Đóng hộp thoại kiểm tra mã hàng loạt"
                         className="w-8 h-8 rounded-xl hover:bg-white/15 flex items-center justify-center text-white/80 hover:text-white transition cursor-pointer"
                     >
-                        <X className="w-4 h-4" />
+                        <X className="w-4 h-4" aria-hidden="true" />
                     </button>
                 </div>
 
@@ -185,27 +202,27 @@ export default function VoucherBulkCheckModal({
                     {/* Khu vực Nhập mã */}
                     <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 space-y-2">
                         <div className="flex items-center justify-between flex-wrap gap-2">
-                            <label className="font-extrabold text-slate-800 flex items-center gap-1.5">
-                                <Ticket className="w-4 h-4 text-blue-600" />
+                            <label htmlFor="bulk-check-codes-input" className="font-extrabold text-slate-800 flex items-center gap-1.5 cursor-pointer">
+                                <Ticket className="w-4 h-4 text-blue-700" aria-hidden="true" />
                                 <span>Dán danh sách mã voucher cần kiểm tra:</span>
                             </label>
                             <div className="flex items-center gap-1.5 flex-wrap">
                                 <button
                                     type="button"
                                     onClick={handlePasteFromClipboard}
-                                    className="px-2.5 py-1 rounded-lg bg-white hover:bg-blue-50 border border-slate-200 hover:border-blue-300 text-slate-700 text-[11px] font-bold transition flex items-center gap-1 cursor-pointer shadow-2xs"
+                                    className="px-2.5 py-1 rounded-lg bg-white hover:bg-blue-50 border border-slate-200 hover:border-blue-300 text-slate-700 text-[11px] font-bold transition flex items-center gap-1 cursor-pointer shadow-sm"
                                     title="Dán từ Clipboard"
                                 >
-                                    <Copy className="w-3 h-3 text-blue-600" />
+                                    <Copy className="w-3 h-3 text-blue-700" aria-hidden="true" />
                                     <span>Dán từ clipboard</span>
                                 </button>
                                 {rawInput.trim() && (
                                     <button
                                         type="button"
                                         onClick={() => setRawInput('')}
-                                        className="px-2.5 py-1 rounded-lg bg-white hover:bg-rose-50 border border-slate-200 hover:border-rose-300 text-rose-600 text-[11px] font-bold transition flex items-center gap-1 cursor-pointer shadow-2xs"
+                                        className="px-2.5 py-1 rounded-lg bg-white hover:bg-rose-50 border border-slate-200 hover:border-rose-300 text-rose-700 text-[11px] font-bold transition flex items-center gap-1 cursor-pointer shadow-sm"
                                     >
-                                        <Trash2 className="w-3 h-3" />
+                                        <Trash2 className="w-3 h-3" aria-hidden="true" />
                                         <span>Xóa ô nhập</span>
                                     </button>
                                 )}
@@ -213,16 +230,18 @@ export default function VoucherBulkCheckModal({
                         </div>
 
                         <textarea
+                            id="bulk-check-codes-input"
+                            name="bulk_check_codes"
                             rows={4}
                             value={rawInput}
                             onChange={(e) => setRawInput(e.target.value)}
                             placeholder="Dán hoặc nhập danh sách mã tại đây (mỗi mã 1 dòng hoặc cách nhau bởi dấu phẩy, khoảng trắng):&#10;VD:&#10;VOUCHER-50K-ABC1&#10;VOUCHER-100K-XYZ2&#10;VOUCHER-200K-MNP3"
-                            className="w-full bg-white border border-slate-200 rounded-xl p-3 font-mono text-xs text-slate-900 focus:outline-blue-600 placeholder:text-slate-400 font-bold"
+                            className="w-full bg-white border border-slate-200 rounded-xl p-3 font-mono text-xs text-slate-900 focus:outline-blue-600 placeholder:text-slate-500 font-bold"
                         />
 
-                        <div className="flex items-center justify-between text-[11px] text-slate-500">
+                        <div className="flex items-center justify-between text-[11px] text-slate-600">
                             <span>* Tự động nhận diện, in hoa và loại trừ trùng lặp trong danh sách nhập vào.</span>
-                            <span className="font-extrabold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md">
+                            <span className="font-extrabold text-blue-800 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md">
                                 Đã nhập: {parsedCodes.length} mã duy nhất
                             </span>
                         </div>
@@ -232,68 +251,68 @@ export default function VoucherBulkCheckModal({
                     {parsedCodes.length > 0 && (
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                             {/* Tổng số mã kiểm tra */}
-                            <div className="bg-white border border-slate-200 rounded-2xl p-3.5 shadow-2xs flex items-center justify-between">
+                            <div className="bg-white border border-slate-200 rounded-2xl p-3.5 shadow-sm flex items-center justify-between">
                                 <div>
-                                    <div className="text-[10px] font-black uppercase text-slate-400">
+                                    <div className="text-[10px] font-black uppercase text-slate-500">
                                         Tổng Mã Kiểm Tra
                                     </div>
                                     <div className="text-xl font-black text-slate-800 mt-0.5">
                                         {parsedCodes.length} mã
                                     </div>
-                                    <div className="text-[10px] text-slate-500">
+                                    <div className="text-[10px] text-slate-600">
                                         100% đã được quét đối chiếu
                                     </div>
                                 </div>
                                 <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center font-black">
-                                    <Search className="w-5 h-5" />
+                                    <Search className="w-5 h-5" aria-hidden="true" />
                                 </div>
                             </div>
 
                             {/* Mã ĐÃ TỒN TRONG KHO */}
-                            <div className={`border rounded-2xl p-3.5 shadow-2xs flex items-center justify-between ${
+                            <div className={`border rounded-2xl p-3.5 shadow-sm flex items-center justify-between ${
                                 existingList.length > 0
                                     ? 'bg-rose-50/70 border-rose-200 text-rose-950'
                                     : 'bg-white border-slate-200 text-slate-800'
                             }`}>
                                 <div>
-                                    <div className="text-[10px] font-black uppercase text-rose-600">
+                                    <div className="text-[10px] font-black uppercase text-rose-700">
                                         Đã Tồn Trong Kho
                                     </div>
                                     <div className="text-xl font-black text-rose-700 mt-0.5">
                                         {existingList.length} mã
                                     </div>
-                                    <div className="text-[10px] text-rose-600 font-bold">
+                                    <div className="text-[10px] text-rose-700 font-bold">
                                         {existingList.length > 0 ? `Tổng mệnh giá: ${formatCurrency(totalExistingValue)}` : 'Không có mã trùng'}
                                     </div>
                                 </div>
                                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black ${
-                                    existingList.length > 0 ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-400'
+                                    existingList.length > 0 ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-500'
                                 }`}>
-                                    <AlertCircle className="w-5 h-5" />
+                                    <AlertCircle className="w-5 h-5" aria-hidden="true" />
                                 </div>
                             </div>
 
                             {/* Mã CHƯA CÓ TRONG KHO */}
-                            <div className={`border rounded-2xl p-3.5 shadow-2xs flex items-center justify-between ${
+                            <div className={`border rounded-2xl p-3.5 shadow-sm flex items-center justify-between ${
                                 newList.length > 0
                                     ? 'bg-emerald-50/70 border-emerald-200 text-emerald-950'
                                     : 'bg-white border-slate-200 text-slate-800'
                             }`}>
                                 <div>
-                                    <div className="text-[10px] font-black uppercase text-emerald-600">
+                                    <div className="text-[10px] font-black uppercase text-emerald-800">
                                         Chưa Có Trong Kho (Mới)
                                     </div>
-                                    <div className="text-xl font-black text-emerald-700 mt-0.5">
+                                    <div className="text-xl font-black text-emerald-800 mt-0.5">
                                         {newList.length} mã
                                     </div>
-                                    <div className="text-[10px] text-emerald-600 font-bold">
+                                    <div className="text-[10px] text-emerald-700 font-bold">
                                         {newList.length > 0 ? 'Khả dụng sẵn sàng nạp mới' : 'Không có mã mới'}
                                     </div>
                                 </div>
                                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black ${
-                                    newList.length > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400'
+                                    newList.length > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'
                                 }`}>
-                                    <CheckCircle2 className="w-5 h-5" />
+                                    <CheckCircle2 className="w-5 h-5" aria-hidden="true" />
                                 </div>
                             </div>
                         </div>
@@ -308,8 +327,8 @@ export default function VoucherBulkCheckModal({
                                     onClick={() => setFilterTab('ALL')}
                                     className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
                                         filterTab === 'ALL'
-                                            ? 'bg-slate-900 text-white shadow-2xs'
-                                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                            ? 'bg-slate-900 text-white shadow-sm'
+                                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                                     }`}
                                 >
                                     Tất Cả ({checkResults.length})
@@ -319,7 +338,7 @@ export default function VoucherBulkCheckModal({
                                     onClick={() => setFilterTab('EXISTING')}
                                     className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
                                         filterTab === 'EXISTING'
-                                            ? 'bg-rose-600 text-white shadow-2xs'
+                                            ? 'bg-rose-600 text-white shadow-sm'
                                             : 'bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200'
                                     }`}
                                 >
@@ -330,8 +349,8 @@ export default function VoucherBulkCheckModal({
                                     onClick={() => setFilterTab('NEW')}
                                     className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
                                         filterTab === 'NEW'
-                                            ? 'bg-emerald-600 text-white shadow-2xs'
-                                            : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200'
+                                            ? 'bg-emerald-700 text-white shadow-sm'
+                                            : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200'
                                     }`}
                                 >
                                     <span>✓ Chưa Có ({newList.length})</span>
@@ -341,17 +360,21 @@ export default function VoucherBulkCheckModal({
                             <div className="flex items-center gap-2 w-full sm:w-auto">
                                 <div className="relative w-full sm:w-48">
                                     <input
+                                        id="bulk-check-table-search"
+                                        name="bulk_check_table_search"
                                         type="text"
+                                        aria-label="Lọc mã hoặc chương trình trong kết quả"
                                         placeholder="Lọc mã hoặc CT..."
                                         value={searchTableQuery}
                                         onChange={(e) => setSearchTableQuery(e.target.value)}
-                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1 text-xs font-bold outline-none focus:bg-white focus:border-blue-400"
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1 text-xs font-bold outline-none focus:bg-white focus:border-blue-500"
                                     />
                                     {searchTableQuery && (
                                         <button
                                             type="button"
                                             onClick={() => setSearchTableQuery('')}
-                                            className="absolute right-2 top-1.5 text-slate-400 hover:text-slate-600 text-xs font-bold"
+                                            aria-label="Xóa lọc kết quả"
+                                            className="absolute right-2 top-1.5 text-slate-500 hover:text-slate-800 text-xs font-bold cursor-pointer"
                                         >
                                             ✕
                                         </button>
@@ -363,7 +386,7 @@ export default function VoucherBulkCheckModal({
 
                     {/* BẢNG KẾT QUẢ ĐỐI SOÁT CHI TIẾT */}
                     {parsedCodes.length > 0 && (
-                        <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-2xs bg-white">
+                        <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm bg-white">
                             <div className="overflow-x-auto max-h-[380px] no-scrollbar">
                                 <table className="w-full text-left text-xs border-collapse">
                                     <thead className="bg-slate-100 text-slate-700 font-black uppercase text-[10px] tracking-wider sticky top-0 z-10 border-b border-slate-200">
@@ -501,10 +524,10 @@ export default function VoucherBulkCheckModal({
                             <button
                                 type="button"
                                 onClick={handleCopyExistingCodes}
-                                className="px-3 py-2 rounded-xl bg-white hover:bg-rose-50 border border-slate-200 hover:border-rose-300 text-rose-700 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                                className="px-3 py-2 rounded-xl bg-white hover:bg-rose-50 border border-slate-200 hover:border-rose-300 text-rose-700 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm"
                                 title="Sao chép toàn bộ danh sách các mã đã tồn trong kho"
                             >
-                                {isCopied === 'EXISTING' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                                {isCopied === 'EXISTING' ? <Check className="w-3.5 h-3.5 text-emerald-700" aria-hidden="true" /> : <Copy className="w-3.5 h-3.5" aria-hidden="true" />}
                                 <span>{isCopied === 'EXISTING' ? 'Đã chép mã trùng!' : `Copy ${existingList.length} Mã Trùng`}</span>
                             </button>
                         )}
@@ -512,10 +535,10 @@ export default function VoucherBulkCheckModal({
                             <button
                                 type="button"
                                 onClick={handleCopyNewCodes}
-                                className="px-3 py-2 rounded-xl bg-white hover:bg-emerald-50 border border-slate-200 hover:border-emerald-300 text-emerald-700 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                                className="px-3 py-2 rounded-xl bg-white hover:bg-emerald-50 border border-slate-200 hover:border-emerald-300 text-emerald-800 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm"
                                 title="Sao chép toàn bộ danh sách các mã mới chưa có trong kho"
                             >
-                                {isCopied === 'NEW' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                                {isCopied === 'NEW' ? <Check className="w-3.5 h-3.5 text-emerald-700" aria-hidden="true" /> : <Copy className="w-3.5 h-3.5" aria-hidden="true" />}
                                 <span>{isCopied === 'NEW' ? 'Đã chép mã mới!' : `Copy ${newList.length} Mã Mới`}</span>
                             </button>
                         )}
@@ -525,7 +548,7 @@ export default function VoucherBulkCheckModal({
                         <button
                             type="button"
                             onClick={onClose}
-                            className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-200/80 transition cursor-pointer"
+                            className="px-4 py-2 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-200/80 transition cursor-pointer"
                         >
                             Đóng
                         </button>
@@ -533,16 +556,17 @@ export default function VoucherBulkCheckModal({
                             <button
                                 type="button"
                                 onClick={handleImportNewCodes}
-                                className="px-4 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-md shadow-emerald-200 transition flex items-center gap-1.5 cursor-pointer"
+                                className="px-4 py-2 rounded-xl text-xs font-black bg-emerald-700 hover:bg-emerald-800 text-white shadow-md transition flex items-center gap-1.5 cursor-pointer"
                             >
-                                <Upload className="w-3.5 h-3.5" />
+                                <Upload className="w-3.5 h-3.5" aria-hidden="true" />
                                 <span>Nạp {newList.length} Mã Mới Này Vào Kho</span>
-                                <ArrowRight className="w-3.5 h-3.5" />
+                                <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
                             </button>
                         )}
                     </div>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 }

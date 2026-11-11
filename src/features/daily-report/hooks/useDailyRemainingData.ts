@@ -613,7 +613,7 @@ export function useDailyRemainingData({
         return [
             {
                 id: 3,
-                title: 'Mẫu 3: Tổng Quát Súc Tích',
+                title: 'Mẫu 1: Tổng Quát Súc Tích',
                 badge: 'Súc Tích',
                 content: genText(3),
                 description: 'Tóm tắt nhanh số lượng ngành hàng theo 3 mức tiến độ'
@@ -627,7 +627,7 @@ export function useDailyRemainingData({
             },
             {
                 id: 4,
-                title: 'Mẫu 4: Chi Tiết Toàn Bộ',
+                title: 'Mẫu 3: Chi Tiết Toàn Bộ',
                 badge: 'Đầy Đủ',
                 content: genText(4),
                 description: 'Báo cáo toàn diện kết quả ngày theo Target thông minh'

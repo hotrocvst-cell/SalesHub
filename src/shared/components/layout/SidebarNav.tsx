@@ -279,6 +279,12 @@ export const NAVIGATION_GROUPS: NavGroup[] = [
                 path: '/can-ton-kho',
                 icon: Boxes,
                 badge: '📦 Mới'
+            },
+            {
+                name: 'Quay Số & Bốc Thăm',
+                path: '/tien-ich-quay-so',
+                icon: Sparkles,
+                badge: '🎲 Mới'
             }
         ]
     },

@@ -1,17 +1,16 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
     X,
     Camera,
     Edit3,
     Sparkles,
-    CheckCircle2,
     AlertCircle,
     Save,
     KeyRound,
     RefreshCw,
     Database,
-    Clock,
-    AlertTriangle
+    Clock
 } from 'lucide-react';
 import OcrUploadZone from '../../data-update/components/OcrUploadZone';
 import ManualDataEntryModule from '../../data-update/components/ManualDataEntryModule';
@@ -57,13 +56,13 @@ export default function RealtimeDataUpdateModal({
     existingSessions = [],
     initialTab = 'ocr'
 }: Props) {
-    if (!isOpen) return null;
-
     const { canAccessStore, isAdmin: authIsAdmin } = useAuth();
     const effectiveIsAdmin = Boolean(isAdmin || authIsAdmin);
 
     // Tab chuyển đổi: 'ocr' (Tải ảnh trích xuất) hoặc 'manual' (Rà soát & Nhập trực quan)
     const [activeTab, setActiveTab] = useState<'ocr' | 'manual'>(initialTab);
+    const toastTimerRef = useRef<number | null>(null);
+    const closeBtnRef = useRef<HTMLButtonElement | null>(null);
 
     // Đồng bộ tab khi mở modal
     useEffect(() => {
@@ -73,8 +72,8 @@ export default function RealtimeDataUpdateModal({
     }, [isOpen, initialTab]);
 
     // 1. Files upload
-    const [qdFile, setQdFile] = useState<File | null>(null);
-    const [realFile, setRealFile] = useState<File | null>(null);
+    const [qdFiles, setQdFiles] = useState<File[]>([]);
+    const [installmentFiles, setInstallmentFiles] = useState<File[]>([]);
     const [emulationFiles, setEmulationFiles] = useState<File[]>([]);
 
     // 1b. Switch nạp thi đua: 'CLUSTER' (Cả cụm) | 'SINGLE_STORE' (Đích danh từng ST)
@@ -135,7 +134,7 @@ export default function RealtimeDataUpdateModal({
                 setScreenshotTimestamp(existingSessions[0].screenshot_time_str);
             }
         }
-    }, [isOpen, initialTab, existingSessions]);
+    }, [isOpen, initialTab, existingSessions, storesData.length]);
 
     // Nạp thủ công số liệu phiên Cloud hiện tại vào bảng chỉnh sửa
     const handleLoadFromCloudSession = () => {
@@ -153,15 +152,42 @@ export default function RealtimeDataUpdateModal({
 
     // Nạp key từ cloud khi mở modal
     useEffect(() => {
+        if (!isOpen) return;
         fetchAdminGeminiKeyCloud().then(() => {
             setKeyInfo(resolveActiveGeminiKey());
         });
+    }, [isOpen]);
+
+    // Focus & Escape key handler
+    useEffect(() => {
+        if (!isOpen) return;
+        closeBtnRef.current?.focus();
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape' && !isKeyModalOpen) {
+                onClose();
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isOpen, isKeyModalOpen, onClose]);
+
+    useEffect(() => {
+        return () => {
+            if (toastTimerRef.current) {
+                window.clearTimeout(toastTimerRef.current);
+            }
+        };
     }, []);
 
     const showToast = (msg: string) => {
         setModalToast(msg);
-        setTimeout(() => setModalToast(''), 3500);
+        if (toastTimerRef.current) {
+            window.clearTimeout(toastTimerRef.current);
+        }
+        toastTimerRef.current = window.setTimeout(() => setModalToast(''), 3500);
     };
+
+    if (!isOpen) return null;
 
     // Chạy OCR trích xuất ảnh
     const handleRunOcr = async () => {
@@ -175,8 +201,8 @@ export default function RealtimeDataUpdateModal({
             ? emulationFiles.length > 0
             : singleStoreEmulations.some(e => e.files.length > 0);
 
-        if (!qdFile && !realFile && !hasEmulation) {
-            showToast('⚠️ Vui lòng chọn ít nhất 1 ảnh (DT-QĐ, DT-THỰC hoặc Thi đua)!');
+        if (qdFiles.length === 0 && installmentFiles.length === 0 && !hasEmulation) {
+            showToast('⚠️ Vui lòng chọn ít nhất 1 ảnh (Doanh thu QĐ, % Tỷ trọng trả góp hoặc Thi đua)!');
             return;
         }
 
@@ -189,11 +215,12 @@ export default function RealtimeDataUpdateModal({
             const result = await extractAndMergeAllImages(
                 activeKey,
                 {
-                    qdFile,
-                    realFile,
+                    qdFiles,
+                    installmentFiles,
                     emulationFiles,
                     emulationMode,
-                    singleStoreEmulations
+                    singleStoreEmulations,
+                    knownStores: availableStores
                 },
                 (msg, pct) => {
                     setProgressText(msg);
@@ -297,23 +324,28 @@ export default function RealtimeDataUpdateModal({
         }
     };
 
-    return (
-        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 z-50 animate-in fade-in">
+    return createPortal(
+        <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="realtime-update-modal-title"
+            className="!mt-0 fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 z-50"
+        >
             <div className="bg-white rounded-3xl max-w-4xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
                 {/* Header Modal */}
                 <div className="bg-slate-900 text-white p-4 sm:p-5 flex items-center justify-between border-b border-slate-800">
                     <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white font-bold shadow-xs shrink-0">
-                            <Sparkles className="w-5 h-5" />
+                        <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white font-bold shadow-sm shrink-0">
+                            <Sparkles className="w-5 h-5" aria-hidden="true" />
                         </div>
                         <div>
-                            <h2 className="text-base sm:text-lg font-black text-white tracking-tight flex items-center gap-2">
+                            <h2 id="realtime-update-modal-title" className="text-base sm:text-lg font-black text-white tracking-tight flex items-center gap-2 flex-wrap">
                                 <span>{effectiveIsAdmin ? 'Nạp Dữ Liệu Realtime (Cả Cụm)' : 'Nạp Doanh Thu & Thi Đua Realtime'}</span>
-                                <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-400/30">
+                                <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-200 border border-blue-400/40">
                                     Cloud Realtime
                                 </span>
                             </h2>
-                            <p className="text-xs text-slate-400 mt-0.5">
+                            <p className="text-xs text-slate-300 mt-0.5">
                                 Mỗi ST lưu duy nhất 1 phiên mới nhất
                             </p>
                         </div>
@@ -322,60 +354,67 @@ export default function RealtimeDataUpdateModal({
                     <div className="flex items-center gap-2">
                         <button
                             type="button"
+                            aria-label="Cài đặt Gemini API Key"
                             onClick={() => setIsKeyModalOpen(true)}
-                            className="p-2 hover:bg-slate-800 rounded-xl text-slate-300 hover:text-white transition cursor-pointer border border-slate-700"
+                            className="p-2 hover:bg-slate-800 rounded-xl text-slate-200 hover:text-white transition cursor-pointer border border-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
                             title="Cài đặt Gemini API Key"
                         >
-                            <KeyRound className="w-4 h-4 text-amber-400" />
+                            <KeyRound className="w-4 h-4 text-amber-400" aria-hidden="true" />
                         </button>
                         <button
+                            ref={closeBtnRef}
                             type="button"
+                            aria-label="Đóng hộp thoại nạp dữ liệu Realtime"
                             onClick={onClose}
-                            className="p-2 hover:bg-slate-800 rounded-xl text-slate-400 hover:text-white transition cursor-pointer"
+                            className="p-2 hover:bg-slate-800 rounded-xl text-slate-300 hover:text-white transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                         >
-                            <X className="w-5 h-5" />
+                            <X className="w-5 h-5" aria-hidden="true" />
                         </button>
                     </div>
                 </div>
 
                 {/* Subheader & Tabs Chuyển đổi */}
                 <div className="bg-slate-100 p-2.5 sm:px-5 flex items-center justify-between border-b border-slate-200 flex-wrap gap-2">
-                    <div className="flex items-center p-1 bg-white rounded-xl border border-slate-200 shadow-inner">
+                    <div role="tablist" aria-label="Chế độ nhập liệu Realtime" className="flex items-center p-1 bg-white rounded-xl border border-slate-200 shadow-inner">
                         <button
                             type="button"
+                            role="tab"
+                            aria-selected={activeTab === 'ocr'}
                             onClick={() => setActiveTab('ocr')}
-                            className={`flex items-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-bold transition cursor-pointer ${activeTab === 'ocr'
-                                ? 'bg-blue-600 text-white shadow-xs'
-                                : 'text-slate-600 hover:text-slate-900'
+                            className={`flex items-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-bold transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${activeTab === 'ocr'
+                                ? 'bg-blue-600 text-white shadow-sm'
+                                : 'text-slate-700 hover:text-slate-900'
                                 }`}
                         >
-                            <Camera className="w-3.5 h-3.5" />
+                            <Camera className="w-3.5 h-3.5" aria-hidden="true" />
                             <span>1. Tải Ảnh</span>
                         </button>
                         <button
                             type="button"
+                            role="tab"
+                            aria-selected={activeTab === 'manual'}
                             onClick={() => setActiveTab('manual')}
-                            className={`flex items-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-bold transition cursor-pointer ${activeTab === 'manual'
-                                ? 'bg-blue-600 text-white shadow-xs'
-                                : 'text-slate-600 hover:text-slate-900'
+                            className={`flex items-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-bold transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${activeTab === 'manual'
+                                ? 'bg-blue-600 text-white shadow-sm'
+                                : 'text-slate-700 hover:text-slate-900'
                                 }`}
                         >
-                            <Edit3 className="w-3.5 h-3.5" />
-                            <span>2. Rà Soát & Nhập ({storesData.length} ST)</span>
+                            <Edit3 className="w-3.5 h-3.5" aria-hidden="true" />
+                            <span>2. Rà Soát &amp; Nhập ({storesData.length} ST)</span>
                         </button>
                     </div>
 
                     {screenshotTimestamp && (
-                        <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 bg-white px-2.5 py-1 rounded-lg border border-slate-200">
-                            <Clock className="w-3.5 h-3.5 text-blue-600" />
-                            <span>Giờ chụp ảnh: <strong className="text-blue-700">{screenshotTimestamp}</strong></span>
+                        <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 bg-white px-2.5 py-1 rounded-lg border border-slate-200">
+                            <Clock className="w-3.5 h-3.5 text-blue-600" aria-hidden="true" />
+                            <span>Giờ chụp ảnh: <strong className="text-blue-700 tabular-nums">{screenshotTimestamp}</strong></span>
                         </div>
                     )}
                 </div>
 
                 {/* Toast thông báo trong modal */}
                 {modalToast && (
-                    <div className="bg-slate-800 text-white px-4 py-2 text-xs font-bold text-center border-b border-slate-700 animate-in fade-in">
+                    <div role="status" aria-live="polite" className="bg-slate-800 text-white px-4 py-2 text-xs font-bold text-center border-b border-slate-700">
                         {modalToast}
                     </div>
                 )}
@@ -384,8 +423,8 @@ export default function RealtimeDataUpdateModal({
                 <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
                     {/* Lỗi OCR nếu có */}
                     {ocrError && (
-                        <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2.5">
-                            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                        <div role="alert" className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2.5">
+                            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" aria-hidden="true" />
                             <div className="flex-1">
                                 <strong className="block font-bold">Lỗi trích xuất:</strong>
                                 <span>{ocrError}</span>
@@ -396,10 +435,11 @@ export default function RealtimeDataUpdateModal({
                     {activeTab === 'ocr' ? (
                         <div className="space-y-4">
                             <OcrUploadZone
-                                qdFile={qdFile}
-                                onQdFileChange={setQdFile}
-                                realFile={realFile}
-                                onRealFileChange={setRealFile}
+                                mode="STORE"
+                                qdFiles={qdFiles}
+                                onQdFilesChange={setQdFiles}
+                                installmentFiles={installmentFiles}
+                                onInstallmentFilesChange={setInstallmentFiles}
                                 emulationFiles={emulationFiles}
                                 onEmulationFilesChange={setEmulationFiles}
                                 hasGeminiKey={Boolean(keyInfo.key)}
@@ -420,17 +460,17 @@ export default function RealtimeDataUpdateModal({
                     ) : (
                         <div className="space-y-4">
                             {existingSessions && existingSessions.length > 0 && (
-                                <div className="flex items-center justify-between p-3 sm:px-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/90 rounded-2xl flex-wrap gap-2.5 shadow-2xs">
+                                <div className="flex items-center justify-between p-3 sm:px-4 bg-blue-50/80 border border-blue-200 rounded-2xl flex-wrap gap-2.5 shadow-sm">
                                     <div className="flex items-center gap-2.5">
-                                        <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
-                                            <Database className="w-4 h-4" />
+                                        <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                                            <Database className="w-4 h-4" aria-hidden="true" />
                                         </div>
                                         <div>
-                                            <span className="text-xs text-blue-900 font-bold block">
-                                                Phiên Cloud hiện tại: <strong className="text-blue-700">{existingSessions.length} ST</strong>
+                                            <span className="text-xs text-blue-950 font-bold block">
+                                                Phiên Cloud hiện tại: <strong className="text-blue-700 tabular-nums">{existingSessions.length} ST</strong>
                                                 {existingSessions[0]?.screenshot_time_str ? ` • Giờ chụp: ${existingSessions[0].screenshot_time_str}` : ''}
                                             </span>
-                                            <span className="text-[11px] text-slate-500">
+                                            <span className="text-[11px] text-slate-600">
                                                 Có thể nạp toàn bộ số liệu phiên Cloud vào bảng để rà soát hoặc điều chỉnh số liệu
                                             </span>
                                         </div>
@@ -438,10 +478,10 @@ export default function RealtimeDataUpdateModal({
                                     <button
                                         type="button"
                                         onClick={handleLoadFromCloudSession}
-                                        className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                                        className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                                         title="Nạp toàn bộ số liệu của các ST từ phiên Cloud vào giao diện để chỉnh sửa"
                                     >
-                                        <RefreshCw className="w-3.5 h-3.5" />
+                                        <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
                                         <span>Nạp số liệu phiên Cloud</span>
                                     </button>
                                 </div>
@@ -466,7 +506,7 @@ export default function RealtimeDataUpdateModal({
 
                 {/* Footer Modal với nút Lưu Cloud */}
                 <div className="bg-slate-50 p-3.5 sm:px-5 border-t border-slate-200 flex items-center justify-between flex-wrap gap-2">
-                    <div className="text-xs text-slate-500">
+                    <div className="text-xs text-slate-600 font-medium">
                         {storesData.length > 0
                             ? `Đã nạp ${storesData.length} ST sẵn sàng đẩy lên Cloud`
                             : 'Chưa có số liệu ST'}
@@ -476,7 +516,7 @@ export default function RealtimeDataUpdateModal({
                         <button
                             type="button"
                             onClick={onClose}
-                            className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:text-slate-900 hover:bg-slate-200 transition cursor-pointer"
+                            className="px-4 py-2 rounded-xl text-xs font-bold text-slate-700 hover:text-slate-900 hover:bg-slate-200 transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
                         >
                             Đóng
                         </button>
@@ -485,10 +525,10 @@ export default function RealtimeDataUpdateModal({
                             type="button"
                             onClick={handleSaveToCloud}
                             disabled={isSaving || storesData.length === 0}
-                            className="px-5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition shadow-sm cursor-pointer disabled:opacity-50"
+                            className="px-5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition shadow-sm cursor-pointer disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
                         >
-                            {isSaving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                            <span>{isSaving ? 'Đang lưu Cloud...' : '💾 Lưu Phiên Realtime Lên Cloud'}</span>
+                            {isSaving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" aria-hidden="true" /> : <Save className="w-3.5 h-3.5" aria-hidden="true" />}
+                            <span>{isSaving ? 'Đang lưu Cloud...' : 'Lưu Phiên Realtime Lên Cloud'}</span>
                         </button>
                     </div>
                 </div>
@@ -505,7 +545,8 @@ export default function RealtimeDataUpdateModal({
                     showToast(`✅ Đã lưu cấu hình API Key (${source === 'ADMIN' ? 'Hệ Thống' : 'Cá Nhân'})!`);
                 }}
             />
-        </div>
+        </div>,
+        document.body
     );
 }
 

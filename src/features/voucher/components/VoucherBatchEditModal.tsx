@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
     X,
     Save,
@@ -97,7 +98,7 @@ export default function VoucherBatchEditModal({
         return [];
     }, [allowedStores, accessibleStores]);
 
-    // Khởi tạo danh sách shop khi mở modal
+    // Khởi tạo danh sách ST khi mở modal
     React.useEffect(() => {
         if (isOpen && clusterStoreNames.length > 0) {
             setSelectedStoresInCluster(clusterStoreNames);
@@ -105,6 +106,15 @@ export default function VoucherBatchEditModal({
             setErrorMsg('');
         }
     }, [isOpen, clusterStoreNames]);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape' && !isSubmitting) onClose();
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isOpen, isSubmitting, onClose]);
 
     if (!isOpen || selectedVouchers.length === 0) return null;
 
@@ -256,25 +266,34 @@ export default function VoucherBatchEditModal({
         }
     };
 
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs font-avo animate-in fade-in duration-200">
-            <div className="bg-white rounded-3xl max-w-xl w-full border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+    return createPortal(
+        <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="voucher-batch-edit-modal-title"
+            className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm"
+            onClick={() => !isSubmitting && onClose()}
+        >
+            <div
+                className="bg-white rounded-3xl max-w-xl w-full border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[92vh]"
+                onClick={(e) => e.stopPropagation()}
+            >
                 {/* Header */}
-                <div className="bg-gradient-to-r from-indigo-700 via-indigo-800 to-purple-800 px-5 py-4 text-white flex items-center justify-between">
+                <div className="bg-slate-900 px-5 py-4 text-white flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
-                        <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center font-black">
-                            <Edit3 className="w-5 h-5 text-amber-300" />
+                        <div className="w-9 h-9 rounded-xl bg-blue-700 flex items-center justify-center font-black">
+                            <Edit3 className="w-5 h-5 text-amber-300" aria-hidden="true" />
                         </div>
                         <div>
                             <div className="flex items-center gap-2 flex-wrap">
-                                <h3 className="font-black text-sm uppercase tracking-wide">
+                                <h3 id="voucher-batch-edit-modal-title" className="font-black text-sm uppercase tracking-wide">
                                     Cập Nhật Hàng Loạt Voucher
                                 </h3>
                                 <span className="font-mono text-xs bg-amber-400 text-slate-950 px-2.5 py-0.5 rounded-full font-black">
                                     {selectedVouchers.length} mã đã chọn
                                 </span>
                             </div>
-                            <div className="text-[11px] text-indigo-200">
+                            <div className="text-[11px] text-slate-300">
                                 Tổng giá trị: <strong>{totalSelectedValue.toLocaleString('vi-VN')}đ</strong> • Người thực hiện: {currentUserDisplayName}
                             </div>
                         </div>
@@ -282,19 +301,21 @@ export default function VoucherBatchEditModal({
                     <button
                         type="button"
                         onClick={onClose}
-                        className="p-1.5 rounded-xl hover:bg-white/20 text-white/80 hover:text-white transition cursor-pointer"
+                        disabled={isSubmitting}
+                        aria-label="Đóng hộp thoại cập nhật hàng loạt"
+                        className="p-1.5 rounded-xl hover:bg-white/20 text-white/80 hover:text-white transition cursor-pointer disabled:opacity-50"
                     >
-                        <X className="w-5 h-5" />
+                        <X className="w-5 h-5" aria-hidden="true" />
                     </button>
                 </div>
 
                 {/* Banner Hướng Dẫn & Tóm Tắt Mã Chọn */}
                 <div className="bg-slate-50 border-b border-slate-200 p-3 sm:px-5 flex items-center justify-between gap-3 text-xs">
-                    <div className="flex items-center gap-2 text-slate-600">
-                        <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
+                    <div className="flex items-center gap-2 text-slate-700">
+                        <Sparkles className="w-4 h-4 text-amber-600 shrink-0" aria-hidden="true" />
                         <span>Tích chọn những thông tin bạn muốn thay đổi đồng loạt bên dưới.</span>
                     </div>
-                    <span className="text-[11px] font-black text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full shrink-0">
+                    <span className="text-[11px] font-black text-blue-800 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full shrink-0">
                         Sẽ cập nhật {enabledFieldsCount} trường
                     </span>
                 </div>
@@ -303,7 +324,7 @@ export default function VoucherBatchEditModal({
                 <form onSubmit={handleSubmit} className="p-4 sm:p-5 overflow-y-auto space-y-4 text-xs flex-1">
                     {errorMsg && (
                         <div className="p-3 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 font-bold flex items-center gap-2">
-                            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" aria-hidden="true" />
                             <span>{errorMsg}</span>
                         </div>
                     )}
@@ -320,11 +341,11 @@ export default function VoucherBatchEditModal({
                                     onChange={(e) => setApplyScope(e.target.checked)}
                                     className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
                                 />
-                                <Store className="w-4 h-4 text-emerald-700" />
+                                <Store className="w-4 h-4 text-emerald-700" aria-hidden="true" />
                                 <span className="uppercase">1. Cập Nhật Cụm / Kho Được Phép Sử Dụng</span>
                             </label>
                             <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                                applyScope ? 'bg-emerald-600 text-white border-emerald-700' : 'bg-slate-200 text-slate-600 border-slate-300'
+                                applyScope ? 'bg-emerald-700 text-white border-emerald-800' : 'bg-slate-200 text-slate-700 border-slate-300'
                             }`}>
                                 {applyScope ? 'Đang bật' : 'Bỏ qua'}
                             </span>
@@ -342,11 +363,11 @@ export default function VoucherBatchEditModal({
                                         }}
                                         className={`p-2 rounded-xl border text-center font-bold text-[11px] transition cursor-pointer ${
                                             scopeType === 'CLUSTER_ALL'
-                                                ? 'bg-emerald-600 text-white border-emerald-700 shadow-2xs'
+                                                ? 'bg-emerald-700 text-white border-emerald-800 shadow-sm'
                                                 : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
                                         }`}
                                     >
-                                        🏢 Toàn Cụm ({clusterStoreNames.length} Shop)
+                                        🏢 Toàn Cụm ({clusterStoreNames.length} ST)
                                     </button>
 
                                     <button
@@ -354,11 +375,11 @@ export default function VoucherBatchEditModal({
                                         onClick={() => setScopeType('CLUSTER_CUSTOM')}
                                         className={`p-2 rounded-xl border text-center font-bold text-[11px] transition cursor-pointer ${
                                             scopeType === 'CLUSTER_CUSTOM'
-                                                ? 'bg-emerald-600 text-white border-emerald-700 shadow-2xs'
+                                                ? 'bg-emerald-700 text-white border-emerald-800 shadow-sm'
                                                 : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
                                         }`}
                                     >
-                                        ☑️ Tùy Chọn Shop Trong Cụm
+                                        ☑️ Tùy Chọn ST Trong Cụm
                                     </button>
 
                                     <button
@@ -371,11 +392,11 @@ export default function VoucherBatchEditModal({
                                         }}
                                         className={`p-2 rounded-xl border text-center font-bold text-[11px] transition cursor-pointer ${
                                             scopeType === 'SINGLE'
-                                                ? 'bg-emerald-600 text-white border-emerald-700 shadow-2xs'
+                                                ? 'bg-emerald-700 text-white border-emerald-800 shadow-sm'
                                                 : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
                                         }`}
                                     >
-                                        🏪 Riêng 1 Shop Cụ Thể
+                                        🏪 Riêng 1 ST Cụ Thể
                                     </button>
 
                                     {isAdmin && (
@@ -384,8 +405,8 @@ export default function VoucherBatchEditModal({
                                             onClick={() => setScopeType('GLOBAL')}
                                             className={`p-2 rounded-xl border text-center font-bold text-[11px] transition cursor-pointer col-span-2 sm:col-span-3 ${
                                                 scopeType === 'GLOBAL'
-                                                    ? 'bg-purple-600 text-white border-purple-700 shadow-2xs'
-                                                    : 'bg-white text-purple-700 border-purple-200 hover:bg-purple-50'
+                                                    ? 'bg-blue-700 text-white border-blue-800 shadow-sm'
+                                                    : 'bg-white text-blue-700 border-blue-200 hover:bg-blue-50'
                                             }`}
                                         >
                                             🌐 Toàn Quốc / Tất Cả Cụm (Admin)
@@ -429,16 +450,19 @@ export default function VoucherBatchEditModal({
                                                 );
                                             })}
                                         </div>
-                                        <div className="text-[10px] text-slate-400 text-right">
-                                            Đã chọn: <strong className="text-emerald-700">{selectedStoresInCluster.length}</strong>/{clusterStoreNames.length} shop
+                                        <div className="text-[10px] text-slate-600 text-right">
+                                            Đã chọn: <strong className="text-emerald-700">{selectedStoresInCluster.length}</strong>/{clusterStoreNames.length} ST
                                         </div>
                                     </div>
                                 )}
 
-                                {/* Dropdown chọn 1 shop khi chọn SINGLE */}
+                                {/* Dropdown chọn 1 ST khi chọn SINGLE */}
                                 {scopeType === 'SINGLE' && (
                                     <div className="mt-2">
                                         <select
+                                            id="batch-edit-single-store"
+                                            name="batch_edit_single_store"
+                                            aria-label="Chọn 1 ST cụ thể"
                                             value={singleStoreName}
                                             onChange={(e) => setSingleStoreName(e.target.value)}
                                             className="w-full bg-white border border-emerald-300 rounded-xl p-2 font-bold text-slate-800 cursor-pointer"
@@ -586,7 +610,7 @@ export default function VoucherBatchEditModal({
                                 <span className="uppercase">4. Cập Nhật Diễn Giải / Điều Kiện Áp Dụng</span>
                             </label>
                             <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                                applyDescription ? 'bg-emerald-600 text-white border-emerald-700' : 'bg-slate-200 text-slate-600 border-slate-300'
+                                applyDescription ? 'bg-emerald-700 text-white border-emerald-800' : 'bg-slate-200 text-slate-700 border-slate-300'
                             }`}>
                                 {applyDescription ? 'Đang bật' : 'Bỏ qua'}
                             </span>
@@ -796,15 +820,15 @@ export default function VoucherBatchEditModal({
 
                 {/* Footer Hành Động */}
                 <div className="bg-slate-50 p-3 sm:p-4 border-t border-slate-200 flex items-center justify-between gap-2 flex-wrap">
-                    <div className="text-[11px] text-slate-500 font-bold">
-                        Đang chọn <strong className="text-indigo-700">{selectedVouchers.length}</strong> mã voucher
+                    <div className="text-[11px] text-slate-600 font-bold">
+                        Đang chọn <strong className="text-blue-800">{selectedVouchers.length}</strong> mã voucher
                     </div>
                     <div className="flex items-center gap-2">
                         <button
                             type="button"
                             onClick={onClose}
                             disabled={isSubmitting}
-                            className="px-4 py-2 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-600 text-xs font-bold transition cursor-pointer"
+                            className="px-4 py-2 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs font-bold transition cursor-pointer"
                         >
                             Hủy
                         </button>
@@ -812,14 +836,15 @@ export default function VoucherBatchEditModal({
                             type="button"
                             onClick={handleSubmit}
                             disabled={isSubmitting || enabledFieldsCount === 0}
-                            className="px-5 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 active:scale-[0.99] text-white text-xs font-black transition cursor-pointer shadow-md flex items-center gap-1.5 disabled:opacity-50"
+                            className="px-5 py-2 rounded-xl bg-blue-700 hover:bg-blue-800 active:scale-[0.99] text-white text-xs font-black transition cursor-pointer shadow-md flex items-center gap-1.5 disabled:opacity-50"
                         >
-                            <Save className="w-4 h-4 text-amber-300" />
+                            <Save className="w-4 h-4 text-amber-300" aria-hidden="true" />
                             <span>{isSubmitting ? 'Đang cập nhật...' : `Cập Nhật ${selectedVouchers.length} Mã`}</span>
                         </button>
                     </div>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 }

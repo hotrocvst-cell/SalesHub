@@ -47,6 +47,8 @@ interface Props {
     knownStoreCampaigns?: KnownStoreCampaignTarget[];
     campaignDict?: CampaignDictItem[];
     onRemapCampaign?: (oldName: string, newName: string) => void;
+    onResetBatch?: () => void;
+    hasSavedSession?: boolean;
 }
 
 export default function EmployeeManualDataEntryModule({
@@ -66,7 +68,9 @@ export default function EmployeeManualDataEntryModule({
     campaignMappings = [],
     knownStoreCampaigns = [],
     campaignDict = [],
-    onRemapCampaign
+    onRemapCampaign,
+    onResetBatch,
+    hasSavedSession = false
 }: Props) {
     const [searchTerm, setSearchTerm] = useState('');
     const [expandedEmployeeId, setExpandedEmployeeId] = useState<string | null>(null);
@@ -86,6 +90,7 @@ export default function EmployeeManualDataEntryModule({
     const [selectedEmpToAdd, setSelectedEmpToAdd] = useState<string>('');
     const [manualEmpIdInput, setManualEmpIdInput] = useState<string>('');
     const [addError, setAddError] = useState<string>('');
+    const [editingMappingEmpId, setEditingMappingEmpId] = useState<string | null>(null);
 
     // Danh sách nhân sự trong danh bạ ST chưa có trong phiên này
     const availableEmployees = useMemo(() => {
@@ -94,25 +99,45 @@ export default function EmployeeManualDataEntryModule({
         return storeEmployees.filter(e => !currentIds.has(String(e.employee_id || '').trim().toLowerCase()));
     }, [storeEmployees, employees]);
 
-    // Tính toán chiều rộng chuẩn badge theo Quy chuẩn 11
+    // Tính toán chiều rộng chuẩn badge theo Quy chuẩn 11 (loại trừ placeholder UNMAPPED::)
     const maxIdLength = useMemo(() => {
         if (!employees || employees.length === 0) return 6;
-        return Math.max(6, ...employees.map(r => String(r.employeeId || '').trim().length));
+        const validLengths = employees
+            .filter(r => !r.isUnmappedName && !String(r.employeeId || '').startsWith('UNMAPPED::'))
+            .map(r => String(r.employeeId || '').trim().length);
+        return Math.max(6, ...validLengths);
+    }, [employees]);
+
+    // Thống kê dòng cần rà soát mapping Mã NV (ảnh không có Mã NV)
+    const mappingReviewStats = useMemo(() => {
+        let unmappedCount = 0;
+        let nameMatchedCount = 0;
+        employees.forEach(e => {
+            if (e.isUnmappedName || String(e.employeeId || '').startsWith('UNMAPPED::')) {
+                unmappedCount++;
+            } else if (e.mappingSource === 'NAME_EXACT' || e.mappingSource === 'NAME_FUZZY') {
+                nameMatchedCount++;
+            }
+        });
+        return { unmappedCount, nameMatchedCount };
     }, [employees]);
 
     // Thống kê tổng quan KPI
     const kpiSummary = useMemo(() => {
         const totalEmployees = employees.length;
         const totalQd = employees.reduce((sum, e) => sum + (Number(e.revenueQd) || 0), 0);
-        const totalReal = employees.reduce((sum, e) => sum + (Number(e.revenueReal) || 0), 0);
-        const totalInstallment = employees.reduce((sum, e) => sum + (Number(e.installmentReal) || 0), 0);
-        const avgInstallmentRate = totalReal > 0 ? (totalInstallment / totalReal) * 100 : 0;
+        const totalInstallmentQd = employees.reduce((sum, e) => sum + (Number(e.installmentQd) || 0), 0);
+        const weightedRateWeight = employees.reduce((sum, e) => sum + ((Number(e.revenueQd) || 0) > 0 ? Number(e.revenueQd) : 0), 0);
+        const avgInstallmentRate = weightedRateWeight > 0
+            ? employees.reduce((sum, e) => sum + (Number(e.installmentRate) || 0) * (Number(e.revenueQd) || 0), 0) / weightedRateWeight
+            : (totalEmployees > 0
+                ? employees.reduce((sum, e) => sum + (Number(e.installmentRate) || 0), 0) / totalEmployees
+                : 0);
 
         return {
             totalEmployees,
             totalQd,
-            totalReal,
-            totalInstallment,
+            totalInstallmentQd,
             avgInstallmentRate
         };
     }, [employees]);
@@ -123,14 +148,25 @@ export default function EmployeeManualDataEntryModule({
         const q = searchTerm.toLowerCase().trim();
         return employees.filter(e =>
             e.employeeId.toLowerCase().includes(q) ||
-            e.fullName.toLowerCase().includes(q)
+            e.fullName.toLowerCase().includes(q) ||
+            (e.ocrSourceName || '').toLowerCase().includes(q)
         );
     }, [employees, searchTerm]);
 
-    // Cập nhật trường Doanh thu nhân viên
+    // Tập hợp Mã NV đã có trong bảng để gợi ý trạng thái gộp khi mapping
+    const existingEmpIdSet = useMemo(
+        () => new Set(
+            employees
+                .filter(e => !e.isUnmappedName && !String(e.employeeId || '').startsWith('UNMAPPED::'))
+                .map(e => String(e.employeeId || '').trim().toLowerCase())
+        ),
+        [employees]
+    );
+
+    // Cập nhật trường Doanh thu & % Tỷ trọng trả góp nhân viên
     const handleUpdateField = (
         empId: string,
-        field: 'revenueQd' | 'revenueReal' | 'installmentReal' | 'fullName',
+        field: 'revenueQd' | 'installmentQd' | 'installmentRate' | 'fullName',
         val: any
     ) => {
         const updated = employees.map(e => {
@@ -140,15 +176,8 @@ export default function EmployeeManualDataEntryModule({
             if (field === 'fullName') {
                 item.fullName = String(val);
             } else {
-                const numVal = Number(val) || 0;
+                const numVal = parseFloat(String(val)) || 0;
                 item[field] = numVal;
-
-                // Tự tính lại tỷ lệ trả góp
-                if (field === 'revenueReal' || field === 'installmentReal') {
-                    const rev = field === 'revenueReal' ? numVal : item.revenueReal;
-                    const inst = field === 'installmentReal' ? numVal : item.installmentReal;
-                    item.installmentRate = rev > 0 ? Number(((inst / rev) * 100).toFixed(2)) : 0;
-                }
             }
             return item;
         });
@@ -156,9 +185,100 @@ export default function EmployeeManualDataEntryModule({
         onChangeEmployees(updated);
     };
 
+    // Gán hoặc sửa lại Mã NV cho dòng đọc từ ảnh không có Mã NV (tự động gộp nếu Mã NV đích đã tồn tại)
+    const handleRemapEmployeeId = (sourceEmpId: string, targetEmpId: string) => {
+        const cleanTargetId = targetEmpId.trim();
+        if (!cleanTargetId || cleanTargetId.toLowerCase() === sourceEmpId.trim().toLowerCase()) {
+            setEditingMappingEmpId(null);
+            return;
+        }
+
+        const sourceEmp = employees.find(e => e.employeeId === sourceEmpId);
+        if (!sourceEmp) return;
+
+        const targetOfficial = storeEmployees.find(
+            e => String(e.employee_id || '').trim().toLowerCase() === cleanTargetId.toLowerCase()
+        );
+        const officialId = targetOfficial?.employee_id?.trim() || cleanTargetId;
+        const officialName = targetOfficial?.full_name?.trim() || sourceEmp.fullName;
+
+        const targetExisting = employees.find(
+            e => e.employeeId !== sourceEmpId && e.employeeId.trim().toLowerCase() === officialId.toLowerCase()
+        );
+
+        let updatedList: EmployeeOcrParsedItem[];
+
+        if (targetExisting) {
+            updatedList = employees
+                .filter(e => e.employeeId !== sourceEmpId)
+                .map(e => {
+                    if (e.employeeId !== targetExisting.employeeId) return e;
+
+                    const mergedCampaigns: Record<string, number> = { ...(e.campaigns || {}) };
+                    Object.entries(sourceEmp.campaigns || {}).forEach(([cName, cVal]) => {
+                        mergedCampaigns[cName] = (mergedCampaigns[cName] || 0) + (Number(cVal) || 0);
+                    });
+
+                    const detailMap = new Map((e.campaignDetails || []).map(d => [d.campaignName, { ...d }]));
+                    (sourceEmp.campaignDetails || []).forEach(d => {
+                        const existingDetail = detailMap.get(d.campaignName);
+                        if (existingDetail) {
+                            detailMap.set(d.campaignName, {
+                                ...existingDetail,
+                                value: (Number(existingDetail.value) || 0) + (Number(d.value) || 0)
+                            });
+                        } else {
+                            detailMap.set(d.campaignName, { ...d });
+                        }
+                    });
+
+                    return {
+                        ...e,
+                        employeeId: officialId,
+                        fullName: officialName || e.fullName,
+                        revenueQd: e.revenueQd || sourceEmp.revenueQd,
+                        installmentQd: e.installmentQd || sourceEmp.installmentQd,
+                        installmentRate: e.installmentRate || sourceEmp.installmentRate,
+                        campaigns: mergedCampaigns,
+                        campaignDetails: Array.from(detailMap.values()),
+                        mappingSource: 'ID',
+                        isUnmappedName: false,
+                        ocrSourceName: sourceEmp.ocrSourceName || e.ocrSourceName
+                    };
+                });
+
+            if (expandedEmployeeId === sourceEmpId) {
+                setExpandedEmployeeId(targetExisting.employeeId);
+            }
+        } else {
+            updatedList = employees.map(e => {
+                if (e.employeeId !== sourceEmpId) return e;
+                return {
+                    ...e,
+                    employeeId: officialId,
+                    fullName: officialName,
+                    mappingSource: 'ID',
+                    isUnmappedName: false,
+                    ocrSourceName: e.ocrSourceName || e.fullName
+                };
+            });
+
+            if (expandedEmployeeId === sourceEmpId) {
+                setExpandedEmployeeId(officialId);
+            }
+        }
+
+        setEditingMappingEmpId(null);
+        onChangeEmployees(updatedList);
+    };
+
     // Xóa nhân viên
     const handleRemoveEmployee = (empId: string) => {
-        if (!window.confirm(`Bạn có chắc muốn xóa nhân viên mã ${empId}?`)) return;
+        const target = employees.find(e => e.employeeId === empId);
+        const label = target?.isUnmappedName || empId.startsWith('UNMAPPED::')
+            ? `"${target?.ocrSourceName || target?.fullName || empId}" (dòng chưa gán Mã NV)`
+            : `nhân viên mã ${empId}`;
+        if (!window.confirm(`Bạn có chắc muốn xóa ${label}?`)) return;
         onChangeEmployees(employees.filter(e => e.employeeId !== empId));
     };
 
@@ -183,8 +303,7 @@ export default function EmployeeManualDataEntryModule({
             employeeId: String(found.employee_id).trim(),
             fullName: found.full_name?.trim() || `Nhân viên ${cleanId}`,
             revenueQd: 0,
-            revenueReal: 0,
-            installmentReal: 0,
+            installmentQd: 0,
             installmentRate: 0,
             campaigns: {},
             campaignDetails: []
@@ -205,8 +324,7 @@ export default function EmployeeManualDataEntryModule({
             employeeId: String(e.employee_id).trim(),
             fullName: e.full_name?.trim() || `Nhân viên ${e.employee_id}`,
             revenueQd: 0,
-            revenueReal: 0,
-            installmentReal: 0,
+            installmentQd: 0,
             installmentRate: 0,
             campaigns: {},
             campaignDetails: []
@@ -243,38 +361,30 @@ export default function EmployeeManualDataEntryModule({
     return (
         <div className="space-y-4">
             {/* THẺ CHỈ SỐ KPI TỔNG HỢP PHIÊN */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                <div className="bg-blue-50/70 border-l-4 border-blue-500 rounded-xl p-3 shadow-xs">
-                    <span className="text-[10px] font-bold text-blue-700 uppercase tracking-wider block">TỔNG NHÂN VIÊN</span>
-                    <span className="text-lg font-black text-slate-800 font-mono">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <div className="bg-blue-50/70 border border-blue-200 rounded-xl p-3 shadow-xs">
+                    <span className="text-[10px] font-bold text-blue-800 uppercase tracking-wider block">TỔNG NHÂN VIÊN</span>
+                    <span className="text-lg font-black text-slate-900 font-mono tabular-nums">
                         {kpiSummary.totalEmployees}
                     </span>
-                    <span className="text-[10px] text-slate-500 font-medium block mt-0.5">nhân sự có số liệu</span>
+                    <span className="text-[10px] text-slate-600 font-medium block mt-0.5">nhân sự có số liệu</span>
                 </div>
 
-                <div className="bg-amber-50/70 border-l-4 border-amber-500 rounded-xl p-3 shadow-xs">
-                    <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider block">TỔNG DTQĐ</span>
-                    <span className="text-lg font-black text-amber-700 font-mono">
+                <div className="bg-amber-50/70 border border-amber-200 rounded-xl p-3 shadow-xs">
+                    <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wider block">TỔNG DTQĐ</span>
+                    <span className="text-lg font-black text-amber-800 font-mono tabular-nums">
                         {formatValue(kpiSummary.totalQd)} tr
                     </span>
-                    <span className="text-[10px] text-slate-500 font-medium block mt-0.5">doanh thu quy đổi</span>
+                    <span className="text-[10px] text-slate-600 font-medium block mt-0.5">doanh thu quy đổi</span>
                 </div>
 
-                <div className="bg-emerald-50/70 border-l-4 border-emerald-500 rounded-xl p-3 shadow-xs">
-                    <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block">TỔNG DT THỰC</span>
-                    <span className="text-lg font-black text-emerald-700 font-mono">
-                        {formatValue(kpiSummary.totalReal)} tr
+                <div className="bg-purple-50/70 border border-purple-200 rounded-xl p-3 shadow-xs">
+                    <span className="text-[10px] font-bold text-purple-800 uppercase tracking-wider block">DT TRẢ GÓP QĐ &amp; %TG</span>
+                    <span className="text-lg font-black text-purple-800 font-mono tabular-nums">
+                        {formatValue(kpiSummary.totalInstallmentQd)} tr
                     </span>
-                    <span className="text-[10px] text-slate-500 font-medium block mt-0.5">doanh thu thực tế</span>
-                </div>
-
-                <div className="bg-purple-50/70 border-l-4 border-purple-500 rounded-xl p-3 shadow-xs">
-                    <span className="text-[10px] font-bold text-purple-700 uppercase tracking-wider block">TRẢ GÓP & %TG</span>
-                    <span className="text-lg font-black text-purple-700 font-mono">
-                        {formatValue(kpiSummary.totalInstallment)} tr
-                    </span>
-                    <span className="text-[10px] text-purple-600 font-bold block mt-0.5">
-                        Tỷ lệ: {kpiSummary.avgInstallmentRate.toFixed(1)}%
+                    <span className="text-[10px] text-purple-700 font-bold block mt-0.5 tabular-nums">
+                        TB tỷ trọng trả góp: {kpiSummary.avgInstallmentRate.toFixed(1)}%
                     </span>
                 </div>
             </div>
@@ -329,12 +439,11 @@ export default function EmployeeManualDataEntryModule({
                         )}
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-amber-900 font-medium">
-                        <span>👤 Người nạp: <strong>{existingSession.created_by || 'Chưa rõ'}</strong></span>
-                        <span>⏰ Lúc: <strong>{formatDateTime(existingSession.created_at)}</strong></span>
-                        <span>👥 Quy mô: <strong>{existingSession.employee_count}</strong> nhân viên</span>
-                        <span>💰 DT Thực: <strong>{formatValue(existingSession.total_revenue_actual)} tr</strong></span>
-                        <span>🎯 DTQĐ: <strong>{formatValue(existingSession.total_revenue_qd)} tr</strong></span>
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-amber-900 font-medium tabular-nums">
+                        <span>Người nạp: <strong>{existingSession.created_by || 'Chưa rõ'}</strong></span>
+                        <span>Lúc: <strong>{formatDateTime(existingSession.created_at)}</strong></span>
+                        <span>Quy mô: <strong>{existingSession.employee_count}</strong> nhân viên</span>
+                        <span>DTQĐ: <strong>{formatValue(existingSession.total_revenue_qd)} tr</strong></span>
                     </div>
 
                     <p className="text-[11px] text-amber-800 leading-relaxed">
@@ -403,9 +512,26 @@ export default function EmployeeManualDataEntryModule({
                         className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
                         title="Thêm nhân viên từ danh bạ ST vào phiên"
                     >
-                        <Plus className="w-3.5 h-3.5 text-blue-600" />
+                        <Plus className="w-3.5 h-3.5 text-blue-600" aria-hidden="true" />
                         <span>Thêm NV</span>
                     </button>
+
+                    {onResetBatch && (
+                        <button
+                            type="button"
+                            onClick={onResetBatch}
+                            disabled={isSaving || isScanningAdditional}
+                            className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50 border ${
+                                hasSavedSession
+                                    ? 'bg-blue-50 hover:bg-blue-100 text-blue-800 border-blue-300 shadow-2xs'
+                                    : 'bg-rose-50 hover:bg-rose-100 text-rose-800 border-rose-200'
+                            }`}
+                            title="Xóa trắng toàn bộ ảnh và bảng số liệu hiện tại để chuẩn bị đợt nạp mới"
+                        >
+                            <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" />
+                            <span>{hasSavedSession ? 'Đợt nạp mới (Xóa trắng)' : 'Xóa trắng'}</span>
+                        </button>
+                    )}
 
                     {existingSession ? (
                         <>
@@ -460,113 +586,215 @@ export default function EmployeeManualDataEntryModule({
                 </div>
             )}
 
+            {/* CẢNH BÁO RÀ SOÁT MAPPING TÊN NHÂN VIÊN TỪ ẢNH KHÔNG CÓ MÃ NV */}
+            {(mappingReviewStats.unmappedCount > 0 || mappingReviewStats.nameMatchedCount > 0) && (
+                <div
+                    className={`rounded-2xl p-3 border text-xs flex items-start gap-2.5 ${
+                        mappingReviewStats.unmappedCount > 0
+                            ? 'bg-rose-50 border-rose-200 text-rose-900'
+                            : 'bg-amber-50 border-amber-200 text-amber-900'
+                    }`}
+                >
+                    {mappingReviewStats.unmappedCount > 0 ? (
+                        <AlertTriangle className="w-4 h-4 text-rose-700 shrink-0 mt-0.5" aria-hidden="true" />
+                    ) : (
+                        <UserCheck className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" aria-hidden="true" />
+                    )}
+                    <div className="space-y-1 flex-1">
+                        {mappingReviewStats.unmappedCount > 0 && (
+                            <p className="font-bold leading-snug">
+                                Có <span className="font-black tabular-nums">{mappingReviewStats.unmappedCount}</span> dòng tên nhân viên trên ảnh chưa có Mã NV và chưa khớp được tự động. Vui lòng chọn đúng Mã NV trong danh bạ ST (hoặc xóa dòng thừa) trước khi lưu Cloud.
+                            </p>
+                        )}
+                        {mappingReviewStats.nameMatchedCount > 0 && (
+                            <p className="font-medium leading-snug">
+                                Có <span className="font-bold tabular-nums">{mappingReviewStats.nameMatchedCount}</span> nhân sự từ ảnh không có Mã NV đã được tự động đối chiếu theo tên — vui lòng kiểm tra lại và bấm &quot;Khớp tên · Đổi&quot; nếu cần sửa.
+                            </p>
+                        )}
+                    </div>
+                </div>
+            )}
+
             {/* BẢNG RÀ SOÁT DANH SÁCH NHÂN VIÊN (QUY CHUẨN 1 & 11) */}
             <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-xs text-left border-collapse">
                         <thead>
                             <tr className="bg-slate-800 text-slate-200 font-bold uppercase text-[10px] tracking-wider border-b border-slate-700">
-                                <th className="px-2.5 py-2.5 text-center w-10">STT</th>
+                                <th className="px-2 py-2.5 text-center w-10">STT</th>
                                 {/* CỘT GỘP NHÂN VIÊN DUY NHẤT THEO QUY CHUẨN 11 */}
-                                <th className="px-3 py-2.5">NHÂN VIÊN</th>
+                                <th className="px-2.5 py-2.5">NHÂN VIÊN</th>
                                 <th className="px-2 py-2.5 text-right w-24">DTQĐ (Tr)</th>
-                                <th className="px-2 py-2.5 text-right w-24">DT Thực (Tr)</th>
-                                <th className="px-2 py-2.5 text-right w-24">DT Trả Góp</th>
-                                <th className="px-2 py-2.5 text-right w-16">% TG</th>
-                                <th className="px-2.5 py-2.5 text-center w-28">Thi Đua</th>
+                                <th className="px-2 py-2.5 text-right w-28">DT Trả Góp QĐ</th>
+                                <th className="px-2 py-2.5 text-right w-24">% Tỷ Trọng TG</th>
+                                <th className="px-2 py-2.5 text-center w-24">Thi Đua</th>
                                 <th className="px-2 py-2.5 text-center w-12">Xóa</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                             {filteredEmployees.length === 0 ? (
                                 <tr>
-                                    <td colSpan={8} className="text-center py-8 text-slate-400 text-xs">
+                                    <td colSpan={7} className="text-center py-8 text-slate-500 text-xs">
                                         Không tìm thấy nhân viên nào phù hợp.
                                     </td>
                                 </tr>
                             ) : (
                                 filteredEmployees.map((emp, index) => {
+                                    const isUnmapped = Boolean(emp.isUnmappedName) || String(emp.employeeId || '').startsWith('UNMAPPED::');
+                                    const isNameMatched = !isUnmapped && (emp.mappingSource === 'NAME_EXACT' || emp.mappingSource === 'NAME_FUZZY');
+                                    const isEditingMapping = editingMappingEmpId === emp.employeeId;
                                     const shortenedName = getShortenedEmployeeName(emp.fullName);
                                     const isExpanded = expandedEmployeeId === emp.employeeId;
                                     const campaignsCount = Object.keys(emp.campaigns || {}).length;
 
                                     return (
                                         <React.Fragment key={emp.employeeId}>
-                                            <tr className="hover:bg-blue-50/40 transition">
+                                            <tr className={`transition ${isUnmapped ? 'bg-rose-50/70 hover:bg-rose-50' : 'hover:bg-blue-50/40'}`}>
                                                 {/* STT */}
-                                                <td className="px-2.5 py-2 text-center text-slate-400 font-mono text-[11px]">
+                                                <td className="px-2 py-2 text-center text-slate-500 font-mono text-[11px] tabular-nums">
                                                     {index + 1}
                                                 </td>
 
                                                 {/* CỘT GỘP NHÂN VIÊN THEO QUY CHUẨN 11 */}
-                                                <td className="px-3 py-2">
-                                                    <div className="flex items-center gap-1.5">
-                                                        {/* Badge mã NV tự động tính chiều rộng */}
-                                                        <span
-                                                            style={{
-                                                                minWidth: `${maxIdLength + 2.2}ch`,
-                                                                width: `${maxIdLength + 2.2}ch`
-                                                            }}
-                                                            className="font-mono font-bold text-xs px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-800 border border-blue-200 inline-block text-center leading-normal shrink-0"
-                                                        >
-                                                            {emp.employeeId}
-                                                        </span>
+                                                <td className="px-2.5 py-2">
+                                                    {isUnmapped ? (
+                                                        <div className="space-y-1.5 min-w-[175px]">
+                                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                                <span className="text-[10px] font-black px-1.5 py-0.5 rounded-md bg-rose-100 text-rose-900 border border-rose-300 shrink-0">
+                                                                    Chưa có Mã NV
+                                                                </span>
+                                                                <span
+                                                                    title={`Tên đọc từ ảnh: ${emp.ocrSourceName || emp.fullName}`}
+                                                                    className="font-extrabold text-rose-950 text-xs"
+                                                                >
+                                                                    {emp.ocrSourceName || emp.fullName}
+                                                                </span>
+                                                            </div>
+                                                            {storeEmployees.length > 0 && (
+                                                                <select
+                                                                    value=""
+                                                                    aria-label={`Chọn Mã NV cho ${emp.ocrSourceName || emp.fullName}`}
+                                                                    onChange={(e) => handleRemapEmployeeId(emp.employeeId, e.target.value)}
+                                                                    className="w-full max-w-[230px] text-[11px] font-bold text-slate-800 bg-white border border-rose-300 rounded-lg px-2 py-1 outline-none focus:ring-2 focus:ring-rose-500 cursor-pointer"
+                                                                >
+                                                                    <option value="">-- Chọn Mã NV danh bạ --</option>
+                                                                    {storeEmployees.map(se => {
+                                                                        const seId = String(se.employee_id || '').trim();
+                                                                        const hasExisting = existingEmpIdSet.has(seId.toLowerCase());
+                                                                        return (
+                                                                            <option key={seId} value={seId}>
+                                                                                [{seId}] {se.full_name}{hasExisting ? ' (Gộp số liệu)' : ''}
+                                                                            </option>
+                                                                        );
+                                                                    })}
+                                                                </select>
+                                                            )}
+                                                        </div>
+                                                    ) : (
+                                                        <div className="space-y-1">
+                                                            <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap">
+                                                                {/* Badge mã NV tự động tính chiều rộng */}
+                                                                <span
+                                                                    style={{
+                                                                        minWidth: `${maxIdLength + 2.2}ch`,
+                                                                        width: `${maxIdLength + 2.2}ch`
+                                                                    }}
+                                                                    className="font-mono font-bold text-xs px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-800 border border-blue-200 inline-block text-center leading-normal shrink-0"
+                                                                >
+                                                                    {emp.employeeId}
+                                                                </span>
 
-                                                        {/* Tên rút gọn với tooltip đầy đủ */}
-                                                        <span
-                                                            title={`Mã NV: ${emp.employeeId} - ${emp.fullName}`}
-                                                            className="font-extrabold text-slate-800 text-xs truncate max-w-[140px] sm:max-w-none"
-                                                        >
-                                                            {shortenedName}
-                                                        </span>
-                                                    </div>
+                                                                {/* Tên rút gọn với tooltip đầy đủ */}
+                                                                <span
+                                                                    title={`Mã NV: ${emp.employeeId} - ${emp.fullName}${emp.ocrSourceName ? ` (Ảnh: ${emp.ocrSourceName})` : ''}`}
+                                                                    className="font-extrabold text-slate-800 text-xs truncate max-w-[140px] sm:max-w-none"
+                                                                >
+                                                                    {shortenedName}
+                                                                </span>
+
+                                                                {isNameMatched && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setEditingMappingEmpId(isEditingMapping ? null : emp.employeeId)}
+                                                                        title={`Đã khớp tự động theo tên trên ảnh: "${emp.ocrSourceName || emp.fullName}". Bấm để đổi Mã NV nếu chưa đúng.`}
+                                                                        className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 transition cursor-pointer shrink-0"
+                                                                    >
+                                                                        {isEditingMapping ? 'Đóng' : 'Khớp tên · Đổi'}
+                                                                    </button>
+                                                                )}
+                                                            </div>
+
+                                                            {isEditingMapping && storeEmployees.length > 0 && (
+                                                                <select
+                                                                    value={emp.employeeId}
+                                                                    aria-label={`Đổi Mã NV cho ${emp.fullName}`}
+                                                                    onChange={(e) => handleRemapEmployeeId(emp.employeeId, e.target.value)}
+                                                                    className="w-full max-w-[240px] text-[11px] font-bold text-slate-800 bg-white border border-amber-300 rounded-lg px-2 py-1 outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer"
+                                                                >
+                                                                    {storeEmployees.map(se => {
+                                                                        const seId = String(se.employee_id || '').trim();
+                                                                        const isCurrent = seId.toLowerCase() === emp.employeeId.trim().toLowerCase();
+                                                                        const hasExisting = !isCurrent && existingEmpIdSet.has(seId.toLowerCase());
+                                                                        return (
+                                                                            <option key={seId} value={seId}>
+                                                                                [{seId}] {se.full_name}{hasExisting ? ' (Gộp số liệu)' : ''}
+                                                                            </option>
+                                                                        );
+                                                                    })}
+                                                                </select>
+                                                            )}
+                                                        </div>
+                                                    )}
                                                 </td>
 
                                                 {/* DTQĐ */}
                                                 <td className="px-2 py-2 text-right">
                                                     <input
                                                         type="number"
+                                                        step="any"
                                                         value={emp.revenueQd || ''}
+                                                        placeholder="0"
                                                         onChange={(e) => handleUpdateField(emp.employeeId, 'revenueQd', e.target.value)}
-                                                        className="w-full text-right font-mono font-extrabold text-amber-700 bg-slate-50 border border-slate-200 rounded px-1.5 py-1 text-xs outline-none focus:ring-1 focus:ring-amber-500"
+                                                        className="w-full text-right font-mono font-extrabold tabular-nums text-amber-800 bg-slate-50 border border-slate-200 rounded px-1.5 py-1 text-xs outline-none focus:ring-1 focus:ring-amber-500"
                                                     />
                                                 </td>
 
-                                                {/* DT Thực */}
+                                                {/* DT Trả góp QĐ */}
                                                 <td className="px-2 py-2 text-right">
                                                     <input
                                                         type="number"
-                                                        value={emp.revenueReal || ''}
-                                                        onChange={(e) => handleUpdateField(emp.employeeId, 'revenueReal', e.target.value)}
-                                                        className="w-full text-right font-mono font-extrabold text-emerald-700 bg-slate-50 border border-slate-200 rounded px-1.5 py-1 text-xs outline-none focus:ring-1 focus:ring-emerald-500"
+                                                        step="any"
+                                                        value={emp.installmentQd || ''}
+                                                        placeholder="0"
+                                                        onChange={(e) => handleUpdateField(emp.employeeId, 'installmentQd', e.target.value)}
+                                                        className="w-full text-right font-mono font-bold tabular-nums text-purple-800 bg-slate-50 border border-slate-200 rounded px-1.5 py-1 text-xs outline-none focus:ring-1 focus:ring-purple-500"
                                                     />
                                                 </td>
 
-                                                {/* DT Trả góp */}
+                                                {/* % Tỷ trọng trả góp */}
                                                 <td className="px-2 py-2 text-right">
-                                                    <input
-                                                        type="number"
-                                                        value={emp.installmentReal || ''}
-                                                        onChange={(e) => handleUpdateField(emp.employeeId, 'installmentReal', e.target.value)}
-                                                        className="w-full text-right font-mono font-bold text-purple-700 bg-slate-50 border border-slate-200 rounded px-1.5 py-1 text-xs outline-none focus:ring-1 focus:ring-purple-500"
-                                                    />
-                                                </td>
-
-                                                {/* % Trả góp */}
-                                                <td className="px-2 py-2 text-right">
-                                                    <span className={`font-mono font-bold text-xs px-1.5 py-0.5 rounded ${
-                                                        emp.installmentRate >= 40
-                                                            ? 'bg-emerald-100 text-emerald-800'
-                                                            : emp.installmentRate >= 25
-                                                            ? 'bg-amber-100 text-amber-800'
-                                                            : 'bg-rose-100 text-rose-800'
-                                                    }`}>
-                                                        {emp.installmentRate.toFixed(1)}%
-                                                    </span>
+                                                    <div className="flex items-center justify-end gap-1">
+                                                        <input
+                                                            type="number"
+                                                            step="any"
+                                                            min={0}
+                                                            value={emp.installmentRate === 0 ? '' : emp.installmentRate}
+                                                            placeholder="0"
+                                                            onChange={(e) => handleUpdateField(emp.employeeId, 'installmentRate', e.target.value)}
+                                                            className={`w-16 text-right font-mono font-bold tabular-nums bg-slate-50 border border-slate-200 rounded px-1.5 py-1 text-xs outline-none focus:ring-1 focus:ring-emerald-500 ${
+                                                                emp.installmentRate >= 40
+                                                                    ? 'text-emerald-800'
+                                                                    : emp.installmentRate >= 25
+                                                                        ? 'text-amber-800'
+                                                                        : 'text-rose-800'
+                                                            }`}
+                                                        />
+                                                        <span className="text-[11px] font-bold text-slate-500">%</span>
+                                                    </div>
                                                 </td>
 
                                                 {/* Nút xem Thi đua */}
-                                                <td className="px-2.5 py-2 text-center">
+                                                <td className="px-2 py-2 text-center">
                                                     <button
                                                         type="button"
                                                         onClick={() => setExpandedEmployeeId(isExpanded ? null : emp.employeeId)}
@@ -576,21 +804,22 @@ export default function EmployeeManualDataEntryModule({
                                                                 : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
                                                         }`}
                                                     >
-                                                        <Trophy className="w-3 h-3 text-amber-500" />
-                                                        <span>{campaignsCount} mục</span>
-                                                        {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                                                        <Trophy className="w-3 h-3 text-amber-500" aria-hidden="true" />
+                                                        <span className="tabular-nums">{campaignsCount} mục</span>
+                                                        {isExpanded ? <ChevronUp className="w-3 h-3" aria-hidden="true" /> : <ChevronDown className="w-3 h-3" aria-hidden="true" />}
                                                     </button>
                                                 </td>
 
                                                 {/* Xóa */}
-                                                <td className="px-2.5 py-2 text-center">
+                                                <td className="px-2 py-2 text-center">
                                                     <button
                                                         type="button"
+                                                        aria-label={`Xóa nhân viên ${emp.fullName}`}
                                                         onClick={() => handleRemoveEmployee(emp.employeeId)}
-                                                        className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition cursor-pointer"
+                                                        className="p-1 text-slate-500 hover:text-rose-700 hover:bg-rose-50 rounded transition cursor-pointer"
                                                         title="Xóa nhân viên khỏi phiên"
                                                     >
-                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                        <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                                                     </button>
                                                 </td>
                                             </tr>
@@ -598,7 +827,7 @@ export default function EmployeeManualDataEntryModule({
                                             {/* DÒNG MỞ RỘNG CHI TIẾT THI ĐUA */}
                                             {isExpanded && (
                                                 <tr className="bg-slate-50/90 border-y border-blue-100">
-                                                    <td colSpan={8} className="p-3 sm:px-6">
+                                                    <td colSpan={7} className="p-3 sm:px-6">
                                                         <div className="space-y-2">
                                                             <div className="flex items-center justify-between">
                                                                 <span className="text-[11px] font-bold text-slate-700 flex items-center gap-1.5 uppercase tracking-wider">

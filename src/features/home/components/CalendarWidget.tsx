@@ -263,265 +263,280 @@ export default function CalendarWidget() {
     const WEEKDAY_NAMES = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
 
     return (
-        <div className="space-y-4">
-            {/* BỐ CỤC CHÍNH: 2 CỘT TRÊN PC (CÔNG VIỆC VS CALENDAR THU GỌN), XẾP DỌC TRÊN MOBILE */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
-                {/* 1. CỘT TRÁI: BẢNG CÔNG VIỆC CẦN LÀM & SỰ KIỆN (ƯU TIÊN TRÊN MOBILE & PC) */}
-                <div className="lg:col-span-5 flex flex-col">
-                    <WorkTaskListWidget
-                        containerRef={taskSectionRef}
-                        selectedDate={selectedDate}
-                        selectedLunar={selectedLunar}
-                        isTodaySelected={isTodaySelected}
-                        diffDaysFromToday={diffDaysFromToday}
-                        currentDayNotes={currentDayNotes}
-                        systemEvents={currentDaySystemEvents}
-                        selectedStore={selectedStore}
-                        onSelectStore={setSelectedStore}
-                        userAccessibleStores={userAccessibleStores}
-                        availableStores={stores}
-                        currentUser={currentUser}
-                        canManage={canManage}
-                        onOpenAddModal={() => handleOpenAddModal(selectedDate)}
-                        onOpenEditModal={handleOpenEditModal}
-                        onNotesChanged={refreshNotes}
-                        onJumpToday={handleJumpToday}
-                    />
-                </div>
+        <>
+            <div className="space-y-4">
+                {/* BỐ CỤC CHÍNH: 2 CỘT TRÊN PC (CÔNG VIỆC VS CALENDAR THU GỌN), XẾP DỌC TRÊN MOBILE */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+                    {/* 1. CỘT TRÁI: BẢNG CÔNG VIỆC CẦN LÀM & SỰ KIỆN (ƯU TIÊN TRÊN MOBILE & PC) */}
+                    <div className="lg:col-span-5 flex flex-col">
+                        <WorkTaskListWidget
+                            containerRef={taskSectionRef}
+                            selectedDate={selectedDate}
+                            selectedLunar={selectedLunar}
+                            isTodaySelected={isTodaySelected}
+                            diffDaysFromToday={diffDaysFromToday}
+                            currentDayNotes={currentDayNotes}
+                            systemEvents={currentDaySystemEvents}
+                            selectedStore={selectedStore}
+                            onSelectStore={setSelectedStore}
+                            userAccessibleStores={userAccessibleStores}
+                            availableStores={stores}
+                            currentUser={currentUser}
+                            canManage={canManage}
+                            onOpenAddModal={() => handleOpenAddModal(selectedDate)}
+                            onOpenEditModal={handleOpenEditModal}
+                            onNotesChanged={refreshNotes}
+                            onJumpToday={handleJumpToday}
+                        />
+                    </div>
 
-                {/* 2. CỘT PHẢI: BẢNG CALENDAR THU GỌN (COMPACT CALENDAR) */}
-                <div className="lg:col-span-7 flex flex-col">
-                    <div className="bg-white rounded-3xl p-4 sm:p-6 border border-slate-200/90 shadow-sm flex flex-col justify-between h-full space-y-4">
-                        {/* Header Calendar: Điều hướng Tháng / Năm & Nút Cấu hình Admin */}
-                        <div className="flex items-center justify-between gap-2 pb-3 border-b border-slate-100 flex-wrap">
-                            <div className="flex items-center gap-2.5">
-                                <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-black border border-blue-100 shrink-0">
-                                    <CalendarIcon className="w-4 h-4" />
-                                </div>
-                                <div>
-                                    <h3 className="font-black text-sm sm:text-base text-slate-900 tracking-tight flex items-center gap-2">
-                                        <span>Lịch Tháng {month + 1} / {year}</span>
-                                    </h3>
-                                    <p className="text-[10px] text-slate-400">
-                                        Nhấp chọn ngày để xem việc • Nhấp đúp để tạo việc
-                                    </p>
-                                </div>
-                            </div>
-
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                                {/* Nút Cấu hình sự kiện (chỉ dành cho Admin) */}
-                                {isAdmin && (
-                                    <button
-                                        type="button"
-                                        onClick={() => setIsEventsModalOpen(true)}
-                                        className="px-2.5 py-1 rounded-xl bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-300 text-slate-600 hover:text-indigo-700 text-[11px] font-bold transition flex items-center gap-1 cursor-pointer"
-                                        title="Cấu hình sự kiện định kỳ trên lịch (Khởi động, kỳ lương, giữa kỳ, chốt số, cúng mùng 2/16)"
-                                    >
-                                        <Settings className="w-3 h-3 text-indigo-600" />
-                                        <span className="hidden sm:inline">Sự Kiện Lịch</span>
-                                    </button>
-                                )}
-
-                                {/* Bộ chọn tháng & điều hướng */}
-                                <select
-                                    value={month}
-                                    onChange={(e) => setViewDate(new Date(year, parseInt(e.target.value), 1))}
-                                    className="px-2 py-1 rounded-lg bg-slate-50 border border-slate-200 text-xs font-bold text-slate-800 outline-none cursor-pointer"
-                                >
-                                    {Array.from({ length: 12 }, (_, i) => (
-                                        <option key={i} value={i}>Tháng {i + 1}</option>
-                                    ))}
-                                </select>
-
-                                <select
-                                    value={year}
-                                    onChange={(e) => setViewDate(new Date(parseInt(e.target.value), month, 1))}
-                                    className="px-2 py-1 rounded-lg bg-slate-50 border border-slate-200 text-xs font-bold text-slate-800 outline-none cursor-pointer"
-                                >
-                                    {[2024, 2025, 2026, 2027, 2028].map(y => (
-                                        <option key={y} value={y}>{y}</option>
-                                    ))}
-                                </select>
-
-                                <div className="flex items-center border-l border-slate-200 pl-1">
-                                    <button
-                                        type="button"
-                                        onClick={handlePrevMonth}
-                                        className="p-1 rounded-lg hover:bg-slate-100 text-slate-600 transition cursor-pointer"
-                                        title="Tháng trước"
-                                    >
-                                        <ChevronLeft className="w-4 h-4" />
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={handleNextMonth}
-                                        className="p-1 rounded-lg hover:bg-slate-100 text-slate-600 transition cursor-pointer"
-                                        title="Tháng sau"
-                                    >
-                                        <ChevronRight className="w-4 h-4" />
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* BẢNG LƯỚI LỊCH THU GỌN (COMPACT GRID) */}
-                        <div className="space-y-1">
-                            {/* Thứ trong tuần */}
-                            <div className="grid grid-cols-7 gap-1 text-center font-black text-[11px] text-slate-500 pb-1">
-                                {WEEKDAY_NAMES.map((name, idx) => (
-                                    <div
-                                        key={name}
-                                        className={`py-1 rounded-lg ${
-                                            idx >= 5 ? 'text-rose-500 bg-rose-50/50' : 'text-slate-600 bg-slate-50/60'
-                                        }`}
-                                    >
-                                        {name}
+                    {/* 2. CỘT PHẢI: BẢNG CALENDAR THU GỌN (COMPACT CALENDAR) */}
+                    <div className="lg:col-span-7 flex flex-col">
+                        <div className="bg-white rounded-3xl p-4 sm:p-6 border border-slate-200/90 shadow-sm flex flex-col justify-between h-full space-y-4">
+                            {/* Header Calendar: Điều hướng Tháng / Năm & Nút Cấu hình Admin */}
+                            <div className="flex items-center justify-between gap-2 pb-3 border-b border-slate-100 flex-wrap">
+                                <div className="flex items-center gap-2.5">
+                                    <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-black border border-blue-100 shrink-0" aria-hidden="true">
+                                        <CalendarIcon className="w-4 h-4" />
                                     </div>
-                                ))}
+                                    <div>
+                                        <h3 className="font-black text-sm sm:text-base text-slate-900 tracking-tight flex items-center gap-2">
+                                            <span>Lịch Tháng {month + 1} / {year}</span>
+                                        </h3>
+                                        <p className="text-[10px] text-slate-500">
+                                            Nhấp chọn ngày để xem việc • Nhấp đúp để tạo việc
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                    {/* Nút Cấu hình sự kiện (chỉ dành cho Admin) */}
+                                    {isAdmin && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsEventsModalOpen(true)}
+                                            className="px-2.5 py-1 rounded-xl bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-300 text-slate-700 hover:text-indigo-700 text-[11px] font-bold transition flex items-center gap-1 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                                            title="Cấu hình sự kiện định kỳ trên lịch (Khởi động, kỳ lương, giữa kỳ, chốt số, cúng mùng 2/16)"
+                                        >
+                                            <Settings className="w-3 h-3 text-indigo-600 shrink-0" aria-hidden="true" />
+                                            <span className="hidden sm:inline">Sự Kiện Lịch</span>
+                                        </button>
+                                    )}
+
+                                    {/* Bộ chọn tháng & điều hướng */}
+                                    <select
+                                        id="home-calendar-month"
+                                        name="calendarMonth"
+                                        aria-label="Chọn tháng"
+                                        value={month}
+                                        onChange={(e) => setViewDate(new Date(year, parseInt(e.target.value), 1))}
+                                        className="px-2 py-1 rounded-lg bg-slate-50 border border-slate-200 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                                    >
+                                        {Array.from({ length: 12 }, (_, i) => (
+                                            <option key={i} value={i}>Tháng {i + 1}</option>
+                                        ))}
+                                    </select>
+
+                                    <select
+                                        id="home-calendar-year"
+                                        name="calendarYear"
+                                        aria-label="Chọn năm"
+                                        value={year}
+                                        onChange={(e) => setViewDate(new Date(parseInt(e.target.value), month, 1))}
+                                        className="px-2 py-1 rounded-lg bg-slate-50 border border-slate-200 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                                    >
+                                        {[2024, 2025, 2026, 2027, 2028].map(y => (
+                                            <option key={y} value={y}>{y}</option>
+                                        ))}
+                                    </select>
+
+                                    <div className="flex items-center border-l border-slate-200 pl-1">
+                                        <button
+                                            type="button"
+                                            onClick={handlePrevMonth}
+                                            aria-label="Tháng trước"
+                                            className="p-1 rounded-lg hover:bg-slate-100 text-slate-600 transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                                            title="Tháng trước"
+                                        >
+                                            <ChevronLeft className="w-4 h-4" aria-hidden="true" />
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={handleNextMonth}
+                                            aria-label="Tháng sau"
+                                            className="p-1 rounded-lg hover:bg-slate-100 text-slate-600 transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                                            title="Tháng sau"
+                                        >
+                                            <ChevronRight className="w-4 h-4" aria-hidden="true" />
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
 
-                            {/* Các ô ngày */}
-                            <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
-                                {calendarDays.map((item, idx) => {
-                                    const dateKey = formatDateKey(item.date);
-                                    const isSelected = dateKey === selectedDateKey;
-                                    const isToday =
-                                        item.date.getDate() === today.getDate() &&
-                                        item.date.getMonth() === today.getMonth() &&
-                                        item.date.getFullYear() === today.getFullYear();
-
-                                    const dayNotes = monthNotesMap[dateKey] || [];
-                                    const daySystemEvents = getMatchingSystemEventsForDate(systemEvents, item.date, item.lunar);
-                                    const hasItems = dayNotes.length > 0 || daySystemEvents.length > 0;
-
-                                    // Nhận diện ngày cúng mùng 2 và 16 ÂL
-                                    const isCungMung2 = item.lunar.day === 2;
-                                    const isCung16 = item.lunar.day === 16;
-                                    const isMung1 = item.lunar.day === 1;
-                                    const isRam15 = item.lunar.day === 15;
-
-                                    return (
+                            {/* BẢNG LƯỚI LỊCH THU GỌN (COMPACT GRID) */}
+                            <div className="space-y-1">
+                                {/* Thứ trong tuần */}
+                                <div className="grid grid-cols-7 gap-1 text-center font-black text-[11px] text-slate-600 pb-1">
+                                    {WEEKDAY_NAMES.map((name, idx) => (
                                         <div
-                                            key={`${dateKey}_${idx}`}
-                                            onClick={() => handleSelectDate(item.date)}
-                                            onDoubleClick={() => canManage && handleOpenAddModal(item.date)}
-                                            className={`min-h-[50px] sm:min-h-[62px] p-1 sm:p-1.5 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between relative group select-none ${
-                                                isSelected
-                                                    ? 'bg-blue-50/90 border-blue-500 ring-2 ring-blue-300 shadow-xs z-10'
-                                                    : isToday
-                                                        ? 'bg-amber-50/60 border-amber-300 shadow-2xs'
-                                                        : item.isCurrentMonth
-                                                            ? 'bg-white hover:bg-slate-50 border-slate-200/80 shadow-2xs'
-                                                            : 'bg-slate-50/40 border-slate-100 opacity-40'
+                                            key={name}
+                                            className={`py-1 rounded-lg ${
+                                                idx >= 5 ? 'text-rose-600 bg-rose-50/60' : 'text-slate-700 bg-slate-50/70'
                                             }`}
                                         >
-                                            {/* Dòng trên: Số ngày dương + Badge chấm / Sự kiện */}
-                                            <div className="flex items-center justify-between">
-                                                <span
-                                                    className={`font-black text-xs sm:text-sm font-mono ${
-                                                        isSelected
-                                                            ? 'text-blue-700 font-extrabold'
-                                                            : isToday
-                                                                ? 'text-amber-700'
-                                                                : item.date.getDay() === 0
-                                                                    ? 'text-rose-600'
-                                                                    : 'text-slate-800'
-                                                    }`}
-                                                >
-                                                    {item.dayNumber}
-                                                </span>
+                                            {name}
+                                        </div>
+                                    ))}
+                                </div>
 
-                                                {/* Mini Icons / Dots chỉ thị */}
-                                                <div className="flex items-center gap-0.5">
-                                                    {daySystemEvents.length > 0 && (
-                                                        <span className="text-[10px] leading-none" title={daySystemEvents[0].title}>
-                                                            {daySystemEvents[0].icon}
+                                {/* Các ô ngày */}
+                                <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
+                                    {calendarDays.map((item, idx) => {
+                                        const dateKey = formatDateKey(item.date);
+                                        const isSelected = dateKey === selectedDateKey;
+                                        const isToday =
+                                            item.date.getDate() === today.getDate() &&
+                                            item.date.getMonth() === today.getMonth() &&
+                                            item.date.getFullYear() === today.getFullYear();
+
+                                        const dayNotes = monthNotesMap[dateKey] || [];
+                                        const daySystemEvents = getMatchingSystemEventsForDate(systemEvents, item.date, item.lunar);
+
+                                        // Nhận diện ngày cúng mùng 2 và 16 ÂL
+                                        const isCungMung2 = item.lunar.day === 2;
+                                        const isCung16 = item.lunar.day === 16;
+                                        const isMung1 = item.lunar.day === 1;
+                                        const isRam15 = item.lunar.day === 15;
+                                        const dayLabel = `Ngày ${item.dayNumber} tháng ${item.date.getMonth() + 1} năm ${item.date.getFullYear()}, Âm lịch ${item.lunar.lunarLabel}${daySystemEvents[0] ? `, ${daySystemEvents[0].title}` : ''}${dayNotes.length > 0 ? `, ${dayNotes.length} việc` : ''}`;
+
+                                        return (
+                                            <button
+                                                type="button"
+                                                key={`${dateKey}_${idx}`}
+                                                onClick={() => handleSelectDate(item.date)}
+                                                onDoubleClick={() => canManage && handleOpenAddModal(item.date)}
+                                                aria-pressed={isSelected}
+                                                aria-label={dayLabel}
+                                                className={`min-h-[50px] sm:min-h-[62px] p-1 sm:p-1.5 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between text-left relative group select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                                                    isSelected
+                                                        ? 'bg-blue-50/90 border-blue-500 ring-2 ring-blue-300 shadow-sm z-10'
+                                                        : isToday
+                                                            ? 'bg-amber-50/60 border-amber-300 shadow-sm'
+                                                            : item.isCurrentMonth
+                                                                ? 'bg-white hover:bg-slate-50 border-slate-200/80 shadow-sm'
+                                                                : 'bg-slate-50/40 border-slate-100 opacity-45'
+                                                }`}
+                                            >
+                                                {/* Dòng trên: Số ngày dương + Badge chấm / Sự kiện */}
+                                                <div className="w-full flex items-center justify-between">
+                                                    <span
+                                                        className={`font-black text-xs sm:text-sm font-mono tabular-nums ${
+                                                            isSelected
+                                                                ? 'text-blue-700 font-extrabold'
+                                                                : isToday
+                                                                    ? 'text-amber-700'
+                                                                    : item.date.getDay() === 0
+                                                                        ? 'text-rose-600'
+                                                                        : 'text-slate-800'
+                                                        }`}
+                                                    >
+                                                        {item.dayNumber}
+                                                    </span>
+
+                                                    {/* Mini Icons / Dots chỉ thị */}
+                                                    <div className="flex items-center gap-0.5">
+                                                        {daySystemEvents.length > 0 && (
+                                                            <span className="text-[10px] leading-none" title={daySystemEvents[0].title} aria-hidden="true">
+                                                                {daySystemEvents[0].icon}
+                                                            </span>
+                                                        )}
+                                                        {dayNotes.length > 0 && (
+                                                            <span
+                                                                className="w-1.5 h-1.5 rounded-full bg-blue-600 shadow-sm shrink-0"
+                                                                title={`${dayNotes.length} công việc`}
+                                                            />
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                {/* Dòng giữa: Nhãn sự kiện nổi bật nếu có (desktop hiện đầy đủ, mobile hiện nhãn ngắn gọn tránh cắt 3 ký tự) */}
+                                                <div className="w-full my-auto py-0.5 min-h-[14px]">
+                                                    {isCungMung2 && item.isCurrentMonth && (
+                                                        <span className="text-[8px] font-black px-1 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-200 truncate block leading-tight">
+                                                            <span className="sm:hidden">M2</span>
+                                                            <span className="hidden sm:inline">🎋 Cúng M2</span>
                                                         </span>
                                                     )}
-                                                    {dayNotes.length > 0 && (
-                                                        <span
-                                                            className="w-1.5 h-1.5 rounded-full bg-blue-600 shadow-xs shrink-0"
-                                                            title={`${dayNotes.length} công việc`}
-                                                        />
+                                                    {isCung16 && item.isCurrentMonth && (
+                                                        <span className="text-[8px] font-black px-1 py-0.5 rounded bg-orange-100 text-orange-900 border border-orange-200 truncate block leading-tight">
+                                                            <span className="sm:hidden">16</span>
+                                                            <span className="hidden sm:inline">🎋 Cúng 16</span>
+                                                        </span>
+                                                    )}
+                                                    {!isCungMung2 && !isCung16 && daySystemEvents.length > 0 && item.isCurrentMonth && (
+                                                        <span className="hidden sm:block text-[8px] font-bold px-1 py-0.5 rounded bg-indigo-100 text-indigo-800 truncate leading-tight">
+                                                            {daySystemEvents[0].title}
+                                                        </span>
+                                                    )}
+                                                    {!isCungMung2 && !isCung16 && daySystemEvents.length === 0 && dayNotes.length > 0 && (
+                                                        <span className="hidden sm:block text-[8px] font-bold text-blue-700 truncate leading-tight">
+                                                            📌 {dayNotes[0].title}
+                                                        </span>
                                                     )}
                                                 </div>
-                                            </div>
 
-                                            {/* Dòng giữa: Nhãn sự kiện nổi bật nếu có */}
-                                            <div className="my-auto py-0.5 min-h-[14px]">
-                                                {isCungMung2 && item.isCurrentMonth && (
-                                                    <span className="text-[8px] font-black px-1 py-0.2 rounded bg-amber-100 text-amber-900 border border-amber-200 truncate block leading-tight">
-                                                        🎋 Cúng M2
+                                                {/* Dòng dưới: Ngày âm lịch */}
+                                                <div className="w-full flex items-center justify-between gap-0.5 text-[9px] pt-0.5 border-t border-slate-100/70">
+                                                    <span
+                                                        className={`truncate font-mono tabular-nums ${
+                                                            isMung1 || isRam15
+                                                                ? 'text-rose-600 font-black'
+                                                                : isCungMung2 || isCung16
+                                                                    ? 'text-amber-700 font-bold'
+                                                                    : 'text-slate-500'
+                                                        }`}
+                                                    >
+                                                        {isRam15 ? '15' : item.lunar.lunarLabel}
                                                     </span>
-                                                )}
-                                                {isCung16 && item.isCurrentMonth && (
-                                                    <span className="text-[8px] font-black px-1 py-0.2 rounded bg-orange-100 text-orange-900 border border-orange-200 truncate block leading-tight">
-                                                        🎋 Cúng 16
-                                                    </span>
-                                                )}
-                                                {!isCungMung2 && !isCung16 && daySystemEvents.length > 0 && item.isCurrentMonth && (
-                                                    <span className="text-[8px] font-bold px-1 py-0.2 rounded bg-indigo-100 text-indigo-800 truncate block leading-tight">
-                                                        {daySystemEvents[0].title}
-                                                    </span>
-                                                )}
-                                                {!isCungMung2 && !isCung16 && daySystemEvents.length === 0 && dayNotes.length > 0 && (
-                                                    <span className="text-[8px] font-bold text-blue-700 truncate block leading-tight">
-                                                        📌 {dayNotes[0].title}
-                                                    </span>
-                                                )}
-                                            </div>
 
-                                            {/* Dòng dưới: Ngày âm lịch */}
-                                            <div className="flex items-center justify-between text-[9px] pt-0.5 border-t border-slate-100/70">
-                                                <span
-                                                    className={`truncate font-mono ${
-                                                        isMung1 || isRam15
-                                                            ? 'text-rose-600 font-black'
-                                                            : isCungMung2 || isCung16
-                                                                ? 'text-amber-700 font-bold'
-                                                                : 'text-slate-400'
-                                                    }`}
-                                                >
-                                                    {item.lunar.lunarLabel}
-                                                </span>
-
-                                                {isMung1 && (
-                                                    <span className="text-[7.5px] font-black px-0.5 rounded bg-rose-100 text-rose-700">
-                                                        M1
-                                                    </span>
-                                                )}
-                                                {isRam15 && (
-                                                    <span className="text-[7.5px] font-black px-0.5 rounded bg-amber-100 text-amber-800">
-                                                        Rằm
-                                                    </span>
-                                                )}
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
-
-                        {/* Chú thích nhanh ở đáy Calendar */}
-                        <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500 flex-wrap gap-2">
-                            <div className="flex items-center gap-3">
-                                <span className="flex items-center gap-1">
-                                    <span className="w-2 h-2 rounded-full bg-blue-600"></span>
-                                    <span>Việc cần làm</span>
-                                </span>
-                                <span className="flex items-center gap-1">
-                                    <span>🎋</span>
-                                    <span>Cúng mùng 2 & 16 ÂL</span>
-                                </span>
-                                <span className="flex items-center gap-1">
-                                    <span className="w-2 h-2 rounded-full bg-rose-500"></span>
-                                    <span>Mùng 1 & Rằm</span>
-                                </span>
+                                                    {isMung1 && (
+                                                        <span className="hidden sm:inline text-[7.5px] font-black px-0.5 rounded bg-rose-100 text-rose-700 shrink-0">
+                                                            M1
+                                                        </span>
+                                                    )}
+                                                    {isRam15 && (
+                                                        <span className="text-[7.5px] font-black px-0.5 rounded bg-amber-100 text-amber-800 shrink-0">
+                                                            Rằm
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
                             </div>
 
-                            <span className="text-slate-400 text-[10px]">
-                                SalesHub Smart Calendar
-                            </span>
+                            {/* Chú thích nhanh ở đáy Calendar */}
+                            <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-600 flex-wrap gap-2">
+                                <div className="flex items-center gap-3 flex-wrap">
+                                    <span className="flex items-center gap-1">
+                                        <span className="w-2 h-2 rounded-full bg-blue-600" aria-hidden="true"></span>
+                                        <span>Việc cần làm</span>
+                                    </span>
+                                    <span className="flex items-center gap-1">
+                                        <span aria-hidden="true">🎋</span>
+                                        <span>Cúng mùng 2 &amp; 16 ÂL</span>
+                                    </span>
+                                    <span className="flex items-center gap-1">
+                                        <span className="w-2 h-2 rounded-full bg-rose-500" aria-hidden="true"></span>
+                                        <span>Mùng 1 &amp; Rằm</span>
+                                    </span>
+                                </div>
+
+                                <span className="text-slate-500 text-[10px]">
+                                    SalesHub Smart Calendar
+                                </span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -549,6 +564,6 @@ export default function CalendarWidget() {
                 canManage={canManage}
                 editingNote={editingNote}
             />
-        </div>
+        </>
     );
 }

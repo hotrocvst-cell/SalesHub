@@ -81,55 +81,55 @@ export function getDenominationHotStyle(denomination: number): DenominationHotSt
             return {
                 tier,
                 label: 'Nhập môn',
-                badgeClass: 'bg-emerald-100 text-emerald-800 border-emerald-200',
-                textClass: 'text-emerald-700',
+                badgeClass: 'bg-emerald-100 text-emerald-900 border-emerald-300',
+                textClass: 'text-emerald-800',
                 bgClass: 'bg-emerald-50/70',
                 borderClass: 'border-emerald-200',
-                activeClass: 'bg-emerald-600 text-white border-emerald-700 ring-2 ring-emerald-300 shadow-md',
+                activeClass: 'bg-emerald-700 text-white border-emerald-800 ring-2 ring-emerald-300 shadow-md',
                 tagIcon: '🌱'
             };
         case 'POPULAR':
             return {
                 tier,
                 label: 'Phổ biến',
-                badgeClass: 'bg-sky-100 text-sky-800 border-sky-200',
-                textClass: 'text-sky-700',
+                badgeClass: 'bg-sky-100 text-sky-900 border-sky-300',
+                textClass: 'text-sky-800',
                 bgClass: 'bg-sky-50/70',
                 borderClass: 'border-sky-200',
-                activeClass: 'bg-sky-600 text-white border-sky-700 ring-2 ring-sky-300 shadow-md',
+                activeClass: 'bg-sky-700 text-white border-sky-800 ring-2 ring-sky-300 shadow-md',
                 tagIcon: '✨'
             };
         case 'MEDIUM':
             return {
                 tier,
                 label: 'Hấp dẫn',
-                badgeClass: 'bg-indigo-100 text-indigo-800 border-indigo-200',
-                textClass: 'text-indigo-700',
+                badgeClass: 'bg-indigo-100 text-indigo-900 border-indigo-300',
+                textClass: 'text-indigo-800',
                 bgClass: 'bg-indigo-50/70',
                 borderClass: 'border-indigo-200',
-                activeClass: 'bg-indigo-600 text-white border-indigo-700 ring-2 ring-indigo-300 shadow-md',
+                activeClass: 'bg-indigo-700 text-white border-indigo-800 ring-2 ring-indigo-300 shadow-md',
                 tagIcon: '⭐'
             };
         case 'HIGH':
             return {
                 tier,
                 label: 'Giá trị cao',
-                badgeClass: 'bg-amber-100 text-amber-900 border-amber-300',
-                textClass: 'text-amber-700',
+                badgeClass: 'bg-amber-100 text-amber-950 border-amber-300',
+                textClass: 'text-amber-800',
                 bgClass: 'bg-amber-50/70',
                 borderClass: 'border-amber-300',
-                activeClass: 'bg-amber-500 text-white border-amber-600 ring-2 ring-amber-300 shadow-md',
+                activeClass: 'bg-amber-700 text-white border-amber-800 ring-2 ring-amber-300 shadow-md',
                 tagIcon: '🔥'
             };
         case 'PREMIUM':
             return {
                 tier,
                 label: 'Cực Hot',
-                badgeClass: 'bg-rose-100 text-rose-900 border-rose-300',
-                textClass: 'text-rose-600',
+                badgeClass: 'bg-rose-100 text-rose-950 border-rose-300',
+                textClass: 'text-rose-700',
                 bgClass: 'bg-rose-50/70',
                 borderClass: 'border-rose-300',
-                activeClass: 'bg-rose-600 text-white border-rose-700 ring-2 ring-rose-300 shadow-md',
+                activeClass: 'bg-rose-700 text-white border-rose-800 ring-2 ring-rose-300 shadow-md',
                 tagIcon: '💥'
             };
         case 'VIP':
@@ -137,11 +137,11 @@ export function getDenominationHotStyle(denomination: number): DenominationHotSt
             return {
                 tier,
                 label: 'VIP Đặc Biệt',
-                badgeClass: 'bg-gradient-to-r from-amber-500 to-rose-600 text-white border-rose-400 font-black shadow-xs',
+                badgeClass: 'bg-gradient-to-r from-amber-700 to-rose-700 text-white border-rose-600 font-black shadow-sm',
                 textClass: 'text-rose-700 font-black',
                 bgClass: 'bg-gradient-to-br from-amber-50 via-rose-50 to-orange-50',
                 borderClass: 'border-rose-300',
-                activeClass: 'bg-gradient-to-r from-amber-600 to-rose-600 text-white border-rose-700 ring-2 ring-amber-300 shadow-lg',
+                activeClass: 'bg-gradient-to-r from-amber-700 to-rose-700 text-white border-rose-800 ring-2 ring-amber-300 shadow-lg',
                 tagIcon: '👑'
             };
     }

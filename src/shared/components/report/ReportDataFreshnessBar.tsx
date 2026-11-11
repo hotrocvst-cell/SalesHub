@@ -7,7 +7,6 @@ import {
     ArrowUpRight,
     Clock,
     User,
-    Calendar,
     Sparkles
 } from 'lucide-react';
 import { formatDate, getYesterdayDateString, normalizeToDateString } from '../../../core/lib/formatters';
@@ -80,10 +79,10 @@ export default function ReportDataFreshnessBar({
             data-html2canvas-ignore="true"
             data-export-ignore="true"
             className={`rounded-2xl border transition-all ${isUpToDate
-                ? 'bg-gradient-to-r from-emerald-50/95 via-teal-50/80 to-emerald-50/90 border-emerald-300/90 text-emerald-950 shadow-2xs'
+                ? 'bg-emerald-50/90 border-emerald-300/90 text-emerald-950 shadow-sm'
                 : hasData
-                    ? 'bg-gradient-to-r from-amber-50/95 via-orange-50/85 to-amber-50/90 border-amber-300/90 text-amber-950 shadow-2xs'
-                    : 'bg-gradient-to-r from-rose-50/95 via-red-50/85 to-rose-50/90 border-rose-300/90 text-rose-950 shadow-2xs'
+                    ? 'bg-amber-50/90 border-amber-300/90 text-amber-950 shadow-sm'
+                    : 'bg-rose-50/90 border-rose-300/90 text-rose-950 shadow-sm'
                 } ${compact ? 'p-2.5 sm:p-3' : 'p-3 sm:p-3.5'} ${className}`}
         >
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5">
@@ -91,19 +90,19 @@ export default function ReportDataFreshnessBar({
                 <div className="flex items-start sm:items-center gap-2.5 min-w-0">
                     {/* Icon đại diện trạng thái */}
                     <div
-                        className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 shadow-2xs mt-0.5 sm:mt-0 ${isUpToDate
-                            ? 'bg-emerald-600 text-white'
+                        className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 shadow-sm mt-0.5 sm:mt-0 ${isUpToDate
+                            ? 'bg-emerald-700 text-white'
                             : hasData
                                 ? 'bg-amber-500 text-slate-950'
-                                : 'bg-rose-600 text-white'
+                                : 'bg-rose-700 text-white'
                             }`}
                     >
                         {isUpToDate ? (
-                            <CheckCircle2 className="w-5 h-5 stroke-[2.5]" />
+                            <CheckCircle2 className="w-5 h-5 stroke-[2.5]" aria-hidden="true" />
                         ) : hasData ? (
-                            <AlertTriangle className="w-5 h-5 stroke-[2.5]" />
+                            <AlertTriangle className="w-5 h-5 stroke-[2.5]" aria-hidden="true" />
                         ) : (
-                            <AlertCircle className="w-5 h-5 stroke-[2.5]" />
+                            <AlertCircle className="w-5 h-5 stroke-[2.5]" aria-hidden="true" />
                         )}
                     </div>
 
@@ -121,14 +120,14 @@ export default function ReportDataFreshnessBar({
 
                             {/* Badge trạng thái */}
                             <span
-                                className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full border shadow-2xs inline-flex items-center gap-1 ${isUpToDate
-                                    ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                                className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full border shadow-sm inline-flex items-center gap-1 ${isUpToDate
+                                    ? 'bg-emerald-100 text-emerald-900 border-emerald-300'
                                     : hasData
-                                        ? 'bg-amber-100 text-amber-900 border-amber-300'
-                                        : 'bg-rose-100 text-rose-800 border-rose-300'
+                                        ? 'bg-amber-100 text-amber-950 border-amber-300'
+                                        : 'bg-rose-100 text-rose-900 border-rose-300'
                                     }`}
                             >
-                                <span className={`w-1.5 h-1.5 rounded-full ${isUpToDate ? 'bg-emerald-600 animate-pulse' : hasData ? 'bg-amber-600' : 'bg-rose-600'}`} />
+                                <span className={`w-1.5 h-1.5 rounded-full ${isUpToDate ? 'bg-emerald-600' : hasData ? 'bg-amber-600' : 'bg-rose-600'}`} aria-hidden="true" />
                                 <span>{isUpToDate ? 'Phiên Mới Nhất' : hasData ? 'Chậm Phiên' : 'Thiếu Dữ Liệu'}</span>
                             </span>
                         </div>
@@ -150,7 +149,7 @@ export default function ReportDataFreshnessBar({
                             )}
 
                             {storeName && storeName !== 'all' && (
-                                <span className="text-slate-500 font-normal">
+                                <span className="text-slate-600 font-normal">
                                     • ST: <strong className="text-slate-800 font-bold">{storeName}</strong>
                                 </span>
                             )}
@@ -162,16 +161,16 @@ export default function ReportDataFreshnessBar({
                 <div className="flex items-start sm:items-center gap-2 self-start sm:self-auto flex-wrap shrink-0">
                     {/* Meta: Người cập nhật / Giờ cập nhật */}
                     {(formattedUpdatedAt || lastUpdatedBy || sessionTitle) && (
-                        <div className="flex flex-col gap-1 text-[10px] sm:text-[10.5px] font-medium text-slate-600 bg-white/90 backdrop-blur-xs px-2.5 py-1.5 rounded-xl border border-slate-200/80 shadow-2xs">
+                        <div className="flex flex-col gap-1 text-[10px] sm:text-[10.5px] font-medium text-slate-600 bg-white/95 backdrop-blur-sm px-2.5 py-1.5 rounded-xl border border-slate-200 shadow-sm">
                             {formattedUpdatedAt && (
-                                <div className="flex items-center gap-1.5 text-slate-600" title={`Cập nhật lúc ${formattedUpdatedAt}`}>
-                                    <Clock className="w-3 h-3 text-slate-400 shrink-0" />
+                                <div className="flex items-center gap-1.5 text-slate-700" title={`Cập nhật lúc ${formattedUpdatedAt}`}>
+                                    <Clock className="w-3 h-3 text-slate-500 shrink-0" aria-hidden="true" />
                                     <span>{formattedUpdatedAt}</span>
                                 </div>
                             )}
                             {lastUpdatedBy && (
-                                <div className="flex items-center gap-1.5 text-slate-700 font-bold" title={`Bởi ${lastUpdatedBy}`}>
-                                    <User className="w-3 h-3 text-slate-400 shrink-0" />
+                                <div className="flex items-center gap-1.5 text-slate-800 font-bold" title={`Bởi ${lastUpdatedBy}`}>
+                                    <User className="w-3 h-3 text-slate-500 shrink-0" aria-hidden="true" />
                                     <span className="max-w-[160px] sm:max-w-[200px] truncate">{lastUpdatedBy}</span>
                                 </div>
                             )}
@@ -185,12 +184,12 @@ export default function ReportDataFreshnessBar({
                             data-html2canvas-ignore="true"
                             data-export-ignore="true"
                             onClick={() => navigate(actionUrl)}
-                            className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 active:scale-[0.98] text-white text-[11px] font-black transition cursor-pointer shadow-xs flex items-center gap-1 shrink-0"
+                            className="px-3 py-1.5 rounded-xl bg-blue-700 hover:bg-blue-800 active:scale-[0.98] text-white text-[11px] font-black transition cursor-pointer shadow-sm flex items-center gap-1 shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700 focus-visible:ring-offset-1"
                             title="Chuyển đến màn hình cập nhật số liệu"
                         >
-                            <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                            <Sparkles className="w-3.5 h-3.5 text-amber-300" aria-hidden="true" />
                             <span>{actionLabel}</span>
-                            <ArrowUpRight className="w-3.5 h-3.5" />
+                            <ArrowUpRight className="w-3.5 h-3.5" aria-hidden="true" />
                         </button>
                     )}
                 </div>

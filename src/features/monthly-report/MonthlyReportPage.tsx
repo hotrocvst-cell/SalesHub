@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
-    calculate8KScale,
     generateStandardReportCanvas,
     downloadReportCanvas,
     copyReportCanvasToClipboard
@@ -36,16 +35,11 @@ import {
     TrendingUp,
     AlertCircle,
     Trophy,
-    Coins,
-    CreditCard,
-    Target,
     ArrowRight,
     ArrowUpDown,
     Filter,
     FileText,
-    Download,
     Copy,
-    Sparkles,
     Lock
 } from "lucide-react";
 import { useAuth } from "../../shared/contexts/AuthContext";
@@ -85,11 +79,23 @@ export default function MonthlyReportPage() {
     const [isProcessingImg, setIsProcessingImg] = useState<boolean>(false);
     const [isCopyingImg, setIsCopyingImg] = useState<boolean>(false);
     const [toastMessage, setToastMessage] = useState<string | null>(null);
+    const toastTimerRef = useRef<number | null>(null);
 
     const showToast = (msg: string) => {
         setToastMessage(msg);
-        setTimeout(() => setToastMessage(null), 2500);
+        if (toastTimerRef.current) {
+            window.clearTimeout(toastTimerRef.current);
+        }
+        toastTimerRef.current = window.setTimeout(() => setToastMessage(null), 2500);
     };
+
+    useEffect(() => {
+        return () => {
+            if (toastTimerRef.current) {
+                window.clearTimeout(toastTimerRef.current);
+            }
+        };
+    }, []);
 
     // 1. TẢI DỮ LIỆU TỪ SUPABASE
     const loadData = async () => {
@@ -256,7 +262,11 @@ export default function MonthlyReportPage() {
                 ? ((totalActual / passedDays * totalDays) / totalTarget * 100)
                 : (totalTarget > 0 ? (totalActual / totalTarget * 100) : 0);
 
-            const installmentRate = totalActual > 0 ? (totalInstallment / totalActual * 100) : 0;
+            const storesWithRate = targetList.filter(r => (Number(r.installmentRate) || 0) > 0);
+            const totalRateWeight = storesWithRate.reduce((sum, r) => sum + ((Number(r.revenueActual) || 0) > 0 ? Number(r.revenueActual) : 1), 0);
+            const installmentRate = (storesWithRate.length > 0 && totalRateWeight > 0)
+                ? storesWithRate.reduce((sum, r) => sum + Number(r.installmentRate) * ((Number(r.revenueActual) || 0) > 0 ? Number(r.revenueActual) : 1), 0) / totalRateWeight
+                : (totalActual > 0 ? (totalInstallment / totalActual * 100) : 0);
 
             const clusterLabel = isAdmin
                 ? `TỔNG TOÀN CỤM (${targetList.length} ST)`
@@ -466,89 +476,7 @@ export default function MonthlyReportPage() {
         return paceList;
     }, [records, selectedStore, isAdmin, canAccessStore]);
 
-    // 10. MODULE NHẬN XÉT & TÓM TẮT MỤC TIÊU
-    const summaryText = useMemo(() => {
-        if (!currentRecord) return '';
-
-        const isAll = selectedStore === "all" || selectedStore === "Tổng";
-        const dispStore = isAll ? (isAdmin ? 'TỔNG TOÀN CỤM' : 'TỔNG CỤM PHỤ TRÁCH') : selectedStore;
-        let txt = `📢 [${dispStore}]\n- NGÀY ${formatDate(currentRecord.reportDate)}`;
-
-        txt += `\n\n💰 Lũy kế DTQĐ: ${formatValue(currentRecord.revenueActual)} (DKHT: ${(currentRecord.forecastCompletionRate || 0).toFixed(1)}%)`;
-        if (currentRecord.revenueActual < currentRecord.revenueTarget) {
-            txt += `\n- Còn lại: ${formatRemainingTarget(currentRecord.revenueTarget - currentRecord.revenueActual)}`;
-        }
-        if ((currentRecord.installmentRate || 0) > 0) {
-            txt += `\n- DT trả góp: ${formatValue(currentRecord.revenueInstallment)} (${(currentRecord.installmentRate || 0).toFixed(1)}%)`;
-        }
-
-
-        if (emulationRowList.length > 0) {
-            const targeted = emulationRowList;
-            const passed = targeted.filter(d => d.pctDK >= 100);
-            const passRate = targeted.length > 0 ? (passed.length / targeted.length * 100).toFixed(1) : '0';
-            txt += `\n\n🎯 THI ĐUA: DK Đạt ${passed.length}/${targeted.length} NH (${passRate}%)`;
-
-            const fails = targeted.filter(d => d.pctDK < 100);
-
-            if (fails.length === 0) {
-                txt += `\n\n🎉 Xuất sắc! Đã hoàn thành tất cả các chỉ tiêu!`;
-            } else {
-                const groupNear = fails.filter(d => d.pctDK >= 80);
-                const groupSpeed = fails.filter(d => d.pctDK >= 50 && d.pctDK < 80);
-                const groupAlert = fails.filter(d => d.pctDK < 50);
-
-                if (summaryMode === 1) {
-                    txt += `\n\n📊 TỔNG HỢP DK CHƯA ĐẠT (${fails.length} NH):`;
-                    if (groupNear.length > 0) txt += `\n- ⚡ CẬN ĐÍCH (>80%): ${groupNear.length} NH`;
-                    if (groupSpeed.length > 0) txt += `\n- 🔥 CẦN TĂNG TỐC (50% - 80%): ${groupSpeed.length} NH`;
-                    if (groupAlert.length > 0) txt += `\n- ⚠️ NGUY HIỂM (<50%): ${groupAlert.length} NH`;
-                } else if (summaryMode === 2) {
-                    txt += `\n\n📊 CHI TIẾT DK CHƯA ĐẠT (${fails.length} NH):`;
-                    if (groupNear.length > 0) {
-                        txt += `\n\n⚡ CẬN ĐÍCH (>80%): ${groupNear.length} NH`;
-                        groupNear.forEach(d => {
-                            const prefix = isAll ? `[${d.storeName}] ` : '';
-                            txt += `\n- ${prefix}${d.label}: thiếu ${formatValue(Math.max(0, d.target - d.actual))} (${d.pctDK.toFixed(1)}%)`;
-                        });
-                    }
-                    if (groupSpeed.length > 0) {
-                        txt += `\n\n🔥 CẦN TĂNG TỐC (50% - 80%): ${groupSpeed.length} NH`;
-                        groupSpeed.forEach(d => {
-                            const prefix = isAll ? `[${d.storeName}] ` : '';
-                            txt += `\n- ${prefix}${d.label}: thiếu ${formatValue(Math.max(0, d.target - d.actual))} (${d.pctDK.toFixed(1)}%)`;
-                        });
-                    }
-                    if (groupAlert.length > 0) {
-                        txt += `\n\n⚠️ NGUY HIỂM (<50%): ${groupAlert.length} NH`;
-                        groupAlert.forEach(d => {
-                            const prefix = isAll ? `[${d.storeName}] ` : '';
-                            txt += `\n- ${prefix}${d.label}: thiếu ${formatValue(Math.max(0, d.target - d.actual))} (${d.pctDK.toFixed(1)}%)`;
-                        });
-                    }
-                } else {
-                    txt += `\n\n⚠️ CHI TIẾT DK CHƯA ĐẠT (${fails.length} NH):`;
-                    fails.forEach(d => {
-                        const prefix = isAll ? `[${d.storeName}] ` : '';
-                        txt += `\n- ${prefix}${d.label}: thiếu ${formatValue(Math.max(0, d.target - d.actual))} (${d.pctDK.toFixed(1)}%)`;
-                    });
-                }
-            }
-        }
-
-        return txt;
-    }, [currentRecord, emulationRowList, selectedStore, summaryMode]);
-
-    const handleCopyText = () => {
-        if (!summaryText) {
-            showToast('Chưa có nội dung tóm tắt để sao chép!');
-            return;
-        }
-        navigator.clipboard.writeText(summaryText);
-        showToast('Đã copy nội dung nhận xét vào clipboard!');
-    };
-
-    // 10b. CẤU HÌNH 3 MẪU NHẬN XÉT TẠO SẴN CHO BÁO CÁO THÁNG
+    // 10. CẤU HÌNH 3 MẪU NHẬN XÉT & TÓM TẮT MỤC TIÊU TẠO SẴN CHO BÁO CÁO THÁNG
     const monthlyAssessmentTemplates = useMemo<AssessmentTemplate[]>(() => {
         if (!currentRecord) return [];
 
@@ -628,6 +556,21 @@ export default function MonthlyReportPage() {
         ];
     }, [currentRecord, emulationRowList, selectedStore, isAdmin]);
 
+    const summaryText = useMemo(() => {
+        return monthlyAssessmentTemplates.find(t => t.id === summaryMode)?.content
+            || monthlyAssessmentTemplates[0]?.content
+            || '';
+    }, [monthlyAssessmentTemplates, summaryMode]);
+
+    const handleCopyText = () => {
+        if (!summaryText) {
+            showToast('Chưa có nội dung tóm tắt để sao chép!');
+            return;
+        }
+        navigator.clipboard.writeText(summaryText);
+        showToast('Đã copy nội dung nhận xét vào clipboard!');
+    };
+
     // HÀM TẠO ẢNH 8K SIÊU NÉT (VỚI AUTO-SAFETY CLAMP) - ĐỘC LẬP HOÀN TOÀN VỚI THIẾT BỊ NGƯỜI DÙNG
     const generate8KCanvas = async () => {
         if (!reportRef.current) return null;
@@ -702,31 +645,35 @@ export default function MonthlyReportPage() {
         <div className="p-4 sm:p-6 space-y-4 max-w-full mx-auto w-full">
             {/* Toast thông báo */}
             {toastMessage && (
-                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-5 py-2.5 rounded-full text-xs sm:text-sm font-bold shadow-2xl z-50 animate-bounce">
+                <div
+                    role="status"
+                    aria-live="polite"
+                    className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-5 py-2.5 rounded-full text-xs sm:text-sm font-bold shadow-xl z-50 border border-slate-700"
+                >
                     {toastMessage}
                 </div>
             )}
 
             {/* THANH ĐIỀU KHIỂN ĐÃ TÁCH THÀNH 2 HÀNG ĐỘC LẬP */}
-            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
                 {/* TIÊU ĐỀ BÁO CÁO */}
                 <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3">
                     <div className="flex items-center gap-2.5">
-                        <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-600 font-bold">
-                            <BarChart3 className="w-5 h-5" />
+                        <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-700 font-bold shrink-0">
+                            <BarChart3 className="w-5 h-5" aria-hidden="true" />
                         </div>
                         <div>
                             <h1 className="text-base font-black text-slate-800 uppercase tracking-wide">
-                                Lũy Kế Doanh Thu & Thi Đua Tháng {selectedMonth}/{selectedYear}
+                                Lũy Kế Doanh Thu &amp; Thi Đua Tháng {selectedMonth}/{selectedYear}
                             </h1>
-                            <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1.5">
+                            <p className="text-xs text-slate-600 mt-0.5 flex items-center gap-1.5 flex-wrap">
                                 <span>Trạng thái:</span>
                                 {currentRecord ? (
-                                    <span className="text-emerald-700 font-bold bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded text-[10px]">
+                                    <span className="text-emerald-800 font-bold bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded text-[10px]">
                                         Bản ghi ngày {formatDate(currentRecord.reportDate)}
                                     </span>
                                 ) : (
-                                    <span className="text-amber-700 font-bold bg-amber-50 border border-amber-200 px-1.5 py-0.2 rounded text-[10px]">
+                                    <span className="text-amber-800 font-bold bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded text-[10px]">
                                         Chưa có dữ liệu
                                     </span>
                                 )}
@@ -737,21 +684,24 @@ export default function MonthlyReportPage() {
 
                 {/* HÀNG 1: BỘ LỌC ST / CỤM (BẮT BUỘC ĐẦU TIÊN & NẰM RIÊNG LẺ 1 DÒNG) */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2.5 border-b border-slate-100">
-                    <div className="flex items-center gap-2">
-                        <span className="text-xs font-black text-slate-600 uppercase tracking-wider shrink-0 flex items-center gap-1.5">
-                            <Store className="w-4 h-4 text-amber-600" />
-                            ST / Cụm:
-                        </span>
-                        <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all min-w-[200px] sm:min-w-[280px] ${isLockedToSingleStore
-                            ? 'bg-amber-50/90 border-amber-200 text-amber-900 shadow-2xs'
-                            : 'bg-slate-50 border-slate-300 text-slate-700 hover:border-amber-400'
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2.5 w-full sm:w-auto">
+                        <label
+                            htmlFor="monthly-store-select"
+                            className="text-xs font-black text-slate-700 uppercase tracking-wider shrink-0 flex items-center gap-1.5"
+                        >
+                            <Store className="w-4 h-4 text-amber-700" aria-hidden="true" />
+                            <span>ST / Cụm:</span>
+                        </label>
+                        <div className={`flex items-center gap-1.5 px-3 py-1.5 min-h-[38px] rounded-xl border text-xs font-bold transition-all w-full sm:w-auto sm:min-w-[280px] ${isLockedToSingleStore
+                            ? 'bg-amber-50/90 border-amber-300 text-amber-900 shadow-sm'
+                            : 'bg-slate-50 border-slate-300 text-slate-800 hover:border-amber-400'
                             }`}>
-                            {isLockedToSingleStore ? (
-                                <Lock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                            ) : (
-                                <Store className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                            {isLockedToSingleStore && (
+                                <Lock className="w-3.5 h-3.5 text-amber-700 shrink-0" aria-hidden="true" />
                             )}
                             <select
+                                id="monthly-store-select"
+                                name="store"
                                 value={selectedStore}
                                 onChange={(e) => {
                                     setSelectedStore(e.target.value);
@@ -761,14 +711,14 @@ export default function MonthlyReportPage() {
                                 title={isLockedToSingleStore ? 'Tài khoản nhân viên được cố định theo ST đã đăng ký' : undefined}
                                 className={`bg-transparent outline-none font-bold w-full ${isLockedToSingleStore
                                     ? 'cursor-not-allowed text-amber-900 font-black'
-                                    : 'cursor-pointer text-slate-700'
+                                    : 'cursor-pointer text-slate-800'
                                     }`}
                             >
                                 {canViewAllStores && (
                                     <option value="all">
                                         {isAdmin
-                                            ? `🏢 TỔNG TOÀN CỤM (${allStoreList.length} ST)`
-                                            : `🏢 TỔNG CỤM PHỤ TRÁCH (${storeList.length} ST)`
+                                            ? `TỔNG TOÀN CỤM (${allStoreList.length} ST)`
+                                            : `TỔNG CỤM PHỤ TRÁCH (${storeList.length} ST)`
                                         }
                                     </option>
                                 )}
@@ -777,7 +727,7 @@ export default function MonthlyReportPage() {
                                 ))}
                             </select>
                             {isLockedToSingleStore && (
-                                <span className="text-[10px] bg-amber-200/80 text-amber-800 px-1 py-0.5 rounded font-bold uppercase tracking-wider hidden sm:inline shrink-0">
+                                <span className="text-[10px] bg-amber-200/80 text-amber-900 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider hidden sm:inline shrink-0">
                                     Đã khóa
                                 </span>
                             )}
@@ -788,11 +738,16 @@ export default function MonthlyReportPage() {
                 {/* HÀNG 2: TIÊU CHÍ THỜI GIAN & TẢI SỐ LIỆU */}
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                     <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-xs font-bold text-slate-500">Kỳ báo cáo:</span>
+                        <label htmlFor="monthly-month-select" className="text-xs font-bold text-slate-600">
+                            Kỳ báo cáo:
+                        </label>
                         <select
+                            id="monthly-month-select"
+                            name="month"
+                            aria-label="Chọn tháng báo cáo"
                             value={selectedMonth}
                             onChange={(e) => setSelectedMonth(Number(e.target.value))}
-                            className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer"
+                            className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 min-h-[36px] text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer"
                         >
                             {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
                                 <option key={m} value={m}>Tháng {m}/{selectedYear}</option>
@@ -800,31 +755,36 @@ export default function MonthlyReportPage() {
                         </select>
 
                         <select
+                            id="monthly-date-select"
+                            name="reportDate"
+                            aria-label="Chọn ngày chốt số liệu"
                             value={selectedDate}
                             onChange={(e) => setSelectedDate(e.target.value)}
                             disabled={availableDates.length === 0}
-                            className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer disabled:opacity-50"
+                            className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 min-h-[36px] text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer disabled:opacity-50"
                         >
-                            <option value="latest">⚡ Mới nhất ({availableDates[0] ? formatDate(availableDates[0]) : 'Chưa có'})</option>
+                            <option value="latest">Mới nhất ({availableDates[0] ? formatDate(availableDates[0]) : 'Chưa có'})</option>
                             {availableDates.map(d => (
                                 <option key={d} value={d}>Ngày {formatDate(d)}</option>
                             ))}
                         </select>
 
                         <button
+                            type="button"
+                            aria-label="Tải lại số liệu"
                             onClick={loadData}
                             disabled={loading}
-                            className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition cursor-pointer"
+                            className="p-2 min-h-[36px] min-w-[36px] flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition cursor-pointer disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
                             title="Tải lại số liệu"
                         >
-                            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
                         </button>
                     </div>
                 </div>
 
-                {/* HÀNG 2: MẪU BUTTON BÁO CÁO CHUNG CHO DỰ ÁN */}
+                {/* HÀNG 3: CÔNG CỤ XUẤT BÁO CÁO */}
                 <div className="flex items-center justify-between gap-2 flex-wrap">
-                    <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                    <div className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">
                         Công cụ xuất báo cáo
                     </div>
 
@@ -848,33 +808,34 @@ export default function MonthlyReportPage() {
 
             {/* KHU VỰC HIỂN THỊ */}
             {loading ? (
-                <div className="bg-white p-16 rounded-3xl border border-slate-200 text-center space-y-3">
-                    <RefreshCw className="w-8 h-8 animate-spin mx-auto text-amber-500" />
-                    <p className="text-xs font-bold text-slate-500">Đang tổng hợp số liệu từ Supabase...</p>
+                <div className="bg-white p-16 rounded-3xl border border-slate-200 text-center space-y-3 shadow-sm">
+                    <RefreshCw className="w-8 h-8 animate-spin mx-auto text-amber-600" aria-hidden="true" />
+                    <p className="text-xs font-bold text-slate-600">Đang tổng hợp số liệu từ Cloud...</p>
                 </div>
             ) : !currentRecord ? (
-                <div className="bg-white p-12 sm:p-16 rounded-3xl border border-slate-200 text-center space-y-4 shadow-xs">
-                    <div className="w-14 h-14 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center mx-auto border border-amber-200">
-                        <AlertCircle className="w-7 h-7" />
+                <div className="bg-white p-12 sm:p-16 rounded-3xl border border-slate-200 text-center space-y-4 shadow-sm">
+                    <div className="w-14 h-14 bg-amber-50 text-amber-700 rounded-2xl flex items-center justify-center mx-auto border border-amber-200">
+                        <AlertCircle className="w-7 h-7" aria-hidden="true" />
                     </div>
                     <div className="max-w-md mx-auto space-y-1.5">
                         <h3 className="text-base font-black text-slate-800 uppercase tracking-wide">
                             Chưa có dữ liệu kinh doanh
                         </h3>
-                        <p className="text-xs text-slate-500 leading-relaxed">
+                        <p className="text-xs text-slate-600 leading-relaxed">
                             Tháng <b>{selectedMonth}/{selectedYear}</b> {selectedStore !== 'all' ? `của ST ${selectedStore}` : ''} chưa được ghi nhận bản ghi thực tế nào trên hệ thống.
                         </p>
-                        <p className="text-xs font-bold text-indigo-600 pt-1">
-                            👉 Vui lòng nhập dữ liệu doanh thu / thi đua từ màn hình Cập Nhật để xem báo cáo!
+                        <p className="text-xs font-bold text-blue-700 pt-1">
+                            Vui lòng nhập dữ liệu doanh thu / thi đua từ màn hình Cập Nhật để xem báo cáo.
                         </p>
                     </div>
                     <div className="pt-2">
                         <button
+                            type="button"
                             onClick={() => navigate('/cap-nhat')}
-                            className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-xs font-black uppercase tracking-wider inline-flex items-center gap-2 shadow-sm transition cursor-pointer"
+                            className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl text-xs font-black uppercase tracking-wider inline-flex items-center gap-2 shadow-sm transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                         >
                             <span>Đi Đến Màn Hình Cập Nhật</span>
-                            <ArrowRight className="w-4 h-4" />
+                            <ArrowRight className="w-4 h-4" aria-hidden="true" />
                         </button>
                     </div>
                 </div>
@@ -902,23 +863,23 @@ export default function MonthlyReportPage() {
                         />
 
                         {/* 1. BANNER TIÊU ĐỀ BÁO CÁO */}
-                        <div className="bg-gradient-to-r from-slate-900 to-slate-800 text-white p-4 sm:p-5 rounded-xl shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="bg-gradient-to-r from-slate-900 to-slate-800 text-white p-4 sm:p-5 rounded-xl shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                             <div>
                                 <div className="flex items-center gap-2">
-                                    <Store className="w-5 h-5 text-amber-400" />
+                                    <Store className="w-5 h-5 text-amber-400 shrink-0" aria-hidden="true" />
                                     <h2 className="font-black text-sm sm:text-base tracking-wide uppercase">
                                         {currentRecord.storeName}
                                     </h2>
                                 </div>
-                                <p className="text-xs text-slate-400 mt-1 flex items-center gap-3">
-                                    <span>Số liệu ngày: <b className="text-amber-400 font-mono">{formatDate(currentRecord.reportDate)}</b></span>
-                                    <span>•</span>
-                                    <span>Tiến độ ngày: <b className="text-white font-mono">{currentRecord.passedDays}/{currentRecord.totalDays} ngày</b></span>
+                                <p className="text-xs text-slate-300 mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1">
+                                    <span>Số liệu ngày: <b className="text-amber-300 font-mono tabular-nums">{formatDate(currentRecord.reportDate)}</b></span>
+                                    <span className="hidden sm:inline text-slate-500" aria-hidden="true">•</span>
+                                    <span>Tiến độ ngày: <b className="text-white font-mono tabular-nums">{currentRecord.passedDays}/{currentRecord.totalDays} ngày</b></span>
                                 </p>
                             </div>
 
                             <div className="flex items-center gap-2">
-                                <span className="bg-white/10 px-3 py-1.5 rounded-xl text-xs font-bold border border-white/10 font-mono text-emerald-400">
+                                <span className="bg-white/10 px-3 py-1.5 rounded-xl text-xs font-bold border border-white/15 font-mono tabular-nums text-emerald-300">
                                     Dự kiến HT: {(currentRecord.forecastCompletionRate || 0).toFixed(1)}%
                                 </span>
                             </div>
@@ -930,25 +891,25 @@ export default function MonthlyReportPage() {
                             return (
                                 <div data-kpi-grid="true" className={`grid grid-cols-2 sm:grid-cols-3 ${hasInstallmentRate ? 'lg:grid-cols-6' : 'lg:grid-cols-5'} gap-2.5`}>
                                     {/* Card 1: DOANH THU QĐ */}
-                                    <div className="bg-amber-50/70 border-l-4 border-amber-500 rounded-xl p-3 shadow-xs text-center">
-                                        <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider block">DTQĐ</span>
-                                        <span className="text-base sm:text-lg font-black text-slate-800 font-mono mt-0.5 block">
+                                    <div className="bg-amber-50/80 border border-amber-200 rounded-xl p-3 shadow-sm text-center">
+                                        <span className="text-[10px] font-bold text-amber-900 uppercase tracking-wider block">DTQĐ</span>
+                                        <span className="text-base sm:text-lg font-black text-slate-900 font-mono tabular-nums mt-0.5 block">
                                             {formatValue(currentRecord.revenueActual || 0)}
                                         </span>
                                     </div>
 
                                     {/* Card 2: MỤC TIÊU */}
-                                    <div className="bg-rose-50/70 border-l-4 border-rose-500 rounded-xl p-3 shadow-xs text-center">
-                                        <span className="text-[10px] font-bold text-rose-700 uppercase tracking-wider block">TARGET</span>
-                                        <span className="text-base sm:text-lg font-black text-slate-800 font-mono mt-0.5 block">
+                                    <div className="bg-rose-50/80 border border-rose-200 rounded-xl p-3 shadow-sm text-center">
+                                        <span className="text-[10px] font-bold text-rose-800 uppercase tracking-wider block">TARGET</span>
+                                        <span className="text-base sm:text-lg font-black text-slate-900 font-mono tabular-nums mt-0.5 block">
                                             {formatValue(currentRecord.revenueTarget || 0)}
                                         </span>
                                     </div>
 
                                     {/* Card 3: %DKHT DT */}
-                                    <div className="bg-sky-50/70 border-l-4 border-sky-500 rounded-xl p-3 shadow-xs text-center">
-                                        <span className="text-[10px] font-bold text-sky-700 uppercase tracking-wider block">%DKHT DT</span>
-                                        <span className={`text-base sm:text-lg font-black font-mono mt-0.5 block ${(currentRecord.forecastCompletionRate || 0) >= 100 ? 'text-emerald-600' : 'text-amber-600'
+                                    <div className="bg-sky-50/80 border border-sky-200 rounded-xl p-3 shadow-sm text-center">
+                                        <span className="text-[10px] font-bold text-sky-900 uppercase tracking-wider block">%DKHT DT</span>
+                                        <span className={`text-base sm:text-lg font-black font-mono tabular-nums mt-0.5 block ${(currentRecord.forecastCompletionRate || 0) >= 100 ? 'text-emerald-700' : 'text-amber-700'
                                             }`}>
                                             {(currentRecord.forecastCompletionRate || 0).toFixed(1)}%
                                         </span>
@@ -956,26 +917,26 @@ export default function MonthlyReportPage() {
 
                                     {/* Card 4: % TRẢ GÓP (CHỈ HIỂN THỊ KHI CÓ % TRẢ GÓP) */}
                                     {hasInstallmentRate && (
-                                        <div className="bg-purple-50/70 border-l-4 border-purple-500 rounded-xl p-3 shadow-xs text-center animate-in fade-in">
-                                            <span className="text-[10px] font-bold text-purple-700 uppercase tracking-wider block">% TRẢ CHẬM</span>
-                                            <span className="text-base sm:text-lg font-black text-purple-700 font-mono mt-0.5 block">
+                                        <div className="bg-purple-50/80 border border-purple-200 rounded-xl p-3 shadow-sm text-center">
+                                            <span className="text-[10px] font-bold text-purple-800 uppercase tracking-wider block">% TRẢ CHẬM</span>
+                                            <span className="text-base sm:text-lg font-black text-purple-800 font-mono tabular-nums mt-0.5 block">
                                                 {(currentRecord.installmentRate || 0).toFixed(1)}%
                                             </span>
                                         </div>
                                     )}
 
                                     {/* Card 5: THI ĐUA ĐẠT */}
-                                    <div className="bg-slate-100/90 border-l-4 border-slate-600 rounded-xl p-3 shadow-xs text-center">
+                                    <div className="bg-slate-100/90 border border-slate-300 rounded-xl p-3 shadow-sm text-center">
                                         <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wider block">THI ĐUA</span>
-                                        <span className="text-base sm:text-lg font-black text-slate-800 font-mono mt-0.5 block">
+                                        <span className="text-base sm:text-lg font-black text-slate-900 font-mono tabular-nums mt-0.5 block">
                                             {emulationStats.passed}/{emulationStats.total}
                                         </span>
                                     </div>
 
                                     {/* Card 6: %HT THI ĐUA */}
-                                    <div className="bg-emerald-50/70 border-l-4 border-emerald-500 rounded-xl p-3 shadow-xs text-center">
-                                        <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block">%THI ĐUA</span>
-                                        <span className="text-base sm:text-lg font-black text-emerald-600 font-mono mt-0.5 block">
+                                    <div className="bg-emerald-50/80 border border-emerald-200 rounded-xl p-3 shadow-sm text-center">
+                                        <span className="text-[10px] font-bold text-emerald-900 uppercase tracking-wider block">%THI ĐUA</span>
+                                        <span className="text-base sm:text-lg font-black text-emerald-700 font-mono tabular-nums mt-0.5 block">
                                             {emulationStats.passRate}%
                                         </span>
                                     </div>
@@ -986,15 +947,14 @@ export default function MonthlyReportPage() {
                         {/* 3. BẢNG KẾT QUẢ THI ĐUA (NÂNG CẤP TIÊU ĐỀ NỔI BẬT & CÓ CỜ IGNORE BỘ LỌC KHI CHỤP ẢNH) */}
                         <div className="rounded-xl border border-slate-200 overflow-hidden shadow-sm">
                             {/* KHỐI TIÊU ĐỀ BẢNG NỔI BẬT */}
-                            <div className="p-3.5 bg-gradient-to-r from-blue-700 via-indigo-700 to-blue-800 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+                            <div className="p-3.5 bg-gradient-to-r from-blue-700 to-blue-900 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
                                 <div className="flex items-center gap-2.5">
-                                    <div className="w-8 h-8 rounded-lg bg-amber-400/20 border border-amber-300/40 flex items-center justify-center text-amber-300 shadow-inner">
-                                        <Trophy className="w-4 h-4 fill-amber-300" />
+                                    <div className="w-8 h-8 rounded-lg bg-amber-400/20 border border-amber-300/40 flex items-center justify-center text-amber-300 shadow-inner shrink-0">
+                                        <Trophy className="w-4 h-4 fill-amber-300" aria-hidden="true" />
                                     </div>
                                     <div>
-                                        <h3 className="font-extrabold text-sm sm:text-base tracking-wide uppercase flex items-center gap-1.5 drop-shadow-xs">
+                                        <h3 className="font-extrabold text-sm sm:text-base tracking-wide uppercase flex items-center gap-1.5">
                                             <span>Bảng Thi Đua Chi Tiết {isAllMode ? '(Toàn Cụm)' : ''}</span>
-                                            <Sparkles className="w-4 h-4 text-amber-300 animate-pulse" />
                                         </h3>
                                         <p className="text-[11px] text-blue-100 font-medium mt-0.5">
                                             Lũy kế tính đến hết ngày {formatDate(currentRecord.reportDate)}
@@ -1003,7 +963,7 @@ export default function MonthlyReportPage() {
                                 </div>
 
                                 <div className="flex items-center gap-2">
-                                    <span className="text-xs font-black uppercase bg-amber-400 text-slate-950 px-3 py-1 rounded-lg shadow-sm border border-amber-300">
+                                    <span className="text-xs font-black uppercase bg-amber-400 text-slate-950 px-3 py-1 rounded-lg shadow-sm border border-amber-300 tabular-nums">
                                         {emulationRowList.length} NH THI ĐUA
                                     </span>
                                 </div>
@@ -1014,31 +974,37 @@ export default function MonthlyReportPage() {
                                 data-html2canvas-ignore="true"
                                 className="p-3 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2.5 text-xs"
                             >
-                                <div className="flex items-center gap-1.5 text-slate-500 font-bold uppercase text-[11px]">
-                                    <Filter className="w-3.5 h-3.5 text-indigo-600" />
+                                <div className="flex items-center gap-1.5 text-slate-600 font-bold uppercase text-[11px]">
+                                    <Filter className="w-3.5 h-3.5 text-blue-600" aria-hidden="true" />
                                     <span>Bộ lọc bảng:</span>
                                 </div>
 
                                 <div className="flex items-center gap-2 flex-wrap">
-                                    <div className="flex items-center gap-1 bg-white border border-slate-300 rounded-xl px-2.5 py-1 shadow-2xs">
-                                        <Filter className="w-3.5 h-3.5 text-slate-400" />
+                                    <div className="flex items-center gap-1.5 bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 min-h-[34px] shadow-sm">
+                                        <Filter className="w-3.5 h-3.5 text-slate-500 shrink-0" aria-hidden="true" />
                                         <select
+                                            id="monthly-status-filter"
+                                            name="statusFilter"
+                                            aria-label="Lọc theo trạng thái thi đua"
                                             value={statusFilter}
                                             onChange={(e) => setStatusFilter(e.target.value)}
-                                            className="bg-transparent font-bold text-slate-700 outline-none cursor-pointer text-xs"
+                                            className="bg-transparent font-bold text-slate-800 outline-none cursor-pointer text-xs"
                                         >
                                             <option value="all">Tất cả trạng thái</option>
-                                            <option value="passed">✅ Chỉ mục ĐẠT (&ge;100%)</option>
-                                            <option value="failed">⚠️ Chỉ mục CHƯA ĐẠT (&lt;100%)</option>
+                                            <option value="passed">Chỉ mục ĐẠT (≥100%)</option>
+                                            <option value="failed">Chỉ mục CHƯA ĐẠT (&lt;100%)</option>
                                         </select>
                                     </div>
 
-                                    <div className="flex items-center gap-1 bg-white border border-slate-300 rounded-xl px-2.5 py-1 shadow-2xs">
-                                        <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
+                                    <div className="flex items-center gap-1.5 bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 min-h-[34px] shadow-sm">
+                                        <ArrowUpDown className="w-3.5 h-3.5 text-slate-500 shrink-0" aria-hidden="true" />
                                         <select
+                                            id="monthly-sort-order"
+                                            name="sortOrder"
+                                            aria-label="Sắp xếp bảng thi đua"
                                             value={sortOrder}
                                             onChange={(e) => setSortOrder(e.target.value)}
-                                            className="bg-transparent font-bold text-slate-700 outline-none cursor-pointer text-xs"
+                                            className="bg-transparent font-bold text-slate-800 outline-none cursor-pointer text-xs"
                                         >
                                             <option value="pct-desc">% Tiến độ DK giảm dần</option>
                                             <option value="pct-asc">% Tiến độ DK tăng dần</option>
@@ -1053,8 +1019,16 @@ export default function MonthlyReportPage() {
                                 </div>
                             </div>
 
+                            {/* Gợi ý cuộn ngang trên mobile */}
+                            <div
+                                data-html2canvas-ignore="true"
+                                className="px-3 py-1.5 bg-slate-100/80 border-b border-slate-200 text-[10px] font-semibold text-slate-600 md:hidden"
+                            >
+                                Vuốt ngang trên bảng để xem đầy đủ cột %HT, %DKHT và Còn lại
+                            </div>
+
                             {/* BẢNG SỐ LIỆU CHI TIẾT */}
-                            <div className="overflow-x-auto no-scrollbar">
+                            <div className="overflow-x-auto">
                                 <table className="w-full text-xs text-left font-avo report-table border-collapse">
                                     <thead className="bg-slate-800 text-white uppercase text-[10px] font-black border-b border-slate-700">
                                         <tr>
@@ -1062,19 +1036,19 @@ export default function MonthlyReportPage() {
                                             {isAllMode && (
                                                 <th className="py-2 px-2 text-left whitespace-nowrap">ST</th>
                                             )}
-                                            <th className="py-2 px-2.5 text-left">Thi đua</th>
-                                            <th className="py-2 px-2 text-right whitespace-nowrap">Target</th>
-                                            <th className="py-2 px-2 text-right whitespace-nowrap">Lũy Kế</th>
+                                            <th className="py-2 px-2 sm:px-2.5 text-left">Thi đua</th>
+                                            <th className="py-2 px-1.5 sm:px-2 text-right whitespace-nowrap">Target</th>
+                                            <th className="py-2 px-1.5 sm:px-2 text-right whitespace-nowrap">Lũy Kế</th>
                                             <th className="py-2 px-1.5 text-center whitespace-nowrap" title="% Hoàn thành hiện tại: (Lũy kế / Target) * 100">%HT</th>
                                             <th className="py-2 px-1.5 text-center whitespace-nowrap" title="% Dự kiến hoàn thành cuối tháng theo nhịp bán">%DKHT</th>
-                                            <th className="py-2 px-2 text-right whitespace-nowrap" title="Mục tiêu thi đua còn lại: Target - Lũy kế">Còn lại</th>
+                                            <th className="py-2 px-1.5 sm:px-2 text-right whitespace-nowrap" title="Mục tiêu thi đua còn lại: Target - Lũy kế">Còn lại</th>
                                             <th className="py-2 px-1.5 text-center w-12 whitespace-nowrap">Đánh giá</th>
                                         </tr>
                                     </thead>
-                                    <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                                    <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
                                         {emulationRowList.length === 0 ? (
                                             <tr>
-                                                <td colSpan={isAllMode ? 9 : 8} className="py-8 text-center text-slate-400">
+                                                <td colSpan={isAllMode ? 9 : 8} className="py-8 text-center text-slate-600">
                                                     Không tìm thấy mục thi đua nào khớp với điều kiện lọc trong ngày {formatDate(currentRecord.reportDate)}.
                                                 </td>
                                             </tr>
@@ -1083,48 +1057,55 @@ export default function MonthlyReportPage() {
                                                 const isPass = row.pctDK >= 100;
                                                 return (
                                                     <tr key={row.id} className={isPass ? 'bg-[#f0fdf4] text-emerald-950' : 'bg-[#fff1f2] text-rose-950'}>
-                                                        <td className="py-1.5 px-1.5 text-center text-slate-400 font-bold whitespace-nowrap">
+                                                        <td className="py-1.5 px-1.5 text-center text-slate-700 font-bold tabular-nums whitespace-nowrap">
                                                             {idx + 1}
                                                         </td>
                                                         {isAllMode && (
                                                             <td className="py-1.5 px-2 font-bold text-slate-800 whitespace-nowrap text-left">
-                                                                <div className="flex items-center gap-1.5">
-                                                                    <Store className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                                                                    <span>{row.storeName}</span>
-                                                                </div>
+                                                                {row.storeName}
                                                             </td>
                                                         )}
-                                                        <td className="py-1.5 px-2.5 font-bold text-slate-800 text-left">
+                                                        <td className="py-1.5 px-2 sm:px-2.5 font-bold text-slate-900 text-left">
                                                             {row.label}
                                                         </td>
-                                                        <td className="py-1.5 px-2 text-right font-mono font-bold whitespace-nowrap">
+                                                        <td className="py-1.5 px-1.5 sm:px-2 text-right font-mono tabular-nums font-bold whitespace-nowrap">
                                                             {formatValue(row.target)}
                                                         </td>
-                                                        <td className="py-1.5 px-2 text-right font-mono font-bold text-indigo-600 whitespace-nowrap">
+                                                        <td className="py-1.5 px-1.5 sm:px-2 text-right font-mono tabular-nums font-bold text-blue-700 whitespace-nowrap">
                                                             {formatValue(row.actual)}
                                                         </td>
-                                                        <td className="py-1.5 px-1.5 text-center font-mono font-bold whitespace-nowrap">
+                                                        <td className="py-1.5 px-1.5 text-center font-mono tabular-nums font-bold whitespace-nowrap">
                                                             <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${row.pctHT >= 100
-                                                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                                                                : 'bg-slate-100 text-slate-700 border border-slate-200'
+                                                                ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
+                                                                : 'bg-slate-100 text-slate-800 border border-slate-300'
                                                                 }`}>
                                                                 {row.pctHT.toFixed(0)}%
                                                             </span>
                                                         </td>
-                                                        <td className="py-1.5 px-1.5 text-center font-mono font-bold whitespace-nowrap">
-                                                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${isPass ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-rose-100 text-rose-800 border border-rose-300'
+                                                        <td className="py-1.5 px-1.5 text-center font-mono tabular-nums font-bold whitespace-nowrap">
+                                                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${isPass ? 'bg-emerald-100 text-emerald-900 border border-emerald-300' : 'bg-rose-100 text-rose-900 border border-rose-300'
                                                                 }`}>
                                                                 {row.pctDK.toFixed(0)}%
                                                             </span>
                                                         </td>
-                                                        <td className={`py-1.5 px-2 text-right font-mono font-bold whitespace-nowrap ${row.remaining === 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                                        <td className={`py-1.5 px-1.5 sm:px-2 text-right font-mono tabular-nums font-bold whitespace-nowrap ${row.remaining === 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
                                                             {formatRemainingTarget(row.remaining, false)}
                                                         </td>
                                                         <td className="py-1.5 px-1.5 text-center whitespace-nowrap align-middle">
                                                             {isPass ? (
-                                                                <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-emerald-500 text-white text-[11px] font-bold">✓</span>
+                                                                <span
+                                                                    aria-label="Đạt"
+                                                                    className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-emerald-700 text-white text-[11px] font-bold"
+                                                                >
+                                                                    ✓
+                                                                </span>
                                                             ) : (
-                                                                <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-rose-500 text-white text-[11px] font-bold">✕</span>
+                                                                <span
+                                                                    aria-label="Chưa đạt"
+                                                                    className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-rose-700 text-white text-[11px] font-bold"
+                                                                >
+                                                                    ✕
+                                                                </span>
                                                             )}
                                                         </td>
                                                     </tr>
@@ -1142,52 +1123,52 @@ export default function MonthlyReportPage() {
               ============================================================== */}
 
                     {/* KHỐI THEO DÕI NHỊP DOANH THU (PACE TỪNG NGÀY) */}
-                    <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+                    <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
                             <div>
                                 <h3 className="font-black text-xs sm:text-sm text-slate-800 uppercase tracking-wide flex items-center gap-2">
-                                    <TrendingUp className="w-4 h-4 text-indigo-600" />
+                                    <TrendingUp className="w-4 h-4 text-blue-600" aria-hidden="true" />
                                     <span>Biến Động Nhịp Doanh Thu ({isAllMode ? 'Toàn Cụm' : selectedStore})</span>
                                 </h3>
-                                <p className="text-[11px] text-slate-400 mt-0.5">
+                                <p className="text-[11px] text-slate-600 mt-0.5">
                                     Doanh số phát sinh thực tế từng ngày
                                 </p>
                             </div>
 
                             {dailyPaceData.length > 0 && (
-                                <div className="bg-indigo-50 border border-indigo-200 px-3 py-1 rounded-xl text-xs font-bold text-indigo-700">
+                                <div className="bg-blue-50 border border-blue-200 px-3 py-1 rounded-xl text-xs font-bold text-blue-800 self-start sm:self-auto">
                                     Nhịp ngày {dailyPaceData[dailyPaceData.length - 1]?.date}:{' '}
-                                    <span className="font-mono text-indigo-950 font-black">
+                                    <span className="font-mono tabular-nums text-blue-950 font-black">
                                         {formatValue(dailyPaceData[dailyPaceData.length - 1]?.dailyPace || 0)}
                                     </span>
                                 </div>
                             )}
                         </div>
 
-                        <div className="overflow-x-auto no-scrollbar">
-                            <table className="w-full text-xs text-left min-w-[550px]">
-                                <thead className="bg-slate-50 text-slate-500 uppercase text-[10px] font-black border-y border-slate-200">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-xs text-left min-w-[460px]">
+                                <thead className="bg-slate-50 text-slate-600 uppercase text-[10px] font-black border-y border-slate-200">
                                     <tr>
                                         <th className="py-2.5 px-3">Ngày Ghi Nhận</th>
                                         <th className="py-2.5 px-3 text-right">Lũy Kế Hệ Thống</th>
-                                        <th className="py-2.5 px-3 text-right text-indigo-600">Nhịp Ngày (Thực Thu)</th>
+                                        <th className="py-2.5 px-3 text-right text-blue-700">Nhịp Ngày (Thực Thu)</th>
                                         <th className="py-2.5 px-3 text-center">Trạng Thái</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                                <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
                                     {dailyPaceData.map((row, idx) => (
                                         <tr key={`${row.date || 'date'}-${idx}`} className="hover:bg-slate-50 transition">
                                             <td className="py-2 px-3 font-semibold text-slate-800">
                                                 {row.dayLabel} ({row.date})
                                             </td>
-                                            <td className="py-2 px-3 text-right font-mono text-slate-600">
+                                            <td className="py-2 px-3 text-right font-mono tabular-nums text-slate-700">
                                                 {formatValue(row.cumulativeRevenue)}
                                             </td>
-                                            <td className="py-2 px-3 text-right font-mono font-bold text-indigo-600">
+                                            <td className="py-2 px-3 text-right font-mono tabular-nums font-bold text-blue-700">
                                                 {formatValue(row.dailyPace)}
                                             </td>
                                             <td className="py-2 px-3 text-center">
-                                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${row.dailyPace > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-400'
+                                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${row.dailyPace > 0 ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-slate-100 text-slate-600 border border-slate-200'
                                                     }`}>
                                                     {row.dailyPace > 0 ? 'Có phát sinh' : 'Chưa ghi nhận'}
                                                 </span>
@@ -1201,31 +1182,44 @@ export default function MonthlyReportPage() {
 
                     {/* MODULE NHẬN XÉT & TÓM TẮT MỤC TIÊU */}
                     {summaryText && currentRecord && (
-                        <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-xs space-y-3">
-                            <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-sm space-y-3">
+                            <div className="flex flex-wrap items-center justify-between gap-2.5">
                                 <div className="flex flex-wrap items-center gap-2">
                                     <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-                                        <FileText className="w-4 h-4 text-indigo-600" />
-                                        <span>Nhận Xét & Tóm Tắt Mục Tiêu</span>
+                                        <FileText className="w-4 h-4 text-blue-600" aria-hidden="true" />
+                                        <span>Nhận Xét &amp; Tóm Tắt Mục Tiêu</span>
                                     </span>
 
                                     {/* Bộ 3 nút chuyển chế độ tóm tắt */}
-                                    <div className="inline-flex p-0.5 bg-slate-100 rounded-lg text-[11px] font-bold border border-slate-200">
+                                    <div
+                                        role="tablist"
+                                        aria-label="Chế độ tóm tắt mục tiêu tháng"
+                                        className="inline-flex p-0.5 bg-slate-100 rounded-lg text-[11px] font-bold border border-slate-200 flex-wrap gap-0.5"
+                                    >
                                         <button
+                                            type="button"
+                                            role="tab"
+                                            aria-selected={summaryMode === 1}
                                             onClick={() => setSummaryMode(1)}
-                                            className={`px-2.5 py-1 rounded-md transition ${summaryMode === 1 ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-900'}`}
+                                            className={`px-2.5 py-1.5 min-h-[32px] rounded-md transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${summaryMode === 1 ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-700 hover:text-slate-900'}`}
                                         >
                                             1. Tổng quát
                                         </button>
                                         <button
+                                            type="button"
+                                            role="tab"
+                                            aria-selected={summaryMode === 2}
                                             onClick={() => setSummaryMode(2)}
-                                            className={`px-2.5 py-1 rounded-md transition ${summaryMode === 2 ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-900'}`}
+                                            className={`px-2.5 py-1.5 min-h-[32px] rounded-md transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${summaryMode === 2 ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-700 hover:text-slate-900'}`}
                                         >
                                             2. Chi tiết 3 nhóm
                                         </button>
                                         <button
+                                            type="button"
+                                            role="tab"
+                                            aria-selected={summaryMode === 3}
                                             onClick={() => setSummaryMode(3)}
-                                            className={`px-2.5 py-1 rounded-md transition ${summaryMode === 3 ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-900'}`}
+                                            className={`px-2.5 py-1.5 min-h-[32px] rounded-md transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${summaryMode === 3 ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-700 hover:text-slate-900'}`}
                                         >
                                             3. Chi tiết toàn bộ
                                         </button>
@@ -1233,14 +1227,16 @@ export default function MonthlyReportPage() {
                                 </div>
 
                                 <button
+                                    type="button"
                                     onClick={handleCopyText}
-                                    className="text-xs text-blue-600 hover:text-blue-700 font-bold underline cursor-pointer"
+                                    className="px-3 py-1.5 min-h-[34px] rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-bold transition cursor-pointer inline-flex items-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                                 >
-                                    Sao chép nội dung
+                                    <Copy className="w-3.5 h-3.5" aria-hidden="true" />
+                                    <span>Sao chép nội dung</span>
                                 </button>
                             </div>
 
-                            <pre className="font-mono text-xs p-4 bg-slate-50 border border-slate-200 rounded-xl whitespace-pre-wrap leading-relaxed text-slate-700 max-h-64 overflow-y-auto">
+                            <pre className="font-mono text-xs p-4 bg-slate-50 border border-slate-200 rounded-xl whitespace-pre-wrap leading-relaxed text-slate-800 max-h-64 overflow-y-auto">
                                 {summaryText}
                             </pre>
                         </div>

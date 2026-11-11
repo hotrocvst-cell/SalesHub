@@ -16,6 +16,14 @@ import {
     type CampaignMappingItem
 } from './campaignTargetMappingService';
 import { prepareImageForOcr, fileToBase64 } from './imageCompressionService';
+import {
+    cleanBiPercent,
+    normalizeViName,
+    buildRevenueQdOcrPrompt,
+    buildInstallmentRateOcrPrompt,
+    findMatchedCandidateByName,
+    findDirectoryEmployeeByName
+} from './employeeOcrShared';
 
 export { prepareImageForOcr, fileToBase64 };
 export type { KnownStoreCampaignTarget, CampaignMappingItem };
@@ -47,12 +55,14 @@ export interface EmployeeOcrCampaignItem {
 export interface EmployeeOcrParsedItem {
     employeeId: string;
     fullName: string;
-    revenueQd: number;
-    revenueReal: number;
-    installmentReal: number;
-    installmentRate: number;
+    revenueQd: number;         // Doanh thu QĐ (triệu đồng)
+    installmentQd: number;     // DT Trả góp QĐ (triệu đồng)
+    installmentRate: number;   // % Tỷ trọng trả góp (%)
     campaigns: Record<string, number>;
     campaignDetails?: EmployeeOcrCampaignItem[];
+    mappingSource?: 'ID' | 'NAME_EXACT' | 'NAME_FUZZY' | 'UNMAPPED';
+    ocrSourceName?: string;    // Tên gốc đọc từ ảnh không có Mã NV để user rà soát
+    isUnmappedName?: boolean;  // Đánh dấu dòng chưa khớp được Mã NV trong danh bạ
 }
 
 export interface EmployeeOcrResult {
@@ -69,106 +79,54 @@ export interface EmployeeOcrResult {
 const CANDIDATE_MODELS = STANDARD_GEMINI_MODELS;
 
 /**
- * Prompt chuyên biệt cho trích xuất DOANH THU (DT-QĐ và DT-THỰC)
- */
-function buildRevenueOcrPrompt(mode: 'QD' | 'REAL' | 'ALL' = 'ALL'): string {
-    const isQd = mode === 'QD';
-    const isReal = mode === 'REAL';
-
-    return `
-Bạn là chuyên gia phân tích dữ liệu kinh doanh bán lẻ từ ảnh chụp màn hình BI.
-${isQd 
-    ? 'Hình ảnh được gửi gồm các trang ảnh chụp màn hình bảng DOANH THU QUY ĐỔI (DT-QĐ) theo nhân viên (có thể gồm nhiều ảnh chụp cuộn nối tiếp nhau do ST có đông nhân viên).' 
-    : isReal 
-        ? 'Hình ảnh được gửi gồm các trang ảnh chụp màn hình bảng DOANH THU THỰC & TRẢ GÓP (DT-THỰC) theo nhân viên (có thể gồm nhiều ảnh chụp cuộn nối tiếp nhau do ST có đông nhân viên).' 
-        : 'Hình ảnh được gửi gồm bảng DOANH THU QUY ĐỔI (DT-QĐ) và/hoặc DOANH THU THỰC (DT-THỰC) theo nhân viên.'
-}
-(LƯU Ý QUAN TRỌNG: Hãy trích xuất TẤT CẢ các nhân viên xuất hiện trên TẤT CẢ các ảnh được cung cấp).
-
-YÊU CẦU TRÍCH XUẤT:
-1. Nhận diện từng nhân viên qua Mã NV (ví dụ "260732", "27560", "249041", "267997", "22838", "4614").
-2. HỌ TÊN: Lấy họ tên nhân viên (kể cả khi tên bị cắt ngắn kèm dấu ba chấm như "Nguyễn...").
-3. DOANH THU & ĐỊNH DẠNG SỐ QUAN TRỌNG:
-   - DẤU PHẨY ',' LÀ DẤU PHÂN CÁCH HÀNG NGHÌN. KHÔNG PHẢI DẤU PHẨY THẬP PHÂN.
-   - VÍ DỤ: "4,237" -> 4237; "4,146" -> 4146; "3,405" -> 3405; "3,361" -> 3361; "3,221" -> 3221; "3,143" -> 3143; "1,799" -> 1799; "1,172" -> 1172.
-   - revenueQd: lấy từ cột DOANH THU QĐ (ví dụ "4,237" -> 4237). ${isReal ? '(Nếu ảnh chỉ có DT Thực thì để 0)' : ''}
-   - revenueReal: lấy từ cột DOANH THU thực (ví dụ "3,221" -> 3221). ${isQd ? '(Nếu ảnh chỉ có DT-QĐ thì để 0)' : ''}
-   - installmentReal: lấy từ cột DT TRẢ GÓP (ví dụ "1,799" -> 1799).
-   - installmentRate: tính tỷ lệ % = (installmentReal / revenueReal) * 100. Làm tròn 2 chữ số thập phân.
-   - ĐƠN VỊ TIỀN TỆ: Giữ nguyên đơn vị trên ảnh (triệu đồng), không nhân 1,000,000.
-4. LOẠI BỎ DỮ LIỆU DƯ THỪA: Bỏ qua dòng 'online - Online - 18001060' và các dòng tổng cộng.
-5. THỜI GIAN CHỤP: Nếu thấy dòng chữ "Cập nhật lúc: HH:mm:ss DD/MM/YYYY" ở góc ảnh, hãy trích xuất vào "screenshotTimestamp".
-
-Trả về DUY NHẤT một khối JSON thuần:
-{
-  "screenshotTimestamp": string,
-  "employees": [
-    {
-      "employeeId": string,
-      "fullName": string,
-      "revenueQd": number,
-      "revenueReal": number,
-      "installmentReal": number,
-      "installmentRate": number
-    }
-  ]
-}
-Chỉ trả về JSON thuần, không bọc markdown \`\`\`json.
-`;
-}
-
-/**
- * Prompt chuyên biệt cho trích xuất MỘT NHÓM BẢNG THI ĐUA (Emulation Batch)
- * Hỗ trợ cả 2 định dạng:
- * 1. Định dạng phân cấp hình cây theo Siêu Thị (BI Smartphone Tree: Chương trình -> Siêu thị -> Nhân viên % tỉ trọng)
- * 2. Định dạng bảng phẳng truyền thống (Danh sách nhân viên với giá trị trực tiếp)
+ * Prompt chuyên biệt cho trích xuất BẢNG THI ĐUA NHÂN VIÊN (MẪU MỚI: HÀNG = NHÂN VIÊN, CỘT = CHƯƠNG TRÌNH)
+ * Cũng giữ fallback nếu ảnh dùng bảng phân cấp cũ.
  */
 function buildEmulationBatchPrompt(): string {
     return `
-Bạn là chuyên gia phân tích dữ liệu thi đua bán lẻ từ ảnh chụp màn hình BI trên điện thoại thông minh (smartphone).
-Hình ảnh gửi gồm các bảng/khối chương trình thi đua nhân viên theo Siêu Thị (ST).
+Bạn là chuyên gia phân tích dữ liệu thi đua bán lẻ từ ảnh chụp màn hình ứng dụng BI trên điện thoại thông minh.
 
-ĐẶC BIỆT CHÚ Ý CẤU TRÚC PHÂN CẤP THEO SIÊU THỊ (HIERARCHICAL TREE FORMAT):
-Bảng có các cột: CHƯƠNG TRÌNH | THỰC HIỆN | TARGET | % DỰ KIẾN HOÀN THÀNH (hoặc % HOÀN THÀNH).
-Cấu trúc các hàng:
-1. HÀNG CHƯƠNG TRÌNH: Bắt đầu bằng tên chương trình (ví dụ: 'T11 - Tai nghe', 'T11 - Sạc dự phòng', 'T11 - Trả chậm...', 'T11 - Bảo hiểm Tổng', 'T11 - VAS', 'T11 - Topzone', 'T11 - Phụ kiện khác IT...', 'T11 - Bảo hiểm Thợ ICT', 'T11 - Loa', 'T11 - Phụ kiện công...', 'T11 - Ví trả sau').
-   - Có huy hiệu đơn vị: '[DT]' (Doanh thu) hoặc '[SL]' (Số lượng).
-   - Cột THỰC HIỆN: Số lũy kế thực hiện ST (ví dụ: -1.93, 3.26, 179.40, 68.37, 92, 1,844.77, 296.22, 149.77, 45.41, 14.40, 10.29, 165.08).
-   - Cột TARGET: Chỉ tiêu (ví dụ: 20.79, 23.79, 1,169.83, 356.05, 484, 10,887.00, 1,718.82, 584.09, 128.48, 32.51, 15.58, 213.60).
-2. HÀNG SIÊU THỊ (ST): Nằm dưới hàng chương trình (thường có dấu '-' hoặc icon, ví dụ: '[-] AAR_BRV_VTA - 290 Trương Công Định...').
-   - Cột THỰC HIỆN và TARGET: Giá trị thực hiện và target của ST này.
-3. HÀNG NHÂN VIÊN: Nằm thụt lề dưới hàng ST.
-   - Cột CHƯƠNG TRÌNH: '<Mã NV> - <Họ và tên nhân viên>' (ví dụ: '22838 - Trần Thị Sáu', '260732 - Nguyễn Thị Hồ...', '27560 - Bùi Minh Lãm', '4614 - Lê Quang Vinh', '267997 - Nguyễn Thùy...', '249041 - Nguyễn Phương...').
-   - Cột THỰC HIỆN: Hiển thị TỶ LỆ TỈ TRỌNG (%) của nhân viên so với ST (ví dụ: '66.9%', '33.4%', '43.3%', '35%', '21.7%', '51%', '30.5%', '100%', '88%', '11.9%...'). Nếu là dấu gạch ngang '-' nghĩa là 0%.
-   - Cột TARGET: thường để trống.
+CẤU TRÚC ẢNH MẪU CHÍNH ("Hàng: nhân viên · Cột: chương trình", "Chỉ số: THỰC HIỆN"):
+- Góc trên bên phải có thời gian cập nhật "Cập nhật lúc: HH:mm:ss DD/MM/YYYY" (nếu thấy, ghi vào "screenshotTimestamp").
+- Cột đầu tiên bên trái: "NHÂN VIÊN"
+  + Hàng đầu tiên là "TỔNG": chứa tổng số liệu của từng cột chương trình (dùng làm "storeActual" và "campaignTotals", TUYỆT ĐỐI KHÔNG đưa "TỔNG" vào danh sách nhân viên).
+  + Các hàng tiếp theo: CHỈ CÓ HỌ VÀ TÊN NHÂN VIÊN (không có Mã NV, ví dụ: "Đào Hoàng Anh", "Trần Thị Hoài Thu", "Vương Trà Mi", "Trần Thị Tuyết Nga", "Nguyễn Quốc Bảo", "Phan Đình Đức",...).
+- Các cột tiếp theo bên phải là TÊN CHƯƠNG TRÌNH THI ĐUA kèm đơn vị trong ngoặc đơn ở cuối tiêu đề:
+  + Ví dụ: "Trả chậm FECREDIT, SAMSUNG F+, SHINHAN, MCREDIT (DT)", "Tai nghe (DT)", "Sim ĐMX (SL)", "Trả Chậm Điện máy & Gia dụng (DT)", "Ví trả sau (DT)", "VAS (SL)", "Vay tiền mặt (DT)", "Trả chậm Homecredit (DT)".
+  + "(DT)" -> unit = "DT" (triệu đồng).
+  + "(SL)" -> unit = "SL" (số lượng).
+  + Tách bỏ phần "(DT)" hoặc "(SL)" khỏi "programName" để giữ tên chương trình sạch sẽ.
+- Giá trị trong từng ô giao giữa hàng nhân viên và cột chương trình là KẾT QUẢ LŨY KẾ TRỰC TIẾP ("directValue") của nhân viên đó:
+  + Nếu ô là dấu gạch ngang "—" hoặc "-" -> directValue = 0.
+  + Dấu chấm "." là phần thập phân (ví dụ: "35.84" -> 35.84; "44.80" -> 44.8; "0.05" -> 0.05; "82.44" -> 82.44).
+  + Dấu phẩy "," (nếu có trong số >= 1,000) là phân cách hàng nghìn (ví dụ: "1,234.50" -> 1234.5).
+  + Đối với cột "(SL)", giá trị là số nguyên (ví dụ: "4", "6", "58", "300").
 
-(NGOÀI RA CŨNG HỖ TRỢ BẢNG PHẲNG TRUYỀN THỐNG: Nếu cột THỰC HIỆN của nhân viên ghi số tiền/số lượng trực tiếp không có dấu % thì trích xuất vào directValue).
+(Lưu ý bổ sung: nếu ảnh là định dạng bảng cây cũ có % tỉ trọng, vẫn đọc ratioPercent/storeActual/storeTarget như chuẩn cũ).
 
 QUY TẮC BẮT BUỘC:
-1. DẤU PHẨY ',' LÀ DẤU PHÂN CÁCH HÀNG NGHÌN (ví dụ: '1,169.83' -> 1169.83; '1,718.82' -> 1718.82; '10,887.00' -> 10887; '1,844.77' -> 1844.77).
-2. TỈ LỆ TỈ TRỌNG (%): Loại bỏ ký tự '%' và chuyển thành số (ví dụ: '66.9%' -> 66.9; '43.3%' -> 43.3; '100%' -> 100; '-' -> 0).
-3. ĐƠN VỊ: Nhận diện nhãn '[DT]' -> 'DT', '[SL]' -> 'SL'. Nếu chương trình có nhãn [SL] hoặc đơn vị là Số Lượng, bắt buộc đặt unit là 'SL'.
-4. TÊN BỊ CẮT NGẮN: Giữ nguyên tên gốc (kể cả có '...' như 'T11 - Trả chậm...').
-5. BỎ QUA HOÀN TOÀN: Dòng 'online - Online - 18001060' và các dòng chữ mờ watermark.
+1. BỎ QUA HOÀN TOÀN các dòng chữ mờ watermark in chéo trên ảnh ("26479 - Đào Bá Linh",...) — TUYỆT ĐỐI KHÔNG lấy số "26479" từ watermark làm giá trị ô!
+2. BỎ QUA dòng "online - Online - 18001060" (nếu có).
+3. Đọc ĐẦY ĐỦ TẤT CẢ các cột chương trình và ĐẦY ĐỦ TẤT CẢ các hàng nhân viên hiển thị trong bảng theo đúng hàng ngang, không lệch cột.
 
 Trả về DUY NHẤT một khối JSON thuần:
 {
+  "screenshotTimestamp": string | null,
   "campaignTotals": [
-    { "campaignName": string, "totalValue": number }
+    { "campaignName": string, "unit": "DT" | "SL", "totalValue": number }
   ],
   "campaigns": [
     {
       "programName": string,
       "unit": "DT" | "SL",
-      "storeName": string,
       "storeActual": number,
       "storeTarget": number,
       "employees": [
         {
-          "employeeId": string,
+          "employeeId": string | null,
           "fullName": string,
-          "ratioPercent": number | null,
           "directValue": number | null,
+          "ratioPercent": number | null,
           "rank": number | null,
           "badge": string | null
         }
@@ -312,13 +270,114 @@ async function callGeminiVisionJson(
 }
 
 /**
- * Xử lý kết quả trả về từ một lô ảnh thi đua (Emulation Chunk Result)
- * Hỗ trợ bóc tách phân cấp theo Siêu Thị, tính toán giá trị từ % tỉ trọng
- * và tự động mapping tên thi đua bị cắt ngắn (...) qua Target ST.
+ * Đối chiếu & tạo/cập nhật bản ghi nhân viên theo Mã NV hoặc Họ tên (khi ảnh không có Mã NV)
+ * Tự động đánh dấu `mappingSource` và `isUnmappedName` để user rà soát khi cần.
+ */
+function resolveOrCreateEmployeeByIdOrName(
+    employeeMap: Map<string, EmployeeOcrParsedItem>,
+    systemEmployees: EmployeeItem[],
+    rawId: string | null | undefined,
+    rawName: string
+): EmployeeOcrParsedItem | null {
+    const empId = rawId ? String(rawId).trim() : '';
+    const name = String(rawName || '').trim();
+    if (!empId && !name) return null;
+    if (
+        empId.toLowerCase() === 'online' ||
+        name.toLowerCase().includes('online - 18001060') ||
+        /^(tổng|tong)$/i.test(name)
+    ) {
+        return null;
+    }
+
+    // 1. Có Mã NV rõ ràng
+    if (empId) {
+        const existing = employeeMap.get(empId);
+        if (existing) {
+            if (name && (!existing.fullName || existing.fullName.endsWith('...') || existing.fullName.length <= 8)) {
+                existing.fullName = name;
+            }
+            return existing;
+        }
+        const dictEmp = systemEmployees.find(se => String(se.employee_id || '').trim() === empId);
+        const created: EmployeeOcrParsedItem = {
+            employeeId: empId,
+            fullName: dictEmp?.full_name?.trim() || name,
+            revenueQd: 0,
+            installmentQd: 0,
+            installmentRate: 0,
+            campaigns: {},
+            campaignDetails: [],
+            mappingSource: 'ID',
+            isUnmappedName: false
+        };
+        employeeMap.set(empId, created);
+        return created;
+    }
+
+    // 2. Không có Mã NV -> Tìm theo Họ tên trong employeeMap trước (từ ảnh Doanh thu QĐ hoặc ảnh trước)
+    const normNoAccent = normalizeViName(name, true);
+    const inMapMatch = findMatchedCandidateByName(name, Array.from(employeeMap.values()));
+
+    if (inMapMatch) {
+        if (!inMapMatch.item.ocrSourceName) inMapMatch.item.ocrSourceName = name;
+        if (!inMapMatch.item.mappingSource) inMapMatch.item.mappingSource = inMapMatch.mode;
+        return inMapMatch.item;
+    }
+
+    // 3. Đối chiếu danh bạ nhân sự ST (systemEmployees)
+    const dictRes = findDirectoryEmployeeByName(name, systemEmployees);
+    if (dictRes?.emp?.employee_id) {
+        const dictId = String(dictRes.emp.employee_id).trim();
+        const existingById = employeeMap.get(dictId);
+        if (existingById) {
+            if (!existingById.ocrSourceName) existingById.ocrSourceName = name;
+            return existingById;
+        }
+        const created: EmployeeOcrParsedItem = {
+            employeeId: dictId,
+            fullName: dictRes.emp.full_name?.trim() || name,
+            revenueQd: 0,
+            installmentQd: 0,
+            installmentRate: 0,
+            campaigns: {},
+            campaignDetails: [],
+            mappingSource: dictRes.mode,
+            ocrSourceName: name,
+            isUnmappedName: false
+        };
+        employeeMap.set(dictId, created);
+        return created;
+    }
+
+    // 4. Chưa khớp được Mã NV nào -> tạo bản ghi tạm để user rà soát & chọn lại trong Tab 2
+    const unmappedKey = `UNMAPPED::${normNoAccent || name}`;
+    const existingUnmapped = employeeMap.get(unmappedKey);
+    if (existingUnmapped) return existingUnmapped;
+
+    const unmappedItem: EmployeeOcrParsedItem = {
+        employeeId: unmappedKey,
+        fullName: name,
+        revenueQd: 0,
+        installmentQd: 0,
+        installmentRate: 0,
+        campaigns: {},
+        campaignDetails: [],
+        mappingSource: 'UNMAPPED',
+        ocrSourceName: name,
+        isUnmappedName: true
+    };
+    employeeMap.set(unmappedKey, unmappedItem);
+    return unmappedItem;
+}
+
+/**
+ * Xử lý kết quả trả về từ ảnh thi đua (hỗ trợ cả bảng Hàng=Nhân viên/Cột=Chương trình và bảng cây cũ)
  */
 function processEmulationChunkResult(
     emuParsed: any,
     employeeMap: Map<string, EmployeeOcrParsedItem>,
+    systemEmployees: EmployeeItem[],
     allCampaignTotals: Array<{ campaignName: string; totalValue: number }>,
     detectedMappings: Map<string, CampaignMappingItem>,
     targetMappingOptions?: {
@@ -347,7 +406,7 @@ function processEmulationChunkResult(
         const storeTarget = cleanBiNumber(camp.storeTarget || camp.target);
         let unit = String(camp.unit || 'DT').toUpperCase().includes('SL') ? 'SL' : 'DT';
 
-        // Tự động mapping tên chương trình qua Target ST
+        // Tự động mapping tên chương trình qua danh mục & Target ST
         const mappingRes = resolveCampaignNameByTarget(
             rawName,
             storeTarget,
@@ -389,49 +448,32 @@ function processEmulationChunkResult(
 
         const emps: any[] = Array.isArray(camp.employees) ? camp.employees : [];
         emps.forEach(empRow => {
-            const empId = String(empRow.employeeId || '').trim();
-            let fullName = String(empRow.fullName || '').trim();
-            if (!empId || empId === 'online' || fullName.toLowerCase().includes('online - 18001060')) return;
+            const targetEmp = resolveOrCreateEmployeeByIdOrName(
+                employeeMap,
+                systemEmployees,
+                empRow.employeeId,
+                empRow.fullName
+            );
+            if (!targetEmp) return;
 
-            // Tính giá trị thực hiện của nhân viên
+            // Tính giá trị thực hiện của nhân viên (ưu tiên kết quả lũy kế trực tiếp directValue)
             let val = 0;
             let ratioPercent: number | undefined;
 
-            if (empRow.directValue !== undefined && empRow.directValue !== null && cleanBiNumber(empRow.directValue) > 0) {
+            if (empRow.directValue !== undefined && empRow.directValue !== null && empRow.directValue !== '') {
                 val = cleanBiNumber(empRow.directValue);
             } else if (empRow.ratioPercent !== undefined && empRow.ratioPercent !== null) {
                 ratioPercent = cleanBiNumber(empRow.ratioPercent);
                 if (ratioPercent > 0 && storeActual !== 0) {
                     const rawCalculated = storeActual * (ratioPercent / 100);
-                    // Đối với các chương trình thi đua tính theo số lượng (SL), làm tròn số kết quả (ví dụ: 47,8 → 48)
                     val = isQty ? Math.round(rawCalculated) : Number(rawCalculated.toFixed(2));
                 }
-            } else if (empRow.value !== undefined && empRow.value !== null) {
+            } else if (empRow.value !== undefined && empRow.value !== null && empRow.value !== '') {
                 val = cleanBiNumber(empRow.value);
             }
 
-            // Đảm bảo kết quả số lượng luôn được làm tròn thành số nguyên
             if (isQty && !isNaN(val)) {
                 val = Math.round(val);
-            }
-
-            let targetEmp = employeeMap.get(empId);
-            if (!targetEmp) {
-                targetEmp = {
-                    employeeId: empId,
-                    fullName: fullName,
-                    revenueQd: 0,
-                    revenueReal: 0,
-                    installmentReal: 0,
-                    installmentRate: 0,
-                    campaigns: {},
-                    campaignDetails: []
-                };
-                employeeMap.set(empId, targetEmp);
-            } else {
-                if (fullName && (!targetEmp.fullName || targetEmp.fullName.endsWith('...') || targetEmp.fullName.length <= 8)) {
-                    targetEmp.fullName = fullName;
-                }
             }
 
             if (resolvedName) {
@@ -464,17 +506,18 @@ function processEmulationChunkResult(
 }
 
 /**
- * Trích xuất và hợp nhất toàn bộ các ảnh chụp nhân viên (DT-QĐ, DT-THỰC, THI ĐUA)
- * SỬ DỤNG CƠ CHẾ CHIA NHỎ THEO LÔ (BATCHING CHUNKS CỦA 3 ẢNH) VÀ NÉN ẢNH
- * ĐẢM BẢO XỬ LÝ MƯỢT MÀ KHI NẠP 20 FILE ẢNH THI ĐUA MÀ KHÔNG BỊ ABORT / TIMEOUT.
+ * Trích xuất và hợp nhất toàn bộ các ảnh chụp nhân viên (DT-QĐ, % Tỷ trọng trả góp, Thi đua)
+ * - Ảnh 1 & 2 (Doanh thu hợp nhất): Lấy Doanh thu QĐ & DT Trả góp QĐ (hỗ trợ nhiều ảnh cuộn ngang/dọc)
+ * - Ảnh 3 (Báo cáo trả chậm): Lấy % Tỷ trọng trả góp (đối chiếu theo Họ tên nếu ảnh không hiện Mã NV)
+ * - Ảnh Thi đua: giữ nguyên theo lô 3 ảnh/lần
  */
 export async function extractAndMergeEmployeeImages(
     apiKey: string,
     files: {
         qdFile?: File | null;
         qdFiles?: File[];
-        realFile?: File | null;
-        realFiles?: File[];
+        installmentFile?: File | null;
+        installmentFiles?: File[];
         emulationFiles: File[];
     },
     systemEmployees: EmployeeItem[] = [],
@@ -488,12 +531,12 @@ export async function extractAndMergeEmployeeImages(
     const qdFilesList: File[] = files.qdFiles && files.qdFiles.length > 0
         ? files.qdFiles
         : (files.qdFile ? [files.qdFile] : []);
-    const realFilesList: File[] = files.realFiles && files.realFiles.length > 0
-        ? files.realFiles
-        : (files.realFile ? [files.realFile] : []);
+    const installmentFilesList: File[] = files.installmentFiles && files.installmentFiles.length > 0
+        ? files.installmentFiles
+        : (files.installmentFile ? [files.installmentFile] : []);
     const emulationFiles = files.emulationFiles || [];
 
-    const totalRevenueFiles = qdFilesList.length + realFilesList.length;
+    const totalRevenueFiles = qdFilesList.length + installmentFilesList.length;
     const totalEmulation = emulationFiles.length;
 
     if (totalRevenueFiles === 0 && totalEmulation === 0) {
@@ -502,16 +545,16 @@ export async function extractAndMergeEmployeeImages(
 
     onProgress?.('Đang nén và tối ưu hóa kích thước hình ảnh...', 5);
 
-    // 1. Nén ảnh Doanh thu QĐ
+    // 1. Nén ảnh Doanh thu QĐ & DT Trả góp QĐ
     const preparedQdImages: Array<{ data: string; mimeType: string }> = [];
     for (let i = 0; i < qdFilesList.length; i++) {
         preparedQdImages.push(await prepareImageForOcr(qdFilesList[i]));
     }
 
-    // 2. Nén ảnh Doanh thu Thực
-    const preparedRealImages: Array<{ data: string; mimeType: string }> = [];
-    for (let i = 0; i < realFilesList.length; i++) {
-        preparedRealImages.push(await prepareImageForOcr(realFilesList[i]));
+    // 2. Nén ảnh % Tỷ trọng trả góp (Báo cáo trả chậm)
+    const preparedInstallmentImages: Array<{ data: string; mimeType: string }> = [];
+    for (let i = 0; i < installmentFilesList.length; i++) {
+        preparedInstallmentImages.push(await prepareImageForOcr(installmentFilesList[i]));
     }
 
     // 3. Nén ảnh Thi đua
@@ -525,27 +568,27 @@ export async function extractAndMergeEmployeeImages(
     const detectedMappings = new Map<string, CampaignMappingItem>();
     let detectedTimestamp: string | undefined;
 
-    // Helper merge nhân sự từ các lô doanh thu
-    const mergeRevenueEmployees = (revEmployees: any[]) => {
+    // Helper merge nhân sự từ các ảnh Doanh thu QĐ & DT Trả góp QĐ
+    const mergeRevenueQdEmployees = (revEmployees: any[]) => {
         revEmployees.forEach(e => {
             const empId = String(e.employeeId || '').trim();
             const name = String(e.fullName || '').trim();
             if (!empId || empId === 'online' || name.toLowerCase().includes('online - 18001060')) return;
 
-            const revQd = cleanBiNumber(e.revenueQd);
-            const revReal = cleanBiNumber(e.revenueReal);
-            const instReal = cleanBiNumber(e.installmentReal);
-            const instRate = e.installmentRate !== undefined && e.installmentRate !== null
-                ? cleanBiNumber(e.installmentRate)
-                : (revReal > 0 ? Number(((instReal / revReal) * 100).toFixed(2)) : 0);
+            const hasRevQd = e.revenueQd !== null && e.revenueQd !== undefined && e.revenueQd !== '';
+            const rawInstQd = e.installmentQd ?? e.dtTraGopQd;
+            const hasInstQd = rawInstQd !== null && rawInstQd !== undefined && rawInstQd !== '';
+
+            const revQdVal = hasRevQd ? cleanBiNumber(e.revenueQd) : null;
+            const instQdVal = hasInstQd ? cleanBiNumber(rawInstQd) : null;
 
             if (employeeMap.has(empId)) {
                 const existing = employeeMap.get(empId)!;
-                if (revQd > 0) existing.revenueQd = revQd;
-                if (revReal > 0) existing.revenueReal = revReal;
-                if (instReal > 0) {
-                    existing.installmentReal = instReal;
-                    existing.installmentRate = instRate;
+                if (revQdVal !== null && (revQdVal > 0 || existing.revenueQd === 0)) {
+                    existing.revenueQd = revQdVal;
+                }
+                if (instQdVal !== null && (instQdVal > 0 || existing.installmentQd === 0)) {
+                    existing.installmentQd = instQdVal;
                 }
                 if (name && (name.length > existing.fullName.length || existing.fullName.includes('...')) && !name.includes('...')) {
                     existing.fullName = name;
@@ -554,10 +597,9 @@ export async function extractAndMergeEmployeeImages(
                 employeeMap.set(empId, {
                     employeeId: empId,
                     fullName: name,
-                    revenueQd: revQd,
-                    revenueReal: revReal,
-                    installmentReal: instReal,
-                    installmentRate: instRate,
+                    revenueQd: revQdVal ?? 0,
+                    installmentQd: instQdVal ?? 0,
+                    installmentRate: 0,
                     campaigns: {},
                     campaignDetails: []
                 });
@@ -565,51 +607,57 @@ export async function extractAndMergeEmployeeImages(
         });
     };
 
-    // Chia nhỏ danh sách ảnh theo lô (Mỗi lô 2-3 ảnh để xử lý ổn định, không timeout)
-    const REV_CHUNK_SIZE = 2;
+    // Helper merge % Tỷ trọng trả góp từ Ảnh mẫu 3 (đối chiếu theo Mã NV hoặc Họ tên tiếng Việt)
+    const mergeInstallmentRateEmployees = (instEmployees: any[]) => {
+        instEmployees.forEach(e => {
+            const targetEmp = resolveOrCreateEmployeeByIdOrName(
+                employeeMap,
+                systemEmployees,
+                e.employeeId,
+                e.fullName
+            );
+            if (!targetEmp) return;
+            targetEmp.installmentRate = cleanBiPercent(e.installmentRate);
+        });
+    };
+
+    // Quét từng ảnh riêng lẻ để không lệch cột khi cuộn ngang/dọc
+    const REV_CHUNK_SIZE = 1;
     const qdChunks: Array<Array<{ data: string; mimeType: string }>> = [];
     for (let i = 0; i < preparedQdImages.length; i += REV_CHUNK_SIZE) {
         qdChunks.push(preparedQdImages.slice(i, i + REV_CHUNK_SIZE));
     }
 
-    const realChunks: Array<Array<{ data: string; mimeType: string }>> = [];
-    for (let i = 0; i < preparedRealImages.length; i += REV_CHUNK_SIZE) {
-        realChunks.push(preparedRealImages.slice(i, i + REV_CHUNK_SIZE));
+    const installmentChunks: Array<Array<{ data: string; mimeType: string }>> = [];
+    for (let i = 0; i < preparedInstallmentImages.length; i += REV_CHUNK_SIZE) {
+        installmentChunks.push(preparedInstallmentImages.slice(i, i + REV_CHUNK_SIZE));
     }
 
-    // Chia nhỏ danh sách ảnh thi đua thành các lô (Mỗi lô 3 ảnh)
-    const CHUNK_SIZE = 3;
-    const emuChunks: Array<Array<{ data: string; mimeType: string }>> = [];
-    for (let i = 0; i < preparedEmulationImages.length; i += CHUNK_SIZE) {
-        emuChunks.push(preparedEmulationImages.slice(i, i + CHUNK_SIZE));
-    }
-
-    const totalSteps = qdChunks.length + realChunks.length + emuChunks.length;
+    const EMU_CONCURRENCY = 3;
+    const totalSteps = qdChunks.length + installmentChunks.length + preparedEmulationImages.length;
     let currentStep = 0;
 
     // =========================================================================
-    // GIAI ĐOẠN 1A: TRÍCH XUẤT DOANH THU QUY ĐỔI (DT-QĐ)
+    // GIAI ĐOẠN 1A: TRÍCH XUẤT DOANH THU QĐ & DT TRẢ GÓP QĐ (ẢNH 1 & 2)
     // =========================================================================
     for (let qIdx = 0; qIdx < qdChunks.length; qIdx++) {
         currentStep++;
         const chunk = qdChunks[qIdx];
-        const fromImg = qIdx * REV_CHUNK_SIZE + 1;
-        const toImg = Math.min((qIdx + 1) * REV_CHUNK_SIZE, qdFilesList.length);
         const pct = Math.round((currentStep / (totalSteps + 1)) * 90);
 
         onProgress?.(
-            `Đang trích xuất Doanh thu QĐ (ảnh ${fromImg}${toImg > fromImg ? ` - ${toImg}` : ''}/${qdFilesList.length})...`,
+            `Đang trích xuất Doanh thu QĐ & Trả góp QĐ (ảnh ${qIdx + 1}/${qdFilesList.length})...`,
             pct
         );
 
         try {
             const revParsed = await callGeminiVisionJson(
                 apiKey,
-                buildRevenueOcrPrompt('QD'),
+                buildRevenueQdOcrPrompt(),
                 chunk,
                 60000,
                 keySource,
-                (msg) => onProgress?.(`DT-QĐ (đợt ${qIdx + 1}): ${msg}`, pct)
+                (msg) => onProgress?.(`DT-QĐ (ảnh ${qIdx + 1}): ${msg}`, pct)
             );
 
             if (revParsed.screenshotTimestamp && !detectedTimestamp) {
@@ -617,90 +665,101 @@ export async function extractAndMergeEmployeeImages(
             }
 
             const revEmployees: any[] = Array.isArray(revParsed.employees) ? revParsed.employees : [];
-            mergeRevenueEmployees(revEmployees);
+            mergeRevenueQdEmployees(revEmployees);
         } catch (err: any) {
-            console.error(`Lỗi khi quét ảnh DT-QĐ đợt ${qIdx + 1}:`, err);
-            if (qdChunks.length === 1 && realChunks.length === 0 && emuChunks.length === 0) {
+            if (err instanceof GeminiQuotaExceededError || err?.isQuotaExceeded) throw err;
+            console.error(`Lỗi khi quét ảnh DT-QĐ #${qIdx + 1}:`, err);
+            if (qdChunks.length === 1 && installmentChunks.length === 0 && preparedEmulationImages.length === 0) {
                 throw err;
             }
         }
     }
 
     // =========================================================================
-    // GIAI ĐOẠN 1B: TRÍCH XUẤT DOANH THU THỰC & TRẢ GÓP (DT-THỰC)
+    // GIAI ĐOẠN 1B: TRÍCH XUẤT % TỶ TRỌNG TRẢ GÓP (ẢNH MẪU 3 - BÁO CÁO TRẢ CHẬM)
     // =========================================================================
-    for (let rIdx = 0; rIdx < realChunks.length; rIdx++) {
+    for (let rIdx = 0; rIdx < installmentChunks.length; rIdx++) {
         currentStep++;
-        const chunk = realChunks[rIdx];
-        const fromImg = rIdx * REV_CHUNK_SIZE + 1;
-        const toImg = Math.min((rIdx + 1) * REV_CHUNK_SIZE, realFilesList.length);
+        const chunk = installmentChunks[rIdx];
         const pct = Math.round((currentStep / (totalSteps + 1)) * 90);
 
         onProgress?.(
-            `Đang trích xuất Doanh thu Thực & Trả góp (ảnh ${fromImg}${toImg > fromImg ? ` - ${toImg}` : ''}/${realFilesList.length})...`,
+            `Đang trích xuất % Tỷ trọng trả góp (ảnh ${rIdx + 1}/${installmentFilesList.length})...`,
             pct
         );
 
         try {
-            const revParsed = await callGeminiVisionJson(
+            const instParsed = await callGeminiVisionJson(
                 apiKey,
-                buildRevenueOcrPrompt('REAL'),
+                buildInstallmentRateOcrPrompt(),
                 chunk,
                 60000,
                 keySource,
-                (msg) => onProgress?.(`DT-Thực (đợt ${rIdx + 1}): ${msg}`, pct)
+                (msg) => onProgress?.(`% Tỷ trọng TG (ảnh ${rIdx + 1}): ${msg}`, pct)
             );
 
-            if (revParsed.screenshotTimestamp && !detectedTimestamp) {
-                detectedTimestamp = revParsed.screenshotTimestamp;
+            if (instParsed.screenshotTimestamp && !detectedTimestamp) {
+                detectedTimestamp = instParsed.screenshotTimestamp;
             }
 
-            const revEmployees: any[] = Array.isArray(revParsed.employees) ? revParsed.employees : [];
-            mergeRevenueEmployees(revEmployees);
+            const instEmployees: any[] = Array.isArray(instParsed.employees) ? instParsed.employees : [];
+            mergeInstallmentRateEmployees(instEmployees);
         } catch (err: any) {
-            console.error(`Lỗi khi quét ảnh DT-Thực đợt ${rIdx + 1}:`, err);
-            if (realChunks.length === 1 && qdChunks.length === 0 && emuChunks.length === 0) {
+            if (err instanceof GeminiQuotaExceededError || err?.isQuotaExceeded) throw err;
+            console.error(`Lỗi khi quét ảnh % Tỷ trọng trả góp #${rIdx + 1}:`, err);
+            if (installmentChunks.length === 1 && qdChunks.length === 0 && preparedEmulationImages.length === 0) {
                 throw err;
             }
         }
     }
 
     // =========================================================================
-    // GIAI ĐOẠN 2: TRÍCH XUẤT THI ĐUA THEO TỪNG LÔ (3 ẢNH / LÔ)
+    // GIAI ĐOẠN 2: TRÍCH XUẤT THI ĐUA (MỖI ẢNH 1 CALL RIÊNG BIỆT, CHẠY SONG SONG ĐỢT 3 ẢNH)
     // =========================================================================
-    for (let cIdx = 0; cIdx < emuChunks.length; cIdx++) {
-        currentStep++;
-        const chunk = emuChunks[cIdx];
-        const fromImg = cIdx * CHUNK_SIZE + 1;
-        const toImg = Math.min((cIdx + 1) * CHUNK_SIZE, emulationFiles.length);
+    for (let bStart = 0; bStart < preparedEmulationImages.length; bStart += EMU_CONCURRENCY) {
+        const batch = preparedEmulationImages.slice(bStart, bStart + EMU_CONCURRENCY);
+        const fromImg = bStart + 1;
+        const toImg = bStart + batch.length;
+        currentStep += batch.length;
         const pct = Math.round((currentStep / (totalSteps + 1)) * 90);
 
         onProgress?.(
-            `Đang trích xuất nhóm thi đua ${cIdx + 1}/${emuChunks.length} (Ảnh ${fromImg} - ${toImg}/${emulationFiles.length})...`,
+            `Đang trích xuất bảng thi đua (Ảnh ${fromImg}${toImg > fromImg ? ` - ${toImg}` : ''}/${emulationFiles.length})...`,
             pct
         );
 
-        try {
-            const emuParsed = await callGeminiVisionJson(
-                apiKey,
-                buildEmulationBatchPrompt(),
-                chunk,
-                60000,
-                keySource,
-                (msg) => onProgress?.(`Nhóm thi đua ${cIdx + 1}: ${msg}`, pct)
-            );
+        const batchResults = await Promise.all(
+            batch.map(async (img, offset) => {
+                try {
+                    return await callGeminiVisionJson(
+                        apiKey,
+                        buildEmulationBatchPrompt(),
+                        [img],
+                        60000,
+                        keySource
+                    );
+                } catch (err: any) {
+                    if (err instanceof GeminiQuotaExceededError || err?.isQuotaExceeded) throw err;
+                    console.warn(`Lỗi khi quét ảnh thi đua #${bStart + offset + 1}:`, err);
+                    return null;
+                }
+            })
+        );
 
+        batchResults.forEach(emuParsed => {
+            if (!emuParsed) return;
+            if (emuParsed.screenshotTimestamp && !detectedTimestamp) {
+                detectedTimestamp = emuParsed.screenshotTimestamp;
+            }
             processEmulationChunkResult(
                 emuParsed,
                 employeeMap,
+                systemEmployees,
                 allCampaignTotals,
                 detectedMappings,
                 targetMappingOptions
             );
-        } catch (err: any) {
-            console.warn(`Lỗi khi quét nhóm thi đua ${cIdx + 1}:`, err);
-            // Tiếp tục quét các nhóm thi đua còn lại
-        }
+        });
     }
 
     // =========================================================================
@@ -774,40 +833,46 @@ export async function extractAdditionalEmulationImages(
         });
     });
 
-    const CHUNK_SIZE = 3;
-    const chunks: Array<Array<{ data: string; mimeType: string }>> = [];
-    for (let i = 0; i < preparedImages.length; i += CHUNK_SIZE) {
-        chunks.push(preparedImages.slice(i, i + CHUNK_SIZE));
-    }
-
+    const EMU_CONCURRENCY = 3;
     const allCampaignTotals: Array<{ campaignName: string; totalValue: number }> = [];
     const detectedMappings = new Map<string, CampaignMappingItem>();
 
-    for (let cIdx = 0; cIdx < chunks.length; cIdx++) {
-        const fromImg = cIdx * CHUNK_SIZE + 1;
-        const toImg = Math.min((cIdx + 1) * CHUNK_SIZE, additionalFiles.length);
-        const pct = Math.round(((cIdx + 1) / (chunks.length + 1)) * 85);
-        onProgress?.(`Đang quét thi đua bổ sung đợt ${cIdx + 1}/${chunks.length} (Ảnh ${fromImg} - ${toImg})...`, pct);
+    for (let bStart = 0; bStart < preparedImages.length; bStart += EMU_CONCURRENCY) {
+        const batch = preparedImages.slice(bStart, bStart + EMU_CONCURRENCY);
+        const fromImg = bStart + 1;
+        const toImg = bStart + batch.length;
+        const pct = Math.round((toImg / (preparedImages.length + 1)) * 85);
+        onProgress?.(`Đang quét thi đua bổ sung (Ảnh ${fromImg}${toImg > fromImg ? ` - ${toImg}` : ''}/${additionalFiles.length})...`, pct);
 
-        try {
-            const emuParsed = await callGeminiVisionJson(
-                apiKey,
-                buildEmulationBatchPrompt(),
-                chunks[cIdx],
-                60000,
-                keySource
-            );
+        const batchResults = await Promise.all(
+            batch.map(async (img, offset) => {
+                try {
+                    return await callGeminiVisionJson(
+                        apiKey,
+                        buildEmulationBatchPrompt(),
+                        [img],
+                        60000,
+                        keySource
+                    );
+                } catch (err: any) {
+                    if (err instanceof GeminiQuotaExceededError || err?.isQuotaExceeded) throw err;
+                    console.warn(`Lỗi khi quét ảnh bổ sung #${bStart + offset + 1}:`, err);
+                    return null;
+                }
+            })
+        );
 
+        batchResults.forEach(emuParsed => {
+            if (!emuParsed) return;
             processEmulationChunkResult(
                 emuParsed,
                 employeeMap,
+                systemEmployees,
                 allCampaignTotals,
                 detectedMappings,
                 targetMappingOptions
             );
-        } catch (err: any) {
-            console.warn(`Lỗi khi quét nhóm bổ sung ${cIdx + 1}:`, err);
-        }
+        });
     }
 
     onProgress?.('Đã hợp nhất xong số liệu thi đua bổ sung!', 100);
@@ -832,8 +897,8 @@ export function convertOcrItemsToSessionRecords(
         full_name: item.fullName,
         quantity: 0,
         revenue_qd: item.revenueQd,
-        revenue_actual: item.revenueReal,
-        installment_revenue: item.installmentReal,
+        revenue_actual: 0,
+        installment_revenue: item.installmentQd,
         installment_rate: item.installmentRate,
         campaigns: item.campaigns,
         short_name: getShortenedEmployeeName(item.fullName),
@@ -851,8 +916,7 @@ export function convertSessionRecordsToOcrItems(
         employeeId: r.employee_id,
         fullName: r.full_name,
         revenueQd: r.revenue_qd || 0,
-        revenueReal: r.revenue_actual || 0,
-        installmentReal: r.installment_revenue || 0,
+        installmentQd: r.installment_revenue || 0,
         installmentRate: r.installment_rate || 0,
         campaigns: r.campaigns || {},
         campaignDetails: Object.entries(r.campaigns || {}).map(([cName, cVal]) => ({

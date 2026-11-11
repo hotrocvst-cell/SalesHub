@@ -1,20 +1,17 @@
 import React, { useRef } from 'react';
 import {
-    UploadCloud,
-    FileImage,
     Sparkles,
     Trash2,
-    CheckCircle2,
     Layers,
     Key,
     Plus,
     X,
-    Cpu,
     Store
 } from 'lucide-react';
 import type { OcrEngineType, EmulationUploadMode, SingleStoreEmulationEntry } from '../types/ocrTypes';
 import type { StoreItem } from '../../../core/lib/storage';
 import { formatStoreDisplayName } from '../../../core/lib/formatters';
+import ImageSlotCard from './ImageSlotCard';
 
 interface Props {
     mode?: 'STORE' | 'EMPLOYEE';
@@ -22,10 +19,13 @@ interface Props {
     qdFiles?: File[];
     onQdFileChange?: (file: File | null) => void;
     onQdFilesChange?: (files: File[]) => void;
-    realFile?: File | null;
-    realFiles?: File[];
-    onRealFileChange?: (file: File | null) => void;
-    onRealFilesChange?: (files: File[]) => void;
+
+    // Ảnh % Tỷ trọng trả góp (thay thế hoàn toàn DT Thực cho cả ST và Nhân viên)
+    installmentFile?: File | null;
+    installmentFiles?: File[];
+    onInstallmentFileChange?: (file: File | null) => void;
+    onInstallmentFilesChange?: (files: File[]) => void;
+
     emulationFiles: File[];
     onEmulationFilesChange: (files: File[]) => void;
     engineType?: OcrEngineType;
@@ -35,6 +35,7 @@ interface Props {
     isQuotaExceeded?: boolean;
     onOpenKeyModal: () => void;
     onRunOcr: () => void;
+    onClearAllFiles?: () => void;
     isExtracting: boolean;
     progressText: string;
     progressPercent: number;
@@ -53,17 +54,17 @@ export default function OcrUploadZone({
     qdFiles,
     onQdFileChange,
     onQdFilesChange,
-    realFile,
-    realFiles,
-    onRealFileChange,
-    onRealFilesChange,
+    installmentFile,
+    installmentFiles,
+    onInstallmentFileChange,
+    onInstallmentFilesChange,
     emulationFiles,
     onEmulationFilesChange,
-    hasGeminiKey,
     keySource = 'NONE',
     isQuotaExceeded = false,
     onOpenKeyModal,
     onRunOcr,
+    onClearAllFiles,
     isExtracting,
     progressText,
     progressPercent,
@@ -73,63 +74,13 @@ export default function OcrUploadZone({
     singleStoreEmulations = [],
     onSingleStoreEmulationsChange
 }: Props) {
-    const qdInputRef = useRef<HTMLInputElement>(null);
-    const realInputRef = useRef<HTMLInputElement>(null);
     const emuInputRef = useRef<HTMLInputElement>(null);
 
     const isMultiQd = Boolean(onQdFilesChange || qdFiles !== undefined);
-    const isMultiReal = Boolean(onRealFilesChange || realFiles !== undefined);
-
     const currentQdFiles: File[] = qdFiles ?? (qdFile ? [qdFile] : []);
-    const currentRealFiles: File[] = realFiles ?? (realFile ? [realFile] : []);
 
-    const handleAddQdFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (!e.target.files) return;
-        const newFiles = Array.from(e.target.files);
-        if (onQdFilesChange) {
-            onQdFilesChange([...currentQdFiles, ...newFiles]);
-        } else if (onQdFileChange) {
-            onQdFileChange(newFiles[0] || null);
-        }
-        if (qdInputRef.current) qdInputRef.current.value = '';
-    };
-
-    const handleRemoveQdFile = (index: number) => {
-        if (onQdFilesChange) {
-            onQdFilesChange(currentQdFiles.filter((_, idx) => idx !== index));
-        } else if (onQdFileChange) {
-            onQdFileChange(null);
-        }
-    };
-
-    const handleClearAllQdFiles = () => {
-        if (onQdFilesChange) onQdFilesChange([]);
-        if (onQdFileChange) onQdFileChange(null);
-    };
-
-    const handleAddRealFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (!e.target.files) return;
-        const newFiles = Array.from(e.target.files);
-        if (onRealFilesChange) {
-            onRealFilesChange([...currentRealFiles, ...newFiles]);
-        } else if (onRealFileChange) {
-            onRealFileChange(newFiles[0] || null);
-        }
-        if (realInputRef.current) realInputRef.current.value = '';
-    };
-
-    const handleRemoveRealFile = (index: number) => {
-        if (onRealFilesChange) {
-            onRealFilesChange(currentRealFiles.filter((_, idx) => idx !== index));
-        } else if (onRealFileChange) {
-            onRealFileChange(null);
-        }
-    };
-
-    const handleClearAllRealFiles = () => {
-        if (onRealFilesChange) onRealFilesChange([]);
-        if (onRealFileChange) onRealFileChange(null);
-    };
+    const isMultiInstallment = Boolean(onInstallmentFilesChange || installmentFiles !== undefined);
+    const currentInstallmentFiles: File[] = installmentFiles ?? (installmentFile ? [installmentFile] : []);
 
     const handleAddEmulationFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!e.target.files) return;
@@ -139,43 +90,36 @@ export default function OcrUploadZone({
     };
 
     const handleRemoveEmulationFile = (index: number) => {
-        const next = emulationFiles.filter((_, idx) => idx !== index);
-        onEmulationFilesChange(next);
+        onEmulationFilesChange(emulationFiles.filter((_, idx) => idx !== index));
     };
 
     // Handlers cho chế độ nạp thi đua đích danh từng ST
     const handleAddSingleStoreFiles = (entryIdx: number, newFiles: FileList | null) => {
         if (!newFiles || !onSingleStoreEmulationsChange) return;
         const added = Array.from(newFiles);
-        const updated = singleStoreEmulations.map((entry, idx) => {
-            if (idx === entryIdx) {
-                return { ...entry, files: [...entry.files, ...added] };
-            }
-            return entry;
-        });
-        onSingleStoreEmulationsChange(updated);
+        onSingleStoreEmulationsChange(
+            singleStoreEmulations.map((entry, idx) =>
+                idx === entryIdx ? { ...entry, files: [...entry.files, ...added] } : entry
+            )
+        );
     };
 
     const handleRemoveSingleStoreFile = (entryIdx: number, fileIdx: number) => {
         if (!onSingleStoreEmulationsChange) return;
-        const updated = singleStoreEmulations.map((entry, idx) => {
-            if (idx === entryIdx) {
-                return { ...entry, files: entry.files.filter((_, fI) => fI !== fileIdx) };
-            }
-            return entry;
-        });
-        onSingleStoreEmulationsChange(updated);
+        onSingleStoreEmulationsChange(
+            singleStoreEmulations.map((entry, idx) =>
+                idx === entryIdx ? { ...entry, files: entry.files.filter((_, fI) => fI !== fileIdx) } : entry
+            )
+        );
     };
 
     const handleUpdateEntryStoreName = (entryIdx: number, storeName: string) => {
         if (!onSingleStoreEmulationsChange) return;
-        const updated = singleStoreEmulations.map((entry, idx) => {
-            if (idx === entryIdx) {
-                return { ...entry, storeName };
-            }
-            return entry;
-        });
-        onSingleStoreEmulationsChange(updated);
+        onSingleStoreEmulationsChange(
+            singleStoreEmulations.map((entry, idx) =>
+                idx === entryIdx ? { ...entry, storeName } : entry
+            )
+        );
     };
 
     const handleAddStoreEntry = () => {
@@ -183,16 +127,12 @@ export default function OcrUploadZone({
         const currentStores = new Set(singleStoreEmulations.map(e => e.storeName));
         const nextStore = selectableStores.find(s => !currentStores.has(s.name));
         const nextName = nextStore ? nextStore.name : (selectableStores[0]?.name || '');
-        onSingleStoreEmulationsChange([
-            ...singleStoreEmulations,
-            { storeName: nextName, files: [] }
-        ]);
+        onSingleStoreEmulationsChange([...singleStoreEmulations, { storeName: nextName, files: [] }]);
     };
 
     const handleRemoveStoreEntry = (entryIdx: number) => {
         if (!onSingleStoreEmulationsChange) return;
-        const updated = singleStoreEmulations.filter((_, idx) => idx !== entryIdx);
-        onSingleStoreEmulationsChange(updated);
+        onSingleStoreEmulationsChange(singleStoreEmulations.filter((_, idx) => idx !== entryIdx));
     };
 
     const hasEmulation = emulationMode === 'CLUSTER'
@@ -200,8 +140,8 @@ export default function OcrUploadZone({
         : singleStoreEmulations.some(e => e.files.length > 0);
 
     const hasQd = currentQdFiles.length > 0;
-    const hasReal = currentRealFiles.length > 0;
-    const canExtract = Boolean(hasQd || hasReal || hasEmulation);
+    const hasSecondBlock = currentInstallmentFiles.length > 0;
+    const canExtract = Boolean(hasQd || hasSecondBlock || hasEmulation);
 
     const totalEmulationFiles = emulationMode === 'CLUSTER'
         ? emulationFiles.length
@@ -209,21 +149,32 @@ export default function OcrUploadZone({
 
     return (
         <div className="bg-white rounded-3xl border border-slate-200 p-4 sm:p-5 shadow-xs space-y-4 font-avo">
-            {/* Header và Động cơ */}
+            {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
                 <div className="space-y-0.5">
                     <div className="flex items-center gap-1.5 text-xs font-black text-slate-900 uppercase tracking-wide">
-                        <Sparkles className="w-4 h-4 text-purple-600" />
+                        <Sparkles className="w-4 h-4 text-purple-600" aria-hidden="true" />
                         <span>Tải Ảnh</span>
                     </div>
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap">
-                    {/* Nút cài đặt API Key */}
+                    {canExtract && !isExtracting && onClearAllFiles && (
+                        <button
+                            type="button"
+                            onClick={onClearAllFiles}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 transition cursor-pointer shadow-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
+                            title="Xóa toàn bộ ảnh đã chọn ở 3 mục để tải lại đợt ảnh mới"
+                        >
+                            <Trash2 className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                            <span>Xóa hết ảnh</span>
+                        </button>
+                    )}
+
                     <button
                         type="button"
                         onClick={onOpenKeyModal}
-                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer border shadow-2xs ${isQuotaExceeded
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer border shadow-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${isQuotaExceeded
                             ? 'bg-rose-50 text-rose-900 border-rose-300 hover:bg-rose-100 animate-pulse'
                             : keySource === 'USER'
                                 ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
@@ -233,15 +184,15 @@ export default function OcrUploadZone({
                             }`}
                         title="Quản lý Google Gemini API Key"
                     >
-                        <Key className="w-3.5 h-3.5 shrink-0" />
+                        <Key className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
                         <span>
                             {isQuotaExceeded
                                 ? '⚠️ Key hết lượt - Nhập key Google'
                                 : keySource === 'USER'
-                                    ? '👤 Key Cá Nhân (Ưu tiên)'
+                                    ? 'Key Cá Nhân (Ưu tiên)'
                                     : keySource === 'ADMIN'
-                                        ? '🛡️ API Key'
-                                        : '🟡 Cần Cài Gemini API Key'}
+                                        ? 'API Key'
+                                        : 'Cần Cài Gemini API Key'}
                         </span>
                     </button>
                 </div>
@@ -250,241 +201,75 @@ export default function OcrUploadZone({
             {/* 3 KHỐI TIẾP NHẬN ẢNH */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 {/* 1. KHỐI DOANH THU QUY ĐỔI (DT-QĐ) */}
-                <div className="bg-slate-50/80 border border-slate-200 rounded-2xl p-3.5 flex flex-col justify-between space-y-3">
-                    <div>
-                        <div className="flex items-center justify-between">
-                            <span className="text-xs font-black text-blue-900 uppercase tracking-wide flex items-center gap-1.5">
-                                <FileImage className="w-3.5 h-3.5 text-blue-600" />
-                                <span>1. Doanh Thu QĐ</span>
-                            </span>
-                            <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded font-mono ${currentQdFiles.length > 0 ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-800'
-                                }`}>
-                                {isMultiQd ? `${currentQdFiles.length} ảnh` : (qdFile ? '1 file' : '0 file')}
-                            </span>
-                        </div>
-                    </div>
+                <ImageSlotCard
+                    title="1. Doanh Thu QĐ"
+                    description={
+                        mode === 'STORE'
+                            ? 'Ảnh Thẻ Doanh thu hợp nhất • Lấy: Doanh thu QĐ, DT Trả góp QĐ, Target, TB 3 Tháng, % TT Doanh thu.'
+                            : 'Ảnh Lưới Doanh thu hợp nhất • Lấy: Doanh thu QĐ, DT Trả góp QĐ (chọn nhiều ảnh nếu cuộn ngang/dọc).'
+                    }
+                    theme="blue"
+                    files={currentQdFiles}
+                    isMulti={isMultiQd}
+                    emptyTitle="Chọn ảnh Doanh thu QĐ"
+                    emptySubtitle="Chụp hoặc tải ảnh màn hình"
+                    addMoreLabel="+ Thêm ảnh Doanh thu QĐ khác..."
+                    addInitialLabel="Nạp ảnh Doanh thu QĐ (chọn 1 hoặc nhiều)"
+                    onAddFiles={(added) => {
+                        if (onQdFilesChange) onQdFilesChange([...currentQdFiles, ...added]);
+                        else if (onQdFileChange) onQdFileChange(added[0] || null);
+                    }}
+                    onRemoveFile={(index) => {
+                        if (onQdFilesChange) onQdFilesChange(currentQdFiles.filter((_, idx) => idx !== index));
+                        else if (onQdFileChange) onQdFileChange(null);
+                    }}
+                    onClearAll={() => {
+                        if (onQdFilesChange) onQdFilesChange([]);
+                        if (onQdFileChange) onQdFileChange(null);
+                    }}
+                />
 
-                    <input
-                        ref={qdInputRef}
-                        type="file"
-                        accept="image/*"
-                        multiple={isMultiQd}
-                        className="hidden"
-                        onChange={handleAddQdFiles}
-                    />
+                {/* 2. KHỐI % TỶ TRỌNG TRẢ GÓP (THAY THẾ HOÀN TOÀN DT THỰC) */}
+                <ImageSlotCard
+                    title="2. % Tỷ Trọng Trả Góp"
+                    description={
+                        mode === 'STORE'
+                            ? 'Ảnh Báo cáo trả chậm • Lấy: % Tỷ trọng trả góp theo từng ST.'
+                            : 'Ảnh Báo cáo trả chậm • Lấy: % Tỷ trọng trả góp theo từng nhân viên.'
+                    }
+                    theme="emerald"
+                    files={currentInstallmentFiles}
+                    isMulti={isMultiInstallment}
+                    emptyTitle="Chọn ảnh % Tỷ trọng trả góp"
+                    emptySubtitle="Ảnh Báo cáo trả chậm"
+                    addMoreLabel="+ Thêm ảnh % Tỷ trọng trả góp..."
+                    addInitialLabel="Nạp ảnh % Tỷ trọng trả góp (chọn 1 hoặc nhiều)"
+                    onAddFiles={(added) => {
+                        if (onInstallmentFilesChange) {
+                            onInstallmentFilesChange([...currentInstallmentFiles, ...added]);
+                        } else if (onInstallmentFileChange) {
+                            onInstallmentFileChange(added[0] || null);
+                        }
+                    }}
+                    onRemoveFile={(index) => {
+                        if (onInstallmentFilesChange) {
+                            onInstallmentFilesChange(currentInstallmentFiles.filter((_, idx) => idx !== index));
+                        } else if (onInstallmentFileChange) {
+                            onInstallmentFileChange(null);
+                        }
+                    }}
+                    onClearAll={() => {
+                        if (onInstallmentFilesChange) onInstallmentFilesChange([]);
+                        if (onInstallmentFileChange) onInstallmentFileChange(null);
+                    }}
+                />
 
-                    {isMultiQd ? (
-                        <div className="space-y-1.5">
-                            {currentQdFiles.length > 0 && (
-                                <div className="space-y-1">
-                                    <div className="max-h-24 overflow-y-auto space-y-1 pr-1">
-                                        {currentQdFiles.map((file, idx) => (
-                                            <div
-                                                key={idx}
-                                                className="bg-white border border-blue-200 rounded-lg px-2 py-1 flex items-center justify-between gap-1 text-[11px] shadow-2xs"
-                                            >
-                                                <span className="truncate text-slate-800 font-medium" title={file.name}>
-                                                    #{idx + 1}. {file.name}
-                                                </span>
-                                                <div className="flex items-center gap-1 shrink-0">
-                                                    <span className="text-[10px] text-slate-400 font-mono">
-                                                        {(file.size / 1024).toFixed(0)} KB
-                                                    </span>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleRemoveQdFile(idx)}
-                                                        className="text-slate-400 hover:text-rose-600 transition cursor-pointer p-0.5"
-                                                        title="Xóa ảnh này"
-                                                    >
-                                                        <X className="w-3 h-3" />
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                    {currentQdFiles.length > 1 && (
-                                        <div className="flex justify-end">
-                                            <button
-                                                type="button"
-                                                onClick={handleClearAllQdFiles}
-                                                className="text-[10px] text-rose-500 hover:text-rose-700 font-bold transition cursor-pointer"
-                                            >
-                                                Xóa tất cả ({currentQdFiles.length} ảnh)
-                                            </button>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-
-                            <button
-                                type="button"
-                                onClick={() => qdInputRef.current?.click()}
-                                className="w-full py-2.5 px-3 border-2 border-dashed border-blue-200 hover:border-blue-400 hover:bg-blue-50/40 rounded-xl text-center cursor-pointer transition flex items-center justify-center gap-1.5 text-blue-700 text-xs font-black"
-                            >
-                                <Plus className="w-4 h-4 text-blue-600" />
-                                <span>{currentQdFiles.length > 0 ? '+ Thêm ảnh DT-QĐ khác...' : 'Nạp ảnh DT-QĐ (chọn 1 hoặc nhiều)'}</span>
-                            </button>
-                        </div>
-                    ) : (
-                        qdFile ? (
-                            <div className="bg-white border border-blue-200 rounded-xl p-2.5 flex items-center justify-between gap-2 shadow-2xs">
-                                <div className="flex items-center gap-2 min-w-0">
-                                    <div className="w-7 h-7 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
-                                        <CheckCircle2 className="w-4 h-4" />
-                                    </div>
-                                    <div className="min-w-0">
-                                        <p className="text-xs font-bold text-slate-800 truncate" title={qdFile.name}>
-                                            {qdFile.name}
-                                        </p>
-                                        <p className="text-[10px] text-slate-400">
-                                            {(qdFile.size / 1024).toFixed(1)} KB
-                                        </p>
-                                    </div>
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={() => onQdFileChange?.(null)}
-                                    className="p-1 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition cursor-pointer"
-                                    title="Xóa ảnh này"
-                                >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                            </div>
-                        ) : (
-                            <button
-                                type="button"
-                                onClick={() => qdInputRef.current?.click()}
-                                className="w-full py-4 px-3 border-2 border-dashed border-blue-200 hover:border-blue-400 hover:bg-blue-50/40 rounded-xl text-center cursor-pointer transition flex flex-col items-center justify-center gap-1 text-blue-700"
-                            >
-                                <UploadCloud className="w-5 h-5 text-blue-500" />
-                                <span className="text-xs font-black">Chọn ảnh DT-QĐ</span>
-                                <span className="text-[10px] text-slate-400">Chụp hoặc tải ảnh màn hình</span>
-                            </button>
-                        )
-                    )}
-                </div>
-
-                {/* 2. KHỐI DOANH THU THỰC (DT-THỰC) */}
-                <div className="bg-slate-50/80 border border-slate-200 rounded-2xl p-3.5 flex flex-col justify-between space-y-3">
-                    <div>
-                        <div className="flex items-center justify-between">
-                            <span className="text-xs font-black text-emerald-900 uppercase tracking-wide flex items-center gap-1.5">
-                                <FileImage className="w-3.5 h-3.5 text-emerald-600" />
-                                <span>2. Doanh Thu Thực</span>
-                            </span>
-                            <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded font-mono ${currentRealFiles.length > 0 ? 'bg-emerald-600 text-white' : 'bg-emerald-100 text-emerald-800'
-                                }`}>
-                                {isMultiReal ? `${currentRealFiles.length} ảnh` : (realFile ? '1 file' : '0 file')}
-                            </span>
-                        </div>
-                    </div>
-
-                    <input
-                        ref={realInputRef}
-                        type="file"
-                        accept="image/*"
-                        multiple={isMultiReal}
-                        className="hidden"
-                        onChange={handleAddRealFiles}
-                    />
-
-                    {isMultiReal ? (
-                        <div className="space-y-1.5">
-                            {currentRealFiles.length > 0 && (
-                                <div className="space-y-1">
-                                    <div className="max-h-24 overflow-y-auto space-y-1 pr-1">
-                                        {currentRealFiles.map((file, idx) => (
-                                            <div
-                                                key={idx}
-                                                className="bg-white border border-emerald-200 rounded-lg px-2 py-1 flex items-center justify-between gap-1 text-[11px] shadow-2xs"
-                                            >
-                                                <span className="truncate text-slate-800 font-medium" title={file.name}>
-                                                    #{idx + 1}. {file.name}
-                                                </span>
-                                                <div className="flex items-center gap-1 shrink-0">
-                                                    <span className="text-[10px] text-slate-400 font-mono">
-                                                        {(file.size / 1024).toFixed(0)} KB
-                                                    </span>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleRemoveRealFile(idx)}
-                                                        className="text-slate-400 hover:text-rose-600 transition cursor-pointer p-0.5"
-                                                        title="Xóa ảnh này"
-                                                    >
-                                                        <X className="w-3 h-3" />
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                    {currentRealFiles.length > 1 && (
-                                        <div className="flex justify-end">
-                                            <button
-                                                type="button"
-                                                onClick={handleClearAllRealFiles}
-                                                className="text-[10px] text-rose-500 hover:text-rose-700 font-bold transition cursor-pointer"
-                                            >
-                                                Xóa tất cả ({currentRealFiles.length} ảnh)
-                                            </button>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-
-                            <button
-                                type="button"
-                                onClick={() => realInputRef.current?.click()}
-                                className="w-full py-2.5 px-3 border-2 border-dashed border-emerald-200 hover:border-emerald-400 hover:bg-emerald-50/40 rounded-xl text-center cursor-pointer transition flex items-center justify-center gap-1.5 text-emerald-700 text-xs font-black"
-                            >
-                                <Plus className="w-4 h-4 text-emerald-600" />
-                                <span>{currentRealFiles.length > 0 ? '+ Thêm ảnh DT Thực khác...' : 'Nạp ảnh DT Thực (chọn 1 hoặc nhiều)'}</span>
-                            </button>
-                        </div>
-                    ) : (
-                        realFile ? (
-                            <div className="bg-white border border-emerald-200 rounded-xl p-2.5 flex items-center justify-between gap-2 shadow-2xs">
-                                <div className="flex items-center gap-2 min-w-0">
-                                    <div className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
-                                        <CheckCircle2 className="w-4 h-4" />
-                                    </div>
-                                    <div className="min-w-0">
-                                        <p className="text-xs font-bold text-slate-800 truncate" title={realFile.name}>
-                                            {realFile.name}
-                                        </p>
-                                        <p className="text-[10px] text-slate-400">
-                                            {(realFile.size / 1024).toFixed(1)} KB
-                                        </p>
-                                    </div>
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={() => onRealFileChange?.(null)}
-                                    className="p-1 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition cursor-pointer"
-                                    title="Xóa ảnh này"
-                                >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                            </div>
-                        ) : (
-                            <button
-                                type="button"
-                                onClick={() => realInputRef.current?.click()}
-                                className="w-full py-4 px-3 border-2 border-dashed border-emerald-200 hover:border-emerald-400 hover:bg-emerald-50/40 rounded-xl text-center cursor-pointer transition flex flex-col items-center justify-center gap-1 text-emerald-700"
-                            >
-                                <UploadCloud className="w-5 h-5 text-emerald-500" />
-                                <span className="text-xs font-black">Chọn ảnh DT Thực</span>
-                                <span className="text-[10px] text-slate-400">Lấy DT thực &amp; Trả góp</span>
-                            </button>
-                        )
-                    )}
-                </div>
-
-                {/* 3. KHỐI THI ĐUA LŨY KẾ (HỖ TRỢ SWITCH: CẢ CỤM / ĐÍCH DANH TỪNG ST) */}
+                {/* 3. KHỐI THI ĐUA LŨY KẾ (GIỮ NGUYÊN NHƯ HIỆN TẠI) */}
                 <div className="bg-slate-50/80 border border-slate-200 rounded-2xl p-3.5 flex flex-col justify-between space-y-3">
                     <div>
                         <div className="flex items-center justify-between gap-1 flex-wrap">
                             <span className="text-xs font-black text-purple-900 uppercase tracking-wide flex items-center gap-1.5">
-                                <Layers className="w-3.5 h-3.5 text-purple-600" />
+                                <Layers className="w-3.5 h-3.5 text-purple-600" aria-hidden="true" />
                                 <span>3. Thi đua</span>
                             </span>
 
@@ -495,53 +280,53 @@ export default function OcrUploadZone({
                                         type="button"
                                         onClick={() => onEmulationModeChange('CLUSTER')}
                                         className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition cursor-pointer flex items-center gap-1 ${emulationMode === 'CLUSTER'
-                                            ? 'bg-purple-600 text-white shadow-2xs font-black'
-                                            : 'text-purple-800 hover:text-purple-950'
+                                            ? 'bg-purple-700 text-white shadow-2xs font-black'
+                                            : 'text-purple-900 hover:text-purple-950'
                                             }`}
                                         title="Nạp cả cụm (dữ liệu ảnh có đồng thời tên nhiều ST)"
                                     >
-                                        <span>🌐 Cả Cụm</span>
+                                        <span>Cả Cụm</span>
                                     </button>
                                     <button
                                         type="button"
                                         onClick={() => onEmulationModeChange('SINGLE_STORE')}
                                         className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition cursor-pointer flex items-center gap-1 ${emulationMode === 'SINGLE_STORE'
-                                            ? 'bg-purple-600 text-white shadow-2xs font-black'
-                                            : 'text-purple-800 hover:text-purple-950'
+                                            ? 'bg-purple-700 text-white shadow-2xs font-black'
+                                            : 'text-purple-900 hover:text-purple-950'
                                             }`}
                                         title="Nạp đích danh theo từng ST có thể nạp"
                                     >
-                                        <span>🏪 Từng ST</span>
+                                        <span>Từng ST</span>
                                     </button>
                                 </div>
                             )}
 
-                            <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-purple-100 text-purple-800 font-mono">
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-100 text-purple-900 font-mono tabular-nums">
                                 {totalEmulationFiles} ảnh
                             </span>
                         </div>
 
                         {emulationMode === 'CLUSTER' ? (
-                            <p className="text-[10px] text-purple-800 bg-purple-50/80 border border-purple-200 px-2 py-1 rounded-lg mt-1 font-medium leading-relaxed">
+                            <p className="text-[10.5px] text-purple-900 bg-purple-50/80 border border-purple-200 px-2 py-1 rounded-lg mt-1.5 font-medium leading-relaxed">
                                 {mode === 'STORE' ? (
                                     <>
-                                        🌐 <strong>Ảnh bảng thi đua cụm:</strong> Dữ liệu có đồng thời tên nhiều ST.
+                                        <strong>Ảnh bảng thi đua cụm:</strong> Dữ liệu có đồng thời tên nhiều ST.
                                     </>
                                 ) : (
                                     <>
-                                        🌐 <strong>Ảnh thi đua theo ST:</strong> AI tự động tính số liệu NV từ % tỉ trọng &amp; mapping tên đầy đủ qua Target ST.
+                                        <strong>Ảnh thi đua theo nhân viên:</strong> Ảnh bảng pivot (Hàng: Nhân viên · Cột: Chương trình) • Tự động lấy lũy kế &amp; đối chiếu Mã NV theo tên.
                                     </>
                                 )}
                             </p>
                         ) : (
-                            <p className="text-[10px] text-purple-900 bg-purple-50/90 border border-purple-200 px-2 py-1 rounded-lg mt-1 font-medium leading-relaxed">
-                                🏪 <strong>Đích danh từng ST:</strong> Tải lên ảnh theo đúng ST cần nạp.
+                            <p className="text-[10.5px] text-purple-900 bg-purple-50/90 border border-purple-200 px-2 py-1 rounded-lg mt-1.5 font-medium leading-relaxed">
+                                <strong>Đích danh từng ST:</strong> Tải lên ảnh theo đúng ST cần nạp.
                             </p>
                         )}
 
                         {totalEmulationFiles >= 4 && (
-                            <span className="text-[10px] text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md font-bold block mt-1">
-                                ⚡ Tự động chia thành các đợt 3 ảnh để quét tuần tự an toàn &amp; không timeout
+                            <span className="text-[10px] text-indigo-800 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md font-bold block mt-1">
+                                Tự động quét an toàn theo từng đợt để tránh timeout
                             </span>
                         )}
                     </div>
@@ -563,7 +348,7 @@ export default function OcrUploadZone({
                                     <div className="max-h-24 overflow-y-auto space-y-1 pr-1">
                                         {emulationFiles.map((file, idx) => (
                                             <div
-                                                key={idx}
+                                                key={`${file.name}-${idx}`}
                                                 className="bg-white border border-purple-200 rounded-lg px-2 py-1 flex items-center justify-between gap-1 text-[11px] shadow-2xs"
                                             >
                                                 <span className="truncate text-slate-800 font-medium" title={file.name}>
@@ -572,9 +357,10 @@ export default function OcrUploadZone({
                                                 <button
                                                     type="button"
                                                     onClick={() => handleRemoveEmulationFile(idx)}
-                                                    className="text-slate-400 hover:text-rose-600 transition cursor-pointer p-0.5"
+                                                    aria-label={`Xóa ảnh thi đua ${file.name}`}
+                                                    className="text-slate-500 hover:text-rose-700 transition cursor-pointer p-0.5 rounded"
                                                 >
-                                                    <X className="w-3 h-3" />
+                                                    <X className="w-3 h-3" aria-hidden="true" />
                                                 </button>
                                             </div>
                                         ))}
@@ -584,9 +370,9 @@ export default function OcrUploadZone({
                                 <button
                                     type="button"
                                     onClick={() => emuInputRef.current?.click()}
-                                    className="w-full py-2.5 px-3 border-2 border-dashed border-purple-200 hover:border-purple-400 hover:bg-purple-50/40 rounded-xl text-center cursor-pointer transition flex items-center justify-center gap-1.5 text-purple-700 text-xs font-black"
+                                    className="w-full py-2.5 px-3 border-2 border-dashed border-purple-200 hover:border-purple-400 hover:bg-purple-50/40 rounded-xl text-center cursor-pointer transition flex items-center justify-center gap-1.5 text-purple-800 text-xs font-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
                                 >
-                                    <Plus className="w-4 h-4 text-purple-600" />
+                                    <Plus className="w-4 h-4 text-purple-600" aria-hidden="true" />
                                     <span>{emulationFiles.length > 0 ? '+ Thêm ảnh thi đua cụm khác...' : 'Nạp bộ ảnh thi đua cả cụm (chọn nhiều)'}</span>
                                 </button>
                             </div>
@@ -600,7 +386,7 @@ export default function OcrUploadZone({
                                     <div key={entryIdx} className="bg-white border border-purple-200/90 rounded-xl p-2.5 space-y-2 shadow-2xs">
                                         <div className="flex items-center justify-between gap-2">
                                             <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                                                <Store className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                                                <Store className="w-3.5 h-3.5 text-purple-600 shrink-0" aria-hidden="true" />
                                                 <span className="text-[11px] font-bold text-slate-700 shrink-0">ST:</span>
                                                 <select
                                                     value={entry.storeName}
@@ -625,10 +411,11 @@ export default function OcrUploadZone({
                                                 <button
                                                     type="button"
                                                     onClick={() => handleRemoveStoreEntry(entryIdx)}
-                                                    className="p-1 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition cursor-pointer"
+                                                    aria-label="Xóa ST khỏi danh sách nạp thi đua"
+                                                    className="p-1 text-slate-500 hover:text-rose-700 rounded-lg hover:bg-rose-50 transition cursor-pointer"
                                                     title="Xóa ST này"
                                                 >
-                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                    <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                                                 </button>
                                             )}
                                         </div>
@@ -649,7 +436,7 @@ export default function OcrUploadZone({
                                             <div className="max-h-20 overflow-y-auto space-y-1 pr-1">
                                                 {entry.files.map((file, fIdx) => (
                                                     <div
-                                                        key={fIdx}
+                                                        key={`${file.name}-${fIdx}`}
                                                         className="bg-purple-50/50 border border-purple-200 rounded-md px-2 py-0.5 flex items-center justify-between gap-1 text-[10.5px]"
                                                     >
                                                         <span className="truncate text-slate-800 font-medium" title={file.name}>
@@ -658,9 +445,10 @@ export default function OcrUploadZone({
                                                         <button
                                                             type="button"
                                                             onClick={() => handleRemoveSingleStoreFile(entryIdx, fIdx)}
-                                                            className="text-slate-400 hover:text-rose-600 transition cursor-pointer p-0.5"
+                                                            aria-label={`Xóa ảnh ${file.name}`}
+                                                            className="text-slate-500 hover:text-rose-700 transition cursor-pointer p-0.5"
                                                         >
-                                                            <X className="w-3 h-3" />
+                                                            <X className="w-3 h-3" aria-hidden="true" />
                                                         </button>
                                                     </div>
                                                 ))}
@@ -669,9 +457,9 @@ export default function OcrUploadZone({
 
                                         <label
                                             htmlFor={inputId}
-                                            className="w-full py-1.5 px-2 border border-dashed border-purple-300 hover:border-purple-500 hover:bg-purple-50 text-purple-700 rounded-lg text-[11px] font-bold transition flex items-center justify-center gap-1 cursor-pointer"
+                                            className="w-full py-1.5 px-2 border border-dashed border-purple-300 hover:border-purple-500 hover:bg-purple-50 text-purple-800 rounded-lg text-[11px] font-bold transition flex items-center justify-center gap-1 cursor-pointer"
                                         >
-                                            <Plus className="w-3.5 h-3.5" />
+                                            <Plus className="w-3.5 h-3.5" aria-hidden="true" />
                                             <span>
                                                 {entry.files && entry.files.length > 0
                                                     ? `Thêm ảnh thi đua (${entry.files.length} ảnh)...`
@@ -686,9 +474,9 @@ export default function OcrUploadZone({
                                 <button
                                     type="button"
                                     onClick={handleAddStoreEntry}
-                                    className="w-full py-1.5 px-3 bg-purple-50 hover:bg-purple-100 border border-purple-300 text-purple-800 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
+                                    className="w-full py-1.5 px-3 bg-purple-50 hover:bg-purple-100 border border-purple-300 text-purple-900 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
                                 >
-                                    <Plus className="w-3.5 h-3.5" />
+                                    <Plus className="w-3.5 h-3.5" aria-hidden="true" />
                                     <span>+ Thêm ST khác để nạp thi đua</span>
                                 </button>
                             )}
@@ -702,38 +490,41 @@ export default function OcrUploadZone({
                 <div className="bg-purple-50 border border-purple-200 rounded-2xl p-4 space-y-2 animate-in fade-in">
                     <div className="flex items-center justify-between text-xs">
                         <span className="font-black text-purple-900 flex items-center gap-2">
-                            <Sparkles className="w-4 h-4 text-purple-600 animate-spin" />
+                            <Sparkles className="w-4 h-4 text-purple-600 animate-spin" aria-hidden="true" />
                             <span>{progressText || 'Đang phân tích số liệu hình ảnh...'}</span>
                         </span>
-                        <span className="font-mono font-bold text-purple-800">{progressPercent}%</span>
+                        <span className="font-mono font-bold text-purple-800 tabular-nums">{progressPercent}%</span>
                     </div>
                     <div className="w-full bg-purple-200 rounded-full h-2 overflow-hidden">
                         <div
-                            className="bg-gradient-to-r from-purple-600 to-blue-600 h-2 rounded-full transition-all duration-300"
+                            className="bg-blue-700 h-2 rounded-full transition-all duration-300"
                             style={{ width: `${progressPercent}%` }}
                         />
                     </div>
                 </div>
             ) : (
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
-                    <div className="text-[11px] text-slate-500">
+                    <div className="text-[11px] text-slate-600">
                         {canExtract
-                            ? '✨ Sẵn sàng trích xuất. Nhấn nút để AI quét số liệu và hợp nhất theo từng cá nhân / ST.'
-                            : '💡 Mẹo: Ảnh ghép/cuộn chứa cả 2 bảng DT-QĐ và DT-THỰC chỉ cần nạp vào 1 trong 2 ô, AI sẽ tự động phân tích cả 2.'}
+                            ? mode === 'STORE'
+                                ? 'Sẵn sàng trích xuất. Nhấn nút để AI quét số liệu và hợp nhất theo từng ST.'
+                                : 'Sẵn sàng trích xuất. Nhấn nút để AI quét số liệu và hợp nhất theo từng nhân viên.'
+                            : mode === 'STORE'
+                                ? 'Mẹo: Bạn có thể chọn nhiều ảnh chụp màn hình cùng lúc cho từng mục nếu cụm có nhiều ST.'
+                                : 'Mẹo: Có thể chọn nhiều ảnh cuộn ngang/dọc (ảnh lấy DOANH THU QĐ và ảnh lấy DT TRẢ GÓP QĐ), hệ thống sẽ tự hợp nhất theo Mã NV.'}
                     </div>
 
                     <button
                         type="button"
                         onClick={onRunOcr}
                         disabled={!canExtract || isExtracting}
-                        className="px-6 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-2xl text-xs font-black transition cursor-pointer shadow-md flex items-center justify-center gap-2 disabled:opacity-50 active:scale-95"
+                        className="px-6 py-2.5 bg-indigo-700 hover:bg-indigo-800 text-white rounded-2xl text-xs font-black transition cursor-pointer shadow-md flex items-center justify-center gap-2 disabled:opacity-50 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                     >
-                        <Sparkles className="w-4 h-4" />
-                        <span>⚡ Bắt Đầu Trích Xuất Dữ Liệu (OCR)</span>
+                        <Sparkles className="w-4 h-4" aria-hidden="true" />
+                        <span>Bắt Đầu Trích Xuất Dữ Liệu (OCR)</span>
                     </button>
                 </div>
             )}
         </div>
     );
 }
-

@@ -27,7 +27,8 @@ import {
     Store,
     Info,
     Edit3,
-    Camera
+    Camera,
+    Copy
 } from 'lucide-react';
 import ReportActionButtons from '../../shared/components/report/ReportActionButtons';
 import CloudDataSyncStatusBanner from '../../shared/components/report/CloudDataSyncStatusBanner';
@@ -93,11 +94,23 @@ export default function DailyReportPage() {
     // Từ điển thi đua
     const [campaignsDict, setCampaignsDict] = useState<CampaignDictItem[]>([]);
     const [toastMessage, setToastMessage] = useState<string | null>(null);
+    const toastTimerRef = useRef<number | null>(null);
 
     const showToast = (msg: string) => {
         setToastMessage(msg);
-        setTimeout(() => setToastMessage(null), 2500);
+        if (toastTimerRef.current) {
+            window.clearTimeout(toastTimerRef.current);
+        }
+        toastTimerRef.current = window.setTimeout(() => setToastMessage(null), 2500);
     };
+
+    useEffect(() => {
+        return () => {
+            if (toastTimerRef.current) {
+                window.clearTimeout(toastTimerRef.current);
+            }
+        };
+    }, []);
 
     useEffect(() => {
         try {
@@ -407,7 +420,11 @@ export default function DailyReportPage() {
         <div className="p-3 sm:p-6 max-w-5xl mx-auto space-y-4">
             {/* Toast popup */}
             {toastMessage && (
-                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-5 py-2.5 rounded-full text-xs sm:text-sm font-bold shadow-2xl z-50 animate-bounce">
+                <div
+                    role="status"
+                    aria-live="polite"
+                    className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-5 py-2.5 rounded-full text-xs sm:text-sm font-bold shadow-xl z-50 border border-slate-700"
+                >
                     {toastMessage}
                 </div>
             )}
@@ -440,13 +457,13 @@ export default function DailyReportPage() {
             />
 
             {/* HEADER CÔNG CỤ & TAB SEGMENTED SWITCHER */}
-            <div className="bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-xl text-white flex items-center justify-center font-bold shadow-xs shrink-0 ${activeTab === 'remaining'
-                        ? 'bg-gradient-to-br from-amber-500 to-orange-600'
+                    <div className={`w-10 h-10 rounded-xl text-white flex items-center justify-center font-bold shadow-sm shrink-0 ${activeTab === 'remaining'
+                        ? 'bg-amber-700'
                         : 'bg-blue-600'
                         }`}>
-                        {activeTab === 'remaining' ? <Target className="w-5 h-5 text-white" /> : <Zap className="w-5 h-5 text-white" />}
+                        {activeTab === 'remaining' ? <Target className="w-5 h-5 text-white" aria-hidden="true" /> : <Zap className="w-5 h-5 text-white" aria-hidden="true" />}
                     </div>
                     <div>
                         <div className="flex items-center gap-2 flex-wrap">
@@ -457,13 +474,13 @@ export default function DailyReportPage() {
                                 }
                             </h1>
                             <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border ${activeTab === 'remaining'
-                                ? 'bg-amber-100 text-amber-800 border-amber-200'
-                                : 'bg-blue-100 text-blue-800 border-blue-200'
+                                ? 'bg-amber-100 text-amber-900 border-amber-300'
+                                : 'bg-blue-100 text-blue-900 border-blue-200'
                                 }`}>
                                 {activeTab === 'remaining' ? 'Nâng Cao' : 'Tiêu Chuẩn'}
                             </span>
                         </div>
-                        <p className="text-xs text-slate-500 mt-0.5">
+                        <p className="text-xs text-slate-600 mt-0.5">
                             {activeTab === 'remaining'
                                 ? 'Tính toán Target ngày linh hoạt theo target còn lại.'
                                 : 'Đánh giá Doanh thu, Thi đua trong ngày theo target chuẩn.'
@@ -473,26 +490,36 @@ export default function DailyReportPage() {
                 </div>
 
                 {/* TAB SEGMENTED SWITCHER */}
-                <div className="flex items-center p-1 bg-slate-100/90 rounded-xl border border-slate-200/80 w-full md:w-auto shadow-inner">
+                <div
+                    role="tablist"
+                    aria-label="Chế độ xem báo cáo Realtime"
+                    className="flex items-center p-1 bg-slate-100/90 rounded-xl border border-slate-200/80 w-full md:w-auto shadow-inner"
+                >
                     <button
+                        type="button"
+                        role="tab"
+                        aria-selected={activeTab === 'realtime'}
                         onClick={() => handleTabChange('realtime')}
-                        className={`flex-1 md:flex-initial flex items-center justify-center gap-1.5 py-2 px-3.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${activeTab === 'realtime'
-                            ? 'bg-white text-blue-700 shadow-xs'
-                            : 'text-slate-600 hover:text-slate-900'
+                        className={`flex-1 md:flex-initial flex items-center justify-center gap-1.5 py-2 px-2.5 sm:px-3.5 min-h-[38px] rounded-lg text-xs font-bold whitespace-nowrap transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${activeTab === 'realtime'
+                            ? 'bg-white text-blue-700 shadow-sm'
+                            : 'text-slate-700 hover:text-slate-900'
                             }`}
                     >
-                        <Zap className="w-3.5 h-3.5" />
-                        <span>⚡ Chuẩn Realtime</span>
+                        <Zap className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                        <span>Chuẩn Realtime</span>
                     </button>
                     <button
+                        type="button"
+                        role="tab"
+                        aria-selected={activeTab === 'remaining'}
                         onClick={() => handleTabChange('remaining')}
-                        className={`flex-1 md:flex-initial flex items-center justify-center gap-1.5 py-2 px-3.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${activeTab === 'remaining'
-                            ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-xs'
-                            : 'text-slate-600 hover:text-slate-900'
+                        className={`flex-1 md:flex-initial flex items-center justify-center gap-1.5 py-2 px-2.5 sm:px-3.5 min-h-[38px] rounded-lg text-xs font-bold whitespace-nowrap transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 ${activeTab === 'remaining'
+                            ? 'bg-amber-700 text-white shadow-sm'
+                            : 'text-slate-700 hover:text-slate-900'
                             }`}
                     >
-                        <Target className="w-3.5 h-3.5" />
-                        <span>🎯 Mục Tiêu Còn Lại</span>
+                        <Target className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                        <span>Mục Tiêu Còn Lại</span>
                     </button>
                 </div>
             </div>
@@ -502,9 +529,12 @@ export default function DailyReportPage() {
                 {/* Dòng 1: Chọn ST & Nút Hành Động */}
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
                     <div className="flex-1">
-                        <div className="flex items-center justify-between mb-1 flex-wrap gap-1.5">
-                            <label className="text-[11px] font-bold text-slate-600 uppercase flex items-center gap-1">
-                                <Store className="w-3.5 h-3.5 text-blue-600" />
+                        <div className="flex items-center justify-between mb-1.5 flex-wrap gap-1.5">
+                            <label
+                                htmlFor="daily-report-store-select"
+                                className="text-[11px] font-bold text-slate-700 uppercase flex items-center gap-1"
+                            >
+                                <Store className="w-3.5 h-3.5 text-blue-600" aria-hidden="true" />
                                 <span>Cụm / ST</span>
                             </label>
                             <div className="flex items-center gap-1.5 flex-wrap">
@@ -515,11 +545,11 @@ export default function DailyReportPage() {
                                             setUpdateModalInitialTab('manual');
                                             setIsUpdateModalOpen(true);
                                         }}
-                                        className="text-[11px] font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded-lg flex items-center gap-1 transition cursor-pointer"
-                                        title="Chỉnh sửa số liệu DTQĐ, DT Thực, Trả góp hoặc thi đua của phiên hiện tại trên Cloud"
+                                        className="text-[11px] font-bold text-emerald-800 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 px-2.5 py-1.5 min-h-[32px] rounded-lg flex items-center gap-1.5 transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+                                        title="Chỉnh sửa số liệu DTQĐ, % Tỷ trọng trả góp hoặc thi đua của phiên hiện tại trên Cloud"
                                     >
-                                        <Edit3 className="w-3 h-3 text-emerald-600" />
-                                        <span>✏️ Sửa Số Liệu Phiên ({realtimeSessions.length} ST)</span>
+                                        <Edit3 className="w-3.5 h-3.5 text-emerald-700 shrink-0" aria-hidden="true" />
+                                        <span>Sửa Số Liệu Phiên ({realtimeSessions.length} ST)</span>
                                     </button>
                                 )}
                                 <button
@@ -528,21 +558,23 @@ export default function DailyReportPage() {
                                         setUpdateModalInitialTab('ocr');
                                         setIsUpdateModalOpen(true);
                                     }}
-                                    className="text-[11px] font-bold text-blue-700 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2 py-0.5 rounded-lg flex items-center gap-1 transition cursor-pointer"
-                                    title="Nạp doanh thu (DTQĐ, DT Thực, Trả góp) và thi đua qua OCR hoặc nhập tay (hỗ trợ nạp cả Cụm hoặc từng ST đích danh)"
+                                    className="text-[11px] font-bold text-blue-800 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 border border-blue-300 px-2.5 py-1.5 min-h-[32px] rounded-lg flex items-center gap-1.5 transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                                    title="Nạp doanh thu (DTQĐ, % Tỷ trọng trả góp) và thi đua qua OCR hoặc nhập tay (hỗ trợ nạp cả Cụm hoặc từng ST đích danh)"
                                 >
-                                    <Camera className="w-3 h-3 text-blue-600" />
-                                    <span>📸 Nạp Doanh Thu & Thi Đua</span>
+                                    <Camera className="w-3.5 h-3.5 text-blue-700 shrink-0" aria-hidden="true" />
+                                    <span>Nạp Doanh Thu &amp; Thi Đua</span>
                                 </button>
                             </div>
                         </div>
                         <select
+                            id="daily-report-store-select"
+                            name="store"
                             value={selectedStore}
                             onChange={(e) => setSelectedStore(e.target.value)}
-                            className="w-full bg-white border border-slate-300 text-slate-800 py-2 px-3 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer shadow-xs"
+                            className="w-full bg-white border border-slate-300 text-slate-800 py-2 px-3 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer shadow-sm"
                         >
                             {isAdmin && (
-                                <option value="Tổng">🏢 TỔNG TOÀN CỤM</option>
+                                <option value="Tổng">TỔNG TOÀN CỤM</option>
                             )}
                             {!isAdmin && storeOptions.length === 0 && (
                                 <option value="" disabled>Chưa được phân quyền ST</option>
@@ -553,7 +585,7 @@ export default function DailyReportPage() {
                         </select>
                     </div>
 
-                    <div className="self-end sm:self-center pt-1 sm:pt-4">
+                    <div className="self-end sm:self-center pt-1 sm:pt-5">
                         <ReportActionButtons
                             onExportImage={() => handleCaptureImage('save')}
                             onCopyImage={() => handleCaptureImage('copy')}
@@ -580,12 +612,17 @@ export default function DailyReportPage() {
                 <div className="flex flex-wrap items-center justify-between gap-3 pt-2.5 border-t border-slate-200/80 text-xs">
                     {activeTab === 'realtime' ? (
                         <div className="flex items-center gap-4">
-                            <label className="inline-flex items-center gap-2 cursor-pointer select-none text-slate-700 font-medium">
+                            <label
+                                htmlFor="daily-toggle-points"
+                                className="inline-flex items-center gap-2 min-h-[32px] cursor-pointer select-none text-slate-700 font-medium"
+                            >
                                 <input
+                                    id="daily-toggle-points"
+                                    name="showPoints"
                                     type="checkbox"
                                     checked={isPointsEnabled}
                                     onChange={(e) => setIsPointsEnabled(e.target.checked)}
-                                    className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-4 h-4"
+                                    className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
                                 />
                                 <span>Hiện cột điểm thi đua</span>
                             </label>
@@ -593,17 +630,19 @@ export default function DailyReportPage() {
                     ) : (
                         <div className="flex flex-wrap items-center gap-3">
                             <div className="flex items-center gap-1.5 text-slate-700 font-bold">
-                                <Calendar className="w-3.5 h-3.5 text-amber-600" />
+                                <Calendar className="w-3.5 h-3.5 text-amber-700" aria-hidden="true" />
                                 <span>Kỳ Tháng {remainingData.selectedMonth}/{remainingData.selectedYear}</span>
                             </div>
-                            <div className="text-[11px] font-semibold text-slate-500 bg-white px-2.5 py-1 rounded-lg border border-slate-200 shadow-xs">
-                                ⏳ Số ngày còn lại: <span className="font-black text-amber-600">{remainingData.remainingDays} ngày</span>
+                            <div className="text-[11px] font-semibold text-slate-700 bg-white px-2.5 py-1 rounded-lg border border-slate-200 shadow-sm tabular-nums">
+                                Số ngày còn lại: <span className="font-black text-amber-800">{remainingData.remainingDays} ngày</span>
                             </div>
                         </div>
                     )}
 
-                    <div className="text-[11px] text-slate-500 font-medium">
-                        {allData.length > 0 ? `Đã nạp ${allData.length} mục thi đua` : 'Chưa có dữ liệu'}
+                    <div className="text-[11px] text-slate-600 font-medium tabular-nums">
+                        {isLoadingSessions && allData.length === 0
+                            ? 'Đang tải dữ liệu Cloud...'
+                            : (allData.length > 0 ? `Đã nạp ${allData.length} mục thi đua` : 'Chưa có dữ liệu')}
                     </div>
                 </div>
             </div>
@@ -616,10 +655,10 @@ export default function DailyReportPage() {
             >
                 {/* Header Báo Cáo */}
                 <div className="text-center pb-3 border-b-2 border-blue-600">
-                    <h2 className="text-lg sm:text-xl font-black text-blue-600 uppercase tracking-wide">
+                    <h2 className="text-lg sm:text-xl font-black text-blue-700 uppercase tracking-wide">
                         {selectedStore === 'Tổng' ? 'TỔNG TOÀN CỤM' : selectedStore}
                     </h2>
-                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mt-0.5">
+                    <p className="text-xs font-bold text-slate-600 uppercase tracking-wider mt-0.5">
                         {activeTab === 'remaining'
                             ? `🎯 BÁO CÁO REALTIME - MỤC TIÊU CÒN LẠI • NGÀY ${formatDate(new Date())} (CÒN ${remainingData.remainingDays} NGÀY)`
                             : `⚡ BÁO CÁO DOANH THU & THI ĐUA REALTIME • NGÀY ${formatDate(new Date())}`
@@ -632,26 +671,25 @@ export default function DailyReportPage() {
                     data-kpi-grid="true"
                     className={`grid ${hasInstallmentData ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-1 sm:grid-cols-3'} gap-2.5 text-center`}
                 >
-                    <div className="bg-amber-50/70 border-l-4 border-amber-500 rounded-xl p-2.5 shadow-xs">
-                        <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider block">DOANH THU QĐ</span>
-                        <span className="text-base sm:text-lg font-black text-slate-800 font-mono">
+                    <div className="bg-amber-50/80 border border-amber-200 rounded-xl p-2.5 shadow-sm">
+                        <span className="text-[10px] font-bold text-amber-900 uppercase tracking-wider block">DOANH THU QĐ</span>
+                        <span className="text-base sm:text-lg font-black text-slate-900 font-mono tabular-nums">
                             {formatValue(currentRevenue ? currentRevenue.rev : 0)}
                         </span>
-
                     </div>
 
                     {hasInstallmentData && (
                         <>
-                            <div className="bg-indigo-50/70 border-l-4 border-indigo-500 rounded-xl p-2.5 shadow-xs">
-                                <span className="text-[10px] font-bold text-indigo-700 uppercase tracking-wider block">DT TRẢ GÓP</span>
-                                <span className="text-base sm:text-lg font-black text-slate-800 font-mono">
+                            <div className="bg-blue-50/80 border border-blue-200 rounded-xl p-2.5 shadow-sm">
+                                <span className="text-[10px] font-bold text-blue-900 uppercase tracking-wider block">DT TRẢ GÓP</span>
+                                <span className="text-base sm:text-lg font-black text-slate-900 font-mono tabular-nums">
                                     {formatValue(currentRevenue ? currentRevenue.dtTraGop : 0)}
                                 </span>
                             </div>
 
-                            <div className="bg-purple-50/70 border-l-4 border-purple-500 rounded-xl p-2.5 shadow-xs">
-                                <span className="text-[10px] font-bold text-purple-700 uppercase tracking-wider block">% TRẢ GÓP</span>
-                                <span className="text-base sm:text-lg font-black text-slate-800 font-mono">
+                            <div className="bg-slate-50 border border-slate-300 rounded-xl p-2.5 shadow-sm">
+                                <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wider block">% TRẢ GÓP</span>
+                                <span className="text-base sm:text-lg font-black text-slate-900 font-mono tabular-nums">
                                     {currentRevenue ? (currentRevenue.pctTraGop || 0).toFixed(1) : 0}%
                                 </span>
                             </div>
@@ -659,22 +697,22 @@ export default function DailyReportPage() {
                     )}
 
                     {activeTab === 'realtime' ? (
-                        <div className="bg-emerald-50/70 border-l-4 border-emerald-500 rounded-xl p-2.5 shadow-xs">
-                            <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block">MỤC ĐẠT THI ĐUA</span>
-                            <span className="text-base sm:text-lg font-black text-emerald-600 font-mono">
+                        <div className="bg-emerald-50/80 border border-emerald-200 rounded-xl p-2.5 shadow-sm">
+                            <span className="text-[10px] font-bold text-emerald-900 uppercase tracking-wider block">MỤC ĐẠT THI ĐUA</span>
+                            <span className="text-base sm:text-lg font-black text-emerald-800 font-mono tabular-nums">
                                 {realtimeStats.passed} / {realtimeStats.total}
                             </span>
-                            <span className="text-[10px] text-slate-500 font-bold block mt-0.5">
+                            <span className="text-[10px] text-slate-600 font-bold block mt-0.5 tabular-nums">
                                 %HT: {realtimeStats.passRate}%
                             </span>
                         </div>
                     ) : (
-                        <div className="bg-emerald-50/70 border-l-4 border-emerald-500 rounded-xl p-2.5 shadow-xs">
-                            <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block">ĐẠT TARGET NGÀY</span>
-                            <span className="text-base sm:text-lg font-black text-emerald-700 font-mono">
+                        <div className="bg-emerald-50/80 border border-emerald-200 rounded-xl p-2.5 shadow-sm">
+                            <span className="text-[10px] font-bold text-emerald-900 uppercase tracking-wider block">ĐẠT TARGET NGÀY</span>
+                            <span className="text-base sm:text-lg font-black text-emerald-800 font-mono tabular-nums">
                                 {remainingData.stats.pass.length} / {remainingData.stats.total} NH
                             </span>
-                            <span className="text-[10px] text-slate-500 font-bold block mt-0.5">
+                            <span className="text-[10px] text-slate-600 font-bold block mt-0.5 tabular-nums">
                                 Tỷ lệ đạt ngày: {remainingData.stats.passRate.toFixed(0)}%
                             </span>
                         </div>
@@ -686,6 +724,7 @@ export default function DailyReportPage() {
                     <DailyRealtimeTable
                         campaigns={filteredRealtimeCampaigns}
                         isPointsEnabled={isPointsEnabled}
+                        isLoading={isLoadingSessions && allData.length === 0}
                     />
                 ) : (
                     <DailyRemainingTable
@@ -695,35 +734,46 @@ export default function DailyReportPage() {
                         completedCount={remainingData.completedCount}
                         sortMode={remainingData.sortMode}
                         onSortModeChange={remainingData.setSortMode}
+                        isLoading={isLoadingSessions && allData.length === 0}
                     />
                 )}
             </div>
 
             {/* KHỐI TÓM TẮT GỬI MESSAGING APP */}
             {currentAssessmentTemplates.length > 0 && (
-                <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-xs space-y-3">
+                <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-sm space-y-3">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div className="flex flex-wrap items-center gap-2">
                             <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-                                <Info className="w-4 h-4 text-blue-600" />
+                                <Info className="w-4 h-4 text-blue-600" aria-hidden="true" />
                                 <span>Nhận xét kết quả:</span>
                             </span>
 
                             {/* Cụm nút chọn mẫu nhận xét */}
-                            <div className="inline-flex p-0.5 bg-slate-100 rounded-lg text-xs font-bold border border-slate-200 flex-wrap">
-                                {currentAssessmentTemplates.map((tpl, idx) => (
-                                    <button
-                                        key={tpl.id}
-                                        type="button"
-                                        onClick={() => setSummaryMode(idx)}
-                                        className={`px-2.5 py-1 rounded-md transition cursor-pointer ${(summaryMode >= currentAssessmentTemplates.length ? 0 : summaryMode) === idx
-                                            ? 'bg-white text-blue-700 shadow-xs'
-                                            : 'text-slate-600 hover:text-slate-900'
-                                            }`}
-                                    >
-                                        {tpl.title.split(':')[0]}
-                                    </button>
-                                ))}
+                            <div
+                                role="tablist"
+                                aria-label="Mẫu nhận xét kết quả"
+                                className="inline-flex p-0.5 bg-slate-100 rounded-lg text-xs font-bold border border-slate-200 flex-wrap"
+                            >
+                                {currentAssessmentTemplates.map((tpl, idx) => {
+                                    const activeIdx = summaryMode >= currentAssessmentTemplates.length ? 0 : summaryMode;
+                                    const isSelected = activeIdx === idx;
+                                    return (
+                                        <button
+                                            key={tpl.id}
+                                            type="button"
+                                            role="tab"
+                                            aria-selected={isSelected}
+                                            onClick={() => setSummaryMode(idx)}
+                                            className={`px-2.5 py-1 min-h-[30px] rounded-md transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${isSelected
+                                                ? 'bg-white text-blue-700 shadow-sm'
+                                                : 'text-slate-700 hover:text-slate-900'
+                                                }`}
+                                        >
+                                            {tpl.title.split(':')[0]}
+                                        </button>
+                                    );
+                                })}
                             </div>
                         </div>
 
@@ -737,17 +787,18 @@ export default function DailyReportPage() {
                                     showToast(`Đã copy ${currentAssessmentTemplates[activeIdx]?.title || 'văn bản tóm tắt'}!`);
                                 }
                             }}
-                            className="text-xs text-blue-600 hover:text-blue-700 font-bold underline cursor-pointer self-start sm:self-auto flex items-center gap-1"
+                            className="px-3 py-1.5 min-h-[34px] rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-bold transition cursor-pointer self-start sm:self-auto inline-flex items-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                         >
-                            📋 Copy
+                            <Copy className="w-3.5 h-3.5" aria-hidden="true" />
+                            <span>Copy nhận xét</span>
                         </button>
                     </div>
 
-                    <div className="text-[11px] text-slate-500 font-medium italic">
+                    <div className="text-[11px] text-slate-600 font-medium italic">
                         {currentAssessmentTemplates[summaryMode >= currentAssessmentTemplates.length ? 0 : summaryMode]?.description}
                     </div>
 
-                    <pre className="font-mono text-xs p-3.5 bg-slate-50 border border-slate-200 rounded-xl whitespace-pre-wrap leading-relaxed text-slate-700 max-h-56 overflow-y-auto">
+                    <pre className="font-mono text-xs p-3.5 bg-slate-50 border border-slate-200 rounded-xl whitespace-pre-wrap leading-relaxed text-slate-800 max-h-56 overflow-y-auto">
                         {currentAssessmentTemplates[summaryMode >= currentAssessmentTemplates.length ? 0 : summaryMode]?.content}
                     </pre>
                 </div>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import {
     Ticket,
     Plus,
@@ -252,6 +253,17 @@ export default function VoucherAdminPage() {
         loadData();
     }, [selectedStore, accessible, isAdmin]);
 
+    useEffect(() => {
+        if (!showSqlModal) return;
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                setShowSqlModal(false);
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [showSqlModal]);
+
     // Các chương trình hiện có để gợi ý trong modal nạp
     const existingCampaigns = useMemo(() => {
         const set = new Set<string>();
@@ -453,10 +465,10 @@ export default function VoucherAdminPage() {
 
     if (!canManageVouchers) {
         return (
-            <div className="bg-white rounded-3xl p-8 border border-slate-200 text-center font-avo max-w-md mx-auto my-12">
-                <Lock className="w-10 h-10 text-amber-500 mx-auto mb-3" />
+            <div className="bg-white rounded-3xl p-8 border border-slate-200 text-center max-w-md mx-auto my-12 shadow-sm">
+                <Lock className="w-10 h-10 text-amber-600 mx-auto mb-3" aria-hidden="true" />
                 <h2 className="text-base font-black text-slate-900">Quyền Truy Cập Bị Giới Hạn</h2>
-                <p className="text-xs text-slate-500 mt-2 leading-relaxed">
+                <p className="text-xs text-slate-600 mt-2 leading-relaxed">
                     Phân hệ Quản Lý Kho Voucher chỉ dành riêng cho Quản lý ST, Trưởng ca và Quản trị viên (Admin).
                 </p>
             </div>
@@ -464,40 +476,40 @@ export default function VoucherAdminPage() {
     }
 
     return (
-        <div className="space-y-4 pb-16 font-avo">
+        <div className="space-y-4 pb-16">
             {toastMessage && (
-                <div className="fixed top-5 right-5 z-50 bg-slate-900 text-white px-4 py-2.5 rounded-xl shadow-xl text-xs font-bold flex items-center gap-2 border border-slate-700 animate-in fade-in">
-                    <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+                <div role="status" aria-live="polite" className="fixed top-5 right-5 z-50 bg-slate-900 text-white px-4 py-2.5 rounded-xl shadow-xl text-xs font-bold flex items-center gap-2 border border-slate-700">
+                    <Sparkles className="w-4 h-4 text-amber-400 shrink-0" aria-hidden="true" />
                     <span>{toastMessage}</span>
                 </div>
             )}
 
             {/* 1. HEADER & THANH TÁC VỤ */}
-            <div className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200 shadow-2xs flex flex-wrap items-center justify-between gap-3">
+            <div className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-2xl bg-emerald-600 text-white flex items-center justify-center font-black shadow-md shrink-0">
-                        <Ticket className="w-5 h-5" />
+                    <div className="w-10 h-10 rounded-2xl bg-emerald-700 text-white flex items-center justify-center font-black shadow-md shrink-0">
+                        <Ticket className="w-5 h-5" aria-hidden="true" />
                     </div>
                     <div>
                         <h1 className="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2 flex-wrap">
                             <span>Quản Lý Tồn Kho PMH</span>
-                            <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
+                            <span className="text-[10px] font-bold bg-emerald-100 text-emerald-900 px-2 py-0.5 rounded-full">
                                 QL / TC / Admin
                             </span>
                             {cloudStatus && cloudStatus.tableExists ? (
-                                <span className="text-[10px] font-bold bg-emerald-50 border border-emerald-200 text-emerald-700 px-2 py-0.5 rounded-full flex items-center gap-1" title="Dữ liệu lưu trữ và đồng bộ đám mây Supabase">
-                                    <Cloud className="w-3 h-3 text-emerald-600" />
+                                <span className="text-[10px] font-bold bg-emerald-50 border border-emerald-200 text-emerald-800 px-2 py-0.5 rounded-full flex items-center gap-1" title="Dữ liệu lưu trữ và đồng bộ đám mây Supabase">
+                                    <Cloud className="w-3 h-3 text-emerald-700" aria-hidden="true" />
                                     <span>Cloud OK ({cloudStatus.cloudCount ?? vouchers.length} mã)</span>
                                 </span>
                             ) : cloudStatus && !cloudStatus.tableExists ? (
-                                <span className="text-[10px] font-bold bg-amber-100 border border-amber-300 text-amber-900 px-2 py-0.5 rounded-full flex items-center gap-1" title="Chưa tạo bảng trên Supabase">
-                                    <CloudOff className="w-3 h-3 text-amber-700" />
+                                <span className="text-[10px] font-bold bg-amber-100 border border-amber-300 text-amber-950 px-2 py-0.5 rounded-full flex items-center gap-1" title="Chưa tạo bảng trên Supabase">
+                                    <CloudOff className="w-3 h-3 text-amber-800" aria-hidden="true" />
                                     <span>Chưa Có Bảng Cloud</span>
                                 </span>
                             ) : null}
                         </h1>
-                        <p className="text-xs text-slate-500 hidden sm:block">
-                            Nạp mã PMH, lọc mã chưa dùng, cảnh báo đầu cơ & reset PMH
+                        <p className="text-xs text-slate-600 hidden sm:block">
+                            Nạp mã PMH, lọc mã chưa dùng, cảnh báo đầu cơ &amp; reset PMH
                         </p>
                     </div>
                 </div>
@@ -507,30 +519,30 @@ export default function VoucherAdminPage() {
                     <button
                         type="button"
                         onClick={() => setIsRuleModalOpen(true)}
-                        className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-black active:scale-[0.99] text-white text-xs font-black transition cursor-pointer shadow-xs flex items-center gap-1.5 border border-slate-700 hover:border-emerald-500"
+                        className="px-3 py-1.5 min-h-[34px] rounded-xl bg-slate-900 hover:bg-black active:scale-[0.99] text-white text-xs font-black transition cursor-pointer shadow-sm flex items-center gap-1.5 border border-slate-700 hover:border-emerald-500"
                         title="Cài đặt ưu tiên quy tắc cấp mã voucher (FIFO - Nhập trước cấp trước)"
                     >
-                        <Sliders className="w-4 h-4 text-emerald-400" />
+                        <Sliders className="w-4 h-4 text-emerald-400" aria-hidden="true" />
                         <span>Quy tắc Cấp: <span className="text-emerald-400 font-black">{distributionRule}</span></span>
                     </button>
 
                     <button
                         type="button"
                         onClick={() => handleOpenQrDoubleCheck()}
-                        className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 active:scale-[0.99] text-white text-xs font-black transition cursor-pointer shadow-xs flex items-center gap-1.5"
+                        className="px-3 py-1.5 min-h-[34px] rounded-xl bg-blue-700 hover:bg-blue-800 active:scale-[0.99] text-white text-xs font-black transition cursor-pointer shadow-sm flex items-center gap-1.5 border border-blue-800"
                         title="Tạo mã QR code quét trên máy POS để double check"
                     >
-                        <QrCode className="w-4 h-4 text-amber-300" />
+                        <QrCode className="w-4 h-4 text-amber-300" aria-hidden="true" />
                         <span>Tạo QR Double Check</span>
                     </button>
 
                     <button
                         type="button"
                         onClick={() => setIsBulkCheckModalOpen(true)}
-                        className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 active:scale-[0.99] text-white text-xs font-black transition cursor-pointer shadow-xs flex items-center gap-1.5"
+                        className="px-3 py-1.5 min-h-[34px] rounded-xl bg-sky-700 hover:bg-sky-800 active:scale-[0.99] text-white text-xs font-black transition cursor-pointer shadow-sm flex items-center gap-1.5 border border-sky-800"
                         title="Kiểm tra hàng loạt mã voucher xem đã tồn trong kho hay chưa"
                     >
-                        <Search className="w-4 h-4 text-amber-300" />
+                        <Search className="w-4 h-4 text-amber-200" aria-hidden="true" />
                         <span>Kiểm Tra Mã Hàng Loạt</span>
                     </button>
 
@@ -540,41 +552,41 @@ export default function VoucherAdminPage() {
                             setImportPresetCodes([]);
                             setIsImportModalOpen(true);
                         }}
-                        className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black transition cursor-pointer shadow-xs flex items-center gap-1.5"
+                        className="px-3 py-1.5 min-h-[34px] rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-black transition cursor-pointer shadow-sm flex items-center gap-1.5 border border-emerald-800"
                     >
-                        <Plus className="w-4 h-4" />
+                        <Plus className="w-4 h-4" aria-hidden="true" />
                         <span>Nạp Mã Mới</span>
                     </button>
 
                     <button
                         type="button"
                         onClick={() => setIsResetModalOpen(true)}
-                        className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-black transition cursor-pointer shadow-xs flex items-center gap-1.5"
+                        className="px-3 py-1.5 min-h-[34px] rounded-xl bg-amber-400 hover:bg-amber-500 text-slate-950 text-xs font-black transition cursor-pointer shadow-sm flex items-center gap-1.5 border border-amber-500"
                     >
-                        <RotateCcw className="w-4 h-4" />
+                        <RotateCcw className="w-4 h-4" aria-hidden="true" />
                         <span>Reset Mã Đã Lấy</span>
                     </button>
 
                     <button
                         type="button"
                         onClick={() => setIsCleanModalOpen(true)}
-                        className="px-3.5 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-300 text-rose-800 text-xs font-black transition cursor-pointer shadow-xs flex items-center gap-1.5"
+                        className="px-3 py-1.5 min-h-[34px] rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-300 text-rose-800 text-xs font-black transition cursor-pointer shadow-sm flex items-center gap-1.5"
                         title="Dọn dẹp mã hết hạn hoặc đã dùng để làm sạch kho"
                     >
-                        <Trash2 className="w-4 h-4 text-rose-600" />
+                        <Trash2 className="w-4 h-4 text-rose-700" aria-hidden="true" />
                         <span>Làm Sạch Kho</span>
                     </button>
 
                     <button
                         type="button"
                         onClick={() => setIsDeleteCampaignModalOpen(true)}
-                        className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 active:scale-[0.98] text-white text-xs font-black transition cursor-pointer shadow-xs flex items-center gap-1.5 border border-rose-700"
+                        className="px-3 py-1.5 min-h-[34px] rounded-xl bg-rose-600 hover:bg-rose-700 active:scale-[0.98] text-white text-xs font-black transition cursor-pointer shadow-sm flex items-center gap-1.5 border border-rose-700"
                         title="Lựa chọn và xóa vĩnh viễn các chương trình PMH đã kết thúc hoặc hết hạn"
                     >
-                        <Trash2 className="w-4 h-4 text-white" />
+                        <Trash2 className="w-4 h-4 text-white" aria-hidden="true" />
                         <span>Xóa CT Hết Hạn</span>
                         {endedCampaignsCount > 0 && (
-                            <span className="bg-white text-rose-700 text-[10px] font-black px-1.5 py-0.2 rounded-full shadow-2xs">
+                            <span className="bg-white text-rose-700 text-[10px] font-black px-1.5 py-0.5 rounded-full shadow-sm">
                                 {endedCampaignsCount}
                             </span>
                         )}
@@ -586,23 +598,23 @@ export default function VoucherAdminPage() {
                             setRenameTargetCampaign('');
                             setIsRenameCampaignModalOpen(true);
                         }}
-                        className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-indigo-50 hover:text-indigo-900 border border-slate-300 hover:border-indigo-300 text-slate-800 text-xs font-black transition cursor-pointer shadow-xs flex items-center gap-1.5"
+                        className="px-3 py-1.5 min-h-[34px] rounded-xl bg-slate-100 hover:bg-blue-50 hover:text-blue-900 border border-slate-300 hover:border-blue-300 text-slate-800 text-xs font-black transition cursor-pointer shadow-sm flex items-center gap-1.5"
                         title="Đổi tên / Chỉnh sửa tên chương trình voucher trên toàn kho"
                     >
-                        <Edit3 className="w-4 h-4 text-indigo-600" />
+                        <Edit3 className="w-4 h-4 text-blue-700" aria-hidden="true" />
                         <span>Sửa Tên CT</span>
                     </button>
 
                     <button
                         type="button"
                         onClick={() => setIsHideCampaignModalOpen(true)}
-                        className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-black transition cursor-pointer shadow-xs flex items-center gap-1.5 border border-slate-300"
+                        className="px-3 py-1.5 min-h-[34px] rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-black transition cursor-pointer shadow-sm flex items-center gap-1.5 border border-slate-300"
                         title="Quản lý ẩn/hiện các chương trình voucher để lưu trữ kho an toàn và rút gọn giao diện"
                     >
-                        <EyeOff className="w-4 h-4 text-slate-600" />
+                        <EyeOff className="w-4 h-4 text-slate-600" aria-hidden="true" />
                         <span>Quản Lý Ẩn/Hiện CT</span>
                         {hiddenCampaignsCount > 0 && (
-                            <span className="bg-amber-400 text-slate-950 text-[10px] font-black px-1.5 py-0.2 rounded-full">
+                            <span className="bg-amber-400 text-slate-950 text-[10px] font-black px-1.5 py-0.5 rounded-full">
                                 {hiddenCampaignsCount}
                             </span>
                         )}
@@ -613,19 +625,20 @@ export default function VoucherAdminPage() {
                             type="button"
                             onClick={handleExportExcel}
                             disabled={isExportingExcel}
-                            className="px-3.5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 active:scale-[0.99] text-white text-xs font-black transition cursor-pointer shadow-xs flex items-center gap-1.5 border border-emerald-600 disabled:opacity-60"
+                            className="px-3 py-1.5 min-h-[34px] rounded-xl bg-emerald-700 hover:bg-emerald-800 active:scale-[0.99] text-white text-xs font-black transition cursor-pointer shadow-sm flex items-center gap-1.5 border border-emerald-800 disabled:opacity-60"
                             title="Xuất toàn bộ data tồn kho mã voucher của cụm ST ra file Excel (.xlsx)"
                         >
-                            <FileSpreadsheet className={`w-4 h-4 text-emerald-200 ${isExportingExcel ? 'animate-bounce' : ''}`} />
+                            <FileSpreadsheet className={`w-4 h-4 text-emerald-200 ${isExportingExcel ? 'opacity-60' : ''}`} aria-hidden="true" />
                             <span>{isExportingExcel ? 'Đang xuất Excel...' : 'Xuất Excel'}</span>
                         </button>
                     )}
 
                     <div
-                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-800 text-xs font-bold shrink-0 shadow-2xs"
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 min-h-[34px] rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-800 text-xs font-bold shrink-0 shadow-sm"
                         title="Dữ liệu vận hành 100% thời gian thực trên Supabase Cloud"
                     >
-                        <Cloud className="w-4 h-4 text-emerald-600 animate-pulse" />
+                        <Cloud className="w-4 h-4 text-emerald-700 shrink-0" aria-hidden="true" />
+                        <span className="sm:hidden">Cloud Live</span>
                         <span className="hidden sm:inline">100% Cloud Live</span>
                     </div>
 
@@ -633,20 +646,21 @@ export default function VoucherAdminPage() {
                         <button
                             type="button"
                             onClick={() => setShowSqlModal(true)}
-                            className="p-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 transition cursor-pointer"
+                            aria-label="Xem mã lệnh SQL Supabase"
+                            className="p-2 min-h-[34px] min-w-[34px] flex items-center justify-center rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 transition cursor-pointer"
                             title="Xem mã lệnh SQL Supabase"
                         >
-                            <Code className="w-4 h-4" />
+                            <Code className="w-4 h-4" aria-hidden="true" />
                         </button>
                     )}
 
                     <Link
                         to="/tao-ma-don-hang"
-                        className="px-2.5 py-1.5 rounded-xl border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700 transition cursor-pointer text-xs font-bold flex items-center gap-1.5 shrink-0"
+                        className="px-2.5 py-1.5 min-h-[34px] rounded-xl border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-800 transition cursor-pointer text-xs font-bold flex items-center gap-1.5 shrink-0"
                         title="Mở công cụ tự động sinh mã đơn hàng hàng loạt"
                     >
-                        <Hash className="w-3.5 h-3.5" />
-                        <span className="hidden sm:inline">Sinh Mã Đơn</span>
+                        <Hash className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                        <span>Sinh Mã Đơn</span>
                     </Link>
 
                     <button
@@ -656,10 +670,11 @@ export default function VoucherAdminPage() {
                             setFilterStatusFromStats('ALL');
                             loadData();
                         }}
-                        className="p-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 transition cursor-pointer"
+                        aria-label="Tải lại số liệu và làm mới toàn bộ bộ lọc"
+                        className="p-2 min-h-[34px] min-w-[34px] flex items-center justify-center rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 transition cursor-pointer"
                         title="Tải lại số liệu & Làm mới toàn bộ bộ lọc"
                     >
-                        <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-emerald-600' : ''}`} />
+                        <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-emerald-700' : ''}`} aria-hidden="true" />
                     </button>
                 </div>
             </div>
@@ -679,23 +694,29 @@ export default function VoucherAdminPage() {
             </div>
 
             {/* 2. CHỌN ST & PHẠM VI DỮ LIỆU */}
-            <div className="bg-white rounded-2xl p-3 border border-slate-200 shadow-2xs flex items-center justify-between gap-3 text-xs flex-wrap">
-                <div className="flex items-center gap-2">
-                    <Store className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span className="font-bold text-slate-600">Xem theo Cụm/ST:</span>
+            <div className="bg-white rounded-2xl p-3 border border-slate-200 shadow-sm flex items-center justify-between gap-3 text-xs flex-wrap">
+                <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap w-full sm:w-auto">
+                    <div className="flex items-center gap-1.5 shrink-0">
+                        <Store className="w-4 h-4 text-emerald-700 shrink-0" aria-hidden="true" />
+                        <label htmlFor="voucher-admin-store-filter" className="font-bold text-slate-700 cursor-pointer">
+                            Xem theo Cụm/ST:
+                        </label>
+                    </div>
                     <select
+                        id="voucher-admin-store-filter"
+                        name="voucher_store_filter"
                         value={selectedStore}
                         onChange={(e) => {
                             setSelectedStore(e.target.value);
                             setFilterEmployeeId('');
                         }}
-                        className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 font-bold text-slate-800 cursor-pointer max-w-[240px] truncate"
+                        className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 font-bold text-slate-800 cursor-pointer w-full sm:w-auto sm:max-w-[260px] truncate"
                     >
                         <option value="all">
                             {isAdmin
                                 ? '🏢 Toàn Bộ Hệ Thống (Tất Cả Cụm)'
                                 : allowedStores.length > 1
-                                    ? `🏢 Toàn Cụm Của Tôi (${allowedStores.length} shop)`
+                                    ? `🏢 Toàn Cụm Của Tôi (${allowedStores.length} ST)`
                                     : '🏢 Kho ST Của Tôi'}
                         </option>
                         {allowedStores.map(s => (
@@ -722,11 +743,11 @@ export default function VoucherAdminPage() {
 
             {/* BANNER CẢNH BÁO TỒN KHO MÃ HẾT HẠN (Chỉ hiển thị với các chương trình đang hoạt động/chưa ẩn) */}
             {expiredCount > 0 && (
-                <div className="bg-gradient-to-r from-rose-50 via-rose-50/80 to-amber-50/90 border-2 border-rose-300 rounded-3xl p-4 sm:p-5 shadow-xs text-slate-800 space-y-2.5 animate-in fade-in">
+                <div className="bg-gradient-to-r from-rose-50 via-rose-50/80 to-amber-50/90 border-2 border-rose-300 rounded-3xl p-4 sm:p-5 shadow-sm text-slate-800 space-y-2.5">
                     <div className="flex items-start justify-between gap-3 flex-wrap sm:flex-nowrap">
                         <div className="flex items-start gap-3">
                             <div className="w-10 h-10 rounded-2xl bg-rose-600 text-white flex items-center justify-center font-black shrink-0 shadow-sm">
-                                <AlertTriangle className="w-5 h-5 text-white" />
+                                <AlertTriangle className="w-5 h-5 text-white" aria-hidden="true" />
                             </div>
                             <div className="space-y-1">
                                 <div className="flex items-center gap-2 flex-wrap">
@@ -754,10 +775,10 @@ export default function VoucherAdminPage() {
                             <button
                                 type="button"
                                 onClick={() => setIsHideCampaignModalOpen(true)}
-                                className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 active:scale-[0.99] text-white rounded-xl text-xs font-black transition cursor-pointer shadow-xs flex items-center gap-1.5"
+                                className="px-3.5 py-1.5 bg-amber-400 hover:bg-amber-500 active:scale-[0.99] text-slate-950 border border-amber-500 rounded-xl text-xs font-black transition cursor-pointer shadow-sm flex items-center gap-1.5"
                                 title="Ẩn các chương trình hết hạn để lưu trữ mà không mất dữ liệu"
                             >
-                                <EyeOff className="w-3.5 h-3.5" />
+                                <EyeOff className="w-3.5 h-3.5" aria-hidden="true" />
                                 <span>Ẩn Chương Trình</span>
                             </button>
                             <button
@@ -765,7 +786,7 @@ export default function VoucherAdminPage() {
                                 onClick={() => setIsCleanModalOpen(true)}
                                 className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 active:scale-[0.99] text-white rounded-xl text-xs font-black transition cursor-pointer shadow-sm flex items-center gap-1.5"
                             >
-                                <Trash2 className="w-3.5 h-3.5" />
+                                <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                                 <span>Làm Sạch Kho</span>
                             </button>
                             <button
@@ -774,7 +795,7 @@ export default function VoucherAdminPage() {
                                 className="px-3.5 py-1.5 bg-rose-700 hover:bg-rose-800 active:scale-[0.99] text-white rounded-xl text-xs font-black transition cursor-pointer shadow-sm flex items-center gap-1.5"
                                 title="Lựa chọn và xóa vĩnh viễn các chương trình PMH đã kết thúc (hết hạn)"
                             >
-                                <Trash2 className="w-3.5 h-3.5" />
+                                <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                                 <span>Xóa CT Hết Hạn</span>
                             </button>
                         </div>
@@ -784,7 +805,7 @@ export default function VoucherAdminPage() {
 
             {/* BANNER THÔNG BÁO LƯU TRỮ CHƯƠNG TRÌNH ĐÃ ẨN (Khi không có mã hết hạn đang hoạt động) */}
             {expiredCount === 0 && hiddenExpiredVouchers.length > 0 && (
-                <div className="bg-emerald-50/70 border border-emerald-200 rounded-2xl p-3 px-4 text-xs text-emerald-950 flex items-center justify-between gap-3 flex-wrap animate-in fade-in">
+                <div className="bg-emerald-50/70 border border-emerald-200 rounded-2xl p-3 px-4 text-xs text-emerald-950 flex items-center justify-between gap-3 flex-wrap">
                     <div className="flex items-center gap-2">
                         <span className="text-sm shrink-0">📦</span>
                         <span>
@@ -996,20 +1017,30 @@ export default function VoucherAdminPage() {
             />
 
             {/* MODAL HƯỚNG DẪN & XUẤT SQL SUPABASE (CHỈ DÀNH CHO ADMIN) */}
-            {showSqlModal && isAdmin && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs font-avo animate-in fade-in">
-                    <div className="bg-white rounded-3xl max-w-xl w-full border border-slate-200 shadow-2xl p-5 sm:p-6 space-y-4 max-h-[92vh] overflow-y-auto">
+            {showSqlModal && isAdmin && createPortal(
+                <div
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="voucher-sql-modal-title"
+                    className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm"
+                    onClick={() => setShowSqlModal(false)}
+                >
+                    <div
+                        className="bg-white rounded-3xl max-w-xl w-full border border-slate-200 shadow-2xl p-5 sm:p-6 space-y-4 max-h-[92vh] overflow-y-auto"
+                        onClick={(e) => e.stopPropagation()}
+                    >
                         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                             <div className="flex items-center gap-2">
-                                <Database className="w-5 h-5 text-emerald-600" />
-                                <h3 className="font-black text-sm text-slate-900">
+                                <Database className="w-5 h-5 text-emerald-700" aria-hidden="true" />
+                                <h3 id="voucher-sql-modal-title" className="font-black text-sm text-slate-900">
                                     Khởi Tạo Bảng Supabase (store_vouchers)
                                 </h3>
                             </div>
                             <button
                                 type="button"
                                 onClick={() => setShowSqlModal(false)}
-                                className="p-1 text-slate-400 hover:text-slate-700 cursor-pointer rounded-lg hover:bg-slate-100"
+                                aria-label="Đóng hộp thoại mã SQL"
+                                className="p-1.5 text-slate-600 hover:text-slate-900 cursor-pointer rounded-lg hover:bg-slate-100 text-sm font-bold"
                             >
                                 ✕
                             </button>
@@ -1030,10 +1061,12 @@ export default function VoucherAdminPage() {
 
                         {/* Textarea mã SQL */}
                         <div className="space-y-1">
-                            <div className="flex items-center justify-between text-[11px] font-bold text-slate-500">
-                                <span>Mã Lệnh SQL Chuẩn (Bao Gồm RLS & Cột Thời Hạn expires_at):</span>
-                            </div>
+                            <label htmlFor="voucher-sql-ddl" className="flex items-center justify-between text-[11px] font-bold text-slate-600 cursor-pointer">
+                                <span>Mã Lệnh SQL Chuẩn (Bao Gồm RLS &amp; Cột Thời Hạn expires_at):</span>
+                            </label>
                             <textarea
+                                id="voucher-sql-ddl"
+                                name="voucher_sql_ddl"
                                 readOnly
                                 rows={10}
                                 value={STORE_VOUCHERS_SQL}
@@ -1052,7 +1085,7 @@ export default function VoucherAdminPage() {
                                 disabled={loading}
                                 className="px-4 py-2.5 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-black transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
                             >
-                                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
                                 <span>{loading ? 'Đang kiểm tra...' : 'Kiểm Tra Lại Kết Nối Cloud'}</span>
                             </button>
 
@@ -1062,14 +1095,15 @@ export default function VoucherAdminPage() {
                                     navigator.clipboard.writeText(STORE_VOUCHERS_SQL);
                                     showToast('📋 Đã copy lệnh SQL vào bộ nhớ tạm!');
                                 }}
-                                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition cursor-pointer shadow-sm flex items-center gap-1.5"
+                                className="px-4 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-black transition cursor-pointer shadow-sm flex items-center gap-1.5"
                             >
-                                <Code className="w-4 h-4 text-amber-300" />
+                                <Code className="w-4 h-4 text-amber-300" aria-hidden="true" />
                                 <span>Sao Chép Lệnh SQL</span>
                             </button>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
 
             {/* MODAL CÀI ĐẶT QUY TẮC CẤP PHÁT VOUCHER (FIFO / FEFO / LIFO) */}

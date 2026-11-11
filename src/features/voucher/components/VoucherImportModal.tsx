@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Plus, Upload, Check, AlertCircle, Layers, Calendar, Store, Shield, Sparkles, Copy, ChevronDown, ChevronUp } from 'lucide-react';
 import { importVouchers, getDefaultExpiryDate } from '../services/voucherService';
 import { formatDate, getShortStoreName } from '../../../core/lib/formatters';
@@ -186,6 +187,15 @@ export default function VoucherImportModal({
         return Boolean(prev && prev === description.trim());
     }, [currentActiveCampaign, denomination, description, configByCampaignAndDenom, configByCampaignOnly]);
 
+    useEffect(() => {
+        if (!isOpen) return;
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape' && !isSubmitting) onClose();
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isOpen, isSubmitting, onClose]);
+
     if (!isOpen) return null;
 
     const effectiveCampaign = (campaignName === 'NEW' ? customCampaign : campaignName).trim();
@@ -224,7 +234,7 @@ export default function VoucherImportModal({
         let targetClusterStores: string[] | undefined;
 
         if (scopeType === 'CLUSTER') {
-            // Nạp cho Toàn Cụm của Quản lý: Lấy shop đầu tiên làm đại diện và gắn danh sách cả Cụm
+            // Nạp cho Toàn Cụm của Quản lý: Lấy ST đầu tiên làm đại diện và gắn danh sách cả Cụm
             targetStoreName = clusterStoreNames[0] || 'Toàn Cụm ST';
             targetClusterStores = clusterStoreNames.length > 0 ? clusterStoreNames : undefined;
         } else if (scopeType === 'ALL_GLOBAL' && isAdmin) {
@@ -232,7 +242,7 @@ export default function VoucherImportModal({
             targetStoreName = 'Toàn Cụm ST';
             targetClusterStores = undefined;
         } else {
-            // Nạp riêng cho 1 shop cụ thể
+            // Nạp riêng cho 1 ST cụ thể
             targetStoreName = scopeType;
             targetClusterStores = undefined;
         }
@@ -265,18 +275,27 @@ export default function VoucherImportModal({
         }
     };
 
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs font-avo animate-in fade-in duration-200">
-            <div className="bg-white rounded-3xl max-w-lg w-full border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+    return createPortal(
+        <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="voucher-import-modal-title"
+            className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm"
+            onClick={() => !isSubmitting && onClose()}
+        >
+            <div
+                className="bg-white rounded-3xl max-w-lg w-full border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[92vh]"
+                onClick={(e) => e.stopPropagation()}
+            >
                 {/* Header */}
                 <div className="bg-emerald-700 px-5 py-4 text-white flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                        <Plus className="w-5 h-5 text-amber-300" />
+                        <Plus className="w-5 h-5 text-amber-300" aria-hidden="true" />
                         <div>
-                            <h3 className="font-black text-sm uppercase tracking-wide">
+                            <h3 id="voucher-import-modal-title" className="font-black text-sm uppercase tracking-wide">
                                 Nạp Mã Voucher Mới Vào Kho
                             </h3>
-                            <div className="text-[11px] text-emerald-200">
+                            <div className="text-[11px] text-emerald-100">
                                 Quản lý: <strong>{currentUserDisplayName}</strong>
                             </div>
                         </div>
@@ -284,9 +303,11 @@ export default function VoucherImportModal({
                     <button
                         type="button"
                         onClick={onClose}
-                        className="p-1 rounded-xl hover:bg-emerald-800 text-white transition cursor-pointer"
+                        disabled={isSubmitting}
+                        aria-label="Đóng hộp thoại nạp mã mới"
+                        className="p-1.5 rounded-xl hover:bg-emerald-800 text-white transition cursor-pointer disabled:opacity-50"
                     >
-                        <X className="w-5 h-5" />
+                        <X className="w-5 h-5" aria-hidden="true" />
                     </button>
                 </div>
 
@@ -294,7 +315,7 @@ export default function VoucherImportModal({
                 <form onSubmit={handleSubmit} className="p-4 sm:p-5 overflow-y-auto space-y-4 text-xs">
                     {errorMsg && (
                         <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl flex items-center gap-2 font-bold">
-                            <AlertCircle className="w-4 h-4 shrink-0" />
+                            <AlertCircle className="w-4 h-4 shrink-0" aria-hidden="true" />
                             <span>{errorMsg}</span>
                         </div>
                     )}
@@ -302,28 +323,30 @@ export default function VoucherImportModal({
                     {/* 0. PHÂN QUYỀN SỬ DỤNG THEO CỤM (BẢO VỆ RIÊNG TƯ) */}
                     <div className="bg-emerald-50/90 border border-emerald-200 rounded-2xl p-3.5 space-y-2">
                         <div className="flex items-center justify-between text-xs">
-                            <span className="font-black text-emerald-950 flex items-center gap-1.5">
-                                <Shield className="w-4 h-4 text-emerald-700" />
-                                <span>Phạm Vi Phân Quyền Cụm & Riêng Tư:</span>
-                            </span>
+                            <label htmlFor="voucher-import-scope-select" className="font-black text-emerald-950 flex items-center gap-1.5 cursor-pointer">
+                                <Shield className="w-4 h-4 text-emerald-700" aria-hidden="true" />
+                                <span>Phạm Vi Phân Quyền Cụm &amp; Riêng Tư:</span>
+                            </label>
                             <span className="text-[10px] bg-emerald-200/90 text-emerald-900 px-2 py-0.5 rounded-full font-bold">
                                 Bảo Vệ Dữ Liệu
                             </span>
                         </div>
 
                         <select
+                            id="voucher-import-scope-select"
+                            name="voucher_import_scope"
                             value={scopeType}
                             onChange={(e) => setScopeType(e.target.value)}
                             className="w-full bg-white border border-emerald-300 rounded-xl p-2 font-bold text-slate-900 focus:outline-emerald-600 cursor-pointer text-xs"
                         >
                             {clusterStoreNames.length > 1 && (
                                 <option value="CLUSTER">
-                                    🏢 Toàn Cụm Của Tôi ({clusterStoreNames.length} shop - Dùng chung nội bộ cụm)
+                                    🏢 Toàn Cụm Của Tôi ({clusterStoreNames.length} ST - Dùng chung nội bộ cụm)
                                 </option>
                             )}
                             {clusterStoreNames.map(name => (
                                 <option key={name} value={name}>
-                                    🏪 Riêng shop: {getShortStoreName(name)}
+                                    🏪 Riêng ST: {getShortStoreName(name)}
                                 </option>
                             ))}
                             {isAdmin && (
@@ -344,10 +367,12 @@ export default function VoucherImportModal({
 
                     {/* 1. Chọn Chương Trình */}
                     <div>
-                        <label className="block text-[11px] font-black uppercase text-slate-700 mb-1.5">
+                        <label htmlFor="voucher-import-campaign" className="block text-[11px] font-black uppercase text-slate-700 mb-1.5 cursor-pointer">
                             1. Chương Trình Áp Dụng <span className="text-rose-500">*</span>
                         </label>
                         <select
+                            id="voucher-import-campaign"
+                            name="voucher_import_campaign"
                             value={campaignName}
                             onChange={(e) => {
                                 const val = e.target.value;
@@ -367,7 +392,10 @@ export default function VoucherImportModal({
 
                         {campaignName === 'NEW' && (
                             <input
+                                id="voucher-import-custom-campaign"
+                                name="voucher_import_custom_campaign"
                                 type="text"
+                                aria-label="Tên chương trình mới"
                                 value={customCampaign}
                                 onChange={(e) => {
                                     const val = e.target.value;
@@ -385,9 +413,9 @@ export default function VoucherImportModal({
 
                     {/* 2. Chọn Mệnh Giá */}
                     <div>
-                        <label className="block text-[11px] font-black uppercase text-slate-700 mb-1.5">
+                        <span className="block text-[11px] font-black uppercase text-slate-700 mb-1.5">
                             2. Mệnh Giá Voucher <span className="text-rose-500">*</span>
-                        </label>
+                        </span>
                         <div className="flex flex-wrap gap-1.5 mb-2">
                             {COMMON_DENOMINATIONS.map(d => {
                                 const hot = getDenominationHotStyle(d);
@@ -415,9 +443,13 @@ export default function VoucherImportModal({
                             })}
                         </div>
                         <div className="flex items-center gap-2">
-                            <span className="text-slate-500 font-bold shrink-0 text-xs">Mệnh giá tùy chỉnh:</span>
+                            <label htmlFor="voucher-import-denomination" className="text-slate-600 font-bold shrink-0 text-xs cursor-pointer">
+                                Mệnh giá tùy chỉnh:
+                            </label>
                             <div className="relative flex-1">
                                 <input
+                                    id="voucher-import-denomination"
+                                    name="voucher_import_denomination"
                                     type="text"
                                     inputMode="numeric"
                                     value={denomination > 0 ? denomination.toLocaleString('vi-VN') : ''}
@@ -432,7 +464,7 @@ export default function VoucherImportModal({
                                     placeholder="Nhập mệnh giá (VD: 50.000)..."
                                     className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 pl-3 pr-12 font-mono font-black text-sm text-slate-900 focus:bg-white focus:outline-emerald-600"
                                 />
-                                <span className="absolute right-3 top-1/2 -translate-y-1/2 font-bold text-slate-400 text-xs">
+                                <span className="absolute right-3 top-1/2 -translate-y-1/2 font-bold text-slate-500 text-xs">
                                     VNĐ
                                 </span>
                             </div>
@@ -442,13 +474,13 @@ export default function VoucherImportModal({
                     {/* 3. Diễn Giải / Điều Kiện Sử Dụng Mệnh Giá (Nhiều dòng) */}
                     <div>
                         <div className="flex items-center justify-between mb-1.5 flex-wrap gap-1">
-                            <label className="text-[11px] font-black uppercase text-slate-700">
+                            <label htmlFor="voucher-import-description" className="text-[11px] font-black uppercase text-slate-700 cursor-pointer">
                                 3. Diễn Giải / Điều Kiện Sử Dụng (Nhiều dòng)
                             </label>
                             <div className="flex items-center gap-1.5 flex-wrap">
                                 {isAutoMatchedConfig && (
                                     <span className="text-[10px] text-emerald-800 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
-                                        <Sparkles className="w-3 h-3 text-emerald-600" />
+                                        <Sparkles className="w-3 h-3 text-emerald-700" aria-hidden="true" />
                                         <span>Tự động theo cấu hình đã có</span>
                                     </span>
                                 )}
@@ -458,11 +490,13 @@ export default function VoucherImportModal({
                             </div>
                         </div>
                         <textarea
+                            id="voucher-import-description"
+                            name="voucher_import_description"
                             rows={3}
                             value={description}
                             onChange={(e) => setDescription(e.target.value)}
                             placeholder="Nhập các điều kiện áp dụng, mỗi dòng 1 điều kiện:&#10;• Áp dụng cho đơn từ 500.000đ&#10;• Chỉ áp dụng nhóm Gia Dụng & Phụ Kiện&#10;• Không áp dụng cùng CTKM khác"
-                            className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-bold text-xs text-slate-900 focus:bg-white focus:outline-emerald-600 placeholder:text-slate-400 font-sans leading-relaxed"
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-bold text-xs text-slate-900 focus:bg-white focus:outline-emerald-600 placeholder:text-slate-500 font-sans leading-relaxed"
                         />
                         <div className="flex items-center justify-between text-[10px] text-slate-500 mt-1">
                             <span>Bấm để thêm nhanh điều kiện xuống dòng:</span>
@@ -497,8 +531,8 @@ export default function VoucherImportModal({
                     {/* 4. Thời Hạn Sử Dụng (HSD) - Mặc định ngày cuối tháng */}
                     <div>
                         <div className="flex items-center justify-between mb-1.5">
-                            <label className="text-[11px] font-black uppercase text-slate-700 flex items-center gap-1.5">
-                                <Calendar className="w-3.5 h-3.5 text-emerald-600" />
+                            <label htmlFor="voucher-import-expires" className="text-[11px] font-black uppercase text-slate-700 flex items-center gap-1.5 cursor-pointer">
+                                <Calendar className="w-3.5 h-3.5 text-emerald-700" aria-hidden="true" />
                                 <span>4. Thời Hạn Sử Dụng (HSD)</span>
                                 <span className="text-rose-500">*</span>
                             </label>
@@ -507,6 +541,8 @@ export default function VoucherImportModal({
                             </span>
                         </div>
                         <input
+                            id="voucher-import-expires"
+                            name="voucher_import_expires"
                             type="date"
                             value={expiresAt}
                             onChange={(e) => setExpiresAt(e.target.value)}
@@ -519,8 +555,8 @@ export default function VoucherImportModal({
                                 type="button"
                                 onClick={() => setExpiresAt(getDefaultExpiryDate())}
                                 className={`px-2.5 py-1 rounded-lg text-[10.5px] font-bold transition border cursor-pointer ${expiresAt === getDefaultExpiryDate()
-                                    ? 'bg-emerald-600 text-white border-emerald-700 shadow-2xs'
-                                    : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                                    ? 'bg-emerald-700 text-white border-emerald-800 shadow-sm'
+                                    : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                                     }`}
                             >
                                 📅 Cuối tháng này ({formatDate(getDefaultExpiryDate())})
@@ -559,7 +595,7 @@ export default function VoucherImportModal({
                     {/* 5. Textarea Nhập Mã */}
                     <div>
                         <div className="flex items-center justify-between mb-1.5 flex-wrap gap-1">
-                            <label className="text-[11px] font-black uppercase text-slate-700">
+                            <label htmlFor="voucher-import-codes" className="text-[11px] font-black uppercase text-slate-700 cursor-pointer">
                                 5. Danh Sách Mã Voucher <span className="text-rose-500">*</span>
                             </label>
                             <div className="flex items-center gap-1.5 flex-wrap">
@@ -578,6 +614,8 @@ export default function VoucherImportModal({
                             </div>
                         </div>
                         <textarea
+                            id="voucher-import-codes"
+                            name="voucher_import_codes"
                             rows={5}
                             value={rawCodesText}
                             onChange={(e) => setRawCodesText(e.target.value)}
@@ -591,10 +629,10 @@ export default function VoucherImportModal({
 
                         {/* Cảnh Báo & Bảng Đối Soát Khi Phát Hiện Mã Trùng */}
                         {duplicateCodes.length > 0 && (
-                            <div className="mt-2.5 p-3 sm:p-3.5 bg-rose-50/95 border-2 border-rose-300 rounded-2xl space-y-2 text-xs text-rose-950 shadow-2xs animate-in fade-in duration-200">
+                            <div className="mt-2.5 p-3 sm:p-3.5 bg-rose-50/95 border-2 border-rose-300 rounded-2xl space-y-2 text-xs text-rose-950 shadow-sm">
                                 <div className="flex items-start justify-between gap-2 flex-wrap">
                                     <div className="flex items-center gap-2">
-                                        <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                                        <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" aria-hidden="true" />
                                         <div>
                                             <span className="font-black text-rose-900 block text-xs">
                                                 ⚠️ Phát hiện {duplicateCodes.length} mã đã tồn tại trong kho voucher!
@@ -614,10 +652,10 @@ export default function VoucherImportModal({
                                                     setRawCodesText(validCodes.join('\n'));
                                                     setShowDuplicateDetails(false);
                                                 }}
-                                                className="px-2.5 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[11px] transition shadow-xs cursor-pointer flex items-center gap-1"
+                                                className="px-2.5 py-1 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-extrabold text-[11px] transition shadow-sm cursor-pointer flex items-center gap-1"
                                                 title="Tự động loại bỏ các mã bị trùng, chỉ giữ lại mã mới hợp lệ"
                                             >
-                                                <Check className="w-3.5 h-3.5" />
+                                                <Check className="w-3.5 h-3.5" aria-hidden="true" />
                                                 <span>Chỉ Giữ {validCodes.length} Mã Khả Dụng</span>
                                             </button>
                                         )}
@@ -629,9 +667,9 @@ export default function VoucherImportModal({
                                                 setIsDuplicateCopied(true);
                                                 setTimeout(() => setIsDuplicateCopied(false), 2000);
                                             }}
-                                            className="px-2.5 py-1 rounded-xl bg-white hover:bg-rose-100 border border-rose-300 text-rose-800 font-bold text-[11px] transition cursor-pointer flex items-center gap-1 shadow-2xs"
+                                            className="px-2.5 py-1 rounded-xl bg-white hover:bg-rose-100 border border-rose-300 text-rose-800 font-bold text-[11px] transition cursor-pointer flex items-center gap-1 shadow-sm"
                                         >
-                                            <Copy className="w-3 h-3 text-rose-600" />
+                                            <Copy className="w-3 h-3 text-rose-600" aria-hidden="true" />
                                             <span>{isDuplicateCopied ? 'Đã copy!' : `Copy ${duplicateCodes.length} Mã Trùng`}</span>
                                         </button>
                                         <button
@@ -672,20 +710,20 @@ export default function VoucherImportModal({
                                                         </td>
                                                         <td className="py-1.5 px-2.5 text-center font-bold">
                                                             {d.existing.status === 'AVAILABLE' ? (
-                                                                <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded text-[10px]">
+                                                                <span className="text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded text-[10px]">
                                                                     🟢 Trong kho
                                                                 </span>
                                                             ) : d.existing.status === 'CLAIMED' ? (
-                                                                <span className="text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.2 rounded text-[10px]" title={`Đơn: ${d.existing.order_id}`}>
+                                                                <span className="text-amber-900 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded text-[10px]" title={`Đơn: ${d.existing.order_id}`}>
                                                                     🟡 Đã cấp NV
                                                                 </span>
                                                             ) : (
-                                                                <span className="text-slate-600 bg-slate-100 px-1.5 py-0.2 rounded text-[10px]">
+                                                                <span className="text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded text-[10px]">
                                                                     {d.existing.status}
                                                                 </span>
                                                             )}
                                                         </td>
-                                                        <td className="py-1.5 px-2.5 font-mono text-[10px] text-slate-500">
+                                                        <td className="py-1.5 px-2.5 font-mono text-[10px] text-slate-600">
                                                             {d.existing.expires_at ? formatDate(d.existing.expires_at) : '-'}
                                                         </td>
                                                     </tr>
@@ -697,7 +735,7 @@ export default function VoucherImportModal({
                             </div>
                         )}
 
-                        <p className="text-[10px] text-slate-500 mt-1">
+                        <p className="text-[10px] text-slate-600 mt-1">
                             * Hệ thống tự động in hoa, xóa khoảng cách thừa và loại trừ các mã đã có trong kho ST.
                         </p>
                     </div>
@@ -707,20 +745,20 @@ export default function VoucherImportModal({
                         <button
                             type="button"
                             onClick={onClose}
-                            className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 font-bold transition cursor-pointer"
+                            className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 font-bold transition cursor-pointer"
                         >
                             Hủy Bỏ
                         </button>
                         <button
                             type="submit"
                             disabled={isSubmitting || validCodes.length === 0}
-                            className={`px-5 py-2.5 rounded-xl text-white font-black transition cursor-pointer shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 ${
+                            className={`px-5 py-2.5 rounded-xl font-black transition cursor-pointer shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 ${
                                 duplicateCodes.length > 0 && validCodes.length > 0
-                                    ? 'bg-amber-600 hover:bg-amber-700'
-                                    : 'bg-emerald-600 hover:bg-emerald-700'
+                                    ? 'bg-amber-400 hover:bg-amber-500 text-slate-950 border border-amber-500'
+                                    : 'bg-emerald-700 hover:bg-emerald-800 text-white'
                             }`}
                         >
-                            <Upload className="w-4 h-4" />
+                            <Upload className="w-4 h-4" aria-hidden="true" />
                             <span>
                                 {isSubmitting
                                     ? 'Đang Nạp...'
@@ -734,6 +772,7 @@ export default function VoucherImportModal({
                     </div>
                 </form>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 }

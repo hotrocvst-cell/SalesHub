@@ -34,6 +34,7 @@ export function useAiAssistant(params: {
     const [documents, setDocuments] = useState<KnowledgeDocument[]>([]);
     const [availableStores, setAvailableStores] = useState<StoreItem[]>([]);
     const [isSyncingDocs, setIsSyncingDocs] = useState(false);
+    const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
 
     const [sessions, setSessions] = useState<AiChatSession[]>([]);
     const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
@@ -41,6 +42,8 @@ export function useAiAssistant(params: {
     const [inputText, setInputText] = useState('');
     const [queryMode, setQueryMode] = useState<'AI' | 'SEARCH'>('AI');
     const [isThinking, setIsThinking] = useState(false);
+
+    const userStoresKey = userStores.join('|');
 
     const loadInitialData = useCallback(async () => {
         setIsSyncingDocs(true);
@@ -60,8 +63,10 @@ export function useAiAssistant(params: {
         if (docsRes.success) setDocuments(docsRes.data);
         setSessions(sessRes.sessions);
         if (storesRes.success && storesRes.data) setAvailableStores(storesRes.data);
+        setLastSyncedAt(new Date());
         setIsSyncingDocs(false);
-    }, [effectiveRole, effectiveUserId, isAdmin]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [effectiveRole, effectiveUserId, isAdmin, userStoresKey]);
 
     useEffect(() => {
         loadInitialData();
@@ -161,6 +166,7 @@ export function useAiAssistant(params: {
         documents,
         availableStores,
         isSyncingDocs,
+        lastSyncedAt,
         sessions,
         activeSessionId,
         messages,

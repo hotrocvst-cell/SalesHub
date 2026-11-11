@@ -1,5 +1,10 @@
 import { supabase } from '../../../core/lib/supabase';
-import { chunkMarkdownContent, removeVietnameseTones } from '../utils/markdownChunker';
+import { chunkMarkdownContent } from '../utils/markdownChunker';
+import {
+    extractSearchKeywords,
+    scoreAndFilterKnowledgeChunks,
+    type ScoredKnowledgeChunk
+} from '../utils/retrievalScorer';
 import { deleteKnowledgeImages } from './knowledgeStorageService';
 import { invalidateFaqCache, isStoreScopeAllowed } from './faqCacheService';
 import type {
@@ -9,19 +14,7 @@ import type {
     ChatAttachmentImage
 } from '../types/aiAssistantTypes';
 
-const VN_STOPWORDS = new Set([
-    'la', 'gi', 'cua', 'cho', 'nhu', 'the', 'nao', 'co', 'duoc', 'khong', 'ko',
-    've', 'trong', 'khi', 'ma', 'va', 'hoac', 'hay', 'thi', 'voi', 'tai', 'o',
-    'tu', 'den', 'bao', 'nhieu', 'sao', 'vi', 'ban', 'toi', 'em', 'anh', 'chi',
-    'hoi', 'xin', 'vui', 'long', 'cach', 'huong', 'dan', 'quy', 'dinh'
-]);
-
-export function extractSearchKeywords(query: string): string[] {
-    const clean = removeVietnameseTones(query).replace(/[^a-z0-9\s%]/g, ' ');
-    const tokens = clean.split(/\s+/).filter((t) => t.length >= 2 && !VN_STOPWORDS.has(t));
-    if (tokens.length > 0) return Array.from(new Set(tokens)).slice(0, 8);
-    return Array.from(new Set(clean.split(/\s+/).filter((t) => t.length >= 2))).slice(0, 6);
-}
+export { extractSearchKeywords };
 
 /**
  * Tải danh sách tài liệu theo quyền vai trò (Admin tab quản trị thấy toàn bộ; User chỉ thấy tài liệu được phép)
@@ -165,70 +158,71 @@ export async function deleteKnowledgeDocument(doc: KnowledgeDocument): Promise<{
     return { success: true };
 }
 
+const CHUNK_SELECT_COLS =
+    'id, document_id, chunk_index, section_title, content, search_text, image_path, allowed_roles, allowed_stores, knowledge_documents!inner(title, category, source_type, is_active, image_paths)';
+
 /**
- * Tìm kiếm các đoạn tri thức khớp nhất cho người dùng (LỌC NGAY TẠI SUPABASE THEO ROLE & STORE)
+ * Tìm kiếm các đoạn tri thức khớp nhất cho người dùng (2 bước: Khớp ĐỦ TỪ KHÓA ưu tiên trước, sau đó mới mở rộng + chấm điểm lọc nhiễu)
  */
 export async function searchKnowledgeChunksForUser(params: {
     query: string;
     userRole: string;
     userStores: string[];
     limit?: number;
-}): Promise<{ chunks: KnowledgeChunk[]; error?: string }> {
+}): Promise<{ chunks: ScoredKnowledgeChunk[]; error?: string }> {
     const { query, userRole, userStores, limit = 6 } = params;
     const keywords = extractSearchKeywords(query);
-    const normalizedQuery = removeVietnameseTones(query);
+    const bypassStore = userRole === 'ADMIN';
 
     try {
-        let dbQuery = supabase
+        // BƯỚC 1: Ưu tiên khớp ĐỒNG THỜI tất cả từ khóa (AND) để lấy trúng đích 100% tài liệu mục tiêu
+        if (keywords.length >= 2 && keywords.length <= 5) {
+            let strictQuery = supabase
+                .from('knowledge_chunks')
+                .select(CHUNK_SELECT_COLS)
+                .eq('knowledge_documents.is_active', true)
+                .overlaps('allowed_roles', [userRole, 'ALL']);
+
+            keywords.forEach((kw) => {
+                const safeKw = kw.replace(/[,()%]/g, '');
+                if (safeKw) strictQuery = strictQuery.ilike('search_text', `%${safeKw}%`);
+            });
+
+            const { data: strictData, error: strictErr } = await strictQuery.limit(30);
+            if (!strictErr && strictData && strictData.length > 0) {
+                const storeMatched = (strictData as any[]).filter((row) =>
+                    isStoreScopeAllowed(row.allowed_stores, userStores, bypassStore)
+                );
+                const strictScored = scoreAndFilterKnowledgeChunks(storeMatched, query, keywords, limit);
+                if (strictScored.length > 0) {
+                    return { chunks: strictScored };
+                }
+            }
+        }
+
+        // BƯỚC 2: Truy vấn mở rộng (OR) + chấm điểm độ phủ từ khóa, cụm từ liền kề và lọc nhiễu
+        let broadQuery = supabase
             .from('knowledge_chunks')
-            .select('id, document_id, chunk_index, section_title, content, search_text, image_path, allowed_roles, allowed_stores, knowledge_documents!inner(title, category, source_type, is_active, image_paths)')
+            .select(CHUNK_SELECT_COLS)
             .eq('knowledge_documents.is_active', true)
             .overlaps('allowed_roles', [userRole, 'ALL']);
 
         if (keywords.length > 0) {
-            const orExpr = keywords.map((kw) => `search_text.ilike.%${kw.replace(/[,()]/g, '')}%`).join(',');
-            dbQuery = dbQuery.or(orExpr);
+            const orExpr = keywords
+                .map((kw) => kw.replace(/[,()]/g, ''))
+                .filter(Boolean)
+                .map((kw) => `search_text.ilike.%${kw}%`)
+                .join(',');
+            if (orExpr) broadQuery = broadQuery.or(orExpr);
         }
 
-        const { data, error } = await dbQuery.limit(45);
-        if (error) return { chunks: [], error: error.message };
+        const { data: broadData, error: broadErr } = await broadQuery.limit(100);
+        if (broadErr) return { chunks: [], error: broadErr.message };
 
-        const candidates = ((data as any[]) || [])
-            .filter((row) => isStoreScopeAllowed(row.allowed_stores, userStores, userRole === 'ADMIN'))
-            .map((row) => {
-                const docInfo = row.knowledge_documents || {};
-                const searchTxt: string = row.search_text || '';
-                const docTitleNorm = removeVietnameseTones(docInfo.title || '');
-                let score = 0;
-
-                if (normalizedQuery.length >= 4 && searchTxt.includes(normalizedQuery)) score += 25;
-                if (normalizedQuery.length >= 4 && docTitleNorm.includes(normalizedQuery)) score += 15;
-
-                keywords.forEach((kw) => {
-                    if (searchTxt.includes(kw)) score += 5;
-                    if (docTitleNorm.includes(kw)) score += 4;
-                });
-
-                const fallbackImg = Array.isArray(docInfo.image_paths) && docInfo.image_paths.length > 0 ? docInfo.image_paths[0] : null;
-                return {
-                    id: row.id,
-                    document_id: row.document_id,
-                    chunk_index: row.chunk_index,
-                    section_title: row.section_title,
-                    content: row.content,
-                    search_text: searchTxt,
-                    image_path: row.image_path || fallbackImg,
-                    allowed_roles: row.allowed_roles,
-                    allowed_stores: row.allowed_stores,
-                    document_title: docInfo.title || 'Tài liệu nội bộ',
-                    category: docInfo.category || '',
-                    source_type: docInfo.source_type,
-                    score
-                } as KnowledgeChunk;
-            });
-
-        candidates.sort((a, b) => (b.score || 0) - (a.score || 0));
-        return { chunks: candidates.slice(0, limit) };
+        const storeFiltered = ((broadData as any[]) || []).filter((row) =>
+            isStoreScopeAllowed(row.allowed_stores, userStores, bypassStore)
+        );
+        return { chunks: scoreAndFilterKnowledgeChunks(storeFiltered, query, keywords, limit) };
     } catch (err: any) {
         return { chunks: [], error: err?.message || 'Lỗi truy vấn tri thức' };
     }

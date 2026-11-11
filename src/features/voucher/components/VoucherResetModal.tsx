@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Search, RotateCcw, AlertCircle, CheckCircle2, UserCheck, ShoppingBag, Clock, Store } from 'lucide-react';
 import type { VoucherItem } from '../types';
 import { resetClaimedVoucher } from '../services/voucherService';
@@ -26,6 +27,15 @@ export default function VoucherResetModal({
     const [hasSearched, setHasSearched] = useState<boolean>(false);
     const [isResetting, setIsResetting] = useState<boolean>(false);
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape' && !isResetting) onClose();
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isOpen, isResetting, onClose]);
 
     if (!isOpen) return null;
 
@@ -74,18 +84,27 @@ export default function VoucherResetModal({
         }
     };
 
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs font-avo animate-in fade-in duration-200">
-            <div className="bg-white rounded-3xl max-w-md w-full border border-slate-200 shadow-2xl overflow-hidden flex flex-col">
+    return createPortal(
+        <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="voucher-reset-modal-title"
+            className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm"
+            onClick={() => !isResetting && onClose()}
+        >
+            <div
+                className="bg-white rounded-3xl max-w-md w-full border border-slate-200 shadow-2xl overflow-hidden flex flex-col"
+                onClick={(e) => e.stopPropagation()}
+            >
                 {/* Header */}
-                <div className="bg-amber-600 px-5 py-4 text-white flex items-center justify-between">
+                <div className="bg-amber-400 px-5 py-4 text-slate-950 flex items-center justify-between border-b border-amber-500">
                     <div className="flex items-center gap-2">
-                        <RotateCcw className="w-5 h-5 text-amber-200" />
+                        <RotateCcw className="w-5 h-5 text-slate-900" aria-hidden="true" />
                         <div>
-                            <h3 className="font-black text-sm uppercase tracking-wide">
-                                Tra Cứu & Reset Mã Về Kho
+                            <h3 id="voucher-reset-modal-title" className="font-black text-sm uppercase tracking-wide">
+                                Tra Cứu &amp; Reset Mã Về Kho
                             </h3>
-                            <div className="text-[11px] text-amber-100">
+                            <div className="text-[11px] text-amber-950 font-medium">
                                 Nhập lại mã chưa dùng vào danh sách chờ
                             </div>
                         </div>
@@ -93,9 +112,11 @@ export default function VoucherResetModal({
                     <button
                         type="button"
                         onClick={onClose}
-                        className="p-1 rounded-xl hover:bg-amber-700 text-white transition cursor-pointer"
+                        disabled={isResetting}
+                        aria-label="Đóng hộp thoại tra cứu và reset mã"
+                        className="p-1.5 rounded-xl hover:bg-amber-500/60 text-slate-950 transition cursor-pointer disabled:opacity-50"
                     >
-                        <X className="w-5 h-5" />
+                        <X className="w-5 h-5" aria-hidden="true" />
                     </button>
                 </div>
 
@@ -103,11 +124,13 @@ export default function VoucherResetModal({
                 <div className="p-4 sm:p-5 space-y-4 text-xs">
                     {/* Ô Tra Cứu */}
                     <form onSubmit={handleSearch} className="space-y-2">
-                        <label className="block text-[11px] font-black uppercase text-slate-700">
+                        <label htmlFor="voucher-reset-code-input" className="block text-[11px] font-black uppercase text-slate-700 cursor-pointer">
                             Nhập Mã Voucher Cần Tra Cứu
                         </label>
                         <div className="flex items-center gap-2">
                             <input
+                                id="voucher-reset-code-input"
+                                name="voucher_reset_code"
                                 type="text"
                                 value={searchCode}
                                 onChange={(e) => setSearchCode(e.target.value)}
@@ -117,9 +140,9 @@ export default function VoucherResetModal({
                             />
                             <button
                                 type="submit"
-                                className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-black transition cursor-pointer flex items-center gap-1 shrink-0"
+                                className="px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-500 text-slate-950 border border-amber-500 font-black transition cursor-pointer flex items-center gap-1 shrink-0"
                             >
-                                <Search className="w-4 h-4" />
+                                <Search className="w-4 h-4" aria-hidden="true" />
                                 <span>Kiểm Tra</span>
                             </button>
                         </div>
@@ -208,9 +231,9 @@ export default function VoucherResetModal({
                                     type="button"
                                     onClick={handleReset}
                                     disabled={isResetting}
-                                    className="w-full mt-2 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 active:scale-[0.99] text-white font-black transition cursor-pointer shadow-md flex items-center justify-center gap-2"
+                                    className="w-full mt-2 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-500 active:scale-[0.99] text-slate-950 border border-amber-500 font-black transition cursor-pointer shadow-md flex items-center justify-center gap-2"
                                 >
-                                    <RotateCcw className={`w-4 h-4 ${isResetting ? 'animate-spin' : ''}`} />
+                                    <RotateCcw className={`w-4 h-4 ${isResetting ? 'animate-spin' : ''}`} aria-hidden="true" />
                                     <span>{isResetting ? 'Đang Reset...' : 'RESET VỀ DANH SÁCH CHỜ (AVAILABLE)'}</span>
                                 </button>
                             )}
@@ -221,13 +244,14 @@ export default function VoucherResetModal({
                         <button
                             type="button"
                             onClick={onClose}
-                            className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 font-bold transition cursor-pointer"
+                            className="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 font-bold transition cursor-pointer"
                         >
                             Đóng Lại
                         </button>
                     </div>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 }

@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
     X,
     Calendar,
@@ -83,10 +84,11 @@ export default function WorkNoteModal({
     canManage,
     editingNote: externalEditingNote
 }: WorkNoteModalProps) {
-    if (!isOpen || !targetDate) return null;
-
+    const safeDate = targetDate || new Date();
     const userRole = currentUser.role || 'NHAN_VIEN';
-    const dateKey = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}-${String(targetDate.getDate()).padStart(2, '0')}`;
+    const dateKey = `${safeDate.getFullYear()}-${String(safeDate.getMonth() + 1).padStart(2, '0')}-${String(safeDate.getDate()).padStart(2, '0')}`;
+    const titleInputRef = useRef<HTMLInputElement>(null);
+    const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // Form states
     const [title, setTitle] = useState('');
@@ -108,8 +110,31 @@ export default function WorkNoteModal({
     const [isSaving, setIsSaving] = useState(false);
     const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+    useEffect(() => {
+        return () => {
+            if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+        };
+    }, []);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        const prevFocused = document.activeElement as HTMLElement | null;
+        if (canManage) {
+            setTimeout(() => titleInputRef.current?.focus(), 0);
+        }
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') onClose();
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+            prevFocused?.focus?.();
+        };
+    }, [isOpen, canManage, onClose]);
+
     // Điền dữ liệu khi mở modal hoặc chọn sửa
     useEffect(() => {
+        if (!isOpen || !targetDate) return;
         if (externalEditingNote) {
             handleStartEdit(externalEditingNote);
             return;
@@ -130,11 +155,14 @@ export default function WorkNoteModal({
         } else {
             setAssignedStore(ALL_ASSIGNED_STORE_KEY);
         }
-    }, [targetDate, selectedStore, externalEditingNote, dateKey]);
+    }, [isOpen, targetDate, selectedStore, externalEditingNote, dateKey]);
+
+    if (!isOpen || !targetDate) return null;
 
     const showToast = (msg: string) => {
+        if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
         setToastMessage(msg);
-        setTimeout(() => setToastMessage(null), 2500);
+        toastTimerRef.current = setTimeout(() => setToastMessage(null), 2500);
     };
 
     // Bắt đầu chỉnh sửa
@@ -256,34 +284,43 @@ export default function WorkNoteModal({
         }
     };
 
-    return (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-200">
-            <div className="bg-white rounded-3xl max-w-2xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh] animate-in zoom-in-95 duration-200">
+    return createPortal(
+        <div
+            className="fixed inset-0 !mt-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5"
+            onClick={onClose}
+        >
+            <div
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="work-note-modal-title"
+                className="relative bg-white rounded-3xl max-w-2xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]"
+                onClick={(e) => e.stopPropagation()}
+            >
                 {/* TOAST THÔNG BÁO */}
                 {toastMessage && (
-                    <div className="absolute top-4 left-1/2 -translate-x-1/2 z-60 bg-slate-900 text-white px-4 py-2 rounded-2xl shadow-xl flex items-center gap-2 text-xs font-bold border border-white/20 animate-in fade-in slide-in-from-top-2">
-                        <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    <div role="status" aria-live="polite" className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white px-4 py-2 rounded-2xl shadow-xl flex items-center gap-2 text-xs font-bold border border-white/20">
+                        <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" aria-hidden="true" />
                         <span>{toastMessage}</span>
                     </div>
                 )}
 
                 {/* MODAL HEADER */}
-                <div className="px-5 py-4 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 text-white flex items-center justify-between gap-3 shrink-0">
+                <div className="px-4 sm:px-5 py-3.5 sm:py-4 bg-blue-600 text-white flex items-center justify-between gap-3 shrink-0">
                     <div className="flex items-center gap-3 min-w-0">
                         <div className="w-10 h-10 rounded-2xl bg-white/15 backdrop-blur-md flex items-center justify-center font-black text-white shrink-0 border border-white/20">
-                            <span className="font-mono text-base">{targetDate.getDate()}</span>
+                            <span className="font-mono tabular-nums text-base">{targetDate.getDate()}</span>
                         </div>
                         <div className="min-w-0">
-                            <div className="font-black text-sm sm:text-base flex items-center gap-2 truncate">
-                                <span>{canManage ? 'Cấu Hình Công Việc & Sự Kiện Cần Làm' : 'Chi Tiết Công Việc & Sự Kiện'}</span>
-                            </div>
+                            <h2 id="work-note-modal-title" className="font-black text-sm sm:text-base leading-snug">
+                                {canManage ? 'Cấu Hình Công Việc & Sự Kiện' : 'Chi Tiết Công Việc & Sự Kiện'}
+                            </h2>
                             <div className="text-xs text-blue-100 flex items-center gap-2 flex-wrap">
                                 <span>
                                     {['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'][targetDate.getDay()]}, {targetDate.toLocaleDateString('vi-VN')}
                                 </span>
                                 {selectedLunar && (
                                     <>
-                                        <span>•</span>
+                                        <span aria-hidden="true">•</span>
                                         <span className="font-bold text-amber-300">
                                             Âm lịch: Ngày {selectedLunar.day}/{selectedLunar.month} ({selectedLunar.canChiDay || ''})
                                         </span>
@@ -296,22 +333,23 @@ export default function WorkNoteModal({
                     <button
                         type="button"
                         onClick={onClose}
-                        className="w-8 h-8 rounded-full bg-white/15 hover:bg-white/30 text-white flex items-center justify-center transition cursor-pointer shrink-0"
+                        aria-label="Đóng hộp thoại công việc"
+                        className="w-8 h-8 rounded-full bg-white/15 hover:bg-white/30 text-white flex items-center justify-center transition cursor-pointer shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
                     >
-                        <X className="w-4 h-4" />
+                        <X className="w-4 h-4" aria-hidden="true" />
                     </button>
                 </div>
 
                 {/* MODAL BODY */}
-                <div className="p-5 overflow-y-auto space-y-5 flex-1 text-xs">
+                <div className="p-4 sm:p-5 overflow-y-auto overscroll-contain space-y-5 flex-1 text-xs">
                     {/* CHẾ ĐỘ XEM DÀNH CHO NHÂN VIÊN */}
                     {!canManage && (
                         <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-center gap-3">
-                            <Eye className="w-5 h-5 text-amber-600 shrink-0" />
+                            <Eye className="w-5 h-5 text-amber-600 shrink-0" aria-hidden="true" />
                             <div>
                                 <div className="font-black flex items-center gap-1.5">
                                     <span>Chế độ xem dành cho Nhân Viên</span>
-                                    <span className="px-1.5 py-0.2 rounded bg-amber-200 text-amber-900 text-[10px] font-black uppercase">Chỉ Xem</span>
+                                    <span className="px-1.5 py-0.5 rounded bg-amber-200 text-amber-900 text-[10px] font-black uppercase">Chỉ Xem</span>
                                 </div>
                                 <p className="text-amber-800 text-[11px] mt-0.5">
                                     Bạn đang xem danh sách việc cần làm do Quản lý (QL) / Trưởng ca (TC) phân công.
@@ -322,17 +360,17 @@ export default function WorkNoteModal({
 
                     {/* FORM CẤU HÌNH CÔNG VIỆC (QL / TC / ADMIN) */}
                     {canManage && (
-                        <form onSubmit={handleSave} className="p-4 rounded-2xl bg-slate-50 border border-blue-100 space-y-3.5 shadow-2xs">
+                        <form onSubmit={handleSave} className="p-4 rounded-2xl bg-slate-50 border border-blue-100 space-y-3.5 shadow-sm">
                             <div className="flex items-center justify-between text-xs">
                                 <span className="font-black text-slate-800 flex items-center gap-1.5">
-                                    {editingNoteId ? <Edit2 className="w-3.5 h-3.5 text-blue-600" /> : <Plus className="w-3.5 h-3.5 text-blue-600" />}
+                                    {editingNoteId ? <Edit2 className="w-3.5 h-3.5 text-blue-600 shrink-0" aria-hidden="true" /> : <Plus className="w-3.5 h-3.5 text-blue-600 shrink-0" aria-hidden="true" />}
                                     <span>{editingNoteId ? 'Chỉnh sửa công việc / sự kiện:' : 'Tạo mới công việc / sự kiện cần làm:'}</span>
                                 </span>
                                 {editingNoteId && (
                                     <button
                                         type="button"
                                         onClick={handleCancelEdit}
-                                        className="text-[11px] text-slate-500 hover:text-slate-800 font-bold hover:underline"
+                                        className="text-[11px] text-slate-600 hover:text-slate-900 font-bold hover:underline cursor-pointer"
                                     >
                                         Hủy chế độ sửa
                                     </button>
@@ -341,29 +379,33 @@ export default function WorkNoteModal({
 
                             {/* 1. Tiêu đề công việc */}
                             <div>
-                                <label className="block text-xs font-bold text-slate-700 mb-1">
+                                <label htmlFor="work-note-title" className="block text-xs font-bold text-slate-700 mb-1">
                                     Tiêu đề công việc / sự kiện <span className="text-rose-500">*</span>:
                                 </label>
                                 <input
+                                    ref={titleInputRef}
+                                    id="work-note-title"
+                                    name="noteTitle"
                                     type="text"
                                     value={title}
                                     onChange={(e) => setTitle(e.target.value)}
                                     placeholder="Ví dụ: Họp giao ban đầu ca; Cúng thần tài mùng 2; Kiểm kho phụ kiện; Chốt số ca tối..."
-                                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-xs text-slate-900 font-bold placeholder:font-normal placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 shadow-2xs"
-                                    autoFocus
+                                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-xs text-slate-900 font-bold placeholder:font-normal placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 shadow-sm"
                                 />
                             </div>
 
                             {/* 2. Loại công việc & Mức độ ưu tiên */}
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div>
-                                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                                    <label htmlFor="work-note-task-type" className="block text-xs font-bold text-slate-700 mb-1">
                                         Loại công việc / sự kiện:
                                     </label>
                                     <select
+                                        id="work-note-task-type"
+                                        name="noteTaskType"
                                         value={taskType}
                                         onChange={(e) => setTaskType(e.target.value as WorkTaskType)}
-                                        className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-bold text-slate-800 text-xs outline-none cursor-pointer"
+                                        className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-bold text-slate-800 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
                                     >
                                         {TASK_TYPE_OPTIONS.map((opt) => (
                                             <option key={opt.key} value={opt.key}>
@@ -374,13 +416,15 @@ export default function WorkNoteModal({
                                 </div>
 
                                 <div>
-                                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                                    <label htmlFor="work-note-priority" className="block text-xs font-bold text-slate-700 mb-1">
                                         Mức độ ưu tiên:
                                     </label>
                                     <select
+                                        id="work-note-priority"
+                                        name="notePriority"
                                         value={priority}
-                                        onChange={(e) => setPriority(e.target.value as any)}
-                                        className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-bold text-slate-800 text-xs outline-none cursor-pointer"
+                                        onChange={(e) => setPriority(e.target.value as 'NORMAL' | 'HIGH' | 'URGENT')}
+                                        className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-bold text-slate-800 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
                                     >
                                         <option value="NORMAL">🟢 Bình thường</option>
                                         <option value="HIGH">🟡 Quan trọng</option>
@@ -391,9 +435,9 @@ export default function WorkNoteModal({
 
                             {/* 3. Người nhận thông báo hoặc xem danh sách (Target Roles) */}
                             <div>
-                                <label className="block text-xs font-bold text-slate-700 mb-1">
-                                    Đối tượng nhận thông báo & xem danh sách:
-                                </label>
+                                <div className="block text-xs font-bold text-slate-700 mb-1">
+                                    Đối tượng nhận thông báo &amp; xem danh sách:
+                                </div>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                     {TARGET_ROLE_OPTIONS.map((r) => {
                                         const isSelected = targetRoles === r.key;
@@ -401,21 +445,22 @@ export default function WorkNoteModal({
                                             <button
                                                 key={r.key}
                                                 type="button"
+                                                aria-pressed={isSelected}
                                                 onClick={() => setTargetRoles(r.key)}
-                                                className={`p-2 rounded-xl border text-left transition flex items-center justify-between gap-2 cursor-pointer ${
+                                                className={`p-2 rounded-xl border text-left transition flex items-center justify-between gap-2 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                                                     isSelected
                                                         ? 'bg-blue-50 border-blue-400 text-blue-900 ring-2 ring-blue-200'
                                                         : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
                                                 }`}
                                             >
                                                 <div className="flex items-center gap-2 min-w-0">
-                                                    <span className="text-sm shrink-0">{r.icon}</span>
+                                                    <span className="text-sm shrink-0" aria-hidden="true">{r.icon}</span>
                                                     <div className="min-w-0">
                                                         <div className="font-extrabold text-[11px] truncate">{r.label}</div>
-                                                        <div className="text-[10px] text-slate-400 truncate">{r.desc}</div>
+                                                        <div className="text-[10px] text-slate-500 truncate">{r.desc}</div>
                                                     </div>
                                                 </div>
-                                                {isSelected && <Check className="w-3.5 h-3.5 text-blue-600 shrink-0" />}
+                                                {isSelected && <Check className="w-3.5 h-3.5 text-blue-600 shrink-0" aria-hidden="true" />}
                                             </button>
                                         );
                                     })}
@@ -424,26 +469,28 @@ export default function WorkNoteModal({
 
                             {/* 4. Thời gian cần làm: 1 ngày vs Nhiều ngày */}
                             <div className="p-3 rounded-xl bg-white border border-slate-200 space-y-2">
-                                <div className="flex items-center justify-between">
+                                <div className="flex items-center justify-between gap-2 flex-wrap">
                                     <span className="font-bold text-slate-700 text-xs flex items-center gap-1.5">
-                                        <Clock className="w-3.5 h-3.5 text-indigo-600" />
+                                        <Clock className="w-3.5 h-3.5 text-indigo-600 shrink-0" aria-hidden="true" />
                                         Thời gian thực hiện:
                                     </span>
                                     <div className="flex items-center gap-2">
                                         <button
                                             type="button"
+                                            aria-pressed={!isMultiDay}
                                             onClick={() => setIsMultiDay(false)}
-                                            className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition cursor-pointer ${
-                                                !isMultiDay ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                            className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
+                                                !isMultiDay ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                                             }`}
                                         >
                                             1 Ngày duy nhất
                                         </button>
                                         <button
                                             type="button"
+                                            aria-pressed={isMultiDay}
                                             onClick={() => setIsMultiDay(true)}
-                                            className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition cursor-pointer ${
-                                                isMultiDay ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                            className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
+                                                isMultiDay ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                                             }`}
                                         >
                                             Nhiều ngày (Khoảng ngày)
@@ -453,16 +500,18 @@ export default function WorkNoteModal({
 
                                 {isMultiDay && (
                                     <div className="pt-2 flex items-center gap-2 flex-wrap border-t border-slate-100">
-                                        <span className="text-slate-500 font-medium text-[11px]">Từ ngày: <b>{dateKey}</b></span>
-                                        <span className="text-slate-400">→</span>
+                                        <span className="text-slate-600 font-medium text-[11px]">Từ ngày: <b>{dateKey}</b></span>
+                                        <span className="text-slate-500" aria-hidden="true">→</span>
                                         <div className="flex items-center gap-1">
-                                            <span className="text-slate-700 font-bold text-[11px]">Đến ngày:</span>
+                                            <label htmlFor="work-note-end-date" className="text-slate-700 font-bold text-[11px]">Đến ngày:</label>
                                             <input
+                                                id="work-note-end-date"
+                                                name="noteEndDate"
                                                 type="date"
                                                 min={dateKey}
                                                 value={endDateKey}
                                                 onChange={(e) => setEndDateKey(e.target.value)}
-                                                className="px-2.5 py-1 rounded-lg border border-slate-300 text-xs font-bold text-slate-800 outline-none"
+                                                className="px-2.5 py-1 rounded-lg border border-slate-300 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                             />
                                         </div>
                                     </div>
@@ -471,14 +520,16 @@ export default function WorkNoteModal({
 
                             {/* 5. Cấu hình lặp lại hàng tuần / hàng tháng */}
                             <div className="p-3 rounded-xl bg-white border border-slate-200 space-y-2">
-                                <label className="block text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                                    <Repeat className="w-3.5 h-3.5 text-amber-600" />
+                                <label htmlFor="work-note-recurrence" className="block text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                                    <Repeat className="w-3.5 h-3.5 text-amber-600 shrink-0" aria-hidden="true" />
                                     Chu kỳ lặp lại công việc:
                                 </label>
                                 <select
+                                    id="work-note-recurrence"
+                                    name="noteRecurrence"
                                     value={recurrence}
                                     onChange={(e) => setRecurrence(e.target.value as WorkTaskRecurrence)}
-                                    className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-bold text-slate-800 text-xs outline-none cursor-pointer"
+                                    className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-bold text-slate-800 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
                                 >
                                     <option value="NONE">⏹️ Không lặp lại (Chỉ ngày/đợt đã chọn)</option>
                                     <option value="DAILY">🔁 Lặp lại hàng ngày</option>
@@ -498,28 +549,32 @@ export default function WorkNoteModal({
 
                             {/* 6. Nội dung chi tiết */}
                             <div>
-                                <label className="block text-xs font-bold text-slate-700 mb-1">
-                                    Nội dung chi tiết & hướng dẫn thực hiện:
+                                <label htmlFor="work-note-content" className="block text-xs font-bold text-slate-700 mb-1">
+                                    Nội dung chi tiết &amp; hướng dẫn thực hiện:
                                 </label>
                                 <textarea
+                                    id="work-note-content"
+                                    name="noteContent"
                                     value={content}
                                     onChange={(e) => setContent(e.target.value)}
                                     rows={2}
                                     placeholder="Ghi chú cụ thể các đầu việc cần làm, danh sách việc, phân công người làm, lưu ý..."
-                                    className="w-full px-3.5 py-2 rounded-xl border border-slate-300 bg-white text-xs text-slate-800 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 shadow-2xs resize-none"
+                                    className="w-full px-3.5 py-2 rounded-xl border border-slate-300 bg-white text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 shadow-sm resize-none"
                                 />
                             </div>
 
                             {/* 7. Phạm vi áp dụng ST & Nút Lưu */}
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-slate-200">
                                 <div className="flex items-center gap-2">
-                                    <span className="text-xs font-bold text-slate-600 shrink-0">Áp dụng cho:</span>
+                                    <label htmlFor="work-note-store" className="text-xs font-bold text-slate-700 shrink-0">Áp dụng cho:</label>
                                     <div className="relative">
-                                        <Store className="w-3 h-3 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                                        <Store className="w-3 h-3 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" aria-hidden="true" />
                                         <select
+                                            id="work-note-store"
+                                            name="noteStore"
                                             value={assignedStore}
                                             onChange={(e) => setAssignedStore(e.target.value)}
-                                            className="pl-7 pr-4 py-1.5 rounded-xl bg-white border border-slate-300 text-xs font-bold text-slate-800 outline-none cursor-pointer max-w-[240px] truncate"
+                                            className="pl-7 pr-4 py-1.5 rounded-xl bg-white border border-slate-300 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer max-w-[240px] truncate"
                                         >
                                             <option value={ALL_ASSIGNED_STORE_KEY}>
                                                 🏢 Toàn nhóm ST phụ trách
@@ -546,9 +601,9 @@ export default function WorkNoteModal({
                                     <button
                                         type="submit"
                                         disabled={isSaving}
-                                        className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black transition flex items-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-50"
+                                        className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black transition flex items-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                                     >
-                                        <Save className="w-3.5 h-3.5" />
+                                        <Save className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
                                         <span>{editingNoteId ? 'Cập Nhật' : 'Thêm Công Việc'}</span>
                                     </button>
                                 </div>
@@ -559,14 +614,14 @@ export default function WorkNoteModal({
                     {/* DANH SÁCH CÔNG VIỆC TRONG NGÀY ĐANG CHỌN */}
                     <div className="space-y-2 pt-2">
                         <div className="flex items-center justify-between">
-                            <span className="font-extrabold text-slate-800 text-xs flex items-center gap-1.5">
-                                <FileText className="w-3.5 h-3.5 text-blue-600" />
+                            <span className="font-extrabold text-slate-800 text-xs flex items-center gap-1.5 tabular-nums">
+                                <FileText className="w-3.5 h-3.5 text-blue-600 shrink-0" aria-hidden="true" />
                                 <span>Công Việc Ngày {targetDate.getDate()}/{targetDate.getMonth() + 1} ({dayNotes.length} mục):</span>
                             </span>
                         </div>
 
                         {dayNotes.length === 0 ? (
-                            <div className="p-4 rounded-2xl bg-slate-50 border border-dashed border-slate-200 text-center text-xs text-slate-500">
+                            <div className="p-4 rounded-2xl bg-slate-50 border border-dashed border-slate-200 text-center text-xs text-slate-600">
                                 Chưa có công việc hoặc sự kiện nào được ghi nhận cho ngày này.
                             </div>
                         ) : (
@@ -579,7 +634,7 @@ export default function WorkNoteModal({
                                             className={`p-3.5 rounded-2xl border transition space-y-2 ${
                                                 isEditing
                                                     ? 'bg-blue-50/90 border-blue-400 ring-2 ring-blue-200'
-                                                    : 'bg-white hover:bg-slate-50/80 border-slate-200 shadow-2xs'
+                                                    : 'bg-white hover:bg-slate-50/80 border-slate-200 shadow-sm'
                                             }`}
                                         >
                                             <div className="flex items-start justify-between gap-3">
@@ -589,18 +644,18 @@ export default function WorkNoteModal({
                                                             {note.title}
                                                         </span>
                                                         {note.priority === 'URGENT' && (
-                                                            <span className="px-1.5 py-0.2 rounded bg-rose-100 text-rose-700 text-[10px] font-black uppercase">
+                                                            <span className="px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 text-[10px] font-black uppercase">
                                                                 Khẩn cấp
                                                             </span>
                                                         )}
                                                         {note.priority === 'HIGH' && (
-                                                            <span className="px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 text-[10px] font-bold">
+                                                            <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-bold">
                                                                 Quan trọng
                                                             </span>
                                                         )}
                                                         {note.recurrence && note.recurrence !== 'NONE' && (
-                                                            <span className="px-1.5 py-0.2 rounded bg-indigo-100 text-indigo-700 text-[10px] font-bold flex items-center gap-0.5">
-                                                                <Repeat className="w-2.5 h-2.5" /> Lặp lại
+                                                            <span className="px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 text-[10px] font-bold flex items-center gap-0.5">
+                                                                <Repeat className="w-2.5 h-2.5 shrink-0" aria-hidden="true" /> Lặp lại
                                                             </span>
                                                         )}
                                                     </div>
@@ -617,24 +672,26 @@ export default function WorkNoteModal({
                                                         <button
                                                             type="button"
                                                             onClick={() => handleStartEdit(note)}
-                                                            className="p-1 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition"
+                                                            aria-label={`Sửa công việc: ${note.title}`}
+                                                            className="p-1.5 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                                                             title="Sửa công việc này"
                                                         >
-                                                            <Edit2 className="w-3.5 h-3.5" />
+                                                            <Edit2 className="w-3.5 h-3.5" aria-hidden="true" />
                                                         </button>
                                                         <button
                                                             type="button"
                                                             onClick={() => handleDelete(note.id)}
-                                                            className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition"
+                                                            aria-label={`Xóa công việc: ${note.title}`}
+                                                            className="p-1.5 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
                                                             title="Xóa công việc này"
                                                         >
-                                                            <Trash2 className="w-3.5 h-3.5" />
+                                                            <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                                                         </button>
                                                     </div>
                                                 )}
                                             </div>
 
-                                            <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1.5 border-t border-slate-100 flex-wrap gap-2">
+                                            <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1.5 border-t border-slate-100 flex-wrap gap-2">
                                                 <span className="font-bold text-slate-600">
                                                     🏢 {note.store_name === ALL_ASSIGNED_STORE_KEY ? 'Toàn nhóm ST' : note.store_name}
                                                 </span>
@@ -648,6 +705,7 @@ export default function WorkNoteModal({
                     </div>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 }

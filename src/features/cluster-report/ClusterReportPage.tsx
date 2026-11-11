@@ -321,9 +321,10 @@ export default function ClusterReportPage() {
             const totalDays = (rec.totalDays && rec.totalDays > 0) ? rec.totalDays : daysInMonth;
             const remainingDays = Math.max(1, totalDays - passedDays);
 
-            // Bóc tách chi tiết Doanh thu Quy đổi (DTQĐ) và Doanh thu Thực (DT Thực) từ rawRevenue & emulationSummary
+            // Bóc tách chi tiết Doanh thu Quy đổi (DTQĐ) và metadata mới từ rawRevenue & emulationSummary
             const extracted = extractStoreRevenueDetailsWithReal(rec.rawRevenue, storeName);
             const realInfo = (rec.emulationSummary as any)?.['__real_revenue'];
+            const revMeta = (rec.emulationSummary as any)?.['__revenue_meta'];
             const rRealFromSummary = Number(realInfo?.revenueReal || realInfo?.revenueActual || 0);
 
             // DT Thực (L. KẾ) & DTQĐ (L. KẾ)
@@ -374,40 +375,47 @@ export default function ClusterReportPage() {
                 }
             }
 
-            // DT Trả góp & Tỷ lệ trả góp (%TG = DT Trả góp / DT Thực)
+            // DT Trả góp & Tỷ lệ trả góp (%TG)
             let revInstallment = 0;
             let installmentRate = 0;
             let hasInstallmentRate = false;
 
-            if (realInfo && (realInfo.installmentReal !== undefined || realInfo.installmentRevenue !== undefined)) {
-                // Ưu tiên 1: Lấy từ __real_revenue đã lưu trong emulationSummary
+            if (revMeta && (revMeta.installmentQd !== undefined || revMeta.installmentRate !== undefined)) {
+                revInstallment = Number(revMeta.installmentQd) || Number(rec.revenueInstallment) || 0;
+                const metaRate = Number(revMeta.installmentRate) || Number(rec.installmentRate) || 0;
+                if (metaRate > 0) {
+                    installmentRate = metaRate;
+                    hasInstallmentRate = true;
+                }
+            } else if (realInfo && (realInfo.installmentReal !== undefined || realInfo.installmentRevenue !== undefined)) {
+                // Ưu tiên dữ liệu cũ từ __real_revenue nếu có
                 revInstallment = Number(realInfo.installmentReal ?? realInfo.installmentRevenue) || 0;
                 if (realInfo.installmentRateReal !== undefined && realInfo.installmentRateReal !== null) {
                     installmentRate = Number(realInfo.installmentRateReal);
-                    hasInstallmentRate = true;
+                    hasInstallmentRate = installmentRate > 0;
                 } else if (revActual > 0) {
                     installmentRate = Number(((revInstallment / revActual) * 100).toFixed(2));
-                    hasInstallmentRate = true;
+                    hasInstallmentRate = installmentRate > 0;
                 }
             } else if (extracted?.installmentRevenue !== undefined && extracted.installmentRevenue > 0) {
-                // Ưu tiên 2: Lấy từ extracted
+                // Lấy từ extracted
                 revInstallment = extracted.installmentRevenue;
-                if (extracted.installmentRate !== undefined) {
+                if (extracted.installmentRate !== undefined && extracted.installmentRate > 0) {
                     installmentRate = extracted.installmentRate;
                     hasInstallmentRate = true;
-                } else if (revActual > 0) {
+                } else if (revActual > 0 && rRealFromSummary > 0) {
                     installmentRate = Number(((revInstallment / revActual) * 100).toFixed(2));
-                    hasInstallmentRate = true;
+                    hasInstallmentRate = installmentRate > 0;
                 }
-            } else if (Number(rec.revenueInstallment) > 0) {
-                // Ưu tiên 3: Lấy từ bản ghi cột DB
-                revInstallment = Number(rec.revenueInstallment);
+            } else if (Number(rec.revenueInstallment) > 0 || Number(rec.installmentRate) > 0) {
+                // Lấy từ cột DB
+                revInstallment = Number(rec.revenueInstallment) || 0;
                 if (Number(rec.installmentRate) > 0) {
                     installmentRate = Number(rec.installmentRate);
                     hasInstallmentRate = true;
-                } else if (revActual > 0) {
+                } else if (revActual > 0 && rRealFromSummary > 0) {
                     installmentRate = Number(((revInstallment / revActual) * 100).toFixed(2));
-                    hasInstallmentRate = true;
+                    hasInstallmentRate = installmentRate > 0;
                 }
             }
 
@@ -452,10 +460,14 @@ export default function ClusterReportPage() {
             // TB 3 Tháng & Tăng trưởng
             const avg3Months = (cfg?.avg3Months && cfg.avg3Months > 0)
                 ? cfg.avg3Months
-                : ((extracted?.avg3Months && extracted.avg3Months > 0)
-                    ? extracted.avg3Months
-                    : (baseTarget > 0 ? baseTarget * 0.9 : revQd * 0.95));
-            const pctGrowth = avg3Months > 0 ? ((forecastRevenueQd - avg3Months) / avg3Months) * 100 : 0;
+                : (revMeta?.avg3Months && Number(revMeta.avg3Months) > 0)
+                    ? Number(revMeta.avg3Months)
+                    : ((extracted?.avg3Months && extracted.avg3Months > 0)
+                        ? extracted.avg3Months
+                        : (baseTarget > 0 ? baseTarget * 0.9 : revQd * 0.95));
+            const pctGrowth = (revMeta?.pctGrowth !== undefined && revMeta?.pctGrowth !== null && Number(revMeta.pctGrowth) !== 0)
+                ? Number(revMeta.pctGrowth)
+                : (extracted?.pctGrowth !== undefined ? extracted.pctGrowth : (avg3Months > 0 ? ((forecastRevenueQd - avg3Months) / avg3Months) * 100 : 0));
 
             rows.push({
                 id: rec.id,
@@ -553,8 +565,12 @@ export default function ClusterReportPage() {
         const avgPctDkhtStandard = totalBaseTarget > 0 ? (totalForecastRevenueQd / totalBaseTarget) * 100 : 0;
         const avgPctQd = totalRevenueActual > 0 ? ((totalRevenueQd - totalRevenueActual) / totalRevenueActual) * 100 : 0;
         const totalRevenueInstallment = clusterRows.reduce((sum, r) => sum + r.revenueInstallment, 0);
-        const avgInstallmentRate = (hasInstallmentRate && totalRevenueActual > 0)
-            ? (totalRevenueInstallment / totalRevenueActual) * 100
+        const rowsWithInstRate = clusterRows.filter(r => r.hasInstallmentRate && r.installmentRate > 0);
+        const totalInstWeight = rowsWithInstRate.reduce((sum, r) => sum + (r.revenueQd > 0 ? r.revenueQd : 1), 0);
+        const avgInstallmentRate = hasInstallmentRate
+            ? (rowsWithInstRate.length > 0 && totalInstWeight > 0
+                ? rowsWithInstRate.reduce((sum, r) => sum + r.installmentRate * (r.revenueQd > 0 ? r.revenueQd : 1), 0) / totalInstWeight
+                : (totalRevenueActual > 0 ? (totalRevenueInstallment / totalRevenueActual) * 100 : 0))
             : 0;
 
         const totalTargetOver = clusterRows.reduce((sum, r) => sum + r.targetOver, 0);

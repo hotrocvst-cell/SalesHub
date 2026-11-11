@@ -365,7 +365,7 @@ const RAW_DEFAULT_PAGE_PERMISSIONS: SystemPagePermission[] = [
         page_name: 'Cập nhật NV qua OCR',
         path: '/cap-nhat-nhan-vien-ocr',
         group_title: 'DỮ LIỆU & PHIÊN LÀM VIỆC',
-        description: 'Trích xuất số liệu nhân viên từ ảnh chụp BI (DTQĐ, DT Thực, Thi đua) và lưu phiên lũy kế',
+        description: 'Trích xuất số liệu nhân viên từ ảnh chụp BI (DTQĐ, % Tỷ trọng trả góp, Thi đua) và lưu phiên lũy kế',
         is_enabled: true,
         allowed_roles: ['ADMIN'],
         order_index: 7,
@@ -526,6 +526,22 @@ const RAW_DEFAULT_PAGE_PERMISSIONS: SystemPagePermission[] = [
         badge_color: 'amber',
         allow_excel_export: true,
         allowed_excel_roles: ['ADMIN', 'QUAN_LY', 'TRUONG_CA', 'NHAN_VIEN']
+    },
+    {
+        page_key: 'tien_ich_quay_so',
+        page_name: 'Quay Số & Bốc Thăm',
+        path: '/tien-ich-quay-so',
+        group_title: 'TIỆN ÍCH BÁN HÀNG',
+        description: 'Bộ 6 công cụ quay số ngẫu nhiên trực tuyến, vòng quay may mắn, bốc thăm hộp quà, chia đội và tiện ích nhỏ cho ST',
+        is_enabled: true,
+        allowed_roles: ['ADMIN'], // Theo Rule 4 GEMINI.MD: Mặc định chỉ duy nhất ADMIN
+        order_index: 14.5,
+        badge_enabled: true,
+        badge_icon: '🎲',
+        badge_text: 'Mới',
+        badge_color: 'amber',
+        allow_excel_export: false,
+        allowed_excel_roles: ['ADMIN']
     },
     // HỖ TRỢ CVST
     {

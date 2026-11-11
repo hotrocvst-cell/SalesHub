@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import {
     X,
     Save,
@@ -112,12 +113,21 @@ export default function VoucherEditModal({
                 setSelectedStoresInCluster(clusterStoreNames);
             }
         } else {
-            // Gán cho 1 shop cụ thể
+            // Gán cho 1 ST cụ thể
             setScopeType('SINGLE');
             setSingleStoreName(voucher.store_name);
             setSelectedStoresInCluster([voucher.store_name]);
         }
     }, [voucher, existingCampaigns, clusterStoreNames, isAdmin]);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape' && !isSubmitting) onClose();
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isOpen, isSubmitting, onClose]);
 
     if (!isOpen || !voucher) return null;
 
@@ -243,25 +253,34 @@ export default function VoucherEditModal({
         }
     };
 
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs font-avo animate-in fade-in duration-200">
-            <div className="bg-white rounded-3xl max-w-xl w-full border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+    return createPortal(
+        <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="voucher-edit-modal-title"
+            className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm"
+            onClick={() => !isSubmitting && onClose()}
+        >
+            <div
+                className="bg-white rounded-3xl max-w-xl w-full border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[92vh]"
+                onClick={(e) => e.stopPropagation()}
+            >
                 {/* Header */}
-                <div className="bg-gradient-to-r from-emerald-700 via-emerald-800 to-teal-800 px-5 py-4 text-white flex items-center justify-between">
+                <div className="bg-emerald-800 px-5 py-4 text-white flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center font-black">
-                            <Pencil className="w-4 h-4 text-amber-300" />
+                        <div className="w-8 h-8 rounded-xl bg-white/15 flex items-center justify-center font-black">
+                            <Pencil className="w-4 h-4 text-amber-300" aria-hidden="true" />
                         </div>
                         <div>
-                            <div className="flex items-center gap-2">
-                                <h3 className="font-black text-sm uppercase tracking-wide">
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <h3 id="voucher-edit-modal-title" className="font-black text-sm uppercase tracking-wide">
                                     Chỉnh Sửa Mã Coupon
                                 </h3>
                                 <span className="font-mono text-xs bg-amber-400 text-slate-950 px-2 py-0.5 rounded-full font-black">
                                     {voucher.code}
                                 </span>
                             </div>
-                            <div className="text-[11px] text-emerald-200">
+                            <div className="text-[11px] text-emerald-100">
                                 Quản lý cập nhật: <strong>{currentUserDisplayName}</strong>
                             </div>
                         </div>
@@ -269,9 +288,11 @@ export default function VoucherEditModal({
                     <button
                         type="button"
                         onClick={onClose}
-                        className="p-1.5 rounded-xl hover:bg-white/20 text-white/80 hover:text-white transition cursor-pointer"
+                        disabled={isSubmitting}
+                        aria-label="Đóng hộp thoại chỉnh sửa mã coupon"
+                        className="p-1.5 rounded-xl hover:bg-white/20 text-white/80 hover:text-white transition cursor-pointer disabled:opacity-50"
                     >
-                        <X className="w-5 h-5" />
+                        <X className="w-5 h-5" aria-hidden="true" />
                     </button>
                 </div>
 
@@ -279,7 +300,7 @@ export default function VoucherEditModal({
                 <form onSubmit={handleSubmit} className="p-4 sm:p-5 overflow-y-auto space-y-4 text-xs flex-1">
                     {errorMsg && (
                         <div className="p-3 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 font-bold flex items-center gap-2">
-                            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" aria-hidden="true" />
                             <span>{errorMsg}</span>
                         </div>
                     )}
@@ -288,14 +309,14 @@ export default function VoucherEditModal({
                     {voucher && (
                         <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 flex items-center justify-between gap-2.5 flex-wrap">
                             <div className="flex items-center gap-1.5 text-slate-700">
-                                <Clock className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                                <span className="text-[11px] text-slate-500 font-medium">Thời gian nhập kho:</span>
+                                <Clock className="w-3.5 h-3.5 text-emerald-700 shrink-0" aria-hidden="true" />
+                                <span className="text-[11px] text-slate-600 font-medium">Thời gian nhập kho:</span>
                                 <span className="font-mono font-bold text-slate-900 text-xs">
                                     {voucher.created_at ? formatDateTime(voucher.created_at, true) : 'Chưa ghi nhận'}
                                 </span>
                             </div>
                             {voucher.created_by && (
-                                <div className="text-[11px] text-slate-500">
+                                <div className="text-[11px] text-slate-600">
                                     Người nạp: <strong className="text-slate-800">{voucher.created_by}</strong>
                                 </div>
                             )}
@@ -305,12 +326,14 @@ export default function VoucherEditModal({
                     {/* 1. Mã Coupon Thực Tế */}
                     <div>
                         <div className="flex items-center justify-between mb-1.5">
-                            <label className="block text-[11px] font-black uppercase text-slate-700">
-                                1. Mã Voucher (Code) <span className="text-rose-500">*</span>
+                            <label htmlFor="voucher-edit-code-input" className="block text-[11px] font-black uppercase text-slate-700 cursor-pointer">
+                                1. Mã Voucher (Code) <span className="text-rose-600">*</span>
                             </label>
-                            <span className="text-[10px] text-slate-400">Tự động viết hoa</span>
+                            <span className="text-[10px] text-slate-500">Tự động viết hoa</span>
                         </div>
                         <input
+                            id="voucher-edit-code-input"
+                            name="voucher_edit_code"
                             type="text"
                             value={code}
                             onChange={(e) => setCode(e.target.value.toUpperCase())}
@@ -323,11 +346,11 @@ export default function VoucherEditModal({
                     {/* 2. CỤM / KHO ĐƯỢC PHÉP SỬ DỤNG (TRỌNG TÂM) */}
                     <div className="bg-emerald-50/60 border border-emerald-200 rounded-2xl p-3 sm:p-3.5 space-y-2.5">
                         <div className="flex items-center justify-between">
-                            <label className="text-[11px] font-black uppercase text-emerald-950 flex items-center gap-1.5">
-                                <Store className="w-4 h-4 text-emerald-700" />
+                            <span className="text-[11px] font-black uppercase text-emerald-950 flex items-center gap-1.5">
+                                <Store className="w-4 h-4 text-emerald-700" aria-hidden="true" />
                                 <span>2. Cụm / Kho Được Phép Sử Dụng</span>
-                                <span className="text-rose-500">*</span>
-                            </label>
+                                <span className="text-rose-600">*</span>
+                            </span>
                             <span className="text-[10px] font-bold text-emerald-800 bg-white px-2 py-0.5 rounded-full border border-emerald-200">
                                 Phân quyền truy cập
                             </span>
@@ -343,11 +366,11 @@ export default function VoucherEditModal({
                                 }}
                                 className={`p-2 rounded-xl border text-center font-bold text-[11px] transition cursor-pointer ${
                                     scopeType === 'CLUSTER_ALL'
-                                        ? 'bg-emerald-600 text-white border-emerald-700 shadow-2xs'
+                                        ? 'bg-emerald-700 text-white border-emerald-800 shadow-sm'
                                         : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
                                 }`}
                             >
-                                🏢 Toàn Cụm ({clusterStoreNames.length} Shop)
+                                🏢 Toàn Cụm ({clusterStoreNames.length} ST)
                             </button>
 
                             <button
@@ -355,11 +378,11 @@ export default function VoucherEditModal({
                                 onClick={() => setScopeType('CLUSTER_CUSTOM')}
                                 className={`p-2 rounded-xl border text-center font-bold text-[11px] transition cursor-pointer ${
                                     scopeType === 'CLUSTER_CUSTOM'
-                                        ? 'bg-emerald-600 text-white border-emerald-700 shadow-2xs'
+                                        ? 'bg-emerald-700 text-white border-emerald-800 shadow-sm'
                                         : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
                                 }`}
                             >
-                                ☑️ Tùy Chọn Shop Trong Cụm
+                                ☑️ Tùy Chọn ST Trong Cụm
                             </button>
 
                             <button
@@ -372,11 +395,11 @@ export default function VoucherEditModal({
                                 }}
                                 className={`p-2 rounded-xl border text-center font-bold text-[11px] transition cursor-pointer ${
                                     scopeType === 'SINGLE'
-                                        ? 'bg-emerald-600 text-white border-emerald-700 shadow-2xs'
+                                        ? 'bg-emerald-700 text-white border-emerald-800 shadow-sm'
                                         : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
                                 }`}
                             >
-                                🏪 Riêng 1 Shop Cụ Thể
+                                🏪 Riêng 1 ST Cụ Thể
                             </button>
 
                             {isAdmin && (
@@ -385,8 +408,8 @@ export default function VoucherEditModal({
                                     onClick={() => setScopeType('GLOBAL')}
                                     className={`p-2 rounded-xl border text-center font-bold text-[11px] transition cursor-pointer col-span-2 sm:col-span-3 ${
                                         scopeType === 'GLOBAL'
-                                            ? 'bg-purple-600 text-white border-purple-700 shadow-2xs'
-                                            : 'bg-white text-purple-700 border-purple-200 hover:bg-purple-50'
+                                            ? 'bg-blue-700 text-white border-blue-800 shadow-sm'
+                                            : 'bg-white text-blue-700 border-blue-200 hover:bg-blue-50'
                                     }`}
                                 >
                                     🌐 Toàn Quốc / Tất Cả Cụm (Admin)
@@ -394,7 +417,7 @@ export default function VoucherEditModal({
                             )}
                         </div>
 
-                        {/* Danh sách Checkbox chọn từng shop khi chọn CLUSTER_CUSTOM */}
+                        {/* Danh sách Checkbox chọn từng ST khi chọn CLUSTER_CUSTOM */}
                         {scopeType === 'CLUSTER_CUSTOM' && (
                             <div className="bg-white rounded-xl p-2.5 border border-emerald-200 space-y-2 mt-2">
                                 <div className="flex items-center justify-between text-[11px] font-bold text-slate-600 border-b border-slate-100 pb-1.5">
@@ -430,16 +453,19 @@ export default function VoucherEditModal({
                                         );
                                     })}
                                 </div>
-                                <div className="text-[10px] text-slate-400 text-right">
-                                    Đã chọn: <strong className="text-emerald-700">{selectedStoresInCluster.length}</strong>/{clusterStoreNames.length} shop
+                                <div className="text-[10px] text-slate-600 text-right">
+                                    Đã chọn: <strong className="text-emerald-700">{selectedStoresInCluster.length}</strong>/{clusterStoreNames.length} ST
                                 </div>
                             </div>
                         )}
 
-                        {/* Dropdown chọn 1 shop khi chọn SINGLE */}
+                        {/* Dropdown chọn 1 ST khi chọn SINGLE */}
                         {scopeType === 'SINGLE' && (
                             <div className="mt-2">
                                 <select
+                                    id="voucher-edit-single-store"
+                                    name="voucher_edit_single_store"
+                                    aria-label="Chọn 1 ST cụ thể"
                                     value={singleStoreName}
                                     onChange={(e) => setSingleStoreName(e.target.value)}
                                     className="w-full bg-white border border-emerald-300 rounded-xl p-2 font-bold text-slate-800 cursor-pointer"
@@ -466,10 +492,12 @@ export default function VoucherEditModal({
 
                     {/* 3. Chương Trình Áp Dụng */}
                     <div>
-                        <label className="block text-[11px] font-black uppercase text-slate-700 mb-1.5">
+                        <label htmlFor="voucher-edit-campaign" className="block text-[11px] font-black uppercase text-slate-700 mb-1.5 cursor-pointer">
                             3. Chương Trình Áp Dụng <span className="text-rose-500">*</span>
                         </label>
                         <select
+                            id="voucher-edit-campaign"
+                            name="voucher_edit_campaign"
                             value={campaignName}
                             onChange={(e) => setCampaignName(e.target.value)}
                             className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-bold text-slate-800 focus:outline-emerald-600 cursor-pointer"
@@ -482,7 +510,10 @@ export default function VoucherEditModal({
 
                         {campaignName === 'NEW' && (
                             <input
+                                id="voucher-edit-custom-campaign"
+                                name="voucher_edit_custom_campaign"
                                 type="text"
+                                aria-label="Tên chương trình mới"
                                 onChange={(e) => setCustomCampaign(e.target.value)}
                                 placeholder="Nhập tên chương trình mới..."
                                 className="mt-2 w-full bg-white border border-emerald-300 rounded-xl p-2.5 font-bold text-slate-900 focus:outline-emerald-600"
@@ -493,9 +524,9 @@ export default function VoucherEditModal({
 
                     {/* 4. Mệnh Giá Voucher */}
                     <div>
-                        <label className="block text-[11px] font-black uppercase text-slate-700 mb-1.5">
+                        <span className="block text-[11px] font-black uppercase text-slate-700 mb-1.5">
                             4. Mệnh Giá Voucher <span className="text-rose-500">*</span>
-                        </label>
+                        </span>
                         <div className="flex flex-wrap gap-1.5 mb-2">
                             {COMMON_DENOMINATIONS.map(d => {
                                 const hot = getDenominationHotStyle(d);
@@ -518,9 +549,13 @@ export default function VoucherEditModal({
                             })}
                         </div>
                         <div className="flex items-center gap-2">
-                            <span className="text-slate-500 font-bold shrink-0 text-xs">Mệnh giá tùy chỉnh:</span>
+                            <label htmlFor="voucher-edit-denomination" className="text-slate-600 font-bold shrink-0 text-xs cursor-pointer">
+                                Mệnh giá tùy chỉnh:
+                            </label>
                             <div className="relative flex-1">
                                 <input
+                                    id="voucher-edit-denomination"
+                                    name="voucher_edit_denomination"
                                     type="text"
                                     inputMode="numeric"
                                     value={denomination > 0 ? denomination.toLocaleString('vi-VN') : ''}
@@ -528,7 +563,7 @@ export default function VoucherEditModal({
                                     placeholder="Nhập mệnh giá..."
                                     className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 pl-3 pr-12 font-mono font-black text-sm text-slate-900 focus:bg-white focus:outline-emerald-600"
                                 />
-                                <span className="absolute right-3 top-1/2 -translate-y-1/2 font-bold text-slate-400 text-xs">
+                                <span className="absolute right-3 top-1/2 -translate-y-1/2 font-bold text-slate-500 text-xs">
                                     VNĐ
                                 </span>
                             </div>
@@ -538,7 +573,7 @@ export default function VoucherEditModal({
                     {/* 5. Diễn Giải / Điều Kiện Sử Dụng Mệnh Giá (Nhiều dòng) */}
                     <div>
                         <div className="flex items-center justify-between mb-1.5">
-                            <label className="text-[11px] font-black uppercase text-slate-700">
+                            <label htmlFor="voucher-edit-description" className="text-[11px] font-black uppercase text-slate-700 cursor-pointer">
                                 5. Diễn Giải / Điều Kiện Sử Dụng (Nhiều dòng)
                             </label>
                             <span className="text-[10px] text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full font-bold">
@@ -546,11 +581,13 @@ export default function VoucherEditModal({
                             </span>
                         </div>
                         <textarea
+                            id="voucher-edit-description"
+                            name="voucher_edit_description"
                             rows={3}
                             value={description}
                             onChange={(e) => setDescription(e.target.value)}
                             placeholder="Nhập các điều kiện áp dụng, mỗi dòng 1 điều kiện:&#10;• Áp dụng cho đơn từ 500.000đ&#10;• Chỉ áp dụng nhóm Gia Dụng & Phụ Kiện&#10;• Không áp dụng cùng CTKM khác"
-                            className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-bold text-xs text-slate-900 focus:bg-white focus:outline-emerald-600 placeholder:text-slate-400 font-sans leading-relaxed"
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-bold text-xs text-slate-900 focus:bg-white focus:outline-emerald-600 placeholder:text-slate-500 font-sans leading-relaxed"
                         />
                         <div className="flex items-center justify-between text-[10px] text-slate-500 mt-1">
                             <span>Bấm để thêm nhanh điều kiện xuống dòng:</span>
@@ -584,8 +621,8 @@ export default function VoucherEditModal({
                     {/* 6. Thời Hạn Sử Dụng (HSD) */}
                     <div>
                         <div className="flex items-center justify-between mb-1.5">
-                            <label className="text-[11px] font-black uppercase text-slate-700 flex items-center gap-1.5">
-                                <Calendar className="w-3.5 h-3.5 text-emerald-600" />
+                            <label htmlFor="voucher-edit-expires" className="text-[11px] font-black uppercase text-slate-700 flex items-center gap-1.5 cursor-pointer">
+                                <Calendar className="w-3.5 h-3.5 text-emerald-700" aria-hidden="true" />
                                 <span>6. Thời Hạn Sử Dụng (HSD)</span>
                                 <span className="text-rose-500">*</span>
                             </label>
@@ -600,13 +637,15 @@ export default function VoucherEditModal({
                                 <button
                                     type="button"
                                     onClick={() => handleQuickSetMonthEnd(1)}
-                                    className="text-[10px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-2 py-0.5 rounded-lg border border-indigo-200 cursor-pointer"
+                                    className="text-[10px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded-lg border border-blue-200 cursor-pointer"
                                 >
                                     Cuối tháng sau
                                 </button>
                             </div>
                         </div>
                         <input
+                            id="voucher-edit-expires"
+                            name="voucher_edit_expires"
                             type="date"
                             value={expiresAt}
                             onChange={(e) => setExpiresAt(e.target.value)}
@@ -617,9 +656,9 @@ export default function VoucherEditModal({
 
                     {/* 6. Trạng Thái & Reset Cấp Phát */}
                     <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 space-y-2.5">
-                        <label className="block text-[11px] font-black uppercase text-slate-700">
+                        <span className="block text-[11px] font-black uppercase text-slate-700">
                             6. Trạng Thái Mã Voucher
-                        </label>
+                        </span>
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
                             {(['AVAILABLE', 'CLAIMED', 'USED', 'EXPIRED'] as VoucherStatus[]).map(st => (
                                 <button
@@ -632,9 +671,9 @@ export default function VoucherEditModal({
                                     className={`py-2 px-1 rounded-xl text-center font-bold text-[11px] border transition cursor-pointer ${
                                         status === st
                                             ? st === 'AVAILABLE'
-                                                ? 'bg-emerald-600 text-white border-emerald-700'
+                                                ? 'bg-emerald-700 text-white border-emerald-800'
                                                 : st === 'CLAIMED'
-                                                ? 'bg-amber-500 text-white border-amber-600'
+                                                ? 'bg-amber-400 text-slate-950 border-amber-500'
                                                 : st === 'USED'
                                                 ? 'bg-slate-700 text-white border-slate-800'
                                                 : 'bg-rose-600 text-white border-rose-700'
@@ -671,10 +710,12 @@ export default function VoucherEditModal({
 
                     {/* 7. Ghi Chú */}
                     <div>
-                        <label className="block text-[11px] font-black uppercase text-slate-700 mb-1.5">
+                        <label htmlFor="voucher-edit-note" className="block text-[11px] font-black uppercase text-slate-700 mb-1.5 cursor-pointer">
                             7. Ghi Chú Bổ Sung
                         </label>
                         <textarea
+                            id="voucher-edit-note"
+                            name="voucher_edit_note"
                             rows={2}
                             value={userNote}
                             onChange={(e) => setUserNote(e.target.value)}
@@ -690,7 +731,7 @@ export default function VoucherEditModal({
                         type="button"
                         onClick={onClose}
                         disabled={isSubmitting}
-                        className="px-4 py-2 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-600 text-xs font-bold transition cursor-pointer"
+                        className="px-4 py-2 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs font-bold transition cursor-pointer"
                     >
                         Hủy
                     </button>
@@ -698,13 +739,14 @@ export default function VoucherEditModal({
                         type="button"
                         onClick={handleSubmit}
                         disabled={isSubmitting}
-                        className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white text-xs font-black transition cursor-pointer shadow-md flex items-center gap-1.5 disabled:opacity-50"
+                        className="px-5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 active:scale-[0.99] text-white text-xs font-black transition cursor-pointer shadow-md flex items-center gap-1.5 disabled:opacity-50"
                     >
-                        <Save className="w-4 h-4 text-amber-300" />
+                        <Save className="w-4 h-4 text-amber-300" aria-hidden="true" />
                         <span>{isSubmitting ? 'Đang lưu...' : 'Lưu Cập Nhật'}</span>
                     </button>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 }

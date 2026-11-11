@@ -164,38 +164,47 @@ export default function VoucherStockSummaryTable({
     }
 
     return (
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-2xs overflow-hidden font-avo">
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
             {/* Header phân hệ Tổng Hợp & Cảnh Báo Tồn Kho (Click vào để mở rộng/thu gọn) */}
             <div
+                role="button"
+                tabIndex={0}
+                aria-expanded={isExpanded}
                 onClick={() => setIsExpanded(!isExpanded)}
-                className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-4 sm:p-5 text-white flex flex-wrap items-center justify-between gap-3 cursor-pointer select-none hover:brightness-105 transition"
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setIsExpanded(prev => !prev);
+                    }
+                }}
+                className="bg-slate-900 p-4 sm:p-5 text-white flex flex-wrap items-center justify-between gap-3 cursor-pointer select-none hover:bg-slate-950 transition"
                 title="Bấm để mở rộng hoặc thu ẩn bảng tổng hợp dự báo"
             >
                 <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-2xl bg-amber-400 text-slate-950 flex items-center justify-center font-black shadow-md shrink-0">
-                        <TrendingUp className="w-5 h-5" />
+                        <TrendingUp className="w-5 h-5" aria-hidden="true" />
                     </div>
                     <div>
                         <div className="flex items-center gap-2 flex-wrap">
                             <h2 className="text-sm sm:text-base font-black uppercase tracking-wide text-amber-300">
-                                Tổng Hợp Số Lượng & Cảnh báo tồn kho PMH
+                                Tổng Hợp Số Lượng &amp; Cảnh báo tồn kho PMH
                             </h2>
-                            <span className="bg-slate-800 text-slate-300 text-[10px] font-bold px-2 py-0.5 rounded-full border border-slate-700">
+                            <span className="bg-slate-800 text-slate-200 text-[10px] font-bold px-2 py-0.5 rounded-full border border-slate-700">
                                 {filteredForecasts.length} loại PMH
                             </span>
                             {hiddenCampaignNames.length > 0 && (
                                 <span className="bg-slate-800 text-amber-300 text-[10px] font-bold px-2 py-0.5 rounded-full border border-slate-700 flex items-center gap-1">
-                                    <EyeOff className="w-2.5 h-2.5 text-amber-400" />
+                                    <EyeOff className="w-2.5 h-2.5 text-amber-400" aria-hidden="true" />
                                     <span>Đã ẩn {hiddenCampaignNames.length} CT</span>
                                 </span>
                             )}
                             {urgentCount > 0 && (
-                                <span className="bg-rose-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full animate-pulse border border-rose-300">
+                                <span className="bg-rose-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full border border-rose-400">
                                     🚨 {urgentCount} loại cần bổ sung gấp
                                 </span>
                             )}
                             {warningCount > 0 && (
-                                <span className="bg-amber-500 text-slate-950 text-[10px] font-black px-2 py-0.5 rounded-full border border-amber-300">
+                                <span className="bg-amber-400 text-slate-950 text-[10px] font-black px-2 py-0.5 rounded-full border border-amber-300">
                                     ⚠️ {warningCount} loại sắp hết
                                 </span>
                             )}
@@ -213,9 +222,9 @@ export default function VoucherStockSummaryTable({
 
                 {/* Nút bấm chuyển đổi thu gọn / mở rộng */}
                 <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-amber-200/90 bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-xl border border-white/10 flex items-center gap-1.5 transition">
+                    <span className="text-xs font-bold text-amber-200 bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-xl border border-white/10 flex items-center gap-1.5 transition">
                         <span>{isExpanded ? 'Thu Gọn' : 'Xem Chi Tiết'}</span>
-                        {isExpanded ? <ChevronUp className="w-4 h-4 text-amber-300" /> : <ChevronDown className="w-4 h-4 text-amber-300" />}
+                        {isExpanded ? <ChevronUp className="w-4 h-4 text-amber-300" aria-hidden="true" /> : <ChevronDown className="w-4 h-4 text-amber-300" aria-hidden="true" />}
                     </span>
                 </div>
             </div>
@@ -224,18 +233,20 @@ export default function VoucherStockSummaryTable({
             {isExpanded && (
                 <>
                     {/* Thanh lọc chương trình, từ khóa & trạng thái cảnh báo */}
-                    <div className="bg-slate-900/95 px-4 py-3 border-t border-slate-800 flex flex-wrap items-center justify-between gap-3 animate-in fade-in duration-150">
+                    <div className="bg-slate-900/95 px-4 py-3 border-t border-slate-800 flex flex-wrap items-center justify-between gap-3">
                         {/* Nhóm 1: Bộ lọc Chương trình & Ô tìm kiếm */}
-                        <div className="flex items-center gap-2.5 flex-wrap">
-                            <div className="flex items-center gap-2">
-                                <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5 shrink-0">
-                                    <Filter className="w-3.5 h-3.5 text-amber-400" />
+                        <div className="flex items-center gap-2.5 flex-wrap w-full sm:w-auto">
+                            <div className="flex items-center gap-2 w-full sm:w-auto">
+                                <label htmlFor="stock-summary-campaign-filter" className="text-xs font-bold text-slate-300 flex items-center gap-1.5 shrink-0 cursor-pointer">
+                                    <Filter className="w-3.5 h-3.5 text-amber-400" aria-hidden="true" />
                                     <span>Chương trình:</span>
                                 </label>
                                 <select
+                                    id="stock-summary-campaign-filter"
+                                    name="stock_summary_campaign"
                                     value={selectedCampaign}
                                     onChange={(e) => setSelectedCampaign(e.target.value)}
-                                    className="bg-slate-800 border border-slate-700 hover:border-slate-600 rounded-xl px-3 py-1.5 text-xs font-bold text-amber-300 focus:outline-none focus:border-amber-400 max-w-[220px] sm:max-w-[280px] truncate cursor-pointer shadow-xs transition"
+                                    className="bg-slate-800 border border-slate-700 hover:border-slate-600 rounded-xl px-3 py-1.5 text-xs font-bold text-amber-300 focus:outline-none focus:border-amber-400 flex-1 sm:flex-initial sm:max-w-[260px] truncate cursor-pointer shadow-sm transition"
                                 >
                                     <option value="ALL">✨ Tất Cả Chương Trình ({campaignOptions.length})</option>
                                     {campaignOptions.map((c) => (
@@ -247,20 +258,24 @@ export default function VoucherStockSummaryTable({
                             </div>
 
                             {/* Ô tìm kiếm nhanh */}
-                            <div className="relative min-w-[140px] max-w-[190px]">
-                                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                            <div className="relative w-full sm:w-auto sm:min-w-[160px] sm:max-w-[210px]">
+                                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" aria-hidden="true" />
                                 <input
+                                    id="stock-summary-search"
+                                    name="stock_summary_search"
                                     type="text"
+                                    aria-label="Tìm mệnh giá hoặc ghi chú chương trình"
                                     value={searchKeyword}
                                     onChange={(e) => setSearchKeyword(e.target.value)}
                                     placeholder="Tìm mệnh giá, ghi chú..."
-                                    className="w-full pl-8 pr-6 py-1.5 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white placeholder:text-slate-400 focus:outline-none focus:border-amber-400"
+                                    className="w-full pl-8 pr-7 py-1.5 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white placeholder:text-slate-400 focus:outline-none focus:border-amber-400"
                                 />
                                 {searchKeyword && (
                                     <button
                                         type="button"
                                         onClick={() => setSearchKeyword('')}
-                                        className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-xs cursor-pointer"
+                                        aria-label="Xóa từ khóa tìm kiếm"
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-white text-xs cursor-pointer"
                                         title="Xóa tìm kiếm"
                                     >
                                         ✕
@@ -270,17 +285,17 @@ export default function VoucherStockSummaryTable({
                         </div>
 
                         {/* Nhóm 2: Bộ lọc 4 trạng thái cảnh báo */}
-                        <div className="flex items-center gap-1.5 flex-wrap">
+                        <div className="flex items-center gap-1.5 flex-wrap w-full sm:w-auto">
                             {/* 1. Tất Cả */}
                             <button
                                 type="button"
                                 onClick={() => setFilterAlert('ALL')}
                                 className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${filterAlert === 'ALL'
-                                    ? 'bg-white text-slate-900 shadow-xs'
+                                    ? 'bg-white text-slate-900 shadow-sm'
                                     : 'bg-slate-800/80 text-slate-300 hover:bg-slate-800'
                                     }`}
                             >
-                                <Layers className="w-3.5 h-3.5" />
+                                <Layers className="w-3.5 h-3.5" aria-hidden="true" />
                                 <span>Tất Cả ({campaignScopedForecasts.length})</span>
                             </button>
 
@@ -289,12 +304,12 @@ export default function VoucherStockSummaryTable({
                                 type="button"
                                 onClick={() => setFilterAlert('NEED_ATTENTION')}
                                 className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${filterAlert === 'NEED_ATTENTION'
-                                    ? 'bg-rose-600 text-white shadow-xs'
+                                    ? 'bg-rose-600 text-white shadow-sm'
                                     : 'bg-slate-800/80 text-rose-300 hover:bg-rose-950/50'
                                     }`}
                             >
-                                <Flame className="w-3.5 h-3.5" />
-                                <span>Cần Nạp Gấp & Sắp Hết ({needAttentionCount})</span>
+                                <Flame className="w-3.5 h-3.5" aria-hidden="true" />
+                                <span>Cần Nạp Gấp &amp; Sắp Hết ({needAttentionCount})</span>
                             </button>
 
                             {/* 3. Đủ dùng */}
@@ -302,11 +317,11 @@ export default function VoucherStockSummaryTable({
                                 type="button"
                                 onClick={() => setFilterAlert('SAFE')}
                                 className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${filterAlert === 'SAFE'
-                                    ? 'bg-emerald-600 text-white shadow-xs'
+                                    ? 'bg-emerald-700 text-white shadow-sm'
                                     : 'bg-slate-800/80 text-emerald-300 hover:bg-emerald-950/50'
                                     }`}
                             >
-                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                <CheckCircle2 className="w-3.5 h-3.5" aria-hidden="true" />
                                 <span>Đủ Dùng ({safeCount})</span>
                             </button>
 
@@ -315,11 +330,11 @@ export default function VoucherStockSummaryTable({
                                 type="button"
                                 onClick={() => setFilterAlert('ENDED')}
                                 className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${filterAlert === 'ENDED'
-                                    ? 'bg-slate-700 text-white shadow-xs'
+                                    ? 'bg-slate-700 text-white shadow-sm'
                                     : 'bg-slate-800/80 text-slate-300 hover:bg-slate-800'
                                     }`}
                             >
-                                <Ban className="w-3.5 h-3.5 text-rose-400" />
+                                <Ban className="w-3.5 h-3.5 text-rose-400" aria-hidden="true" />
                                 <span>Đã Kết Thúc ({endedCount})</span>
                             </button>
 
@@ -330,12 +345,12 @@ export default function VoucherStockSummaryTable({
                                     onClick={() => setShowHidden(!showHidden)}
                                     className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 border ${
                                         showHidden
-                                            ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-xs'
+                                            ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-sm'
                                             : 'bg-slate-800/80 text-amber-300 hover:bg-slate-800 border-slate-700'
                                     }`}
                                     title={showHidden ? "Đang xem cả các chương trình đã ẩn (bấm để ẩn lại)" : "Bấm để xem các chương trình đã ẩn (lưu trữ)"}
                                 >
-                                    {showHidden ? <Eye className="w-3.5 h-3.5 text-slate-950" /> : <EyeOff className="w-3.5 h-3.5 text-amber-400" />}
+                                    {showHidden ? <Eye className="w-3.5 h-3.5 text-slate-950" aria-hidden="true" /> : <EyeOff className="w-3.5 h-3.5 text-amber-400" aria-hidden="true" />}
                                     <span>{showHidden ? `Đang Hiện Đã Ẩn (${hiddenForecastsCount})` : `Hiện Đã Ẩn (${hiddenForecastsCount})`}</span>
                                 </button>
                             )}
@@ -345,10 +360,10 @@ export default function VoucherStockSummaryTable({
                                 <button
                                     type="button"
                                     onClick={onOpenDeleteCampaignModal}
-                                    className="px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 bg-rose-600 hover:bg-rose-700 text-white shadow-xs sm:ml-auto"
+                                    className="px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 bg-rose-950 hover:bg-rose-900 text-rose-200 border border-rose-500/60 shadow-sm sm:ml-auto"
                                     title="Mở bảng lựa chọn xóa vĩnh viễn các chương trình PMH đã kết thúc (hết hạn)"
                                 >
-                                    <Trash2 className="w-3.5 h-3.5" />
+                                    <Trash2 className="w-3.5 h-3.5 text-rose-300" aria-hidden="true" />
                                     <span>Lựa Chọn Xóa CT Hết Hạn</span>
                                 </button>
                             )}
@@ -356,34 +371,38 @@ export default function VoucherStockSummaryTable({
                     </div>
 
                     {/* Bảng Dữ Liệu Tổng Hợp */}
+                    <div className="sm:hidden px-3 py-1.5 bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-600 flex items-center justify-between">
+                        <span>Chi tiết tồn kho &amp; dự báo theo CT</span>
+                        <span className="text-emerald-700">Vuốt ngang →</span>
+                    </div>
                     <div className="overflow-x-auto">
                         <table className="w-full text-left text-xs border-collapse">
                             <thead>
-                                <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-black uppercase text-slate-600">
-                                    <th className="py-3 px-3">Chương Trình & Diễn Giải</th>
-                                    <th className="py-3 px-2 text-center" style={{ width: '130px' }}>Mệnh Giá</th>
-                                    <th className="py-3 px-2 text-right">Tổng Kho</th>
-                                    <th className="py-3 px-2 text-right">Đã Cấp</th>
-                                    <th className="py-3 px-2 text-right">Còn Lại</th>
-                                    <th className="py-3 px-2 text-center" style={{ width: '110px' }}>TB/Ngày</th>
-                                    <th className="py-3 px-2 text-center" style={{ width: '110px' }}>Dự Báo Còn</th>
-                                    <th className="py-3 px-3 text-center">Tình Trạng & Cảnh Báo</th>
-                                    <th className="py-3 px-2 text-right" style={{ minWidth: '150px' }}>Thao Tác</th>
+                                <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-black uppercase text-slate-700">
+                                    <th className="py-2.5 px-2.5">Chương Trình &amp; Diễn Giải</th>
+                                    <th className="py-2.5 px-2 text-center whitespace-nowrap" style={{ width: '122px' }}>Mệnh Giá</th>
+                                    <th className="py-2.5 px-1.5 text-right whitespace-nowrap">Tổng Kho</th>
+                                    <th className="py-2.5 px-1.5 text-right whitespace-nowrap">Đã Cấp</th>
+                                    <th className="py-2.5 px-2 text-right whitespace-nowrap">Còn Lại</th>
+                                    <th className="py-2.5 px-2 text-center whitespace-nowrap" style={{ width: '98px' }}>TB/Ngày</th>
+                                    <th className="py-2.5 px-2 text-center whitespace-nowrap" style={{ width: '96px' }}>Dự Báo Còn</th>
+                                    <th className="py-2.5 px-2 text-center whitespace-nowrap">Tình Trạng</th>
+                                    <th className="py-2.5 px-2 text-right" style={{ minWidth: '148px' }}>Thao Tác</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
                                 {filteredForecasts.length === 0 ? (
                                     <tr>
-                                        <td colSpan={9} className="py-8 text-center text-slate-500 font-bold">
+                                        <td colSpan={9} className="py-8 text-center text-slate-600 font-bold">
                                             <div className="flex flex-col items-center justify-center gap-2">
-                                                <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
+                                                <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-600">
                                                     {filterAlert === 'NEED_ATTENTION' ? (
-                                                        <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                                                        <CheckCircle2 className="w-5 h-5 text-emerald-700" aria-hidden="true" />
                                                     ) : (
-                                                        <Filter className="w-5 h-5 text-slate-400" />
+                                                        <Filter className="w-5 h-5 text-slate-500" aria-hidden="true" />
                                                     )}
                                                 </div>
-                                                <div className="text-sm font-black text-slate-700">
+                                                <div className="text-sm font-black text-slate-800">
                                                     {filterAlert === 'NEED_ATTENTION'
                                                         ? 'Không có loại PMH nào ở trạng thái Cần nạp gấp hoặc Sắp hết.'
                                                         : 'Không có loại PMH nào thỏa mãn điều kiện lọc.'}
@@ -392,9 +411,9 @@ export default function VoucherStockSummaryTable({
                                                     <button
                                                         type="button"
                                                         onClick={() => setFilterAlert('ALL')}
-                                                        className="mt-1 px-3.5 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold transition cursor-pointer shadow-xs inline-flex items-center gap-1.5"
+                                                        className="mt-1 px-3.5 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold transition cursor-pointer shadow-sm inline-flex items-center gap-1.5"
                                                     >
-                                                        <Layers className="w-3.5 h-3.5" />
+                                                        <Layers className="w-3.5 h-3.5" aria-hidden="true" />
                                                         <span>Xem tất cả ({campaignScopedForecasts.length} loại PMH)</span>
                                                     </button>
                                                 )}
@@ -414,7 +433,7 @@ export default function VoucherStockSummaryTable({
                                             <tr
                                                 key={`${item.campaign_name}_${item.denomination}`}
                                                 className={`hover:bg-slate-50/80 transition ${isEnded
-                                                    ? 'bg-slate-100/60 opacity-80'
+                                                    ? 'bg-slate-100/60 opacity-85'
                                                     : isOutOfStock
                                                         ? 'bg-rose-50/40'
                                                         : isCritical
@@ -423,27 +442,28 @@ export default function VoucherStockSummaryTable({
                                                     }`}
                                             >
                                                 {/* Chương Trình & Diễn Giải Điều Kiện */}
-                                                <td className="py-2.5 px-3">
-                                                    <div className="font-black text-slate-900 text-xs line-clamp-1 flex items-center gap-1.5 flex-wrap">
+                                                <td className="py-2.5 px-2.5">
+                                                    <div className="font-black text-slate-900 text-xs flex items-center gap-1.5 flex-wrap">
                                                         <span>{item.campaign_name}</span>
                                                         {onOpenRenameCampaignModal && (
                                                             <button
                                                                 type="button"
                                                                 onClick={() => onOpenRenameCampaignModal(item.campaign_name)}
-                                                                className="p-0.5 rounded text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition cursor-pointer"
+                                                                aria-label={`Đổi tên chương trình ${item.campaign_name}`}
+                                                                className="p-0.5 rounded text-slate-500 hover:text-blue-700 hover:bg-blue-50 transition cursor-pointer"
                                                                 title={`Đổi / Chỉnh sửa tên chương trình "${item.campaign_name}"`}
                                                             >
-                                                                <Edit3 className="w-3 h-3" />
+                                                                <Edit3 className="w-3 h-3" aria-hidden="true" />
                                                             </button>
                                                         )}
                                                         {item.is_hidden && (
-                                                            <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-slate-200 text-slate-700 border border-slate-300 inline-flex items-center gap-0.5" title="Chương trình này đã được ẩn khỏi danh sách lấy mã">
-                                                                <EyeOff className="w-2.5 h-2.5 text-slate-500" />
+                                                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-200 text-slate-800 border border-slate-300 inline-flex items-center gap-0.5" title="Chương trình này đã được ẩn khỏi danh sách lấy mã">
+                                                                <EyeOff className="w-2.5 h-2.5 text-slate-600" aria-hidden="true" />
                                                                 <span>Đã ẩn</span>
                                                             </span>
                                                         )}
                                                         {isEnded && !item.is_hidden && (
-                                                            <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-rose-100 text-rose-800 border border-rose-200">
+                                                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 border border-rose-200">
                                                                 Đã đóng
                                                             </span>
                                                         )}
@@ -452,72 +472,72 @@ export default function VoucherStockSummaryTable({
                                                         <div className="mt-1 space-y-0.5" title={item.description}>
                                                             {parseConditionLines(item.description).map((cond, cIdx) => (
                                                                 <div key={cIdx} className="text-[10px] font-medium text-amber-950 flex items-start gap-1 leading-tight">
-                                                                    <span className="text-amber-500 font-bold shrink-0">•</span>
-                                                                    <span className="truncate max-w-[240px]">{cond}</span>
+                                                                    <span className="text-amber-700 font-bold shrink-0">•</span>
+                                                                    <span className="truncate max-w-[230px]">{cond}</span>
                                                                 </div>
                                                             ))}
                                                         </div>
                                                     ) : (
-                                                        <div className="text-[10px] text-slate-400 italic mt-0.5">
+                                                        <div className="text-[10px] text-slate-500 italic mt-0.5">
                                                             Chưa cài đặt điều kiện
                                                         </div>
                                                     )}
                                                 </td>
 
                                                 {/* Mệnh Giá (Hiển thị theo thang màu độ hot) */}
-                                                <td className="py-2.5 px-2 text-center">
+                                                <td className="py-2.5 px-2 text-center whitespace-nowrap">
                                                     <div className="inline-flex flex-col items-center">
                                                         <div className={`px-2 py-0.5 rounded-lg border font-mono font-black text-xs flex items-center gap-1 ${hot.badgeClass}`}>
                                                             <span className="text-[10px]">{hot.tagIcon}</span>
                                                             <span>{formatCurrency(item.denomination)}</span>
                                                         </div>
-                                                        <span className="text-[9px] font-bold text-slate-400 mt-0.5">
+                                                        <span className="text-[9px] font-bold text-slate-500 mt-0.5">
                                                             {hot.label}
                                                         </span>
                                                     </div>
                                                 </td>
 
                                                 {/* Tổng Kho Nạp */}
-                                                <td className="py-2.5 px-2 text-right font-mono font-bold text-slate-600">
+                                                <td className="py-2.5 px-1.5 text-right font-mono font-bold text-slate-700 whitespace-nowrap">
                                                     {item.total.toLocaleString('vi-VN')}
                                                 </td>
 
                                                 {/* Đã Cấp (Claimed + Used) */}
-                                                <td className="py-2.5 px-2 text-right font-mono font-bold text-indigo-700">
+                                                <td className="py-2.5 px-1.5 text-right font-mono font-bold text-blue-800 whitespace-nowrap">
                                                     {(item.claimed + item.used).toLocaleString('vi-VN')}
                                                 </td>
 
                                                 {/* Tồn Kho Khả Dụng */}
-                                                <td className="py-2.5 px-2 text-right font-mono">
+                                                <td className="py-2.5 px-2 text-right font-mono whitespace-nowrap">
                                                     <span className={`inline-block px-2 py-0.5 rounded font-black text-xs ${isEnded
-                                                        ? 'bg-slate-200 text-slate-600'
+                                                        ? 'bg-slate-200 text-slate-700'
                                                         : isOutOfStock
                                                             ? 'bg-rose-600 text-white'
                                                             : isCritical
                                                                 ? 'bg-amber-100 text-amber-900 border border-amber-300 font-black'
-                                                                : 'text-emerald-700 font-black bg-emerald-50'
+                                                                : 'text-emerald-800 font-black bg-emerald-50'
                                                         }`}>
                                                         {item.available.toLocaleString('vi-VN')}
                                                     </span>
-                                                    <div className="text-[9.5px] text-slate-400 font-normal mt-0.5">
+                                                    <div className="text-[9.5px] text-slate-500 font-normal mt-0.5 whitespace-nowrap">
                                                         còn {percentAvailable}%
                                                     </div>
                                                 </td>
 
                                                 {/* Tốc Độ Tiêu Thụ TB/Ngày */}
-                                                <td className="py-2.5 px-2 text-center font-mono">
+                                                <td className="py-2.5 px-2 text-center font-mono whitespace-nowrap">
                                                     <div className="font-bold text-slate-800 text-xs">
                                                         ~{item.avgDailyUsage > 0 ? item.avgDailyUsage : 0} mã/ngày
                                                     </div>
-                                                    <div className="text-[9px] text-slate-400">
+                                                    <div className="text-[9px] text-slate-500">
                                                         {item.claimed + item.used > 0 ? 'theo lịch sử cấp' : 'chưa có dữ liệu'}
                                                     </div>
                                                 </td>
 
                                                 {/* Dự Báo Còn Bao Nhiêu Ngày */}
-                                                <td className="py-2.5 px-2 text-center font-mono">
+                                                <td className="py-2.5 px-2 text-center font-mono whitespace-nowrap">
                                                     {isEnded ? (
-                                                        <span className="text-slate-400 font-bold text-xs">
+                                                        <span className="text-slate-500 font-bold text-xs">
                                                             Đã kết thúc
                                                         </span>
                                                     ) : isOutOfStock ? (
@@ -525,56 +545,56 @@ export default function VoucherStockSummaryTable({
                                                             0 ngày
                                                         </span>
                                                     ) : item.daysRemaining !== Infinity ? (
-                                                        <span className={`font-black text-xs ${isCritical ? 'text-rose-600' : isWarning ? 'text-amber-600' : 'text-slate-800'
+                                                        <span className={`font-black text-xs ${isCritical ? 'text-rose-600' : isWarning ? 'text-amber-800' : 'text-slate-800'
                                                             }`}>
                                                             ~{item.daysRemaining} ngày
                                                         </span>
                                                     ) : (
-                                                        <span className="text-slate-400 text-[10px]">
+                                                        <span className="text-slate-500 text-[10px]">
                                                             Dồi dào (∞)
                                                         </span>
                                                     )}
                                                 </td>
 
                                                 {/* Tình Trạng & Cảnh Báo Bổ Sung */}
-                                                <td className="py-2.5 px-3 text-center">
+                                                <td className="py-2.5 px-2 text-center whitespace-nowrap">
                                                     {isEnded ? (
-                                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black bg-slate-900 text-rose-300 border border-rose-500/40 shadow-xs">
-                                                            <Ban className="w-3 h-3 text-rose-400" /> HẾT MÃ - KẾT THÚC
+                                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black bg-slate-900 text-rose-300 border border-rose-500/40 shadow-sm whitespace-nowrap">
+                                                            <Ban className="w-3 h-3 text-rose-400" aria-hidden="true" /> HẾT MÃ - KẾT THÚC
                                                         </span>
                                                     ) : isOutOfStock ? (
-                                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black bg-rose-600 text-white shadow-xs animate-pulse">
-                                                            <Flame className="w-3 h-3" /> TẠM HẾT (CHỜ NẠP)
+                                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black bg-rose-600 text-white shadow-sm whitespace-nowrap">
+                                                            <Flame className="w-3 h-3" aria-hidden="true" /> TẠM HẾT (CHỜ NẠP)
                                                         </span>
                                                     ) : isCritical ? (
-                                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10.5px] font-black bg-rose-100 text-rose-800 border border-rose-300">
-                                                            <AlertTriangle className="w-3 h-3 text-rose-600" /> SẮP HẾT GẤP
+                                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10.5px] font-black bg-rose-100 text-rose-800 border border-rose-300 whitespace-nowrap">
+                                                            <AlertTriangle className="w-3 h-3 text-rose-700" aria-hidden="true" /> SẮP HẾT GẤP
                                                         </span>
                                                     ) : isWarning ? (
-                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
-                                                            <Clock className="w-3 h-3 text-amber-600" /> SẮP HẾT
+                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 whitespace-nowrap">
+                                                            <Clock className="w-3 h-3 text-amber-700" aria-hidden="true" /> SẮP HẾT
                                                         </span>
                                                     ) : (
-                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                                            <CheckCircle2 className="w-3 h-3 text-emerald-600" /> ĐỦ DÙNG
+                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200 whitespace-nowrap">
+                                                            <CheckCircle2 className="w-3 h-3 text-emerald-700" aria-hidden="true" /> ĐỦ DÙNG
                                                         </span>
                                                     )}
                                                 </td>
 
                                                 {/* Nút Thao Tác Nhanh: Nạp Thêm Mã & Toggle Kết Thúc */}
                                                 <td className="py-2.5 px-2 text-right">
-                                                    <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                                                    <div className="flex items-center justify-end gap-1 flex-wrap">
                                                         {onOpenImportModalWithPreset && !isEnded && (
                                                             <button
                                                                 type="button"
                                                                 onClick={() => onOpenImportModalWithPreset(item.campaign_name, item.denomination, item.description)}
-                                                                className={`px-2 py-1 rounded-xl text-xs font-black transition cursor-pointer inline-flex items-center gap-1 shadow-2xs active:scale-[0.98] ${isOutOfStock || isCritical
+                                                                className={`px-2 py-1 rounded-xl text-[10.5px] font-black transition cursor-pointer inline-flex items-center gap-1 shadow-sm active:scale-[0.98] whitespace-nowrap ${isOutOfStock || isCritical
                                                                     ? 'bg-rose-600 hover:bg-rose-700 text-white'
                                                                     : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200'
                                                                     }`}
                                                                 title={`Nạp thêm mã cho chương trình "${item.campaign_name}" (${formatCurrency(item.denomination)})`}
                                                             >
-                                                                <Plus className="w-3 h-3" />
+                                                                <Plus className="w-3 h-3" aria-hidden="true" />
                                                                 <span>Nạp Thêm</span>
                                                             </button>
                                                         )}
@@ -584,20 +604,20 @@ export default function VoucherStockSummaryTable({
                                                                 <button
                                                                     type="button"
                                                                     onClick={() => onToggleCampaignEndStatus(item.campaign_name, item.denomination, true)}
-                                                                    className="px-2 py-1 rounded-xl text-[10.5px] font-black transition cursor-pointer inline-flex items-center gap-1 shadow-2xs active:scale-[0.98] bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300"
+                                                                    className="px-2 py-1 rounded-xl text-[10.5px] font-black transition cursor-pointer inline-flex items-center gap-1 shadow-sm active:scale-[0.98] bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 whitespace-nowrap"
                                                                     title="Mở lại khả năng nạp thêm cho chương trình/mệnh giá này"
                                                                 >
-                                                                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                                                    <CheckCircle2 className="w-3 h-3 text-emerald-700" aria-hidden="true" />
                                                                     <span>Mở Lại</span>
                                                                 </button>
                                                             ) : (
                                                                 <button
                                                                     type="button"
                                                                     onClick={() => onToggleCampaignEndStatus(item.campaign_name, item.denomination, false)}
-                                                                    className="px-2 py-1 rounded-xl text-[10.5px] font-bold transition cursor-pointer inline-flex items-center gap-1 shadow-2xs active:scale-[0.98] bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-700 border border-slate-200 hover:border-rose-300"
+                                                                    className="px-2 py-1 rounded-xl text-[10.5px] font-bold transition cursor-pointer inline-flex items-center gap-1 shadow-sm active:scale-[0.98] bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-700 border border-slate-200 hover:border-rose-300 whitespace-nowrap"
                                                                     title="Đánh dấu hết mã hoàn toàn - Kết thúc chương trình"
                                                                 >
-                                                                    <Ban className="w-3 h-3 text-rose-500" />
+                                                                    <Ban className="w-3 h-3 text-rose-600" aria-hidden="true" />
                                                                     <span>Kết Thúc</span>
                                                                 </button>
                                                             )
@@ -608,20 +628,20 @@ export default function VoucherStockSummaryTable({
                                                                 <button
                                                                     type="button"
                                                                     onClick={() => onToggleCampaignHiddenStatus(item.campaign_name, true)}
-                                                                    className="px-2 py-1 rounded-xl text-[10.5px] font-black transition cursor-pointer inline-flex items-center gap-1 shadow-2xs active:scale-[0.98] bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300"
+                                                                    className="px-2 py-1 rounded-xl text-[10.5px] font-black transition cursor-pointer inline-flex items-center gap-1 shadow-sm active:scale-[0.98] bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 whitespace-nowrap"
                                                                     title={`Hiện lại chương trình "${item.campaign_name}" trên hệ thống`}
                                                                 >
-                                                                    <Eye className="w-3 h-3 text-amber-600" />
+                                                                    <Eye className="w-3 h-3 text-amber-700" aria-hidden="true" />
                                                                     <span>Hiện CT</span>
                                                                 </button>
                                                             ) : (
                                                                 <button
                                                                     type="button"
                                                                     onClick={() => onToggleCampaignHiddenStatus(item.campaign_name, false)}
-                                                                    className="px-2 py-1 rounded-xl text-[10.5px] font-bold transition cursor-pointer inline-flex items-center gap-1 shadow-2xs active:scale-[0.98] bg-slate-100 hover:bg-amber-50 text-slate-700 hover:text-amber-800 border border-slate-200 hover:border-amber-300"
+                                                                    className="px-2 py-1 rounded-xl text-[10.5px] font-bold transition cursor-pointer inline-flex items-center gap-1 shadow-sm active:scale-[0.98] bg-slate-100 hover:bg-amber-50 text-slate-700 hover:text-amber-900 border border-slate-200 hover:border-amber-300 whitespace-nowrap"
                                                                     title={`Ẩn chương trình "${item.campaign_name}" để lưu trữ và rút gọn danh sách`}
                                                                 >
-                                                                    <EyeOff className="w-3 h-3 text-slate-500" />
+                                                                    <EyeOff className="w-3 h-3 text-slate-600" aria-hidden="true" />
                                                                     <span>Ẩn CT</span>
                                                                 </button>
                                                             )
@@ -631,10 +651,10 @@ export default function VoucherStockSummaryTable({
                                                             <button
                                                                 type="button"
                                                                 onClick={() => onOpenRenameCampaignModal(item.campaign_name)}
-                                                                className="px-2 py-1 rounded-xl text-[10.5px] font-bold transition cursor-pointer inline-flex items-center gap-1 shadow-2xs active:scale-[0.98] bg-slate-100 hover:bg-indigo-50 text-slate-700 hover:text-indigo-700 border border-slate-200 hover:border-indigo-300"
+                                                                className="px-2 py-1 rounded-xl text-[10.5px] font-bold transition cursor-pointer inline-flex items-center gap-1 shadow-sm active:scale-[0.98] bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-800 border border-slate-200 hover:border-blue-300 whitespace-nowrap"
                                                                 title={`Đổi / Chỉnh sửa tên chương trình "${item.campaign_name}"`}
                                                             >
-                                                                <Edit3 className="w-3 h-3 text-indigo-500" />
+                                                                <Edit3 className="w-3 h-3 text-blue-700" aria-hidden="true" />
                                                                 <span>Sửa Tên</span>
                                                             </button>
                                                         )}
@@ -643,10 +663,10 @@ export default function VoucherStockSummaryTable({
                                                             <button
                                                                 type="button"
                                                                 onClick={() => onDeleteCampaign(item.campaign_name)}
-                                                                className="px-2 py-1 rounded-xl text-[10.5px] font-bold transition cursor-pointer inline-flex items-center gap-1 shadow-2xs active:scale-[0.98] bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 hover:border-rose-300"
+                                                                className="px-2 py-1 rounded-xl text-[10.5px] font-bold transition cursor-pointer inline-flex items-center gap-1 shadow-sm active:scale-[0.98] bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 hover:border-rose-300 whitespace-nowrap"
                                                                 title={`Xóa vĩnh viễn chương trình "${item.campaign_name}" khỏi kho`}
                                                             >
-                                                                <Trash2 className="w-3 h-3 text-rose-600" />
+                                                                <Trash2 className="w-3 h-3 text-rose-600" aria-hidden="true" />
                                                                 <span>Xóa CT</span>
                                                             </button>
                                                         )}

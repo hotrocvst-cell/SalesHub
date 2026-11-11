@@ -30,9 +30,6 @@ import {
     Calendar,
     Store,
     Search,
-    Download,
-    Camera,
-    Copy,
     RefreshCw,
     Filter,
     ArrowUpRight,
@@ -41,7 +38,9 @@ import {
     Clock,
     Settings,
     CheckCircle2,
-    Lock
+    Lock,
+    AlertTriangle,
+    X
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../shared/contexts/AuthContext';
@@ -97,6 +96,7 @@ export default function EmployeePerformanceReportPage() {
     const [latestSession, setLatestSession] = useState<EmployeeDataSession | null>(null);
 
     const [loading, setLoading] = useState<boolean>(true);
+    const [loadError, setLoadError] = useState<string>('');
     const [isExporting, setIsExporting] = useState<boolean>(false);
     const [isConfigModalOpen, setIsConfigModalOpen] = useState<boolean>(false);
     const [toastMessage, setToastMessage] = useState<string>('');
@@ -106,7 +106,7 @@ export default function EmployeePerformanceReportPage() {
         setTimeout(() => setToastMessage(''), 3500);
     };
 
-    // Cấu hình hoạt động shop & TOP/BOT theo đích danh ST
+    // Cấu hình hoạt động ST & TOP/BOT theo đích danh ST
     const [operatingConfig, setOperatingConfig] = useState(() =>
         getStoreOperatingConfig(selectedStore === 'all' ? 'ALL' : selectedStore, selectedMonth, selectedYear)
     );
@@ -133,110 +133,120 @@ export default function EmployeePerformanceReportPage() {
     // 1. TẢI DỮ LIỆU CỐT LÕI
     const loadAllData = async () => {
         setLoading(true);
+        setLoadError('');
 
         // Tự động đồng bộ cấu hình hoạt động & TOP/BOT từ Cloud Supabase nếu có
         syncPerformanceConfigsFromCloud()
             .then(() => refreshConfigs())
             .catch(() => { });
 
-        const targetStoreParam = isGuest
-            ? GUEST_DEMO_STORE
-            : (selectedStore === 'all' ? undefined : selectedStore);
+        try {
+            const targetStoreParam = isGuest
+                ? GUEST_DEMO_STORE
+                : (selectedStore === 'all' ? undefined : selectedStore);
 
-        const [storesRes, empsRes, targetsRes] = await Promise.all([
-            fetchStores(),
-            fetchEmployees(targetStoreParam),
-            fetchEmployeeRevenueTargets(selectedMonth, selectedYear)
-        ]);
+            const [storesRes, empsRes, targetsRes] = await Promise.all([
+                fetchStores(),
+                fetchEmployees(targetStoreParam),
+                fetchEmployeeRevenueTargets(selectedMonth, selectedYear)
+            ]);
 
-        if (storesRes.success) setStores(storesRes.data);
-        if (empsRes.success) setEmployees(empsRes.data);
-
-        // Chuyển đổi dữ liệu target sang Map theo Mã NV (chuẩn hóa về đơn vị triệu)
-        const targetMap: Record<string, number> = {};
-        if (targetsRes.success && targetsRes.data) {
-            if (Array.isArray(targetsRes.data)) {
-                targetsRes.data.forEach((r: any) => {
-                    if (r && r.employee_id != null) {
-                        const rawTarget = Number(r.target_revenue) || 0;
-                        const key = String(r.employee_id).trim();
-                        targetMap[key] = rawTarget >= 100_000 ? Math.round(rawTarget / 1_000_000) : rawTarget;
-                    }
-                });
-            } else if (typeof targetsRes.data === 'object') {
-                Object.entries(targetsRes.data).forEach(([k, v]) => {
-                    const rawTarget = Number(v) || 0;
-                    targetMap[k.trim()] = rawTarget >= 100_000 ? Math.round(rawTarget / 1_000_000) : rawTarget;
-                });
+            if (storesRes.success) setStores(storesRes.data);
+            if (empsRes.success) setEmployees(empsRes.data);
+            if (!storesRes.success || !empsRes.success) {
+                setLoadError('Không thể tải đầy đủ dữ liệu từ máy chủ. Vui lòng thử tải lại.');
             }
-        }
-        setRevenueTargets(targetMap);
 
-        // Lấy số liệu từ phiên cập nhật gần nhất hoặc draft
-        const revMap: Record<string, any> = {};
-        const hoursMap: Record<string, number> = {};
-
-        // Quét qua các phiên lưu trữ (tự động đồng bộ với Cloud Supabase)
-        const allSessions = await syncAndFetchEmployeeDataSessions({ month: selectedMonth, year: selectedYear });
-
-        // Xác định phiên mới nhất
-        const revSessions = allSessions.filter(sess =>
-            (sess.session_type === 'REVENUE_CAMPAIGN' || sess.session_type === 'FULL_SYNC') &&
-            (selectedStore === 'all' || isStoreMatch(sess.store_name, selectedStore, storesRes.data || stores))
-        );
-        const newest = revSessions.slice().sort((a, b) =>
-            (b.report_date || '').localeCompare(a.report_date || '') ||
-            (b.created_at || '').localeCompare(a.created_at || '')
-        )[0] || null;
-        setLatestSession(newest);
-        allSessions.forEach(sess => {
-            if (sess.session_type === 'REVENUE_CAMPAIGN') {
-                if (selectedStore === 'all' || sess.store_name === selectedStore) {
-                    sess.records.forEach(r => {
-                        const key = (r.employee_id || '').trim();
-                        if (!revMap[key]) revMap[key] = r;
+            // Chuyển đổi dữ liệu target sang Map theo Mã NV (chuẩn hóa về đơn vị triệu)
+            const targetMap: Record<string, number> = {};
+            if (targetsRes.success && targetsRes.data) {
+                if (Array.isArray(targetsRes.data)) {
+                    targetsRes.data.forEach((r: any) => {
+                        if (r && r.employee_id != null) {
+                            const rawTarget = Number(r.target_revenue) || 0;
+                            const key = String(r.employee_id).trim();
+                            targetMap[key] = rawTarget >= 100_000 ? Math.round(rawTarget / 1_000_000) : rawTarget;
+                        }
+                    });
+                } else if (typeof targetsRes.data === 'object') {
+                    Object.entries(targetsRes.data).forEach(([k, v]) => {
+                        const rawTarget = Number(v) || 0;
+                        targetMap[k.trim()] = rawTarget >= 100_000 ? Math.round(rawTarget / 1_000_000) : rawTarget;
                     });
                 }
-            } else if (sess.session_type === 'WORK_HOURS') {
-                sess.records.forEach(r => {
-                    const key = (r.employee_id || '').trim();
-                    if (r.work_hours && !hoursMap[key]) hoursMap[key] = r.work_hours;
-                });
             }
-        });
+            setRevenueTargets(targetMap);
 
-        // Fallback quét qua các draft trong LocalStorage
-        try {
-            for (let i = 0; i < localStorage.length; i++) {
-                const key = localStorage.key(i);
-                if (key && key.startsWith(`saleshub_emp_cum_draft_${selectedMonth}_${selectedYear}_`)) {
-                    if (selectedStore === 'all' || key.endsWith(`_${selectedStore}`)) {
-                        const raw = localStorage.getItem(key);
-                        if (raw) {
-                            const parsed = JSON.parse(raw);
-                            if (parsed.revenueData) {
-                                parsed.revenueData.forEach((r: any) => {
-                                    const k = (r.employee_id || '').trim();
-                                    if (!revMap[k]) revMap[k] = r;
-                                });
-                            }
-                            if (parsed.workHoursMap) {
-                                Object.entries(parsed.workHoursMap).forEach(([empId, h]) => {
-                                    const k = empId.trim();
-                                    if (!hoursMap[k]) hoursMap[k] = Number(h);
-                                });
+            // Lấy số liệu từ phiên cập nhật gần nhất hoặc draft
+            const revMap: Record<string, any> = {};
+            const hoursMap: Record<string, number> = {};
+
+            // Quét qua các phiên lưu trữ (tự động đồng bộ với Cloud Supabase)
+            const allSessions = await syncAndFetchEmployeeDataSessions({ month: selectedMonth, year: selectedYear });
+
+            // Xác định phiên mới nhất
+            const revSessions = allSessions.filter(sess =>
+                (sess.session_type === 'REVENUE_CAMPAIGN' || sess.session_type === 'FULL_SYNC') &&
+                (selectedStore === 'all' || isStoreMatch(sess.store_name, selectedStore, storesRes.data || stores))
+            );
+            const newest = revSessions.slice().sort((a, b) =>
+                (b.report_date || '').localeCompare(a.report_date || '') ||
+                (b.created_at || '').localeCompare(a.created_at || '')
+            )[0] || null;
+            setLatestSession(newest);
+            allSessions.forEach(sess => {
+                if (sess.session_type === 'REVENUE_CAMPAIGN') {
+                    if (selectedStore === 'all' || sess.store_name === selectedStore) {
+                        sess.records.forEach(r => {
+                            const key = (r.employee_id || '').trim();
+                            if (!revMap[key]) revMap[key] = r;
+                        });
+                    }
+                } else if (sess.session_type === 'WORK_HOURS') {
+                    sess.records.forEach(r => {
+                        const key = (r.employee_id || '').trim();
+                        if (r.work_hours && !hoursMap[key]) hoursMap[key] = r.work_hours;
+                    });
+                }
+            });
+
+            // Fallback quét qua các draft trong LocalStorage
+            try {
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    if (key && key.startsWith(`saleshub_emp_cum_draft_${selectedMonth}_${selectedYear}_`)) {
+                        if (selectedStore === 'all' || key.endsWith(`_${selectedStore}`)) {
+                            const raw = localStorage.getItem(key);
+                            if (raw) {
+                                const parsed = JSON.parse(raw);
+                                if (parsed.revenueData) {
+                                    parsed.revenueData.forEach((r: any) => {
+                                        const k = (r.employee_id || '').trim();
+                                        if (!revMap[k]) revMap[k] = r;
+                                    });
+                                }
+                                if (parsed.workHoursMap) {
+                                    Object.entries(parsed.workHoursMap).forEach(([empId, h]) => {
+                                        const k = empId.trim();
+                                        if (!hoursMap[k]) hoursMap[k] = Number(h);
+                                    });
+                                }
                             }
                         }
                     }
                 }
+            } catch (e) {
+                console.warn(e);
             }
-        } catch (e) {
-            console.warn(e);
-        }
 
-        setRevenueDataMap(revMap);
-        setWorkHoursMap(hoursMap);
-        setLoading(false);
+            setRevenueDataMap(revMap);
+            setWorkHoursMap(hoursMap);
+        } catch (err: any) {
+            console.error('Lỗi tải dữ liệu hiệu quả nhân viên:', err);
+            setLoadError(err?.message || 'Đã xảy ra lỗi kết nối khi tải dữ liệu.');
+        } finally {
+            setLoading(false);
+        }
     };
 
     useEffect(() => {
@@ -619,14 +629,20 @@ export default function EmployeePerformanceReportPage() {
                     (el as HTMLElement).remove();
                 });
 
-                // Cố định chiều rộng đầy đủ cho container và tài liệu
+                // Cố định chiều rộng đầy đủ & chiều dài không giới hạn cho container và tài liệu
                 clonedDoc.documentElement.style.width = `${contentWidth}px`;
+                clonedDoc.documentElement.style.height = 'auto';
                 clonedDoc.body.style.width = `${contentWidth}px`;
+                clonedDoc.body.style.height = 'auto';
                 clonedDoc.body.style.overflow = 'visible';
 
                 clonedReport.style.width = `${contentWidth}px`;
                 clonedReport.style.minWidth = `${contentWidth}px`;
                 clonedReport.style.maxWidth = `${contentWidth}px`;
+                clonedReport.style.height = 'auto';
+                clonedReport.style.minHeight = 'auto';
+                clonedReport.style.maxHeight = 'none';
+                clonedReport.style.overflow = 'visible';
                 clonedReport.style.boxSizing = 'border-box';
                 clonedReport.style.fontFamily = "'UTM Avo', 'Avo', sans-serif";
                 clonedReport.style.letterSpacing = 'normal';
@@ -652,9 +668,9 @@ export default function EmployeePerformanceReportPage() {
                     clonedTable.style.tableLayout = 'auto';
                 }
 
-                // Chuyển thead và th từ sticky sang static để không lệch dòng tiêu đề
-                const stickyHeaders = clonedReport.querySelectorAll('thead, th');
-                stickyHeaders.forEach((el) => {
+                // Chuyển thead, th, td, tfoot từ sticky sang static để không lệch cột/tiêu đề khi xuất ảnh
+                const stickyElements = clonedReport.querySelectorAll('thead, th, td, tfoot');
+                stickyElements.forEach((el) => {
                     const htmlEl = el as HTMLElement;
                     htmlEl.style.position = 'static';
                     htmlEl.style.letterSpacing = 'normal';
@@ -761,39 +777,39 @@ export default function EmployeePerformanceReportPage() {
         <div className="max-w-[1680px] mx-auto space-y-4 pb-12">
             {/* Toast Thông Báo */}
             {toastMessage && (
-                <div className="fixed top-5 right-5 z-50 p-4 bg-slate-900 text-white rounded-2xl shadow-2xl flex items-center gap-2.5 text-xs border border-slate-700 animate-in fade-in slide-in-from-top-2 duration-200">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                <div role="status" className="fixed top-5 right-5 z-50 p-4 bg-slate-900 text-white rounded-2xl shadow-2xl flex items-center gap-2.5 text-xs border border-slate-700">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" aria-hidden="true" />
                     <span className="font-semibold">{toastMessage}</span>
                 </div>
             )}
 
             {/* Header Phân Hệ */}
-            <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-2xs flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+            <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-sm flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
                 <div>
                     <div className="flex items-center gap-2">
-                        <span className="p-2 rounded-xl bg-amber-100 text-amber-700 shadow-2xs">
+                        <span className="p-2 rounded-xl bg-amber-100 text-amber-800 shadow-sm" aria-hidden="true">
                             <Trophy className="w-5 h-5" />
                         </span>
                         <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
                             Hiệu Quả Doanh Thu Nhân Viên
                         </h1>
                     </div>
-                    <p className="text-xs text-slate-500 mt-1">
+                    <p className="text-xs text-slate-600 mt-1">
                         Xếp hạng nhân viên, vinh danh cá nhân xuất sắc và đánh giá tiến độ hoàn thành mục tiêu.
                     </p>
                 </div>
 
                 <div className="flex items-center gap-2 self-stretch sm:self-auto flex-wrap">
-                    {/* Nút Cấu Hình Shop & TOP/BOT (Chỉ hiển thị với Admin/QL/TC) */}
+                    {/* Nút Cấu Hình ST & TOP/BOT (Chỉ hiển thị với Admin/QL/TC) */}
                     {canManage && (
                         <button
                             type="button"
                             onClick={() => setIsConfigModalOpen(true)}
-                            className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs"
+                            className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-1"
                             title="Cấu hình giờ mở cửa, số ngày hoạt động và tiêu chuẩn TOP/BOT"
                         >
-                            <Settings className="w-4 h-4 text-amber-400" />
-                            <span>Cấu Hình Shop & TOP/BOT</span>
+                            <Settings className="w-4 h-4 text-amber-400" aria-hidden="true" />
+                            <span>Cấu Hình ST & TOP/BOT</span>
                         </button>
                     )}
 
@@ -802,10 +818,10 @@ export default function EmployeePerformanceReportPage() {
                         <button
                             type="button"
                             onClick={() => navigate('/muc-tieu-nhan-vien')}
-                            className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs"
+                            className="px-3.5 py-2 bg-amber-700 hover:bg-amber-800 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700 focus-visible:ring-offset-1"
                             title="Đi đến trang Khai Báo & Quản Lý Mục Tiêu Nhân Viên"
                         >
-                            <Target className="w-4 h-4" />
+                            <Target className="w-4 h-4" aria-hidden="true" />
                             <span>Khai Báo Target</span>
                         </button>
                     )}
@@ -829,46 +845,46 @@ export default function EmployeePerformanceReportPage() {
                         <button
                             type="button"
                             onClick={() => navigate('/cap-nhat-luy-ke-nhan-vien')}
-                            className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs"
+                            className="px-3.5 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700 focus-visible:ring-offset-1"
                         >
                             <span>Cập Nhật Số Liệu</span>
-                            <ArrowUpRight className="w-4 h-4" />
+                            <ArrowUpRight className="w-4 h-4" aria-hidden="true" />
                         </button>
                     )}
                 </div>
             </div>
 
             {/* Thanh Thông Tin Về Giờ Mở Cửa, Số Ngày & TOP/BOT */}
-            <div className="bg-gradient-to-r from-blue-50/80 via-slate-50 to-amber-50/60 border border-slate-200 rounded-2xl p-3 flex flex-wrap items-center justify-between gap-3 text-xs">
-                <div className="flex items-center gap-4 flex-wrap text-slate-700">
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 flex flex-wrap items-center justify-between gap-2.5 sm:gap-3 text-xs">
+                <div className="flex items-center gap-x-4 gap-y-2 flex-wrap text-slate-700">
                     <span className="flex items-center gap-1.5 font-bold">
-                        <Clock className="w-4 h-4 text-blue-600" />
-                        Giờ bán hàng: <strong className="text-blue-900 font-mono">{operatingConfig.openTime} - {operatingConfig.closeTime}</strong>
-                        <span className="text-[11px] text-blue-600 font-normal">({operatingConfig.operatingHours}h/ngày)</span>
+                        <Clock className="w-4 h-4 text-blue-700 shrink-0" aria-hidden="true" />
+                        Giờ bán hàng: <strong className="text-blue-900 font-mono tabular-nums">{operatingConfig.openTime} - {operatingConfig.closeTime}</strong>
+                        <span className="text-[11px] text-blue-700 font-semibold">({operatingConfig.operatingHours}h/ngày)</span>
                     </span>
 
-                    <span className="text-slate-300">|</span>
+                    <span className="text-slate-300 hidden sm:inline" aria-hidden="true">|</span>
 
-                    <span className="flex items-center gap-1.5 font-bold">
-                        <Calendar className="w-4 h-4 text-amber-600" />
-                        Tiến độ hoạt động: <strong className="text-amber-900 font-mono">{operatingConfig.passedDays}/{operatingConfig.operatingDays} ngày</strong>
+                    <span className="flex items-center gap-1.5 font-bold flex-wrap">
+                        <Calendar className="w-4 h-4 text-amber-700 shrink-0" aria-hidden="true" />
+                        Tiến độ hoạt động: <strong className="text-amber-900 font-mono tabular-nums">{operatingConfig.passedDays}/{operatingConfig.operatingDays} ngày</strong>
                         {operatingConfig.operatingDays !== operatingConfig.defaultDays && (
-                            <span className="text-[10px] text-amber-800 bg-amber-100 font-extrabold px-1.5 py-0.5 rounded-md">
+                            <span className="text-[10px] text-amber-900 bg-amber-100 font-extrabold px-1.5 py-0.5 rounded-md">
                                 Boss đã chỉnh tay (Lịch chuẩn: {operatingConfig.defaultDays} ngày)
                             </span>
                         )}
                     </span>
 
-                    <span className="text-slate-300">|</span>
+                    <span className="text-slate-300 hidden sm:inline" aria-hidden="true">|</span>
 
-                    <span className="flex items-center gap-1.5 font-bold">
-                        <Trophy className="w-4 h-4 text-amber-500" />
+                    <span className="flex items-center gap-1.5 font-bold flex-wrap">
+                        <Trophy className="w-4 h-4 text-amber-600 shrink-0" aria-hidden="true" />
                         Phân loại: <strong className="text-slate-900 font-mono">
                             {topBotConfig.mode === 'PERCENT' ? `TOP ${topBotConfig.topValue}%` : `TOP ${topBotConfig.topValue} NV`}
                         </strong> &amp; <strong className="text-slate-900 font-mono">
                             {topBotConfig.mode === 'PERCENT' ? `BOT ${topBotConfig.botValue}%` : `BOT ${topBotConfig.botValue} NV`}
                         </strong>
-                        <span className="text-[11px] text-slate-500 font-normal">
+                        <span className="text-[11px] text-slate-600 font-medium">
                             (Xếp theo: {topBotConfig.rankBy === 'FORECAST_COMPLETION_RATE' ? '%DKHT' : topBotConfig.rankBy === 'REVENUE_QD' ? 'DTQĐ' : topBotConfig.rankBy === 'REVENUE_ACTUAL' ? 'DT Thực' : '%HT Real'})
                         </span>
                     </span>
@@ -878,52 +894,54 @@ export default function EmployeePerformanceReportPage() {
                     <button
                         type="button"
                         onClick={() => setIsConfigModalOpen(true)}
-                        className="px-2.5 py-1 rounded-xl bg-white hover:bg-slate-100 text-blue-700 font-bold border border-slate-200 text-xs flex items-center gap-1 shadow-2xs transition cursor-pointer"
+                        className="px-2.5 py-1 rounded-xl bg-white hover:bg-slate-100 text-blue-700 font-bold border border-slate-200 text-xs flex items-center gap-1 shadow-sm transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
                     >
-                        <Settings className="w-3.5 h-3.5" />
+                        <Settings className="w-3.5 h-3.5" aria-hidden="true" />
                         <span>Thay đổi cấu hình</span>
                     </button>
                 )}
             </div>
 
             {/* Thanh Bộ Lọc & Tìm Kiếm & Sắp Xếp */}
-            <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-3 text-xs">
+            <div className="bg-white rounded-2xl p-3.5 sm:p-4 border border-slate-200 shadow-sm space-y-3 text-xs">
                 {/* HÀNG 1: BỘ LỌC ST RIÊNG LẺ ĐẦU TIÊN (RULE 10 CONVENTION) */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
-                    <div className="flex items-center gap-2">
-                        <div className={`flex items-center gap-2 px-3.5 py-2 rounded-xl border text-xs font-bold transition-all ${isLockedToSingleStore
-                            ? 'bg-amber-50/90 border-amber-200 text-amber-900 shadow-2xs'
-                            : 'bg-slate-50 border-slate-200 hover:border-amber-400 text-slate-800 shadow-2xs'
-                            }`}>
-                            {isLockedToSingleStore ? (
-                                <Lock className="w-4 h-4 text-amber-600 shrink-0" />
-                            ) : (
-                                <Store className="w-4 h-4 text-amber-600 shrink-0" />
+                <div className="flex flex-wrap items-center justify-between gap-2.5 pb-3 border-b border-slate-100">
+                    <div className={`w-full sm:w-auto sm:max-w-md flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-bold transition-all min-w-0 focus-within:ring-2 focus-within:ring-blue-600 focus-within:border-blue-600 ${isLockedToSingleStore
+                        ? 'bg-amber-50/90 border-amber-200 text-amber-900 shadow-sm'
+                        : 'bg-slate-50 border-slate-200 hover:border-amber-400 text-slate-800 shadow-sm'
+                        }`}>
+                        {isLockedToSingleStore ? (
+                            <Lock className="w-4 h-4 text-amber-700 shrink-0" aria-hidden="true" />
+                        ) : (
+                            <Store className="w-4 h-4 text-amber-700 shrink-0" aria-hidden="true" />
+                        )}
+                        <label htmlFor="perf-store-select" className="text-slate-600 font-bold whitespace-nowrap shrink-0">
+                            ST:
+                        </label>
+                        <select
+                            id="perf-store-select"
+                            name="perf_store"
+                            value={selectedStore}
+                            onChange={e => setSelectedStore(e.target.value)}
+                            disabled={isLockedToSingleStore}
+                            title={currentUser?.is_guest ? 'Tài khoản trải nghiệm sử dụng dữ liệu ST 10335 - AAR_BRV_VTA - 290 Trương Công Định' : (isLockedToSingleStore ? 'Tài khoản nhân viên được cố định theo ST đã đăng ký' : undefined)}
+                            className={`bg-transparent text-xs font-black outline-none w-full min-w-0 sm:min-w-[240px] truncate ${isLockedToSingleStore
+                                ? 'cursor-not-allowed text-amber-900'
+                                : 'cursor-pointer text-slate-900'
+                                }`}
+                        >
+                            {canViewAllStores && (
+                                <option value="all">🏢 Toàn Cụm ST</option>
                             )}
-                            <span className="text-slate-500 font-bold whitespace-nowrap">ST:</span>
-                            <select
-                                value={selectedStore}
-                                onChange={e => setSelectedStore(e.target.value)}
-                                disabled={isLockedToSingleStore}
-                                title={currentUser?.is_guest ? 'Tài khoản trải nghiệm sử dụng dữ liệu ST 10335 - AAR_BRV_VTA - 290 Trương Công Định' : (isLockedToSingleStore ? 'Tài khoản nhân viên được cố định theo ST đã đăng ký' : undefined)}
-                                className={`bg-transparent text-xs font-black outline-none min-w-[200px] sm:min-w-[260px] ${isLockedToSingleStore
-                                    ? 'cursor-not-allowed text-amber-900'
-                                    : 'cursor-pointer text-slate-900'
-                                    }`}
-                            >
-                                {canViewAllStores && (
-                                    <option value="all">🏢 Toàn Cụm ST</option>
-                                )}
-                                {allowedStores.map(s => (
-                                    <option key={s.id || s.code} value={s.name}>🏪 {s.name} ({s.code})</option>
-                                ))}
-                            </select>
-                            {isLockedToSingleStore && (
-                                <span className="text-[10px] bg-amber-200/80 text-amber-800 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">
-                                    {currentUser?.is_guest ? 'Trải nghiệm' : 'Đã khóa'}
-                                </span>
-                            )}
-                        </div>
+                            {allowedStores.map(s => (
+                                <option key={s.id || s.code} value={s.name}>🏪 {s.name} ({s.code})</option>
+                            ))}
+                        </select>
+                        {isLockedToSingleStore && (
+                            <span className="text-[10px] bg-amber-200/80 text-amber-900 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider shrink-0">
+                                {currentUser?.is_guest ? 'Trải nghiệm' : 'Đã khóa'}
+                            </span>
+                        )}
                     </div>
 
                     <div className="flex items-center gap-2">
@@ -935,7 +953,7 @@ export default function EmployeePerformanceReportPage() {
                                 setSearchQuery('');
                                 setSortBy('FORECAST_RATE_DESC');
                             }}
-                            className="text-slate-500 hover:text-slate-800 text-xs font-bold underline cursor-pointer"
+                            className="text-slate-600 hover:text-slate-900 text-xs font-bold underline cursor-pointer px-1.5 py-1 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
                         >
                             Đặt lại bộ lọc
                         </button>
@@ -943,12 +961,15 @@ export default function EmployeePerformanceReportPage() {
                 </div>
 
                 {/* HÀNG 2: CÁC TIÊU CHÍ BỘ LỌC KHÁC & TÌM KIẾM */}
-                <div className="flex flex-wrap items-center justify-between gap-3 pt-0.5">
-                    <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-wrap items-center justify-between gap-2.5 sm:gap-3 pt-0.5">
+                    <div className="flex flex-wrap items-center gap-2 min-w-0 max-w-full">
                         {/* 1. Chọn Tháng / Năm */}
-                        <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl">
-                            <Calendar className="w-4 h-4 text-amber-600" />
+                        <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl focus-within:ring-2 focus-within:ring-blue-600 focus-within:border-blue-600">
+                            <Calendar className="w-4 h-4 text-amber-700 shrink-0" aria-hidden="true" />
+                            <label htmlFor="perf-month-select" className="sr-only">Tháng báo cáo</label>
                             <select
+                                id="perf-month-select"
+                                name="perf_month"
                                 value={selectedMonth}
                                 onChange={e => setSelectedMonth(Number(e.target.value))}
                                 className="bg-transparent text-xs font-bold text-slate-800 outline-none cursor-pointer"
@@ -957,8 +978,11 @@ export default function EmployeePerformanceReportPage() {
                                     <option key={m} value={m}>Tháng {m}</option>
                                 ))}
                             </select>
-                            <span className="text-slate-300">/</span>
+                            <span className="text-slate-400" aria-hidden="true">/</span>
+                            <label htmlFor="perf-year-select" className="sr-only">Năm báo cáo</label>
                             <select
+                                id="perf-year-select"
+                                name="perf_year"
                                 value={selectedYear}
                                 onChange={e => setSelectedYear(Number(e.target.value))}
                                 className="bg-transparent text-xs font-bold text-slate-800 outline-none cursor-pointer"
@@ -970,13 +994,17 @@ export default function EmployeePerformanceReportPage() {
                         </div>
 
                         {/* 2. Bộ lọc SẮP XẾP KẾT QUẢ (Mặc định: %DKHT Cao -> Thấp) */}
-                        <div className="flex items-center gap-1.5 bg-amber-50/80 border border-amber-300 px-3 py-1.5 rounded-xl">
-                            <ArrowUpDown className="w-4 h-4 text-amber-700" />
-                            <span className="text-amber-900 font-bold">Xếp theo:</span>
+                        <div className="flex items-center gap-1.5 bg-amber-50/80 border border-amber-300 px-3 py-1.5 rounded-xl max-w-full min-w-0 focus-within:ring-2 focus-within:ring-amber-600 focus-within:border-amber-600">
+                            <ArrowUpDown className="w-4 h-4 text-amber-800 shrink-0" aria-hidden="true" />
+                            <label htmlFor="perf-sort-select" className="text-amber-950 font-bold whitespace-nowrap shrink-0">
+                                Xếp theo:
+                            </label>
                             <select
+                                id="perf-sort-select"
+                                name="perf_sort"
                                 value={sortBy}
                                 onChange={e => setSortBy(e.target.value)}
-                                className="bg-transparent text-xs font-extrabold text-amber-950 outline-none cursor-pointer"
+                                className="bg-transparent text-xs font-extrabold text-amber-950 outline-none cursor-pointer min-w-0 flex-1 sm:flex-none truncate"
                             >
                                 <option value="FORECAST_RATE_DESC">🎯 %DKHT Dự Báo (Cao ➔ Thấp) [Mặc định]</option>
                                 <option value="FORECAST_RATE_ASC">🎯 %DKHT Dự Báo (Thấp ➔ Cao)</option>
@@ -995,9 +1023,12 @@ export default function EmployeePerformanceReportPage() {
                         </div>
 
                         {/* 3. Lọc nhanh TOP / BOT */}
-                        <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl">
-                            <Trophy className="w-4 h-4 text-amber-500" />
+                        <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl focus-within:ring-2 focus-within:ring-blue-600 focus-within:border-blue-600">
+                            <Trophy className="w-4 h-4 text-amber-600 shrink-0" aria-hidden="true" />
+                            <label htmlFor="perf-topbot-filter" className="sr-only">Lọc nhóm TOP và BOT</label>
                             <select
+                                id="perf-topbot-filter"
+                                name="perf_topbot_filter"
                                 value={topBotFilter}
                                 onChange={e => setTopBotFilter(e.target.value)}
                                 className="bg-transparent text-xs font-bold text-slate-800 outline-none cursor-pointer"
@@ -1010,9 +1041,12 @@ export default function EmployeePerformanceReportPage() {
                         </div>
 
                         {/* 4. Lọc nhịp độ */}
-                        <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl">
-                            <Filter className="w-4 h-4 text-amber-600" />
+                        <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl focus-within:ring-2 focus-within:ring-blue-600 focus-within:border-blue-600">
+                            <Filter className="w-4 h-4 text-amber-700 shrink-0" aria-hidden="true" />
+                            <label htmlFor="perf-pace-filter" className="sr-only">Lọc nhịp độ hoàn thành</label>
                             <select
+                                id="perf-pace-filter"
+                                name="perf_pace_filter"
                                 value={paceFilter}
                                 onChange={e => setPaceFilter(e.target.value)}
                                 className="bg-transparent text-xs font-bold text-slate-800 outline-none cursor-pointer"
@@ -1028,24 +1062,25 @@ export default function EmployeePerformanceReportPage() {
                         {/* 5. Toggle Ẩn / Hiện Giờ Công & Năng Suất (Mặc định: Ẩn) */}
                         <button
                             type="button"
+                            aria-pressed={showWorkHours}
                             onClick={() => setShowWorkHours(prev => !prev)}
-                            className={`inline-flex items-center gap-2 border px-3 py-1.5 rounded-xl transition-all cursor-pointer shadow-xs select-none shrink-0 ${
+                            className={`inline-flex items-center gap-2 border px-3 py-1.5 rounded-xl transition-all cursor-pointer shadow-sm select-none shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${
                                 showWorkHours 
-                                    ? 'bg-blue-50/90 hover:bg-blue-100/90 border-blue-400 text-blue-950 shadow-blue-100' 
+                                    ? 'bg-blue-50/90 hover:bg-blue-100/90 border-blue-400 text-blue-950' 
                                     : 'bg-slate-50 hover:bg-slate-100/90 border-slate-300 text-slate-700 hover:border-slate-400'
                             }`}
                             title={showWorkHours ? 'Đang hiện giờ công & năng suất (Bấm để ẩn)' : 'Đang ẩn giờ công & năng suất (Bấm để hiển thị)'}
                         >
-                            <Clock className={`w-4 h-4 shrink-0 transition-colors ${showWorkHours ? 'text-blue-600' : 'text-slate-400'}`} />
+                            <Clock className={`w-4 h-4 shrink-0 transition-colors ${showWorkHours ? 'text-blue-700' : 'text-slate-600'}`} aria-hidden="true" />
                             <span className="text-xs font-bold whitespace-nowrap">
                                 Giờ công &amp; Năng suất:
                             </span>
 
-                            {/* Cụm Switch Toggle thiết kế chuẩn (không dùng absolute/after lệch vị trí) */}
+                            {/* Cụm Switch Toggle */}
                             <div className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-200 ease-in-out p-0.5 ${
-                                showWorkHours ? 'bg-blue-600' : 'bg-slate-300'
+                                showWorkHours ? 'bg-blue-700' : 'bg-slate-400'
                             }`}>
-                                <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-xs transition-transform duration-200 ease-in-out ${
+                                <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200 ease-in-out ${
                                     showWorkHours ? 'translate-x-4' : 'translate-x-0'
                                 }`} />
                             </div>
@@ -1053,66 +1088,124 @@ export default function EmployeePerformanceReportPage() {
                             {/* Badge Hiện / Ẩn rõ nét */}
                             <span className={`text-[10px] font-black uppercase px-1.5 py-0.5 rounded transition-colors shrink-0 ${
                                 showWorkHours 
-                                    ? 'bg-blue-600 text-white shadow-xs' 
-                                    : 'bg-slate-200 text-slate-600'
+                                    ? 'bg-blue-700 text-white shadow-sm' 
+                                    : 'bg-slate-200 text-slate-700'
                             }`}>
                                 {showWorkHours ? 'Hiện' : 'Ẩn'}
                             </span>
                         </button>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                        <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl w-60">
-                            <Search className="w-4 h-4 text-slate-400" />
+                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                        <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl flex-1 sm:w-60 min-w-0 focus-within:ring-2 focus-within:ring-blue-600 focus-within:border-blue-600 focus-within:bg-white">
+                            <Search className="w-4 h-4 text-slate-500 shrink-0" aria-hidden="true" />
+                            <label htmlFor="perf-search-input" className="sr-only">Tìm nhân viên hoặc mã nhân viên</label>
                             <input
+                                id="perf-search-input"
+                                name="perf_search"
                                 type="text"
+                                aria-label="Tìm theo tên nhân viên hoặc mã nhân viên"
                                 placeholder="Tìm nhân viên / mã NV..."
                                 value={searchQuery}
                                 onChange={e => setSearchQuery(e.target.value)}
-                                className="bg-transparent text-xs outline-none w-full text-slate-800 placeholder-slate-400"
+                                className="bg-transparent text-xs outline-none w-full min-w-0 text-slate-800 placeholder:text-slate-500"
                             />
+                            {searchQuery && (
+                                <button
+                                    type="button"
+                                    onClick={() => setSearchQuery('')}
+                                    aria-label="Xóa từ khóa tìm kiếm"
+                                    className="text-slate-500 hover:text-slate-800 rounded p-0.5 cursor-pointer shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+                                >
+                                    <X className="w-3.5 h-3.5" aria-hidden="true" />
+                                </button>
+                            )}
                         </div>
 
                         <button
                             type="button"
                             onClick={loadAllData}
-                            className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-600 transition cursor-pointer"
+                            disabled={loading}
+                            aria-label="Tải lại số liệu"
+                            className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-700 transition cursor-pointer shrink-0 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
                             title="Tải lại số liệu"
                         >
-                            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-amber-600' : ''}`} />
+                            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-amber-700' : ''}`} aria-hidden="true" />
                         </button>
                     </div>
                 </div>
             </div>
 
-            {/* Container xuất ảnh chuẩn 4K */}
-            <div ref={reportRef} data-report-table="true" className="space-y-4 bg-slate-50/50 p-1.5 rounded-2xl font-avo">
-                {/* THANH TRẠNG THÁI CẬP NHẬT PHIÊN DỮ LIỆU */}
-                <ReportDataFreshnessBar
-                    latestDataDate={latestSession?.report_date}
-                    expectedDate={getYesterdayDateString()}
-                    sessionTitle={latestSession?.session_title}
-                    lastUpdatedAt={latestSession?.created_at}
-                    lastUpdatedBy={latestSession?.created_by}
-                    storeName={selectedStore}
-                    actionUrl="/cap-nhat-luy-ke-nhan-vien"
-                    actionLabel="Cập nhật số liệu NV"
-                    canUpdate={canManage}
-                />
+            {loadError && (
+                <div
+                    role="alert"
+                    data-export-ignore="true"
+                    data-html2canvas-ignore="true"
+                    className="bg-rose-50 border border-rose-200 rounded-2xl p-3.5 flex items-center justify-between gap-3 text-xs text-rose-900"
+                >
+                    <div className="flex items-center gap-2 font-semibold">
+                        <AlertTriangle className="w-4 h-4 text-rose-700 shrink-0" aria-hidden="true" />
+                        <span>{loadError}</span>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={loadAllData}
+                        className="px-3 py-1.5 rounded-xl bg-rose-700 hover:bg-rose-800 text-white font-bold transition cursor-pointer shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-700"
+                    >
+                        Thử lại
+                    </button>
+                </div>
+            )}
 
-                {/* Thẻ Vinh Danh Thành Tích Cá Nhân Xuất Sắc (Thẻ năng suất ẩn/hiện theo toggle) */}
-                <PerformanceKpiCards summary={summary} showWorkHours={showWorkHours} />
+            {/* Container xuất ảnh chuẩn 8K */}
+            <div ref={reportRef} data-report-table="true" className="space-y-4 bg-slate-50/50 p-1.5 rounded-2xl">
+                {/* THANH TRẠNG THÁI CẬP NHẬT PHIÊN DỮ LIỆU (hiển thị Roboto, tự loại khi xuất ảnh) */}
+                <div className="font-sans" data-export-ignore="true" data-html2canvas-ignore="true">
+                    <ReportDataFreshnessBar
+                        latestDataDate={latestSession?.report_date}
+                        expectedDate={getYesterdayDateString()}
+                        sessionTitle={latestSession?.session_title}
+                        lastUpdatedAt={latestSession?.created_at}
+                        lastUpdatedBy={latestSession?.created_by}
+                        storeName={selectedStore}
+                        actionUrl="/cap-nhat-luy-ke-nhan-vien"
+                        actionLabel="Cập nhật số liệu NV"
+                        canUpdate={canManage}
+                    />
+                </div>
 
-                {/* Bảng Xếp Hạng & Năng Suất Chi Tiết (1 dòng header, tên rút gọn, highlight trả chậm < 35%, ẩn/hiện giờ công theo toggle) */}
-                <PerformanceTable
-                    rows={filteredRows}
-                    showStoreName={selectedStore === 'all'}
-                    showWorkHours={showWorkHours}
-                    onSelectEmployee={(emp) => {
-                        const targetStore = emp.store_name || (selectedStore !== 'all' ? selectedStore : '');
-                        navigate(`/chi-tiet-nhan-vien?emp=${emp.employee_id}&month=${selectedMonth}&year=${selectedYear}&store=${encodeURIComponent(targetStore)}`);
-                    }}
-                />
+                {loading && performanceRows.length === 0 ? (
+                    <div aria-busy="true" className="space-y-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                            {[1, 2, 3].map(idx => (
+                                <div key={idx} className="bg-white rounded-2xl p-4 border border-slate-200 space-y-3 animate-pulse">
+                                    <div className="h-4 w-28 bg-slate-200 rounded" />
+                                    <div className="h-6 w-40 bg-slate-200 rounded" />
+                                    <div className="h-4 w-full bg-slate-100 rounded" />
+                                </div>
+                            ))}
+                        </div>
+                        <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-xs font-semibold text-slate-600 animate-pulse">
+                            Đang tải bảng hiệu quả nhân viên...
+                        </div>
+                    </div>
+                ) : (
+                    <div className="space-y-4 font-avo">
+                        {/* Thẻ Vinh Danh Thành Tích Cá Nhân Xuất Sắc (Thẻ năng suất ẩn/hiện theo toggle) */}
+                        <PerformanceKpiCards summary={summary} showWorkHours={showWorkHours} />
+
+                        {/* Bảng Xếp Hạng & Năng Suất Chi Tiết (1 dòng header, tên rút gọn, highlight trả chậm < 35%, ẩn/hiện giờ công theo toggle) */}
+                        <PerformanceTable
+                            rows={filteredRows}
+                            showStoreName={selectedStore === 'all'}
+                            showWorkHours={showWorkHours}
+                            onSelectEmployee={(emp) => {
+                                const targetStore = emp.store_name || (selectedStore !== 'all' ? selectedStore : '');
+                                navigate(`/chi-tiet-nhan-vien?emp=${emp.employee_id}&month=${selectedMonth}&year=${selectedYear}&store=${encodeURIComponent(targetStore)}`);
+                            }}
+                        />
+                    </div>
+                )}
             </div>
 
             {/* Modal Cấu Hình Hoạt Động & TOP/BOT */}

@@ -450,8 +450,10 @@ export default function DataManagementPage() {
                         <div>
                             <h4 className="text-xs font-bold text-slate-700 mb-2 uppercase">Chi Tiết Chương Trình Thi Đua</h4>
                             <div className="max-h-48 overflow-y-auto no-scrollbar border border-slate-200 rounded-xl divide-y divide-slate-100">
-                                {detailRecord.emulationSummary && Object.keys(detailRecord.emulationSummary).length > 0 ? (
-                                    Object.entries(detailRecord.emulationSummary).map(([key, val]) => (
+                                {detailRecord.emulationSummary && Object.keys(detailRecord.emulationSummary).filter(k => !k.startsWith('__')).length > 0 ? (
+                                    Object.entries(detailRecord.emulationSummary)
+                                        .filter(([key]) => !key.startsWith('__'))
+                                        .map(([key, val]) => (
                                         <div key={key} className="p-2.5 flex items-center justify-between text-xs hover:bg-slate-50">
                                             <span className="font-semibold text-slate-700">{getCampaignLabel(key)}</span>
                                             <div className="flex items-center gap-3 font-mono text-[11px]">

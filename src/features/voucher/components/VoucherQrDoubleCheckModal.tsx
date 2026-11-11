@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import QRCode from 'qrcode';
 import {
     X,
@@ -206,13 +207,22 @@ export default function VoucherQrDoubleCheckModal({
     if (!isOpen) return null;
 
     if (vouchers.length === 0) {
-        return (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs font-avo animate-in fade-in">
-                <div className="bg-white rounded-3xl max-w-sm w-full p-6 text-center space-y-4 shadow-2xl border border-slate-200">
-                    <AlertCircle className="w-12 h-12 text-amber-500 mx-auto" />
+        return createPortal(
+            <div
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="qr-double-check-empty-title"
+                className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm"
+                onClick={onClose}
+            >
+                <div
+                    className="bg-white rounded-3xl max-w-sm w-full p-6 text-center space-y-4 shadow-2xl border border-slate-200"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <AlertCircle className="w-12 h-12 text-amber-600 mx-auto" aria-hidden="true" />
                     <div>
-                        <h3 className="font-black text-base text-slate-900">Không Có Mã Nào Được Chọn</h3>
-                        <p className="text-xs text-slate-500 mt-1">
+                        <h3 id="qr-double-check-empty-title" className="font-black text-base text-slate-900">Không Có Mã Nào Được Chọn</h3>
+                        <p className="text-xs text-slate-600 mt-1">
                             Vui lòng tích chọn mã trong danh sách hoặc sử dụng bộ lọc để tạo QR code double check.
                         </p>
                     </div>
@@ -224,29 +234,39 @@ export default function VoucherQrDoubleCheckModal({
                         Đóng Lại
                     </button>
                 </div>
-            </div>
+            </div>,
+            document.body
         );
     }
 
     const progressPercent = Math.round(((currentIndex + 1) / vouchers.length) * 100);
 
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/75 backdrop-blur-xs font-avo animate-in fade-in duration-200">
-            <div className="bg-white rounded-3xl max-w-md w-full border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[96vh] animate-in zoom-in-95 duration-200">
+    return createPortal(
+        <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="qr-double-check-title"
+            className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/75 backdrop-blur-sm"
+            onClick={() => !isActionLoading && onClose()}
+        >
+            <div
+                className="bg-white rounded-3xl max-w-md w-full border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[96vh]"
+                onClick={(e) => e.stopPropagation()}
+            >
                 {/* 1. Header */}
-                <div className="bg-gradient-to-r from-indigo-700 via-indigo-600 to-purple-700 text-white px-4 sm:px-5 py-3.5 flex items-center justify-between shadow-md">
+                <div className="bg-slate-900 text-white px-4 sm:px-5 py-3.5 flex items-center justify-between shadow-md">
                     <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-xl bg-amber-400 text-slate-950 flex items-center justify-center font-black shadow-xs shrink-0">
-                            <QrCode className="w-4 h-4" />
+                        <div className="w-8 h-8 rounded-xl bg-amber-400 text-slate-950 flex items-center justify-center font-black shadow-sm shrink-0">
+                            <QrCode className="w-4 h-4" aria-hidden="true" />
                         </div>
                         <div>
-                            <div className="font-black text-xs sm:text-sm uppercase tracking-wide flex items-center gap-1.5">
+                            <div id="qr-double-check-title" className="font-black text-xs sm:text-sm uppercase tracking-wide flex items-center gap-1.5">
                                 <span>Double Check QR Code</span>
-                                <span className="bg-amber-400 text-slate-950 px-2 py-0.2 rounded-full text-[10px] font-black">
+                                <span className="bg-amber-400 text-slate-950 px-2 py-0.5 rounded-full text-[10px] font-black">
                                     POS / Quét
                                 </span>
                             </div>
-                            <div className="text-[11px] text-indigo-100 font-bold">
+                            <div className="text-[11px] text-slate-300 font-bold">
                                 Mã {currentIndex + 1} / {vouchers.length} coupon
                             </div>
                         </div>
@@ -255,10 +275,11 @@ export default function VoucherQrDoubleCheckModal({
                     <button
                         type="button"
                         onClick={onClose}
+                        aria-label="Đóng hộp thoại QR Double Check"
                         className="p-1.5 rounded-xl hover:bg-white/20 text-white transition cursor-pointer"
                         title="Đóng (Esc)"
                     >
-                        <X className="w-5 h-5" />
+                        <X className="w-5 h-5" aria-hidden="true" />
                     </button>
                 </div>
 
@@ -274,23 +295,23 @@ export default function VoucherQrDoubleCheckModal({
                 <div className="p-4 sm:p-5 overflow-y-auto space-y-3.5 text-xs">
                     {/* Thông báo phản hồi sau thao tác */}
                     {actionFeedback && (
-                        <div className="p-2.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-center font-bold text-xs animate-in fade-in">
+                        <div className="p-2.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-center font-bold text-xs">
                             {actionFeedback}
                         </div>
                     )}
 
                     {/* Khung Vùng QR Code Trung Tâm */}
-                    <div className="bg-gradient-to-b from-slate-50 to-white rounded-2xl p-4 border border-slate-200 text-center shadow-xs flex flex-col items-center justify-center">
+                    <div className="bg-gradient-to-b from-slate-50 to-white rounded-2xl p-4 border border-slate-200 text-center shadow-sm flex flex-col items-center justify-center">
                         {/* Chương trình & Mệnh giá */}
                         <div className="w-full flex items-center justify-between border-b border-slate-200/80 pb-2 mb-3">
                             <div className="text-left truncate pr-2">
-                                <span className="text-[10px] font-bold text-slate-400 uppercase block">Chương Trình</span>
+                                <span className="text-[10px] font-bold text-slate-500 uppercase block">Chương Trình</span>
                                 <span className="font-black text-xs text-slate-800 truncate block" title={currentVoucher?.campaign_name}>
                                     {currentVoucher?.campaign_name}
                                 </span>
                             </div>
                             <div className="text-right shrink-0">
-                                <span className="text-[10px] font-bold text-slate-400 uppercase block">Mệnh Giá</span>
+                                <span className="text-[10px] font-bold text-slate-500 uppercase block">Mệnh Giá</span>
                                 <span className="font-mono font-black text-sm text-rose-600 block">
                                     {Number(currentVoucher?.denomination || 0).toLocaleString('vi-VN')}đ
                                 </span>
@@ -303,7 +324,7 @@ export default function VoucherQrDoubleCheckModal({
                         </div>
 
                         {/* Hình ảnh QR Code */}
-                        <div className="relative p-2 bg-white rounded-2xl border-2 border-indigo-200 shadow-md inline-block">
+                        <div className="relative p-2 bg-white rounded-2xl border-2 border-blue-200 shadow-md inline-block">
                             {qrDataUrl ? (
                                 <img
                                     src={qrDataUrl}
@@ -311,14 +332,14 @@ export default function VoucherQrDoubleCheckModal({
                                     className="w-48 h-48 sm:w-56 sm:h-56 object-contain rounded-xl select-none"
                                 />
                             ) : (
-                                <div className="w-48 h-48 sm:w-56 sm:h-56 flex items-center justify-center text-slate-400 text-xs font-bold">
+                                <div className="w-48 h-48 sm:w-56 sm:h-56 flex items-center justify-center text-slate-500 text-xs font-bold">
                                     Đang tạo mã QR...
                                 </div>
                             )}
 
                             {/* Logo nhỏ giữa QR code để tăng tính nhận diện */}
-                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg p-1 shadow-xs border border-slate-200 pointer-events-none">
-                                <Tag className="w-4 h-4 text-indigo-600" />
+                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg p-1 shadow-sm border border-slate-200 pointer-events-none">
+                                <Tag className="w-4 h-4 text-blue-700" aria-hidden="true" />
                             </div>
                         </div>
 
@@ -327,14 +348,14 @@ export default function VoucherQrDoubleCheckModal({
                             <button
                                 type="button"
                                 onClick={() => currentVoucher && handleCopy(currentVoucher.code)}
-                                className="font-mono font-black text-base sm:text-lg tracking-wider text-slate-900 hover:text-indigo-600 transition cursor-pointer flex items-center gap-1.5 group bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-xl border border-slate-200 shadow-2xs"
+                                className="font-mono font-black text-base sm:text-lg tracking-wider text-slate-900 hover:text-blue-700 transition cursor-pointer flex items-center gap-1.5 group bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-xl border border-slate-200 shadow-sm"
                                 title="Bấm để copy mã"
                             >
                                 <span>{currentVoucher?.code}</span>
                                 {copiedCode === currentVoucher?.code ? (
-                                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                                    <Check className="w-4 h-4 text-emerald-700 shrink-0" aria-hidden="true" />
                                 ) : (
-                                    <Copy className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-700 shrink-0" />
+                                    <Copy className="w-3.5 h-3.5 text-slate-500 group-hover:text-slate-700 shrink-0" aria-hidden="true" />
                                 )}
                             </button>
                         </div>
@@ -384,18 +405,20 @@ export default function VoucherQrDoubleCheckModal({
                             {/* Ô nhập / chỉnh sửa Mã đơn hàng POS */}
                             <div className={currentVoucher.claimed_by_name ? "pt-1.5 border-t border-slate-200/60" : ""}>
                                 <div className="flex items-center justify-between mb-1">
-                                    <label className="flex items-center gap-1 text-[10.5px] font-bold text-indigo-800">
-                                        <ShoppingBag className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                                    <label htmlFor="qr-modal-order-id" className="flex items-center gap-1 text-[10.5px] font-bold text-blue-900 cursor-pointer">
+                                        <ShoppingBag className="w-3.5 h-3.5 text-blue-700 shrink-0" aria-hidden="true" />
                                         Mã đơn hàng POS:
                                     </label>
                                     {currentVoucher.claimed_at && (
-                                        <span className="text-[10px] text-slate-400 font-normal">
+                                        <span className="text-[10px] text-slate-500 font-normal">
                                             ⏱️ {formatDate(currentVoucher.claimed_at)} {new Date(currentVoucher.claimed_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
                                         </span>
                                     )}
                                 </div>
                                 <div className="relative flex items-center">
                                     <input
+                                        id="qr-modal-order-id"
+                                        name="qr_modal_order_id"
                                         type="text"
                                         value={orderIdInput}
                                         onChange={(e) => setOrderIdInput(e.target.value.toUpperCase())}
@@ -407,20 +430,21 @@ export default function VoucherQrDoubleCheckModal({
                                         }}
                                         placeholder="Nhập hoặc sửa mã đơn hàng..."
                                         disabled={isActionLoading || currentStatus === 'USED'}
-                                        className="w-full pl-3 pr-8 py-1.5 bg-white border border-slate-300 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-400 rounded-xl text-xs font-mono font-bold text-indigo-900 placeholder:text-slate-400 uppercase transition outline-none disabled:bg-slate-100 disabled:text-slate-500"
+                                        className="w-full pl-3 pr-8 py-1.5 bg-white border border-slate-300 focus:border-blue-600 focus:ring-1 focus:ring-blue-400 rounded-xl text-xs font-mono font-bold text-blue-950 placeholder:text-slate-500 uppercase transition outline-none disabled:bg-slate-100 disabled:text-slate-500"
                                     />
                                     {orderIdInput && currentStatus !== 'USED' && !isActionLoading && (
                                         <button
                                             type="button"
                                             onClick={() => setOrderIdInput('')}
-                                            className="absolute right-2 text-slate-400 hover:text-slate-600 text-xs p-1 cursor-pointer"
+                                            aria-label="Xóa mã đơn hàng"
+                                            className="absolute right-2 text-slate-500 hover:text-slate-800 text-xs p-1 cursor-pointer"
                                             title="Xóa mã đơn"
                                         >
                                             ✕
                                         </button>
                                     )}
                                 </div>
-                                <p className="text-[9.5px] text-slate-400 mt-1 italic">
+                                <p className="text-[9.5px] text-slate-500 mt-1 italic">
                                     * Quản trị có thể hiệu chỉnh mã đơn hàng trước khi bấm &quot;ĐÃ DÙNG&quot; (Enter để lưu &amp; duyệt)
                                 </p>
                             </div>
@@ -434,10 +458,10 @@ export default function VoucherQrDoubleCheckModal({
                             type="button"
                             onClick={handleReset}
                             disabled={isActionLoading || currentStatus === 'AVAILABLE'}
-                            className="py-3 px-3 rounded-2xl bg-amber-500 hover:bg-amber-600 active:scale-[0.99] text-white font-black text-xs transition cursor-pointer shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+                            className="py-3 px-3 rounded-2xl bg-amber-400 hover:bg-amber-500 active:scale-[0.99] text-slate-950 border border-amber-500 font-black text-xs transition cursor-pointer shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
                             title="Reset mã này về danh sách chờ khả dụng (Phím tắt: R)"
                         >
-                            <RotateCcw className="w-4 h-4 shrink-0" />
+                            <RotateCcw className="w-4 h-4 shrink-0" aria-hidden="true" />
                             <span>RESET VỀ KHO (R)</span>
                         </button>
 
@@ -446,10 +470,10 @@ export default function VoucherQrDoubleCheckModal({
                             type="button"
                             onClick={handleMarkUsed}
                             disabled={isActionLoading || currentStatus === 'USED'}
-                            className="py-3 px-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white font-black text-xs transition cursor-pointer shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+                            className="py-3 px-3 rounded-2xl bg-emerald-700 hover:bg-emerald-800 active:scale-[0.99] text-white font-black text-xs transition cursor-pointer shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
                             title="Xác nhận mã đã thanh toán xong trên đơn hàng (Phím tắt: U)"
                         >
-                            <CheckCircle2 className="w-4 h-4 shrink-0" />
+                            <CheckCircle2 className="w-4 h-4 shrink-0" aria-hidden="true" />
                             <span>ĐÃ DÙNG (U)</span>
                         </button>
                     </div>
@@ -463,11 +487,11 @@ export default function VoucherQrDoubleCheckModal({
                             className="flex-1 py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-[0.99] text-slate-700 font-bold text-xs transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1"
                             title="Mã trước đó (Phím mũi tên ←)"
                         >
-                            <ChevronLeft className="w-4 h-4" />
+                            <ChevronLeft className="w-4 h-4" aria-hidden="true" />
                             <span>Mã Trước (←)</span>
                         </button>
 
-                        <span className="text-[11px] font-mono font-bold text-slate-500 px-2 shrink-0">
+                        <span className="text-[11px] font-mono font-bold text-slate-600 px-2 shrink-0">
                             {currentIndex + 1} / {vouchers.length}
                         </span>
 
@@ -475,20 +499,21 @@ export default function VoucherQrDoubleCheckModal({
                             type="button"
                             onClick={handleNext}
                             disabled={currentIndex === vouchers.length - 1}
-                            className="flex-1 py-2.5 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 active:scale-[0.99] text-white font-black text-xs transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1 shadow-xs"
+                            className="flex-1 py-2.5 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 active:scale-[0.99] text-white font-black text-xs transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1 shadow-sm"
                             title="Mã tiếp theo (Phím mũi tên →)"
                         >
                             <span>Mã Sau (→)</span>
-                            <ChevronRight className="w-4 h-4" />
+                            <ChevronRight className="w-4 h-4" aria-hidden="true" />
                         </button>
                     </div>
 
                     {/* Gợi ý phím tắt PC */}
-                    <div className="text-[10px] text-center text-slate-400 pt-0.5">
+                    <div className="text-[10px] text-center text-slate-500 pt-0.5">
                         💡 Phím tắt: <strong>← →</strong> chuyển mã | <strong>R</strong>: Reset | <strong>U</strong>: Đã dùng | <strong>Esc</strong>: Đóng
                     </div>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 }

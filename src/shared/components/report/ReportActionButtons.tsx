@@ -131,20 +131,20 @@ export default function ReportActionButtons({
         <div
             data-export-ignore="true"
             data-html2canvas-ignore="true"
-            className={`flex items-center gap-2 flex-wrap font-avo antialiased ${className}`}
+            className={`flex items-center gap-2 flex-wrap antialiased ${className}`}
         >
             {/* 1. BUTTON NHẬN XÉT & TÓM TẮT (TÙY CHỌN 1-3 MẪU TẠO SẴN) */}
             {hasAssessment && (
-                <div className="flex items-center rounded-2xl border border-blue-200 bg-blue-50/80 shadow-2xs overflow-hidden">
+                <div className="flex items-center rounded-2xl border border-blue-200 bg-blue-50/80 shadow-sm overflow-hidden">
                     <button
                         type="button"
                         onClick={handleOpenAssessment}
-                        className="px-3.5 py-2 hover:bg-blue-100 text-blue-900 text-xs font-black flex items-center gap-1.5 transition cursor-pointer active:scale-95"
+                        className="px-3.5 py-2 hover:bg-blue-100 text-blue-900 text-xs font-black flex items-center gap-1.5 transition cursor-pointer active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-inset"
                         title="Mở bảng Nhận xét và Tóm tắt báo cáo (Tùy chọn 1 đến 3 mẫu tạo sẵn)"
                     >
-                        <MessageSquareText className="w-4 h-4 text-blue-600 shrink-0" />
+                        <MessageSquareText className="w-4 h-4 text-blue-700 shrink-0" aria-hidden="true" />
                         <span>{assessmentButtonLabel}</span>
-                        <span className="px-1.5 py-0.2 rounded-md bg-blue-200/90 text-blue-900 text-[10px] font-extrabold shrink-0">
+                        <span className="px-1.5 py-0.5 rounded-md bg-blue-200/90 text-blue-950 text-[10px] font-extrabold shrink-0">
                             {templateCount} mẫu
                         </span>
                     </button>
@@ -154,10 +154,10 @@ export default function ReportActionButtons({
                         <button
                             type="button"
                             onClick={() => onToggleShowAssessment(!showAssessmentOnReport)}
-                            className={`px-2.5 py-2 border-l border-blue-200 hover:bg-blue-200/70 transition cursor-pointer flex items-center gap-1 text-[11px] font-black ${
+                            className={`px-2.5 py-2 border-l border-blue-200 hover:bg-blue-200/70 transition cursor-pointer flex items-center gap-1 text-[11px] font-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-inset ${
                                 showAssessmentOnReport
-                                    ? 'bg-blue-600 text-white hover:bg-blue-700'
-                                    : 'text-slate-600 hover:text-slate-900'
+                                    ? 'bg-blue-700 text-white hover:bg-blue-800'
+                                    : 'text-slate-700 hover:text-slate-900'
                             }`}
                             title={
                                 showAssessmentOnReport
@@ -166,9 +166,9 @@ export default function ReportActionButtons({
                             }
                         >
                             {showAssessmentOnReport ? (
-                                <Eye className="w-3.5 h-3.5 text-white" />
+                                <Eye className="w-3.5 h-3.5 text-white" aria-hidden="true" />
                             ) : (
-                                <EyeOff className="w-3.5 h-3.5 text-slate-500" />
+                                <EyeOff className="w-3.5 h-3.5 text-slate-600" aria-hidden="true" />
                             )}
                             <span>{showAssessmentOnReport ? 'HIỆN' : 'ẨN'}</span>
                         </button>
@@ -178,20 +178,20 @@ export default function ReportActionButtons({
 
             {/* 2. CỤM NÚT XUẤT ẢNH & COPY ẢNH BÁO CÁO (CHUẨN HÓA DỌC SMARTPHONE) */}
             {(onExportImage || onCopyImage) && (
-                <div className="flex items-center rounded-2xl shadow-sm overflow-hidden bg-gradient-to-r from-emerald-600 to-teal-600 text-white">
+                <div className="flex items-center rounded-2xl shadow-sm overflow-hidden bg-emerald-700 text-white">
                     {/* Nút Xuất ảnh (Tải PNG) */}
                     {onExportImage && (
                         <button
                             type="button"
                             onClick={onExportImage}
                             disabled={isExporting || finalIsCopying}
-                            className="px-3.5 py-2 hover:from-emerald-700 hover:to-teal-700 text-xs font-black flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50 active:scale-95"
+                            className="px-3.5 py-2 hover:bg-emerald-800 text-xs font-black flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-inset"
                             title="Tải ảnh báo cáo về máy (Chuẩn kích thước dọc smartphone, không watermark)"
                         >
                             {isExporting ? (
-                                <RefreshCw className="w-4 h-4 animate-spin text-amber-200" />
+                                <RefreshCw className="w-4 h-4 animate-spin text-amber-200" aria-hidden="true" />
                             ) : (
-                                <Camera className="w-4 h-4 text-emerald-100" />
+                                <Camera className="w-4 h-4 text-emerald-100" aria-hidden="true" />
                             )}
                             <span>{isExporting ? 'ĐANG XUẤT...' : finalExportLabel}</span>
                         </button>
@@ -203,17 +203,17 @@ export default function ReportActionButtons({
                             type="button"
                             onClick={handleCopyImageWrapped}
                             disabled={isExporting || finalIsCopying}
-                            className={`px-3 py-2 border-l border-emerald-500 hover:bg-emerald-700 text-xs font-black flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50 active:scale-95 ${
-                                (copySuccess ?? internalCopySuccess) ? 'bg-emerald-800 text-white' : ''
+                            className={`px-3 py-2 border-l border-emerald-600 hover:bg-emerald-800 text-xs font-black flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-inset ${
+                                (copySuccess ?? internalCopySuccess) ? 'bg-emerald-900 text-white' : ''
                             }`}
                             title="Sao chép ảnh báo cáo vào Clipboard để dán nhanh (Ctrl+V) vào Zalo"
                         >
                             {finalIsCopying ? (
-                                <RefreshCw className="w-4 h-4 animate-spin text-amber-200" />
+                                <RefreshCw className="w-4 h-4 animate-spin text-amber-200" aria-hidden="true" />
                             ) : (copySuccess ?? internalCopySuccess) ? (
-                                <Check className="w-4 h-4 text-amber-300" />
+                                <Check className="w-4 h-4 text-amber-200" aria-hidden="true" />
                             ) : (
-                                <Copy className="w-4 h-4 text-emerald-100" />
+                                <Copy className="w-4 h-4 text-emerald-100" aria-hidden="true" />
                             )}
                             <span>{(copySuccess ?? internalCopySuccess) ? 'ĐÃ COPY!' : finalCopyLabel}</span>
                         </button>
@@ -226,17 +226,17 @@ export default function ReportActionButtons({
                 <button
                     type="button"
                     onClick={handleCopyTextWrapped}
-                    className={`px-3 py-2 border rounded-2xl text-xs font-black flex items-center gap-1.5 transition cursor-pointer shadow-2xs active:scale-95 ${
+                    className={`px-3 py-2 border rounded-2xl text-xs font-black flex items-center gap-1.5 transition cursor-pointer shadow-sm active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${
                         internalTextCopySuccess
-                            ? 'bg-blue-600 text-white border-blue-600'
-                            : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
+                            ? 'bg-blue-700 text-white border-blue-700'
+                            : 'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-200'
                     }`}
                     title="Sao chép văn bản nhận xét tóm tắt vào bộ nhớ tạm"
                 >
                     {internalTextCopySuccess ? (
-                        <Check className="w-4 h-4 text-white" />
+                        <Check className="w-4 h-4 text-white" aria-hidden="true" />
                     ) : (
-                        <FileText className="w-4 h-4 text-slate-500" />
+                        <FileText className="w-4 h-4 text-slate-600" aria-hidden="true" />
                     )}
                     <span>{internalTextCopySuccess ? 'ĐÃ COPY CHỮ!' : copyTextLabel}</span>
                 </button>
@@ -247,10 +247,10 @@ export default function ReportActionButtons({
                 <button
                     type="button"
                     onClick={onExportExcel}
-                    className="px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-2xl text-xs font-black flex items-center gap-1.5 transition cursor-pointer shadow-2xs active:scale-95"
+                    className="px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-300 rounded-2xl text-xs font-black flex items-center gap-1.5 transition cursor-pointer shadow-sm active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700"
                     title="Xuất file Excel báo cáo chi tiết"
                 >
-                    <FileSpreadsheet className="w-4 h-4 text-emerald-700" />
+                    <FileSpreadsheet className="w-4 h-4 text-emerald-700" aria-hidden="true" />
                     <span>EXCEL</span>
                 </button>
             )}

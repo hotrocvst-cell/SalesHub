@@ -37,6 +37,7 @@ import type {
 } from './types/ocrTypes';
 import QuickStoreEmulationModal from '../daily-report/components/QuickStoreEmulationModal';
 import { saveSingleStoreEmulationDailyRecord } from './services/dailyBusinessRecordService';
+import { extractStoreRevenueDetails } from '../cluster-report/utils/revenueExtractor';
 import {
     Sparkles,
     Calendar,
@@ -85,11 +86,13 @@ CREATE POLICY "Allow public insert/update/delete access" ON public.daily_busines
 // Chuyển đổi BusinessDayRecord từ Supabase Cloud sang StoreReportingData phục vụ rà soát & chỉnh sửa
 function convertBusinessRecordsToStoreReportingData(records: BusinessDayRecord[]): StoreReportingData[] {
     return records.map(r => {
+        const meta = (r.emulationSummary as any)?.['__revenue_meta'];
         const realInfo = (r.emulationSummary as any)?.['__real_revenue'];
+        const extracted = extractStoreRevenueDetails(r.rawRevenue, r.storeName);
         const emus: Record<string, EmulationOcrItem> = {};
 
         Object.entries(r.emulationSummary || {}).forEach(([progName, item]: [string, any]) => {
-            if (progName === '__real_revenue') return;
+            if (progName.startsWith('__')) return;
             emus[progName] = {
                 programName: item.rawHeader || progName,
                 unit: item.unit || 'DOANH THU',
@@ -100,30 +103,32 @@ function convertBusinessRecordsToStoreReportingData(records: BusinessDayRecord[]
             };
         });
 
-        const revReal = realInfo ? (Number(realInfo.revenueReal) || 0) : 0;
-        const tgReal = realInfo ? (Number(realInfo.targetReal) || 0) : 0;
-        const qReal = realInfo ? (Number(realInfo.quantityReal) || 0) : 0;
-        const instReal = realInfo?.installmentReal !== undefined
-            ? Number(realInfo.installmentReal)
+        const codeMatch = r.storeName.match(/^(\d{3,6})/);
+        const installmentQd = meta?.installmentQd !== undefined
+            ? Number(meta.installmentQd) || 0
             : (Number(r.revenueInstallment) || 0);
-        const instRateReal = realInfo?.installmentRateReal !== undefined
-            ? Number(realInfo.installmentRateReal)
-            : (Number(r.installmentRate) || (revReal > 0 ? Number(((instReal / revReal) * 100).toFixed(2)) : 0));
-        const avg3MReal = realInfo ? (Number(realInfo.avg3MonthsReal) || 0) : 0;
+        const avg3Months = meta?.avg3Months !== undefined
+            ? Number(meta.avg3Months) || 0
+            : (extracted?.avg3Months ?? (realInfo ? Number(realInfo.avg3MonthsReal) || 0 : 0));
+        const pctGrowth = meta?.pctGrowth !== undefined
+            ? Number(meta.pctGrowth) || 0
+            : (extracted?.pctGrowth ?? 0);
+        const installmentRate = meta?.installmentRate !== undefined
+            ? Number(meta.installmentRate) || 0
+            : (realInfo?.installmentRateReal !== undefined
+                ? Number(realInfo.installmentRateReal) || 0
+                : (Number(r.installmentRate) || 0));
 
         return {
-            storeCode: '',
+            storeCode: codeMatch ? codeMatch[1] : '',
             storeRawName: r.storeName,
             storeShortName: getShortStoreName(r.storeName),
             revenueQd: Number(r.revenueActual) || 0,
+            installmentQd,
             targetQd: Number(r.revenueTarget) || 0,
-            quantityQd: qReal || 0,
-            revenueReal: revReal,
-            targetReal: tgReal,
-            quantityReal: qReal,
-            installmentReal: instReal,
-            installmentRateReal: instRateReal,
-            avg3MonthsReal: avg3MReal,
+            avg3Months,
+            pctGrowth,
+            installmentRate,
             emulations: emus
         };
     });
@@ -200,9 +205,9 @@ export default function DataExtractOcrPage() {
     const [isKeyModalOpen, setIsKeyModalOpen] = useState<boolean>(false);
     const [isQuotaExceeded, setIsQuotaExceeded] = useState<boolean>(false);
 
-    // 4. File uploads
-    const [qdFile, setQdFile] = useState<File | null>(null);
-    const [realFile, setRealFile] = useState<File | null>(null);
+    // 4. File uploads (hỗ trợ chọn 1 hoặc nhiều ảnh chụp cho từng mục)
+    const [qdFiles, setQdFiles] = useState<File[]>([]);
+    const [installmentFiles, setInstallmentFiles] = useState<File[]>([]);
     const [emulationFiles, setEmulationFiles] = useState<File[]>([]);
 
     // 5. Tiến trình trích xuất OCR
@@ -343,8 +348,8 @@ export default function DataExtractOcrPage() {
             ? emulationFiles.length > 0
             : singleStoreEmulations.some(e => e.files.length > 0);
 
-        if (!qdFile && !realFile && !hasEmulation) {
-            showToast('⚠️ Vui lòng chọn ít nhất 1 ảnh (DT-QĐ, DT-THỰC hoặc Thi đua)!');
+        if (qdFiles.length === 0 && installmentFiles.length === 0 && !hasEmulation) {
+            showToast('⚠️ Vui lòng chọn ít nhất 1 ảnh (Doanh thu QĐ, % Tỷ trọng trả góp hoặc Thi đua)!');
             return;
         }
 
@@ -357,11 +362,12 @@ export default function DataExtractOcrPage() {
             const result = await extractAndMergeAllImages(
                 activeKey,
                 {
-                    qdFile,
-                    realFile,
+                    qdFiles,
+                    installmentFiles,
                     emulationFiles,
                     emulationMode,
-                    singleStoreEmulations
+                    singleStoreEmulations,
+                    knownStores: availableStores
                 },
                 (msg, pct) => {
                     setProgressText(msg);
@@ -436,32 +442,26 @@ export default function DataExtractOcrPage() {
                     };
                 });
 
-                // Luôn lưu kèm dữ liệu Doanh thu thực vào emulationSummary.__real_revenue nếu có
-                const primaryInstallment = st.installmentReal || 0;
-                const primaryInstallmentRate = st.installmentRateReal || (st.revenueReal > 0 ? Number(((primaryInstallment / st.revenueReal) * 100).toFixed(2)) : 0);
+                // Lưu kèm metadata mới (DT Trả góp QĐ, TB 3 Tháng, % TT Doanh thu, % Tỷ trọng trả góp)
+                const safeInstallmentQd = Number(st.installmentQd) || 0;
+                const safeInstallmentRate = Math.min(999.99, Math.max(0, Number(st.installmentRate) || 0));
+                const safeAvg3Months = Number(st.avg3Months) || 0;
+                const safePctGrowth = Number(st.pctGrowth) || 0;
 
-                if (st.revenueReal > 0 || st.targetReal > 0 || primaryInstallment > 0) {
-                    emulationSummary['__real_revenue'] = {
-                        storeName: st.storeRawName,
-                        revenueReal: st.revenueReal || 0,
-                        targetReal: st.targetReal || 0,
-                        quantityReal: st.quantityReal || 0,
-                        installmentReal: primaryInstallment,
-                        installmentRateReal: primaryInstallmentRate,
-                        avg3MonthsReal: st.avg3MonthsReal || 0
-                    };
-                }
+                emulationSummary['__revenue_meta'] = {
+                    storeName: st.storeRawName,
+                    installmentQd: safeInstallmentQd,
+                    avg3Months: safeAvg3Months,
+                    pctGrowth: safePctGrowth,
+                    installmentRate: safeInstallmentRate
+                };
 
                 const rawForecastRate = (st.targetQd > 0 && passedDays > 0)
                     ? ((st.revenueQd / passedDays * totalDays) / st.targetQd) * 100
                     : 0;
+                const safeForecastRate = Math.min(9999.99, Math.max(0, Number(rawForecastRate.toFixed(2))));
 
-                // Chuỗi raw_revenue chuẩn kết hợp cả DTQĐ và DT Thực (có định dạng phân cách rõ ràng để ClusterReport bóc tách)
-                const qdPart = `${st.storeRawName}\nDTQĐ: ${st.revenueQd} | Target: ${st.targetQd} | Số lượng: ${st.quantityQd}`;
-                const realPart = (st.revenueReal > 0 || st.targetReal > 0 || primaryInstallment > 0)
-                    ? `\n\n=== BẢNG DOANH THU THỰC ===\n${st.storeRawName}\nDT Thực: ${st.revenueReal} | Target: ${st.targetReal} | Trả góp: ${primaryInstallment} | % Trả góp: ${primaryInstallmentRate}% | TB 3 Tháng: ${st.avg3MonthsReal || 0}`
-                    : '';
-                const combinedRawRevenue = qdPart + realPart;
+                const combinedRawRevenue = `${st.storeRawName}\nDTQĐ: ${st.revenueQd} | Target: ${st.targetQd} | DT Trả góp QĐ: ${safeInstallmentQd} | TB 3 Tháng: ${safeAvg3Months} | % TT Doanh thu: ${safePctGrowth}% | % Tỷ trọng trả góp: ${safeInstallmentRate}%`;
 
                 return {
                     storeName: st.storeRawName || st.storeShortName,
@@ -472,13 +472,13 @@ export default function DataExtractOcrPage() {
                     totalDays,
                     revenueActual: st.revenueQd,
                     revenueTarget: st.targetQd,
-                    revenueInstallment: primaryInstallment,
-                    installmentRate: primaryInstallmentRate,
-                    forecastCompletionRate: Number(rawForecastRate.toFixed(2)),
+                    revenueInstallment: safeInstallmentQd,
+                    installmentRate: safeInstallmentRate,
+                    forecastCompletionRate: safeForecastRate,
                     emulationSummary,
                     rawEmulation: JSON.stringify(st.emulations),
                     rawRevenue: combinedRawRevenue,
-                    rawRealRevenue: `DT Thực: ${st.revenueReal} | Target: ${st.targetReal} | Trả góp: ${primaryInstallment}`,
+                    rawRealRevenue: '',
                     dataType: 'Lũy kế tháng'
                 };
             });
@@ -544,16 +544,15 @@ export default function DataExtractOcrPage() {
             };
         } else {
             updated.push({
+                storeCode: cleanTarget.match(/^(\d{3,6})/)?.[1] || '',
                 storeRawName: cleanTarget,
                 storeShortName: getShortStoreName(cleanTarget),
                 revenueQd: 0,
+                installmentQd: 0,
                 targetQd: 0,
-                quantityQd: 0,
-                revenueReal: 0,
-                targetReal: 0,
-                quantityReal: 0,
-                installmentReal: 0,
-                installmentRateReal: 0,
+                avg3Months: 0,
+                pctGrowth: 0,
+                installmentRate: 0,
                 emulations: newEmulations
             });
         }
@@ -583,8 +582,6 @@ export default function DataExtractOcrPage() {
 
         setActiveTab('manual');
     };
-
-    const totalExtractedFiles = (qdFile ? 1 : 0) + (realFile ? 1 : 0) + emulationFiles.length;
 
     return (
         <div className="min-h-screen bg-slate-50 text-slate-800 pb-16 font-sans">
@@ -882,10 +879,10 @@ export default function DataExtractOcrPage() {
                         {/* Vùng Upload 3 Nhóm Ảnh */}
                         <OcrUploadZone
                             mode="STORE"
-                            qdFile={qdFile}
-                            onQdFileChange={setQdFile}
-                            realFile={realFile}
-                            onRealFileChange={setRealFile}
+                            qdFiles={qdFiles}
+                            onQdFilesChange={setQdFiles}
+                            installmentFiles={installmentFiles}
+                            onInstallmentFilesChange={setInstallmentFiles}
                             emulationFiles={emulationFiles}
                             onEmulationFilesChange={setEmulationFiles}
                             hasGeminiKey={Boolean(keyInfo.key)}

@@ -44,17 +44,25 @@ export default function EmployeeRankingTable({
 
     const renderSortIcon = (field: SortField) => {
         if (sortField !== field) {
-            return <ArrowUpDown className="w-3 h-3 text-slate-400 group-hover:text-slate-600 inline ml-1 opacity-60" />;
+            return <ArrowUpDown className="w-3 h-3 text-slate-500 group-hover:text-slate-700 inline ml-1 opacity-75" aria-hidden="true" />;
         }
         return sortAsc ? (
-            <ArrowUp className="w-3 h-3 text-indigo-600 inline ml-1 font-bold" />
+            <ArrowUp className="w-3 h-3 text-blue-700 inline ml-1 font-bold" aria-hidden="true" />
         ) : (
-            <ArrowDown className="w-3 h-3 text-indigo-600 inline ml-1 font-bold" />
+            <ArrowDown className="w-3 h-3 text-blue-700 inline ml-1 font-bold" aria-hidden="true" />
         );
     };
 
     return (
-        <div className="rounded-2xl border border-slate-200 overflow-hidden shadow-2xs bg-white">
+        <div className="rounded-2xl border border-slate-200 overflow-hidden shadow-sm bg-white">
+            <div
+                data-html2canvas-ignore="true"
+                data-export-ignore="true"
+                className="sm:hidden px-3 py-1.5 bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-600 flex items-center justify-between"
+            >
+                <span>Bảng xếp hạng chi tiết 9 cột</span>
+                <span className="text-blue-700">Vuốt ngang →</span>
+            </div>
             <div className="overflow-x-auto no-scrollbar">
                 <table
                     data-report-table="true"
@@ -172,7 +180,7 @@ export default function EmployeeRankingTable({
                     <tbody className="divide-y divide-slate-100 font-bold text-slate-800 text-[11px] sm:text-xs">
                         {rows.length === 0 ? (
                             <tr>
-                                <td colSpan={9} className="py-8 text-center text-slate-400 italic font-medium">
+                                <td colSpan={9} className="py-8 text-center text-slate-500 italic font-medium">
                                     Chưa có dữ liệu xếp hạng nhân sự trong kỳ báo cáo này.
                                 </td>
                             </tr>
@@ -186,11 +194,11 @@ export default function EmployeeRankingTable({
                                 return (
                                     <tr
                                         key={row.employee_id}
-                                        className={`hover:bg-indigo-50/20 transition group ${idx % 2 === 1 ? 'bg-slate-50/40' : 'bg-white'
+                                        className={`hover:bg-blue-50/30 transition group ${idx % 2 === 1 ? 'bg-slate-50/40' : 'bg-white'
                                             }`}
                                     >
                                         {/* STT */}
-                                        <td className="py-2 px-2 text-center text-slate-400 font-normal border-r border-slate-100">
+                                        <td className="py-2 px-2 text-center text-slate-500 font-normal border-r border-slate-100">
                                             {idx + 1}
                                         </td>
 
@@ -227,9 +235,9 @@ export default function EmployeeRankingTable({
 
                                         {/* %DKHT */}
                                         <td className={`py-2 px-1 text-center font-black border-r border-slate-100 font-mono ${row.forecast_completion_rate >= 100
-                                            ? 'text-emerald-600'
+                                            ? 'text-emerald-700'
                                             : row.forecast_completion_rate >= 90
-                                                ? 'text-amber-600'
+                                                ? 'text-amber-800'
                                                 : 'text-rose-600'
                                             }`}>
                                             {row.forecast_completion_rate.toFixed(1)}%
@@ -239,11 +247,11 @@ export default function EmployeeRankingTable({
                                         <td className="py-2 px-2 text-center border-r border-slate-100">
                                             <div className="flex items-center justify-center">
                                                 {isTopRevenue ? (
-                                                    <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-emerald-100 text-emerald-900 border border-emerald-300 shadow-2xs whitespace-nowrap">
+                                                    <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-emerald-100 text-emerald-900 border border-emerald-300 shadow-sm whitespace-nowrap">
                                                         Top #{row.revenue_rank}
                                                     </span>
                                                 ) : isBotRevenue ? (
-                                                    <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-rose-100 text-rose-900 border border-rose-300 shadow-2xs whitespace-nowrap">
+                                                    <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-rose-100 text-rose-900 border border-rose-300 shadow-sm whitespace-nowrap">
                                                         Bot #{row.revenue_rank}
                                                     </span>
                                                 ) : (
@@ -267,17 +275,17 @@ export default function EmployeeRankingTable({
                                                 </span>
                                                 {row.bonus_points && row.bonus_points > 0 ? (
                                                     <span
-                                                        className="text-[10px] text-amber-500 font-black cursor-help"
+                                                        className="text-[10px] text-amber-700 font-black cursor-help"
                                                         title={`Đã cộng +${row.bonus_points}đ điểm thưởng thi đua do QL/TC chỉ định`}
                                                     >
                                                         ⭐
                                                     </span>
                                                 ) : null}
-                                                <span className={`px-1.5 py-0.2 rounded text-[9.5px] font-black ${row.emulation_rate >= 100
-                                                    ? 'bg-emerald-100 text-emerald-800'
+                                                <span className={`px-1.5 py-0.5 rounded text-[9.5px] font-black ${row.emulation_rate >= 100
+                                                    ? 'bg-emerald-100 text-emerald-900'
                                                     : row.emulation_rate >= 80
-                                                        ? 'bg-purple-100 text-purple-800'
-                                                        : 'bg-amber-100 text-amber-800'
+                                                        ? 'bg-purple-100 text-purple-900'
+                                                        : 'bg-amber-100 text-amber-900'
                                                     }`}>
                                                     {row.emulation_rate.toFixed(0)}%
                                                 </span>
@@ -288,11 +296,11 @@ export default function EmployeeRankingTable({
                                         <td className="py-2 px-2 text-center border-r border-slate-100">
                                             <div className="flex items-center justify-center">
                                                 {isTopEmulation ? (
-                                                    <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-purple-100 text-purple-900 border border-purple-300 shadow-2xs whitespace-nowrap">
+                                                    <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-purple-100 text-purple-900 border border-purple-300 shadow-sm whitespace-nowrap">
                                                         Top #{row.emulation_rank}
                                                     </span>
                                                 ) : isBotEmulation ? (
-                                                    <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-rose-100 text-rose-900 border border-rose-300 shadow-2xs whitespace-nowrap">
+                                                    <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-rose-100 text-rose-900 border border-rose-300 shadow-sm whitespace-nowrap">
                                                         Bot #{row.emulation_rank}
                                                     </span>
                                                 ) : (
@@ -307,26 +315,26 @@ export default function EmployeeRankingTable({
                                         <td className="py-2 px-2 text-center" title={row.rescue_detail || ''}>
                                             <div className="flex items-center justify-center">
                                                 {row.badge_variant === 'safe' ? (
-                                                    <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-emerald-50 text-emerald-800 border border-emerald-200 whitespace-nowrap shadow-2xs">
+                                                    <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-emerald-50 text-emerald-800 border border-emerald-200 whitespace-nowrap shadow-sm">
                                                         {row.rescue_label || 'An toàn'}
                                                     </span>
                                                 ) : row.badge_variant === 'rescued_rev' ? (
-                                                    <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-teal-50 text-teal-800 border border-teal-300 whitespace-nowrap shadow-2xs flex items-center gap-1">
+                                                    <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-teal-50 text-teal-800 border border-teal-300 whitespace-nowrap shadow-sm flex items-center gap-1">
                                                         <span>🛟</span>
                                                         <span>{row.rescue_label || 'Cứu: DT'}</span>
                                                     </span>
                                                 ) : row.badge_variant === 'rescued_emu' ? (
-                                                    <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-purple-50 text-purple-800 border border-purple-300 whitespace-nowrap shadow-2xs flex items-center gap-1">
+                                                    <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-purple-50 text-purple-800 border border-purple-300 whitespace-nowrap shadow-sm flex items-center gap-1">
                                                         <span>🛟</span>
                                                         <span>{row.rescue_label || 'Cứu: TĐ'}</span>
                                                     </span>
                                                 ) : row.badge_variant === 'thai_san' ? (
-                                                    <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-pink-50 text-pink-700 border border-pink-300 whitespace-nowrap shadow-2xs flex items-center gap-1">
+                                                    <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-pink-50 text-pink-800 border border-pink-300 whitespace-nowrap shadow-sm flex items-center gap-1">
                                                         <span>🤰</span>
                                                         <span>{row.rescue_label || 'Thai sản'}</span>
                                                     </span>
                                                 ) : (
-                                                    <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-rose-100 text-rose-800 border border-rose-300 whitespace-nowrap shadow-2xs">
+                                                    <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-rose-100 text-rose-800 border border-rose-300 whitespace-nowrap shadow-sm">
                                                         {row.rescue_label || '🚨 BOT'}
                                                     </span>
                                                 )}
@@ -338,7 +346,7 @@ export default function EmployeeRankingTable({
                         )}
                     </tbody>
 
-                    {/* DÒNG TỔNG CỘNG / TỔNG SHOP - EXECUTIVE DARK STYLE */}
+                    {/* DÒNG TỔNG CỘNG / TỔNG ST - EXECUTIVE DARK STYLE */}
                     {rows.length > 0 && (
                         <tfoot>
                             <tr className="bg-slate-900 text-white font-black text-xs border-t-2 border-slate-700">
@@ -364,7 +372,7 @@ export default function EmployeeRankingTable({
                                 {/* Phân loại DT */}
                                 <td className="py-3 px-2 text-center text-slate-300 border-r border-slate-800 text-[10.5px]">
                                     <span className="text-emerald-400 font-bold">{summary.topRevenueCount} TOP</span>
-                                    <span className="text-slate-500 mx-1">•</span>
+                                    <span className="text-slate-400 mx-1">•</span>
                                     <span className="text-rose-400 font-bold">{summary.botRevenueCount} BOT</span>
                                 </td>
 
@@ -376,14 +384,14 @@ export default function EmployeeRankingTable({
                                 {/* Phân loại Thi đua */}
                                 <td className="py-3 px-2 text-center text-slate-300 border-r border-slate-800 text-[10.5px]">
                                     <span className="text-purple-300 font-bold">{summary.topEmulationCount} TOP</span>
-                                    <span className="text-slate-500 mx-1">•</span>
+                                    <span className="text-slate-400 mx-1">•</span>
                                     <span className="text-rose-400 font-bold">{summary.botEmulationCount} BOT</span>
                                 </td>
 
                                 {/* Tổng kết Xét cứu & Sức khỏe */}
                                 <td className="py-3 px-2 text-center text-slate-300 text-[10.5px]">
                                     <span className="text-teal-300 font-bold">{summary.rescuedCount ?? 0} CỨU</span>
-                                    <span className="text-slate-500 mx-1">•</span>
+                                    <span className="text-slate-400 mx-1">•</span>
                                     <span className="text-rose-400 font-bold">{summary.botWarningCount ?? 0} BOT</span>
                                 </td>
                             </tr>

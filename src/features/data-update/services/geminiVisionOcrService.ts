@@ -6,7 +6,7 @@ import type {
     EmulationUploadMode,
     SingleStoreEmulationEntry
 } from '../types/ocrTypes';
-import { getShortStoreName, normalizeToMillion, cleanBiNumber } from '../../../core/lib/formatters';
+import { getShortStoreName, cleanBiNumber, isStoreMatch } from '../../../core/lib/formatters';
 import {
     GeminiQuotaExceededError,
     type GeminiKeySource,
@@ -175,7 +175,36 @@ async function callGeminiVision(
 }
 
 /**
- * 1. TRÍCH XUẤT ẢNH DOANH THU QUY ĐỔI (DT-QĐ)
+ * Chuẩn hóa số phần trăm từ OCR (hỗ trợ dấu cách sau dấu âm như "- 10.5%", dấu "+", "%", "—")
+ */
+function cleanBiPercent(val: any): number {
+    if (val === null || val === undefined || val === '') return 0;
+    if (typeof val === 'number') {
+        return isNaN(val) ? 0 : Number(val.toFixed(2));
+    }
+    const cleaned = String(val)
+        .replace(/\s+/g, '')
+        .replace(/%/g, '')
+        .replace(/\+/g, '')
+        .replace(/,/g, '')
+        .trim();
+    if (!cleaned || cleaned === '—' || cleaned === '-' || cleaned === '–') return 0;
+    const num = parseFloat(cleaned);
+    return isNaN(num) ? 0 : Number(num.toFixed(2));
+}
+
+/**
+ * Chuẩn hóa tên ST thô từ OCR: loại bỏ dấu "..." hoặc "…" ở cuối nếu bị cắt chữ trên màn hình mobile
+ */
+function normalizeOcrStoreName(rawName: string): string {
+    return (rawName || '')
+        .replace(/(\.{2,}|…)+$/g, '')
+        .trim();
+}
+
+/**
+ * 1. TRÍCH XUẤT ẢNH DOANH THU QUY ĐỔI (MẪU THẺ MOBILE / BẢNG DOANH THU HỢP NHẤT)
+ * Thông tin cần lấy: Doanh thu QĐ, DT Trả góp QĐ, Target, TB 3 Tháng, % TT Doanh thu
  */
 export async function extractRevenueQdImage(
     apiKey: string,
@@ -183,40 +212,40 @@ export async function extractRevenueQdImage(
     keySource: GeminiKeySource = 'ADMIN'
 ): Promise<{ reportDate?: string; reportTime?: string; stores: Partial<StoreReportingData>[] }> {
     const prepared = await prepareImageForOcr(file);
-    const prompt = `Bạn là chuyên gia phân tích dữ liệu kinh doanh của hệ thống bán lẻ. 
-Nhiệm vụ: Trích xuất chính xác các số liệu DOANH THU QUY ĐỔI (DTQĐ) và DOANH THU THỰC TẾ (nếu có trên ảnh) từ ảnh chụp màn hình ứng dụng BI.
+    const prompt = `Bạn là chuyên gia phân tích dữ liệu kinh doanh bán lẻ.
+Nhiệm vụ: Trích xuất chính xác các số liệu DOANH THU QUY ĐỔI từ ảnh chụp màn hình ứng dụng BI ("Doanh thu hợp nhất" dạng Thẻ hoặc Bảng).
+
+CẤU TRÚC THẺ MOBILE MẪU (mỗi ST là 1 thẻ chữ nhật có dải tiêu đề màu xanh dương hoặc xanh lá ở trên cùng):
+- Tiêu đề thẻ: Mã ST và Tên ST (ví dụ: "10335 - AAR_BRV_VTA - 290 Trương Công Định", "111 - TGD_BRV_VTA - 290 Trương Công Định").
+- Bên trong thẻ có 2 cột:
+  + Cột trái chứa các dòng: "DT TRẢ GÓP QĐ", "DT TRẢ THẲNG QĐ", "DT NHẬP TRẢ QĐ", "DT QĐ KHOẢN VAY", ô nổi bật "DOANH THU QĐ", "TB 3 THÁNG", "DT DỰ KIẾN", "TARGET".
+  + Cột phải chứa các ô badge: "TLPVTC", "% TT DOANH THU", "% HT DỰ KIẾN", "% HT TARGET", "SSG".
 
 LƯU Ý NGHIỆP VỤ BẮT BUỘC:
-1. BỎ QUA HOÀN TOÀN các watermark chữ mờ ("26479 - Đào Bá Linh",...).
-2. BỎ QUA HOÀN TOÀN thẻ "Tổng" hoặc "Tổng (2 dòng)".
-3. CHỈ TRÍCH XUẤT các thẻ của từng ST CỤ THỂ có tên bắt đầu bằng mã số (ví dụ: "10335 - AAR_BRV_VTA - 290 Trương Công Định", "111 - TGD_BRV_VTA - 290 Trương Công Định").
-4. Đọc ngày giờ cập nhật ở góc trên bên phải ảnh (ví dụ: "30/10/2026", "17:19:12").
-5. Đối với mỗi ST, lấy các chỉ số sau:
-   - storeRawName: Tên đầy đủ của ST trên thẻ
-   - revenueQd: Giá trị của "DOANH THU QĐ" (loại bỏ dấu phẩy phân cách hàng nghìn, ví dụ: trên ảnh "20,688" thì kết quả là 20688, "3,123" -> 3123)
-   - targetQd: Giá trị của "TARGET" (nếu là cột Target của bảng DTQĐ)
-   - quantityQd: Giá trị của "SỐ LƯỢNG" (ví dụ 1934)
-   - dtTraGopQd: Giá trị của "DT TRẢ GÓP QĐ" (ví dụ 9093)
-   - revenueReal: Nếu trên ảnh có thêm cột "DOANH THU" (Doanh thu thực tế), trích xuất giá trị này (ví dụ 15964)
-   - targetReal: Giá trị của "TARGET" thực nếu có
-   - installmentReal: Giá trị của "DT TRẢ GÓP" thực nếu có (ví dụ 6685)
-   - avg3MonthsReal: Giá trị của "TB 3 THÁNG" nếu có
+1. BỎ QUA HOÀN TOÀN các watermark chữ mờ in chéo trên ảnh.
+2. BỎ QUA HOÀN TOÀN thẻ "Tổng" hoặc "Tổng (n dòng)".
+3. BỎ QUA HOÀN TOÀN các thẻ bị cắt mất phần tiêu đề tên ST ở mép trên cùng ảnh (không ghép nhầm số liệu của thẻ bị cắt vào thẻ phía dưới).
+4. Đọc ngày giờ cập nhật ở góc trên bên phải ảnh ("Cập nhật lúc: HH:mm:ss DD/MM/YYYY") để điền reportDate (YYYY-MM-DD) và reportTime (HH:mm:ss).
+5. Với mỗi thẻ ST đầy đủ tiêu đề, CHỈ lấy đúng 5 chỉ số sau (đơn vị triệu đồng, bỏ dấu phẩy hàng nghìn):
+   - storeRawName: Tên đầy đủ của ST trên dải tiêu đề thẻ
+   - revenueQd: Giá trị dòng "DOANH THU QĐ" (ví dụ: "6,554" -> 6554, "3,905" -> 3905). KHÔNG nhầm với "DT DỰ KIẾN".
+   - installmentQd: Giá trị dòng "DT TRẢ GÓP QĐ" (ví dụ: "3,236" -> 3236, "1,262" -> 1262).
+   - targetQd: Giá trị dòng "TARGET" (ví dụ: "12,259" -> 12259, "9,420" -> 9420).
+   - avg3Months: Giá trị dòng "TB 3 THÁNG" (ví dụ: "4,707" -> 4707, "4,365" -> 4365).
+   - pctGrowth: Giá trị dòng "% TT DOANH THU" ở cột phải (ví dụ: "+39.2%" -> 39.2, "- 10.5%" -> -10.5). Giữ nguyên dấu âm nếu là số âm, KHÔNG nhầm với "SSG" hay "% HT TARGET".
 
-Định dạng JSON trả về:
+Định dạng JSON trả về duy nhất:
 {
   "reportDate": "YYYY-MM-DD",
   "reportTime": "HH:mm:ss",
   "stores": [
     {
       "storeRawName": "10335 - AAR_BRV_VTA - 290 Trương Công Định",
-      "revenueQd": 20688,
-      "targetQd": 13919,
-      "quantityQd": 1934,
-      "dtTraGopQd": 9093,
-      "revenueReal": 15964,
-      "targetReal": 10889,
-      "installmentReal": 6685,
-      "avg3MonthsReal": 6738
+      "revenueQd": 6554,
+      "installmentQd": 3236,
+      "targetQd": 12259,
+      "avg3Months": 4707,
+      "pctGrowth": 39.2
     }
   ]
 }`;
@@ -230,46 +259,46 @@ LƯU Ý NGHIỆP VỤ BẮT BUỘC:
 }
 
 /**
- * 2. TRÍCH XUẤT ẢNH DOANH THU THỰC (DT-THỰC)
+ * 2. TRÍCH XUẤT ẢNH % TỶ TRỌNG TRẢ GÓP (MẪU 2 - BÁO CÁO TRẢ CHẬM)
  */
-export async function extractRevenueRealImage(
+export async function extractInstallmentRateImage(
     apiKey: string,
     file: File,
     keySource: GeminiKeySource = 'ADMIN'
-): Promise<{ reportDate?: string; reportTime?: string; stores: Partial<StoreReportingData>[] }> {
+): Promise<{
+    reportDate?: string;
+    reportTime?: string;
+    stores: Array<{ storeRawName: string; installmentRate: number }>;
+}> {
     const prepared = await prepareImageForOcr(file);
-    const prompt = `Bạn là chuyên gia phân tích dữ liệu kinh doanh của hệ thống bán lẻ. 
-Nhiệm vụ: Trích xuất chính xác các số liệu DOANH THU THỰC TẾ và DOANH THU QUY ĐỔI (nếu có trên ảnh) từ ảnh chụp màn hình ứng dụng BI.
+    const prompt = `Bạn là chuyên gia phân tích dữ liệu kinh doanh bán lẻ.
+Nhiệm vụ: Trích xuất chính xác "% TỶ TRỌNG TRẢ GÓP" theo từng ST từ ảnh chụp màn hình ứng dụng BI ("Báo cáo trả chậm" - tab "Tỷ trọng trả góp").
+
+CẤU TRÚC ẢNH MẪU:
+- Góc trên bên phải có dòng "Cập nhật lúc: HH:mm:ss DD/MM/YYYY".
+- Bảng dữ liệu phía dưới có các cột: "Siêu thị" (hoặc "ST") và "Tỷ trọng trả chậm %" (có thể có thêm cột khác bị cắt ở mép phải).
+- Tên ST trong cột đầu tiên có thể không có mã số phía trước và bị cắt ngắn ở bên phải (ví dụ: "AAR_BRV_VTA - 290 Trươn", "TGD_BRV_VTA - 290 Trươn"). Hãy chép chính xác phần tên hiển thị, KHÔNG tự thêm dấu "...".
 
 LƯU Ý NGHIỆP VỤ BẮT BUỘC:
-1. BỎ QUA HOÀN TOÀN các watermark chữ mờ ("26479 - Đào Bá Linh",...).
-2. BỎ QUA HOÀN TOÀN thẻ "Tổng" hoặc "Tổng (2 dòng)".
-3. CHỈ TRÍCH XUẤT các thẻ của từng ST CỤ THỂ (ví dụ: "10335 - AAR_BRV_VTA - 290 Trương Công Định", "111 - TGD_BRV_VTA - 290 Trương Công Định").
-4. Đọc ngày giờ cập nhật ở góc trên bên phải ảnh.
-5. Đối với mỗi ST, lấy các chỉ số sau:
-   - storeRawName: Tên ST
-   - revenueReal: Giá trị của "DOANH THU" (Doanh thu thực tế, ví dụ 15964)
-   - targetReal: Giá trị của "TARGET" (ví dụ 10889)
-   - installmentReal: Giá trị của "DT TRẢ GÓP" (ví dụ 6685)
-   - quantityReal: Giá trị của "SỐ LƯỢNG" (ví dụ 1934)
-   - avg3MonthsReal: Giá trị của "TB 3 THÁNG" (ví dụ 6738)
-   - revenueQd: Nếu trên ảnh có thêm cột "DOANH THU QĐ", trích xuất giá trị này (ví dụ 20688)
-   - targetQd: Giá trị của "TARGET" quy đổi nếu có
+1. BỎ QUA HOÀN TOÀN các watermark chữ mờ in chéo trên ảnh.
+2. BỎ QUA HOÀN TOÀN dòng "Tổng" (nếu có).
+3. Đọc ngày giờ cập nhật ở góc trên bên phải nếu có.
+4. Đối với mỗi dòng ST trong bảng, lấy đúng 2 giá trị:
+   - storeRawName: Tên ST hiển thị ở cột đầu tiên
+   - installmentRate: Số phần trăm ở cột "Tỷ trọng trả chậm %" (ví dụ: "51.25%" -> 51.25, "37.38%" -> 37.38).
 
-Định dạng JSON trả về:
+Định dạng JSON trả về duy nhất:
 {
   "reportDate": "YYYY-MM-DD",
   "reportTime": "HH:mm:ss",
   "stores": [
     {
-      "storeRawName": "10335 - AAR_BRV_VTA - 290 Trương Công Định",
-      "revenueReal": 15964,
-      "targetReal": 10889,
-      "installmentReal": 6685,
-      "quantityReal": 1934,
-      "avg3MonthsReal": 6738,
-      "revenueQd": 20688,
-      "targetQd": 13919
+      "storeRawName": "AAR_BRV_VTA - 290 Trươn",
+      "installmentRate": 51.25
+    },
+    {
+      "storeRawName": "TGD_BRV_VTA - 290 Trươn",
+      "installmentRate": 37.38
     }
   ]
 }`;
@@ -592,16 +621,19 @@ LƯU Ý NGHIỆP VỤ BẮT BUỘC:
 }
 
 /**
- * 4. TỔNG HỢP VÀ GHÉP NỐI TOÀN DIỆN TỪ 3 NHÓM ẢNH
+ * 4. TỔNG HỢP VÀ GHÉP NỐI TOÀN DIỆN TỪ 3 NHÓM ẢNH (DT QĐ, % TỶ TRỌNG TRẢ GÓP, THI ĐUA)
  */
 export async function extractAndMergeAllImages(
     apiKey: string,
     files: {
         qdFile?: File | null;
-        realFile?: File | null;
+        qdFiles?: File[];
+        installmentFile?: File | null;
+        installmentFiles?: File[];
         emulationFiles?: File[];
         emulationMode?: EmulationUploadMode;
         singleStoreEmulations?: SingleStoreEmulationEntry[];
+        knownStores?: Array<{ code?: string; name: string; short_name?: string }>;
     },
     onProgress?: (msg: string, percent: number) => void,
     keySource: GeminiKeySource = 'ADMIN'
@@ -619,113 +651,151 @@ export async function extractAndMergeAllImages(
     let detectedReportTime = '';
 
     const storeMap: Record<string, StoreReportingData> = {};
+    const knownStores = files.knownStores || [];
+
+    function resolveOfficialStoreName(rawName: string): { resolvedName: string; code?: string } {
+        const cleaned = normalizeOcrStoreName(rawName);
+        const codeMatch = cleaned.match(/^(\d{3,6})/);
+        let code = codeMatch ? codeMatch[1] : undefined;
+
+        if (knownStores.length > 0) {
+            const matched = knownStores.find(s =>
+                isStoreMatch(s.name, cleaned, knownStores) ||
+                (s.short_name ? isStoreMatch(s.short_name, cleaned, knownStores) : false)
+            );
+            if (matched) {
+                const mCode = matched.code || matched.name.match(/^(\d{3,6})/)?.[1];
+                if (mCode) code = code || mCode;
+                const fullName = (mCode && !matched.name.startsWith(mCode))
+                    ? `${mCode} - ${matched.name.replace(/^\d+\s*[-–—._]\s*/, '')}`
+                    : matched.name;
+                return { resolvedName: fullName, code };
+            }
+        }
+        return { resolvedName: cleaned, code };
+    }
 
     function getOrCreateStore(rawName: string, code?: string): StoreReportingData {
-        const short = getShortStoreName(rawName);
-        const codeMatch = rawName.match(/^(\d{3,6})/);
-        const storeCode = code || (codeMatch ? codeMatch[1] : undefined);
+        const cleanedRaw = normalizeOcrStoreName(rawName);
+        const { resolvedName, code: resolvedCode } = resolveOfficialStoreName(cleanedRaw);
+        const storeCode = code || resolvedCode;
+        const short = getShortStoreName(resolvedName);
 
-        // Khớp ST thông minh: ưu tiên mã số ST (10335, 111...), sau đó đến tên rút gọn
+        // Khớp ST thông minh: mã số ST -> tên rút gọn -> isStoreMatch (tránh nhầm AAR vs TGD cùng địa chỉ)
         const existingKey = Object.keys(storeMap).find(k => {
-            if (storeCode && storeMap[k].storeCode && storeMap[k].storeCode === storeCode) return true;
-            return k === short;
+            const existing = storeMap[k];
+            if (storeCode && existing.storeCode && existing.storeCode === storeCode) return true;
+            if (k === short) return true;
+            return isStoreMatch(existing.storeRawName, cleanedRaw, knownStores) ||
+                isStoreMatch(existing.storeRawName, resolvedName, knownStores);
         });
 
         if (existingKey) {
-            if (storeCode && !storeMap[existingKey].storeCode) {
-                storeMap[existingKey].storeCode = storeCode;
+            const existing = storeMap[existingKey];
+            if (storeCode && !existing.storeCode) {
+                existing.storeCode = storeCode;
             }
-            return storeMap[existingKey];
+            if (resolvedName.length > existing.storeRawName.length && /^\d{3,6}\s*-/.test(resolvedName)) {
+                existing.storeRawName = resolvedName;
+                existing.storeShortName = getShortStoreName(resolvedName);
+            }
+            return existing;
         }
 
         const newStore: StoreReportingData = {
             storeCode,
-            storeRawName: rawName,
+            storeRawName: resolvedName || cleanedRaw,
             storeShortName: short,
             revenueQd: 0,
+            installmentQd: 0,
             targetQd: 0,
-            quantityQd: 0,
-            revenueReal: 0,
-            targetReal: 0,
-            quantityReal: 0,
-            installmentReal: 0,
-            installmentRateReal: 0,
+            avg3Months: 0,
+            pctGrowth: 0,
+            installmentRate: 0,
             emulations: {}
         };
         storeMap[short] = newStore;
         return newStore;
     }
 
-    // Bước 1 & 2: Phân tích đồng thời cả ảnh Doanh thu quy đổi (DT-QĐ) và Doanh thu thực (DT-THỰC)
-    onProgress?.('Đang nén ảnh và phân tích doanh thu qua Canvas & AI...', 25);
+    const qdFileList = [
+        ...(files.qdFiles || []),
+        ...(files.qdFile ? [files.qdFile] : [])
+    ];
+    const installmentFileList = [
+        ...(files.installmentFiles || []),
+        ...(files.installmentFile ? [files.installmentFile] : [])
+    ];
 
-    const [qdRes, realRes] = await Promise.all([
-        files.qdFile ? extractRevenueQdImage(apiKey, files.qdFile, keySource).catch(err => {
-            if (err?.isQuotaExceeded || err instanceof GeminiQuotaExceededError) throw err;
-            errors.push(`Lỗi đọc ảnh DT-QĐ: ${err?.message}`);
-            return null;
-        }) : Promise.resolve(null),
-        files.realFile ? extractRevenueRealImage(apiKey, files.realFile, keySource).catch(err => {
-            if (err?.isQuotaExceeded || err instanceof GeminiQuotaExceededError) throw err;
-            errors.push(`Lỗi đọc ảnh DT Thực: ${err?.message}`);
-            return null;
-        }) : Promise.resolve(null)
+    // Bước 1 & 2: Phân tích đồng thời ảnh Doanh thu QĐ và ảnh % Tỷ trọng trả góp
+    onProgress?.('Đang nén ảnh và phân tích doanh thu QĐ & % tỷ trọng trả góp qua AI...', 25);
+
+    const [qdResults, instResults] = await Promise.all([
+        Promise.all(
+            qdFileList.map(file =>
+                extractRevenueQdImage(apiKey, file, keySource).catch(err => {
+                    if (err?.isQuotaExceeded || err instanceof GeminiQuotaExceededError) throw err;
+                    errors.push(`Lỗi đọc ảnh Doanh thu QĐ (${file.name}): ${err?.message}`);
+                    return null;
+                })
+            )
+        ),
+        Promise.all(
+            installmentFileList.map(file =>
+                extractInstallmentRateImage(apiKey, file, keySource).catch(err => {
+                    if (err?.isQuotaExceeded || err instanceof GeminiQuotaExceededError) throw err;
+                    errors.push(`Lỗi đọc ảnh % Tỷ trọng trả góp (${file.name}): ${err?.message}`);
+                    return null;
+                })
+            )
+        )
     ]);
 
-    if (qdRes) {
+    qdResults.forEach(qdRes => {
+        if (!qdRes) return;
         if (qdRes.reportDate) detectedReportDate = qdRes.reportDate;
         if (qdRes.reportTime) detectedReportTime = qdRes.reportTime;
 
-        qdRes.stores.forEach(st => {
-            if (!st.storeRawName) return;
+        (qdRes.stores || []).forEach((st: any) => {
+            if (!st?.storeRawName) return;
             const store = getOrCreateStore(st.storeRawName);
-            if (st.revenueQd !== undefined) store.revenueQd = cleanBiNumber(st.revenueQd);
-            if (st.targetQd !== undefined) store.targetQd = cleanBiNumber(st.targetQd);
-            if (st.quantityQd !== undefined) store.quantityQd = cleanBiNumber(st.quantityQd);
-
-            if (st.revenueReal !== undefined && cleanBiNumber(st.revenueReal) > 0) {
-                store.revenueReal = cleanBiNumber(st.revenueReal);
+            if (st.revenueQd !== undefined && st.revenueQd !== null) {
+                const val = cleanBiNumber(st.revenueQd);
+                if (val > 0 || store.revenueQd === 0) store.revenueQd = val;
             }
-            if (st.targetReal !== undefined && cleanBiNumber(st.targetReal) > 0) {
-                store.targetReal = cleanBiNumber(st.targetReal);
+            const rawInstQd = st.installmentQd ?? st.dtTraGopQd;
+            if (rawInstQd !== undefined && rawInstQd !== null) {
+                const val = cleanBiNumber(rawInstQd);
+                if (val > 0 || store.installmentQd === 0) store.installmentQd = val;
             }
-            if (st.installmentReal !== undefined && cleanBiNumber(st.installmentReal) > 0) {
-                store.installmentReal = cleanBiNumber(st.installmentReal);
+            if (st.targetQd !== undefined && st.targetQd !== null) {
+                const val = cleanBiNumber(st.targetQd);
+                if (val > 0 || store.targetQd === 0) store.targetQd = val;
             }
-            if (st.avg3MonthsReal !== undefined && cleanBiNumber(st.avg3MonthsReal) > 0) {
-                store.avg3MonthsReal = cleanBiNumber(st.avg3MonthsReal);
+            if (st.avg3Months !== undefined && st.avg3Months !== null) {
+                const val = cleanBiNumber(st.avg3Months);
+                if (val > 0 || store.avg3Months === 0) store.avg3Months = val;
             }
-            if (store.revenueReal > 0 && store.installmentReal > 0) {
-                store.installmentRateReal = Number(((store.installmentReal / store.revenueReal) * 100).toFixed(2));
+            if (st.pctGrowth !== undefined && st.pctGrowth !== null) {
+                const val = cleanBiPercent(st.pctGrowth);
+                if (val !== 0 || store.pctGrowth === 0) store.pctGrowth = val;
             }
         });
-    }
+    });
 
-    if (realRes) {
-        if (!detectedReportDate && realRes.reportDate) detectedReportDate = realRes.reportDate;
-        if (!detectedReportTime && realRes.reportTime) detectedReportTime = realRes.reportTime;
+    instResults.forEach(instRes => {
+        if (!instRes) return;
+        if (!detectedReportDate && instRes.reportDate) detectedReportDate = instRes.reportDate;
+        if (!detectedReportTime && instRes.reportTime) detectedReportTime = instRes.reportTime;
 
-        realRes.stores.forEach(st => {
-            if (!st.storeRawName) return;
+        (instRes.stores || []).forEach(st => {
+            if (!st?.storeRawName) return;
             const store = getOrCreateStore(st.storeRawName);
-            if (st.revenueReal !== undefined) store.revenueReal = cleanBiNumber(st.revenueReal);
-            if (st.targetReal !== undefined) store.targetReal = cleanBiNumber(st.targetReal);
-            if (st.quantityReal !== undefined) store.quantityReal = cleanBiNumber(st.quantityReal);
-            if (st.installmentReal !== undefined) store.installmentReal = cleanBiNumber(st.installmentReal);
-            if (st.avg3MonthsReal !== undefined) store.avg3MonthsReal = cleanBiNumber(st.avg3MonthsReal);
-
-            if (st.revenueQd !== undefined && cleanBiNumber(st.revenueQd) > 0 && store.revenueQd === 0) {
-                store.revenueQd = cleanBiNumber(st.revenueQd);
-            }
-            if (st.targetQd !== undefined && cleanBiNumber(st.targetQd) > 0 && store.targetQd === 0) {
-                store.targetQd = cleanBiNumber(st.targetQd);
-            }
-
-            if (store.revenueReal > 0 && store.installmentReal > 0) {
-                store.installmentRateReal = Number(((store.installmentReal / store.revenueReal) * 100).toFixed(2));
+            if (st.installmentRate !== undefined && st.installmentRate !== null) {
+                store.installmentRate = cleanBiPercent(st.installmentRate);
             }
         });
-    }
+    });
 
     // Bước 3: Trích xuất ảnh Thi đua lũy kế (Hỗ trợ switch: CẢ CỤM hoặc ĐÍCH DANH TỪNG ST)
     const isSingleStoreMode = files.emulationMode === 'SINGLE_STORE';

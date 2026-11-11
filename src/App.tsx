@@ -46,6 +46,7 @@ const GuestAccountsPage = lazy(() => import('./features/admin-config/GuestAccoun
 const CampaignOffsetPage = lazy(() => import('./features/campaign-offset/CampaignOffsetPage'));
 const SampleDataPage = lazy(() => import('./features/sample-data/SampleDataPage'));
 const FocusCampaignPage = lazy(() => import('./features/focus-campaign/FocusCampaignPage'));
+const LuckyDrawHubPage = lazy(() => import('./features/sales-utilities/LuckyDrawHubPage'));
 
 // Các trang Định danh, Đăng ký & Onboarding
 const LoginPage = lazy(() => import('./features/auth/LoginPage'));
@@ -255,6 +256,11 @@ export default function App() {
                                 <Route path="/can-ton-kho" element={
                                     <ProtectedRoute path="/can-ton-kho">
                                         <InventoryBalancingPage />
+                                    </ProtectedRoute>
+                                } />
+                                <Route path="/tien-ich-quay-so" element={
+                                    <ProtectedRoute path="/tien-ich-quay-so">
+                                        <LuckyDrawHubPage />
                                     </ProtectedRoute>
                                 } />
                                 <Route path="/kiem-quy" element={

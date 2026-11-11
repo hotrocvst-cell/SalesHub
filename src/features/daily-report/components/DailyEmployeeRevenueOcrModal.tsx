@@ -1,22 +1,17 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import {
     X,
     Camera,
     Sparkles,
-    CheckCircle2,
     AlertCircle,
     Save,
-    Trash2,
-    Plus,
+    RotateCcw,
     Store,
-    Calendar,
-    UploadCloud,
     Clipboard,
     KeyRound,
-    RotateCcw,
     TrendingUp,
-    CreditCard,
-    Coins,
+    Percent,
     Users,
     Zap
 } from 'lucide-react';
@@ -27,13 +22,15 @@ import {
     isStoreMatch,
     deduplicateStoreNames,
     getTodayDateString,
-    formatValue,
     cleanBiNumber,
     formatDate
 } from '../../../core/lib/formatters';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import type { ParsedEmployeeRevenue } from '../../employee-cumulative/utils/employeeParsers';
-import { extractDailyEmployeeRevenueImagesBatch } from '../services/geminiDailyEmployeeOcrService';
+import {
+    extractDailyEmployeeRevenueImagesBatch,
+    type DailyEmployeeOcrRecord
+} from '../services/geminiDailyEmployeeOcrService';
 import {
     resolveActiveGeminiKey,
     fetchAdminGeminiKeyCloud,
@@ -46,6 +43,7 @@ import {
     saveClusterDailyEmployeeSessions,
     type DailyEmployeeRevenueSessionRecord
 } from '../services/dailyEmployeeRevenueSessionService';
+import DailyOcrPreviewTable from './DailyOcrPreviewTable';
 
 interface Props {
     isOpen: boolean;
@@ -65,6 +63,20 @@ interface Props {
     onSaveToCloudSuccess?: (savedSession: DailyEmployeeRevenueSessionRecord) => void;
 }
 
+function stripOcrUiMetadata(records: DailyEmployeeOcrRecord[]): ParsedEmployeeRevenue[] {
+    return records.map(r => ({
+        employee_id: String(r.employee_id || '').trim(),
+        full_name: String(r.full_name || '').trim(),
+        quantity: Number(r.quantity) || 0,
+        revenue_qd: Number(r.revenue_qd) || 0,
+        revenue_actual: 0,
+        installment_revenue: Number(r.installment_revenue) || 0,
+        installment_rate: Number(r.installment_rate) || 0,
+        revenue_return_qd: Number(r.revenue_return_qd) || 0,
+        revenue_loan_qd: Number(r.revenue_loan_qd) || 0
+    }));
+}
+
 export default function DailyEmployeeRevenueOcrModal({
     isOpen,
     onClose,
@@ -77,8 +89,6 @@ export default function DailyEmployeeRevenueOcrModal({
     onApplyToReport,
     onSaveToCloudSuccess
 }: Props) {
-    if (!isOpen) return null;
-
     // Bản đồ nhân viên -> ST từ danh bạ hệ thống
     const empStoreMap = useMemo(() => {
         const map: Record<string, string> = {};
@@ -110,7 +120,6 @@ export default function DailyEmployeeRevenueOcrModal({
             return availableStores.filter(s => isStoreMatch(s.name, currentUser.store_name, availableStores));
         }
 
-        // Quản lý hoặc Trưởng ca
         const accessible = currentUser?.accessible_stores && currentUser.accessible_stores.length > 0
             ? currentUser.accessible_stores
             : (currentUser?.store_name ? [currentUser.store_name] : []);
@@ -151,39 +160,56 @@ export default function DailyEmployeeRevenueOcrModal({
         return deduplicatedStores[0]?.name || '';
     });
 
-    // Đồng bộ lại selectedStore khi modal mở hoặc danh sách ST đổi
+    // Đồng bộ selectedStore với dropdown trang chính khi mở modal
     useEffect(() => {
-        if (!isOpen || deduplicatedStores.length === 0) return;
-        if (selectedStore === 'all') {
-            if (!canAccessAllCluster) {
-                setSelectedStore(deduplicatedStores[0]?.name || '');
-            }
+        if (!isOpen) return;
+        if (defaultSelectedStore === 'all' && canAccessAllCluster) {
+            setSelectedStore('all');
             return;
         }
-        const isValid = deduplicatedStores.some(s => isStoreMatch(s.name, selectedStore, availableStores));
-        if (!isValid) {
-            if (canAccessAllCluster) {
-                setSelectedStore('all');
-            } else {
-                setSelectedStore(deduplicatedStores[0]?.name || '');
+        if (defaultSelectedStore && defaultSelectedStore !== 'all') {
+            const match = deduplicatedStores.find(s => isStoreMatch(s.name, defaultSelectedStore, availableStores));
+            if (match) {
+                setSelectedStore(match.name);
+                return;
             }
         }
-    }, [isOpen, deduplicatedStores, canAccessAllCluster]);
+        if (selectedStore === 'all' && !canAccessAllCluster) {
+            setSelectedStore(deduplicatedStores[0]?.name || '');
+        } else if (selectedStore !== 'all' && deduplicatedStores.length > 0) {
+            const isValid = deduplicatedStores.some(s => isStoreMatch(s.name, selectedStore, availableStores));
+            if (!isValid) {
+                setSelectedStore(canAccessAllCluster ? 'all' : (deduplicatedStores[0]?.name || ''));
+            }
+        }
+    }, [isOpen, defaultSelectedStore, deduplicatedStores, canAccessAllCluster, availableStores]);
 
-    // Ngày báo cáo realtime luôn cố định theo ngày hôm nay
-    const [reportDate] = useState<string>(() => {
-        return defaultReportDate || getTodayDateString();
-    });
+    // Danh bạ nhân sự thuộc ST đang chọn (dùng cho gợi ý mapping khi thiếu Mã NV)
+    const directoryForSelectedStore = useMemo(() => {
+        if (!selectedStore || selectedStore === 'all') {
+            return employeesDirectory;
+        }
+        const filtered = employeesDirectory.filter(e => isStoreMatch(e.store_name, selectedStore, availableStores));
+        return filtered.length > 0 ? filtered : employeesDirectory;
+    }, [employeesDirectory, selectedStore, availableStores]);
 
-    // 1. Quản lý 2 danh sách file trong cùng 1 khung upload duy nhất
-    const [pasteTarget, setPasteTarget] = useState<'QD' | 'REAL'>('QD');
+    // Ngày báo cáo realtime
+    const [reportDate, setReportDate] = useState<string>(() => defaultReportDate || getTodayDateString());
+    useEffect(() => {
+        if (isOpen && defaultReportDate) {
+            setReportDate(defaultReportDate);
+        }
+    }, [isOpen, defaultReportDate]);
+
+    // 1. Quản lý 2 nhóm ảnh chuẩn mới (Doanh Thu QĐ & % Tỷ Trọng Trả Góp - không có DT Thực, không có Thi đua)
+    const [pasteTarget, setPasteTarget] = useState<'QD' | 'INSTALLMENT'>('QD');
     const [qdFiles, setQdFiles] = useState<File[]>([]);
-    const [realFiles, setRealFiles] = useState<File[]>([]);
+    const [installmentFiles, setInstallmentFiles] = useState<File[]>([]);
 
     const [isDraggingQD, setIsDraggingQD] = useState<boolean>(false);
-    const [isDraggingReal, setIsDraggingReal] = useState<boolean>(false);
+    const [isDraggingInstallment, setIsDraggingInstallment] = useState<boolean>(false);
     const qdInputRef = useRef<HTMLInputElement>(null);
-    const realInputRef = useRef<HTMLInputElement>(null);
+    const installmentInputRef = useRef<HTMLInputElement>(null);
 
     // 2. Gemini API Key
     const [keyInfo, setKeyInfo] = useState<ActiveKeyInfo>(() => resolveActiveGeminiKey());
@@ -197,24 +223,87 @@ export default function DailyEmployeeRevenueOcrModal({
     const [ocrError, setOcrError] = useState<string>('');
     const [detectedScreenshotTime, setDetectedScreenshotTime] = useState<string>('');
 
-    // 4. Kết quả danh sách nhân viên bóc tách
-    const [extractedRecords, setExtractedRecords] = useState<ParsedEmployeeRevenue[]>([]);
+    // 4. Kết quả danh sách nhân viên bóc tách & Ref theo dõi đổi ST
+    const [extractedRecords, setExtractedRecords] = useState<DailyEmployeeOcrRecord[]>([]);
     const [isSavingCloud, setIsSavingCloud] = useState<boolean>(false);
     const [toastMessage, setToastMessage] = useState<string>('');
+    const toastTimerRef = useRef<number | null>(null);
+    const closeBtnRef = useRef<HTMLButtonElement | null>(null);
+    const lastStoreRef = useRef<string>('');
 
-    useEffect(() => {
-        fetchAdminGeminiKeyCloud().then(() => {
-            setKeyInfo(resolveActiveGeminiKey());
-        });
-    }, []);
+    const hasModalWorkingData =
+        qdFiles.length > 0 ||
+        installmentFiles.length > 0 ||
+        extractedRecords.length > 0 ||
+        Boolean(ocrError);
+    const hasModalWorkingDataRef = useRef<boolean>(false);
+    hasModalWorkingDataRef.current = hasModalWorkingData;
 
     const showToast = (msg: string) => {
         setToastMessage(msg);
-        setTimeout(() => setToastMessage(''), 3000);
+        if (toastTimerRef.current) {
+            window.clearTimeout(toastTimerRef.current);
+        }
+        toastTimerRef.current = window.setTimeout(() => setToastMessage(''), 3500);
     };
+
+    const resetModalBatch = () => {
+        setQdFiles([]);
+        setInstallmentFiles([]);
+        setExtractedRecords([]);
+        setOcrError('');
+        setDetectedScreenshotTime('');
+        setProgressText('');
+        setProgressPercent(0);
+        if (qdInputRef.current) qdInputRef.current.value = '';
+        if (installmentInputRef.current) installmentInputRef.current.value = '';
+    };
+
+    // Tự động xóa trắng ảnh & kết quả cũ khi người dùng chuyển sang ST khác
+    useEffect(() => {
+        if (!selectedStore) return;
+        const prev = lastStoreRef.current;
+        if (prev && prev !== selectedStore) {
+            const hadData = hasModalWorkingDataRef.current;
+            resetModalBatch();
+            if (hadData && isOpen) {
+                const label = selectedStore === 'all' ? 'Toàn Cụm ST' : getShortStoreName(selectedStore);
+                showToast(`🧹 Đã chuyển sang ${label} và tự động xóa trắng dữ liệu cũ!`);
+            }
+        }
+        lastStoreRef.current = selectedStore;
+    }, [selectedStore, isOpen]);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        fetchAdminGeminiKeyCloud().then(() => {
+            setKeyInfo(resolveActiveGeminiKey());
+        });
+    }, [isOpen]);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        closeBtnRef.current?.focus();
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape' && !isKeyModalOpen) {
+                onClose();
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isOpen, isKeyModalOpen, onClose]);
+
+    useEffect(() => {
+        return () => {
+            if (toastTimerRef.current) {
+                window.clearTimeout(toastTimerRef.current);
+            }
+        };
+    }, []);
 
     // Hỗ trợ dán ảnh bằng phím tắt Ctrl + V trên toàn Modal
     useEffect(() => {
+        if (!isOpen) return;
         const handlePaste = (e: ClipboardEvent) => {
             const items = e.clipboardData?.items;
             if (!items) return;
@@ -224,7 +313,7 @@ export default function DailyEmployeeRevenueOcrModal({
                 if (items[i].type.indexOf('image') !== -1) {
                     const file = items[i].getAsFile();
                     if (file) {
-                        const targetCategory = pasteTarget === 'QD' ? 'DTQD' : 'DTThuc';
+                        const targetCategory = pasteTarget === 'QD' ? 'DTQD' : 'TyTrongTG';
                         const renamedFile = new File([file], `${targetCategory}_clipboard_${Date.now()}_${i + 1}.png`, { type: file.type });
                         pastedFiles.push(renamedFile);
                     }
@@ -235,74 +324,58 @@ export default function DailyEmployeeRevenueOcrModal({
                 e.preventDefault();
                 if (pasteTarget === 'QD') {
                     setQdFiles(prev => [...prev, ...pastedFiles]);
-                    showToast(`📋 Đã dán ${pastedFiles.length} ảnh vào mục [DTQĐ & Số lượng]!`);
+                    showToast(`📋 Đã dán ${pastedFiles.length} ảnh vào mục [1. Doanh Thu QĐ]!`);
                 } else {
-                    setRealFiles(prev => [...prev, ...pastedFiles]);
-                    showToast(`📋 Đã dán ${pastedFiles.length} ảnh vào mục [DT Thực & Trả góp]!`);
+                    setInstallmentFiles(prev => [...prev, ...pastedFiles]);
+                    showToast(`📋 Đã dán ${pastedFiles.length} ảnh vào mục [2. % Tỷ Trọng Trả Góp]!`);
                 }
             }
         };
 
         window.addEventListener('paste', handlePaste);
         return () => window.removeEventListener('paste', handlePaste);
-    }, [pasteTarget]);
+    }, [isOpen, pasteTarget]);
 
     // Kéo thả ảnh trực tiếp vào từng mục
-    const handleDropCategory = (e: React.DragEvent, category: 'QD' | 'REAL') => {
+    const handleDropCategory = (e: React.DragEvent, category: 'QD' | 'INSTALLMENT') => {
         e.preventDefault();
         if (category === 'QD') setIsDraggingQD(false);
-        else setIsDraggingReal(false);
+        else setIsDraggingInstallment(false);
 
         if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
             const dropped = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
             if (dropped.length > 0) {
                 if (category === 'QD') {
                     setQdFiles(prev => [...prev, ...dropped]);
-                    showToast(`📁 Đã thêm ${dropped.length} ảnh vào [DTQĐ & Số lượng]!`);
+                    showToast(`📁 Đã thêm ${dropped.length} ảnh vào [1. Doanh Thu QĐ]!`);
                 } else {
-                    setRealFiles(prev => [...prev, ...dropped]);
-                    showToast(`📁 Đã thêm ${dropped.length} ảnh vào [DT Thực & Trả góp]!`);
+                    setInstallmentFiles(prev => [...prev, ...dropped]);
+                    showToast(`📁 Đã thêm ${dropped.length} ảnh vào [2. % Tỷ Trọng Trả Góp]!`);
                 }
             }
         }
     };
 
-    // Chọn ảnh từ nút bấm riêng của từng mục (hỗ trợ chọn 1 hoặc nhiều ảnh)
-    const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>, category: 'QD' | 'REAL') => {
+    // Chọn ảnh từ nút bấm riêng của từng mục
+    const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>, category: 'QD' | 'INSTALLMENT') => {
         if (!e.target.files) return;
         const selected = Array.from(e.target.files).filter(f => f.type.startsWith('image/'));
         if (selected.length > 0) {
             if (category === 'QD') {
                 setQdFiles(prev => [...prev, ...selected]);
-                showToast(`📁 Đã chọn ${selected.length} ảnh DTQĐ & Số lượng!`);
+                showToast(`📁 Đã chọn ${selected.length} ảnh Doanh Thu QĐ!`);
             } else {
-                setRealFiles(prev => [...prev, ...selected]);
-                showToast(`📁 Đã chọn ${selected.length} ảnh DT Thực & Trả góp!`);
+                setInstallmentFiles(prev => [...prev, ...selected]);
+                showToast(`📁 Đã chọn ${selected.length} ảnh % Tỷ Trọng Trả Góp!`);
             }
         }
         if (e.target) e.target.value = '';
     };
 
-    const isDragging = pasteTarget === 'QD' ? isDraggingQD : isDraggingReal;
-    const handleDragOver = (e: React.DragEvent) => {
-        e.preventDefault();
-        if (pasteTarget === 'QD') setIsDraggingQD(true);
-        else setIsDraggingReal(true);
-    };
-    const handleDragLeave = (e: React.DragEvent) => {
-        e.preventDefault();
-        if (pasteTarget === 'QD') setIsDraggingQD(false);
-        else setIsDraggingReal(false);
-    };
-    const handleDrop = (e: React.DragEvent) => {
-        handleDropCategory(e, pasteTarget);
-    };
-
     const handleClearAllFiles = () => {
-        setQdFiles([]);
-        setRealFiles([]);
-        setExtractedRecords([]);
-        setOcrError('');
+        if (isExtracting || isSavingCloud) return;
+        resetModalBatch();
+        showToast('🧹 Đã xóa trắng ảnh và kết quả — sẵn sàng đợt nạp mới!');
     };
 
     // Chạy OCR bóc tách đa ảnh
@@ -313,8 +386,8 @@ export default function DailyEmployeeRevenueOcrModal({
             return;
         }
 
-        if (qdFiles.length === 0 && realFiles.length === 0) {
-            showToast('⚠️ Vui lòng chọn hoặc dán ít nhất 1 ảnh DTQĐ hoặc DT Thực!');
+        if (qdFiles.length === 0 && installmentFiles.length === 0) {
+            showToast('⚠️ Vui lòng chọn hoặc dán ít nhất 1 ảnh Doanh Thu QĐ hoặc % Tỷ Trọng Trả Góp!');
             return;
         }
 
@@ -326,12 +399,18 @@ export default function DailyEmployeeRevenueOcrModal({
         try {
             const result = await extractDailyEmployeeRevenueImagesBatch(
                 activeKey,
-                { qdFiles, realFiles },
+                {
+                    qdFiles,
+                    installmentFiles,
+                    selectedStore,
+                    storesList: availableStores
+                },
                 employeesDirectory,
                 (msg, pct) => {
                     setProgressText(msg);
                     setProgressPercent(pct);
-                }
+                },
+                keyInfo.source
             );
 
             if (!result.success || result.records.length === 0) {
@@ -340,8 +419,9 @@ export default function DailyEmployeeRevenueOcrModal({
                 return;
             }
 
-            // Ghi nhận thời gian cập nhật trên ảnh
-            if (result.reportTime || result.reportDate) {
+            if (result.screenshotTimestamp) {
+                setDetectedScreenshotTime(result.screenshotTimestamp);
+            } else if (result.reportTime || result.reportDate) {
                 const timeInfo = [result.reportTime, result.reportDate ? formatDate(result.reportDate) : ''].filter(Boolean).join(' ');
                 setDetectedScreenshotTime(timeInfo);
             } else {
@@ -352,7 +432,19 @@ export default function DailyEmployeeRevenueOcrModal({
             setIsQuotaExceeded(false);
             setProgressPercent(100);
             setProgressText('Trích xuất hoàn tất!');
-            showToast(`🎉 Bóc tách & đối chiếu thành công ${result.records.length} nhân viên!`);
+
+            const unmappedCount = result.records.filter(r => r.isUnmappedName).length;
+            const nameMatchedCount = result.records.filter(
+                r => !r.isUnmappedName && (r.mappingSource === 'NAME_EXACT' || r.mappingSource === 'NAME_FUZZY')
+            ).length;
+
+            if (unmappedCount > 0) {
+                showToast(`⚠️ Đã đọc ${result.records.length} dòng (còn ${unmappedCount} dòng ảnh thiếu Mã NV cần chọn trong bảng)!`);
+            } else if (nameMatchedCount > 0) {
+                showToast(`✅ Đã đọc ${result.records.length} NV (${nameMatchedCount} dòng khớp tự động theo tên)!`);
+            } else {
+                showToast(`🎉 Bóc tách & đối chiếu thành công ${result.records.length} nhân viên!`);
+            }
         } catch (err: any) {
             console.error('Lỗi khi bóc tách báo cáo nhân viên:', err);
             if (err instanceof GeminiQuotaExceededError) {
@@ -371,17 +463,77 @@ export default function DailyEmployeeRevenueOcrModal({
     const handleUpdateRecord = (index: number, field: keyof ParsedEmployeeRevenue, value: any) => {
         setExtractedRecords(prev => {
             const updated = [...prev];
-            const current = { ...updated[index], [field]: value };
+            const numericFields: Array<keyof ParsedEmployeeRevenue> = [
+                'quantity',
+                'revenue_qd',
+                'installment_revenue',
+                'installment_rate',
+                'revenue_return_qd',
+                'revenue_loan_qd'
+            ];
+            const normalizedVal = numericFields.includes(field)
+                ? (value === '' ? 0 : cleanBiNumber(value))
+                : value;
 
-            if (field === 'revenue_actual' || field === 'installment_revenue') {
-                const act = field === 'revenue_actual' ? cleanBiNumber(value) : current.revenue_actual;
-                const inst = field === 'installment_revenue' ? cleanBiNumber(value) : current.installment_revenue;
-                current.installment_rate = act > 0 ? Number(((inst / act) * 100).toFixed(1)) : 0;
-            }
-
-            updated[index] = current;
+            updated[index] = { ...updated[index], [field]: normalizedVal };
             return updated;
         });
+    };
+
+    // Chọn / Đổi Mã NV từ danh bạ (tự gộp nếu Mã NV đích đã tồn tại trong bảng)
+    const handleRemapEmployeeId = (sourceIndex: number, targetEmpId: string) => {
+        const cleanTargetId = targetEmpId.trim();
+        const sourceRow = extractedRecords[sourceIndex];
+        if (!cleanTargetId || !sourceRow) return;
+
+        const official = employeesDirectory.find(
+            e => String(e.employee_id || '').trim().toLowerCase() === cleanTargetId.toLowerCase()
+        );
+        const officialId = official?.employee_id?.trim() || cleanTargetId;
+        const officialName = official?.full_name?.trim() || sourceRow.full_name;
+
+        const targetIndex = extractedRecords.findIndex(
+            (r, idx) => idx !== sourceIndex && String(r.employee_id || '').trim().toLowerCase() === officialId.toLowerCase()
+        );
+
+        if (targetIndex >= 0) {
+            setExtractedRecords(prev =>
+                prev
+                    .filter((_, idx) => idx !== sourceIndex)
+                    .map(r => {
+                        if (String(r.employee_id || '').trim().toLowerCase() !== officialId.toLowerCase()) return r;
+                        return {
+                            ...r,
+                            employee_id: officialId,
+                            full_name: officialName || r.full_name,
+                            quantity: r.quantity || sourceRow.quantity,
+                            revenue_qd: r.revenue_qd !== 0 ? r.revenue_qd : sourceRow.revenue_qd,
+                            installment_revenue: r.installment_revenue || sourceRow.installment_revenue,
+                            installment_rate: sourceRow.installment_rate || r.installment_rate,
+                            revenue_return_qd: r.revenue_return_qd || sourceRow.revenue_return_qd || 0,
+                            revenue_loan_qd: r.revenue_loan_qd || sourceRow.revenue_loan_qd || 0,
+                            mappingSource: 'ID',
+                            isUnmappedName: false,
+                            ocrSourceName: sourceRow.ocrSourceName || r.ocrSourceName
+                        };
+                    })
+            );
+        } else {
+            setExtractedRecords(prev =>
+                prev.map((r, idx) =>
+                    idx === sourceIndex
+                        ? {
+                            ...r,
+                            employee_id: officialId,
+                            full_name: officialName,
+                            mappingSource: 'ID',
+                            isUnmappedName: false,
+                            ocrSourceName: r.ocrSourceName || r.full_name
+                        }
+                        : r
+                )
+            );
+        }
     };
 
     const handleDeleteRecord = (index: number) => {
@@ -398,49 +550,78 @@ export default function DailyEmployeeRevenueOcrModal({
                 revenue_qd: 0,
                 revenue_actual: 0,
                 installment_revenue: 0,
-                installment_rate: 0
+                installment_rate: 0,
+                mappingSource: 'ID',
+                isUnmappedName: false
             }
         ]);
     };
 
-    // Thống kê tổng hợp kết quả
+    // Thống kê tổng hợp kết quả (Không có DT Thực)
     const summaryStats = useMemo(() => {
         const totalEmp = extractedRecords.length;
-        const totalQd = extractedRecords.reduce((acc, r) => acc + (r.revenue_qd || 0), 0);
-        const totalActual = extractedRecords.reduce((acc, r) => acc + (r.revenue_actual || 0), 0);
-        const totalInstallment = extractedRecords.reduce((acc, r) => acc + (r.installment_revenue || 0), 0);
-        const totalQty = extractedRecords.reduce((acc, r) => acc + (r.quantity || 0), 0);
-        const avgInstRate = totalActual > 0 ? Number(((totalInstallment / totalActual) * 100).toFixed(1)) : 0;
+        const totalQd = extractedRecords.reduce((acc, r) => acc + (Number(r.revenue_qd) || 0), 0);
+        const totalInstallment = extractedRecords.reduce((acc, r) => acc + (Number(r.installment_revenue) || 0), 0);
+        const totalQty = extractedRecords.reduce((acc, r) => acc + (Number(r.quantity) || 0), 0);
+
+        const weightSum = extractedRecords.reduce((acc, r) => acc + ((Number(r.revenue_qd) || 0) > 0 ? Number(r.revenue_qd) : 0), 0);
+        let avgInstRate = 0;
+        if (weightSum > 0) {
+            const weightedRate = extractedRecords.reduce(
+                (acc, r) => acc + ((Number(r.revenue_qd) || 0) > 0 ? (Number(r.installment_rate) || 0) * Number(r.revenue_qd) : 0),
+                0
+            );
+            avgInstRate = Number((weightedRate / weightSum).toFixed(1));
+        } else {
+            const withRate = extractedRecords.filter(r => (Number(r.installment_rate) || 0) > 0);
+            if (withRate.length > 0) {
+                avgInstRate = Number(
+                    (withRate.reduce((acc, r) => acc + Number(r.installment_rate), 0) / withRate.length).toFixed(1)
+                );
+            }
+        }
 
         return {
             totalEmp,
             totalQd,
-            totalActual,
             totalInstallment,
             totalQty,
             avgInstRate
         };
     }, [extractedRecords]);
 
+    if (!isOpen) return null;
+
+    const validateBeforeApply = (): boolean => {
+        if (extractedRecords.length === 0) {
+            showToast('⚠️ Chưa có dữ liệu nhân viên để xử lý!');
+            return false;
+        }
+        const invalidRows = extractedRecords.filter(
+            r => Boolean(r.isUnmappedName) || String(r.employee_id || '').startsWith('UNMAPPED::') || !String(r.employee_id || '').trim()
+        );
+        if (invalidRows.length > 0) {
+            showToast(`⚠️ Còn ${invalidRows.length} dòng chưa có Mã NV chính thức! Vui lòng chọn Mã NV từ danh bạ hoặc xóa dòng thừa.`);
+            return false;
+        }
+        return true;
+    };
+
     // 1. Áp dụng vào báo cáo trên trang (in-memory)
     const handleApplyOnly = () => {
-        if (extractedRecords.length === 0) {
-            showToast('⚠️ Chưa có dữ liệu nhân viên để áp dụng!');
-            return;
-        }
+        if (!validateBeforeApply()) return;
+        const cleanRecords = stripOcrUiMetadata(extractedRecords);
 
-        onApplyToReport(extractedRecords, selectedStore, reportDate, detectedScreenshotTime);
+        onApplyToReport(cleanRecords, selectedStore, reportDate, detectedScreenshotTime);
         const storeLabel = selectedStore === 'all' ? 'Toàn Cụm' : getShortStoreName(selectedStore);
-        showToast(`✅ Đã áp dụng ${extractedRecords.length} nhân viên (${storeLabel}) vào báo cáo!`);
+        showToast(`✅ Đã áp dụng ${cleanRecords.length} nhân viên (${storeLabel}) vào báo cáo!`);
         onClose();
     };
 
-    // 2. Áp dụng & Lưu trực tiếp lên Supabase Cloud (Hỗ trợ cả 1 ST hoặc Toàn Cụm)
+    // 2. Áp dụng & Lưu trực tiếp lên Supabase Cloud
     const handleApplyAndSaveCloud = async () => {
-        if (extractedRecords.length === 0) {
-            showToast('⚠️ Chưa có dữ liệu nhân viên để lưu!');
-            return;
-        }
+        if (!validateBeforeApply()) return;
+        const cleanRecords = stripOcrUiMetadata(extractedRecords);
 
         setIsSavingCloud(true);
         try {
@@ -449,22 +630,21 @@ export default function DailyEmployeeRevenueOcrModal({
                 report_date: reportDate,
                 session_time: new Date().toISOString(),
                 screenshot_time_str: detectedScreenshotTime || `${new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} ${formatDate(reportDate)}`,
-                employee_count: summaryStats.totalEmp,
+                employee_count: cleanRecords.length,
                 total_revenue_qd: summaryStats.totalQd,
-                total_revenue_actual: summaryStats.totalActual,
+                total_revenue_actual: 0,
                 total_installment: summaryStats.totalInstallment,
                 total_quantity: summaryStats.totalQty,
-                records: extractedRecords,
+                records: cleanRecords,
                 raw_info: {
-                    source: 'OCR_BI_MOBILE',
+                    source: 'OCR_BI_MOBILE_NO_ACTUAL',
                     qd_files_count: qdFiles.length,
-                    real_files_count: realFiles.length
+                    installment_files_count: installmentFiles.length
                 },
                 updated_by: currentUserName
             };
 
             if (selectedStore === 'all') {
-                // Lưu cho Toàn Cụm và tự động phân bổ về các ST trong cụm
                 const clusterRes = await saveClusterDailyEmployeeSessions(
                     sessionRecord,
                     employeesDirectory,
@@ -477,16 +657,12 @@ export default function DailyEmployeeRevenueOcrModal({
                     return;
                 }
 
-                onApplyToReport(extractedRecords, 'all', reportDate, detectedScreenshotTime);
-
-                if (onSaveToCloudSuccess) {
-                    onSaveToCloudSuccess(sessionRecord);
-                }
+                onApplyToReport(cleanRecords, 'all', reportDate, detectedScreenshotTime);
+                onSaveToCloudSuccess?.(sessionRecord);
 
                 const storeCount = clusterRes.affectedStores.length > 1 ? clusterRes.affectedStores.length - 1 : 0;
-                showToast(`🎉 Đã lưu phiên Toàn Cụm (${summaryStats.totalEmp} NV) và phân bổ về ${storeCount} ST!`);
+                showToast(`🎉 Đã lưu phiên Toàn Cụm (${cleanRecords.length} NV) và phân bổ về ${storeCount} ST!`);
             } else {
-                // Lưu cho 1 ST cụ thể
                 const res = await saveDailyEmployeeSession(sessionRecord, currentUserName);
                 if (!res.success) {
                     showToast(`❌ Lỗi lưu Cloud: ${res.error}`);
@@ -494,17 +670,15 @@ export default function DailyEmployeeRevenueOcrModal({
                     return;
                 }
 
-                onApplyToReport(extractedRecords, selectedStore, reportDate, detectedScreenshotTime);
+                onApplyToReport(cleanRecords, selectedStore, reportDate, detectedScreenshotTime);
+                onSaveToCloudSuccess?.(sessionRecord);
 
-                if (onSaveToCloudSuccess) {
-                    onSaveToCloudSuccess(sessionRecord);
-                }
-
-                showToast(`🎉 Đã lưu phiên ${summaryStats.totalEmp} nhân viên của ${getShortStoreName(selectedStore)} lên Cloud!`);
+                showToast(`🎉 Đã lưu phiên ${cleanRecords.length} nhân viên của ${getShortStoreName(selectedStore)} lên Cloud!`);
             }
 
             setTimeout(() => {
                 setIsSavingCloud(false);
+                resetModalBatch();
                 onClose();
             }, 600);
         } catch (err: any) {
@@ -514,40 +688,46 @@ export default function DailyEmployeeRevenueOcrModal({
         }
     };
 
-    return (
-        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 z-50 animate-in fade-in">
+    return createPortal(
+        <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="daily-emp-ocr-modal-title"
+            className="!mt-0 fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 z-50"
+        >
             <div className="bg-white rounded-3xl max-w-4xl w-full max-h-[94vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
                 {/* 1. HEADER */}
-                <div className="p-4 sm:p-5 bg-gradient-to-r from-slate-900 via-indigo-950 to-blue-950 text-white flex items-center justify-between gap-3 shrink-0">
+                <div className="p-4 sm:p-5 bg-slate-900 text-white flex items-center justify-between gap-3 shrink-0 border-b border-slate-800">
                     <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-300 shadow-inner shrink-0">
-                            <Sparkles className="w-5 h-5 text-emerald-400" />
+                            <Sparkles className="w-5 h-5 text-emerald-300" aria-hidden="true" />
                         </div>
                         <div>
                             <div className="flex items-center gap-2 flex-wrap">
-                                <h2 className="text-base sm:text-lg font-black tracking-tight text-white">
+                                <h2 id="daily-emp-ocr-modal-title" className="text-base sm:text-lg font-black tracking-tight text-white">
                                     Nhập liệu Doanh Thu Nhân Viên
                                 </h2>
-
                             </div>
                             <p className="text-xs text-slate-300 mt-0.5">
-                                Hỗ trợ chọn nhiều ảnh, dán nhanh <kbd className="font-mono bg-white/20 px-1 rounded">Ctrl+V</kbd>
+                                1. Doanh Thu QĐ (nhiều ảnh) + 2. % Tỷ Trọng Trả Góp • Hỗ trợ dán nhanh <kbd className="font-mono bg-white/20 px-1 rounded">Ctrl+V</kbd>
                             </p>
                         </div>
                     </div>
 
                     <button
+                        ref={closeBtnRef}
                         type="button"
+                        aria-label="Đóng hộp thoại nhập liệu doanh thu nhân viên"
                         onClick={onClose}
-                        className="p-2 rounded-xl text-slate-300 hover:text-white hover:bg-white/10 transition cursor-pointer"
+                        className="p-2 rounded-xl text-slate-300 hover:text-white hover:bg-white/10 transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                     >
-                        <X className="w-5 h-5" />
+                        <X className="w-5 h-5" aria-hidden="true" />
                     </button>
                 </div>
 
                 {/* TOAST THÔNG BÁO NỘI BỘ */}
                 {toastMessage && (
-                    <div className="bg-emerald-600 text-white text-xs font-bold px-4 py-2 text-center animate-fade-in shrink-0">
+                    <div role="status" aria-live="polite" className="bg-emerald-700 text-white text-xs font-bold px-4 py-2 text-center shrink-0">
                         {toastMessage}
                     </div>
                 )}
@@ -558,28 +738,31 @@ export default function DailyEmployeeRevenueOcrModal({
                     <div className="bg-slate-50 border border-slate-200/90 rounded-2xl p-3.5 space-y-3">
                         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
                             <div className="flex-1">
-                                <label className="block text-[11px] font-black uppercase text-slate-600 mb-1 flex items-center gap-1.5">
-                                    <Store className="w-3.5 h-3.5 text-blue-600" />
+                                <label htmlFor="ocr-modal-store-select" className="block text-[11px] font-black uppercase text-slate-700 mb-1 flex items-center gap-1.5">
+                                    <Store className="w-3.5 h-3.5 text-blue-600" aria-hidden="true" />
                                     <span>Chọn ST nhập liệu:</span>
-                                    <span className="text-rose-500">*</span>
+                                    <span className="text-rose-600">*</span>
                                     {!effectiveIsAdmin && deduplicatedStores.length > 0 && (
-                                        <span className="ml-auto text-[10px] font-normal normal-case text-slate-500">
+                                        <span className="ml-auto text-[10px] font-normal normal-case text-slate-600">
                                             (Được phân quyền: <strong className="text-blue-700 font-bold">{deduplicatedStores.length}</strong> ST)
                                         </span>
                                     )}
                                 </label>
                                 {deduplicatedStores.length === 0 ? (
-                                    <div className="text-xs text-rose-600 font-bold p-2 bg-rose-50 border border-rose-200 rounded-xl">
-                                        ⚠️ Tài khoản của bạn chưa được phân quyền ST nào để nhập liệu. Vui lòng liên hệ Quản trị viên.
+                                    <div className="text-xs text-rose-700 font-bold p-2 bg-rose-50 border border-rose-200 rounded-xl">
+                                        Tài khoản của bạn chưa được phân quyền ST nào để nhập liệu. Vui lòng liên hệ Quản trị viên.
                                     </div>
                                 ) : (
                                     <select
+                                        id="ocr-modal-store-select"
+                                        name="ocrStore"
                                         value={selectedStore}
+                                        disabled={isExtracting || isSavingCloud}
                                         onChange={(e) => setSelectedStore(e.target.value)}
-                                        className="w-full bg-white border border-slate-300 text-slate-800 py-2.5 px-3 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs"
+                                        className="w-full bg-white border border-slate-300 text-slate-800 py-2.5 px-3 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500 shadow-sm cursor-pointer disabled:opacity-60"
                                     >
                                         {canAccessAllCluster && (
-                                            <option value="all">🌐 Toàn Cụm (Nhập 1 lần nhiều ST)</option>
+                                            <option value="all">Toàn Cụm (Nhập 1 lần nhiều ST)</option>
                                         )}
                                         {deduplicatedStores.map(st => (
                                             <option key={st.id || st.code || st.name} value={st.name}>
@@ -590,7 +773,7 @@ export default function DailyEmployeeRevenueOcrModal({
                                 )}
                                 {selectedStore === 'all' && (
                                     <div className="mt-2 bg-blue-50 border border-blue-200 rounded-xl p-2.5 flex items-start gap-2 text-xs text-blue-900">
-                                        <Users className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                                        <Users className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" aria-hidden="true" />
                                         <div>
                                             <strong className="font-bold">Chế độ Nhập liệu Toàn Cụm:</strong> Hệ thống sẽ lưu 1 phiên Toàn Cụm đồng thời tự động phân bổ số liệu về từng ST theo danh sách nhân sự!
                                         </div>
@@ -598,77 +781,83 @@ export default function DailyEmployeeRevenueOcrModal({
                                 )}
                             </div>
 
-                            <div className="self-end sm:self-center pt-1 sm:pt-4 shrink-0 flex items-center gap-2">
-                                <div className="px-3 py-2 rounded-xl text-xs font-bold bg-blue-50 text-blue-800 border border-blue-200 flex items-center gap-1.5 shadow-2xs">
-                                    <Zap className="w-3.5 h-3.5 text-blue-600 animate-pulse" />
+                            <div className="self-end sm:self-center pt-1 sm:pt-4 shrink-0 flex items-center gap-2 flex-wrap">
+                                <div className="px-3 py-2 rounded-xl text-xs font-bold bg-blue-50 text-blue-900 border border-blue-200 flex items-center gap-1.5 shadow-sm tabular-nums">
+                                    <Zap className="w-3.5 h-3.5 text-blue-700" aria-hidden="true" />
                                     <span>Hôm nay: {formatDate(reportDate)}</span>
                                 </div>
                                 <button
                                     type="button"
                                     onClick={() => setIsKeyModalOpen(true)}
-                                    className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition shadow-2xs cursor-pointer ${isQuotaExceeded
+                                    className={`inline-flex items-center gap-1.5 px-3 py-2 min-h-[36px] rounded-xl text-xs font-bold border transition shadow-sm cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${isQuotaExceeded
                                         ? 'bg-rose-50 text-rose-800 border-rose-300'
                                         : keyInfo.source === 'USER'
-                                            ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                                            : 'bg-slate-50 text-slate-800 border-slate-300'
+                                            ? 'bg-emerald-50 text-emerald-900 border-emerald-300'
+                                            : 'bg-white text-slate-800 border-slate-300 hover:bg-slate-100'
                                         }`}
                                 >
-                                    <KeyRound className="w-3.5 h-3.5" />
+                                    <KeyRound className="w-3.5 h-3.5" aria-hidden="true" />
                                     <span>{Boolean(keyInfo.key) ? (keyInfo.source === 'USER' ? 'Key Cá Nhân' : 'Key Hệ Thống') : 'Nhập API Key'}</span>
                                 </button>
                             </div>
                         </div>
                     </div>
 
-                    {/* KHUNG NẠP ẢNH HỢP NHẤT (UNIFIED SINGLE UPLOAD FRAME) */}
+                    {/* KHUNG NẠP ẢNH 2 BƯỚC CHUẨN MỚI (KHÔNG CÓ DT THỰC & KHÔNG CÓ THI ĐUA) */}
                     <div className="bg-slate-50/70 border border-slate-200/90 rounded-2xl p-3.5 space-y-3">
-                        {/* Thanh chỉ định mục tiêu dán ảnh Ctrl + V & Nút xóa ảnh */}
+                        {/* Thanh chỉ định mục tiêu dán ảnh Ctrl + V & Nút xóa trắng */}
                         <div className="flex flex-wrap items-center justify-between gap-2 bg-white px-3 py-2 rounded-xl border border-slate-200/80">
                             <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-[11px] font-bold text-slate-600 flex items-center gap-1">
-                                    <Clipboard className="w-3.5 h-3.5 text-blue-600" />
-                                    <span>Mục tiêu phím tắt <kbd className="font-mono bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded border border-blue-200 font-bold">Ctrl + V</kbd>:</span>
+                                <span className="text-[11px] font-bold text-slate-700 flex items-center gap-1">
+                                    <Clipboard className="w-3.5 h-3.5 text-blue-600" aria-hidden="true" />
+                                    <span>Dán nhanh <kbd className="font-mono bg-blue-50 text-blue-800 px-1.5 py-0.5 rounded border border-blue-200 font-bold">Ctrl + V</kbd> vào:</span>
                                 </span>
-                                <div className="inline-flex rounded-lg border border-slate-200 p-0.5 bg-slate-100 text-xs font-bold">
+                                <div role="tablist" aria-label="Chọn nhóm ảnh dán nhanh" className="inline-flex rounded-lg border border-slate-200 p-0.5 bg-slate-100 text-xs font-bold flex-wrap gap-0.5">
                                     <button
                                         type="button"
+                                        role="tab"
+                                        aria-selected={pasteTarget === 'QD'}
                                         onClick={() => setPasteTarget('QD')}
-                                        className={`px-2.5 py-1 rounded-md transition cursor-pointer flex items-center gap-1 ${pasteTarget === 'QD'
-                                            ? 'bg-emerald-600 text-white shadow-2xs font-black'
-                                            : 'text-slate-600 hover:text-slate-900'
+                                        className={`px-2.5 py-1.5 rounded-md transition cursor-pointer flex items-center gap-1 ${pasteTarget === 'QD'
+                                            ? 'bg-emerald-700 text-white shadow-sm font-black'
+                                            : 'text-slate-700 hover:text-slate-900'
                                             }`}
                                     >
-                                        <TrendingUp className="w-3 h-3" />
-                                        <span>DTQĐ &amp; Số Lượng ({qdFiles.length})</span>
+                                        <TrendingUp className="w-3 h-3" aria-hidden="true" />
+                                        <span>1. Doanh Thu QĐ ({qdFiles.length})</span>
                                     </button>
                                     <button
                                         type="button"
-                                        onClick={() => setPasteTarget('REAL')}
-                                        className={`px-2.5 py-1 rounded-md transition cursor-pointer flex items-center gap-1 ${pasteTarget === 'REAL'
-                                            ? 'bg-purple-600 text-white shadow-2xs font-black'
-                                            : 'text-slate-600 hover:text-slate-900'
+                                        role="tab"
+                                        aria-selected={pasteTarget === 'INSTALLMENT'}
+                                        onClick={() => setPasteTarget('INSTALLMENT')}
+                                        className={`px-2.5 py-1.5 rounded-md transition cursor-pointer flex items-center gap-1 ${pasteTarget === 'INSTALLMENT'
+                                            ? 'bg-blue-700 text-white shadow-sm font-black'
+                                            : 'text-slate-700 hover:text-slate-900'
                                             }`}
                                     >
-                                        <CreditCard className="w-3 h-3" />
-                                        <span>DT Thực &amp; Trả Góp ({realFiles.length})</span>
+                                        <Percent className="w-3 h-3" aria-hidden="true" />
+                                        <span>2. % Tỷ Trọng TG ({installmentFiles.length})</span>
                                     </button>
                                 </div>
                             </div>
 
-                            {(qdFiles.length > 0 || realFiles.length > 0) && (
+                            {hasModalWorkingData && (
                                 <button
                                     type="button"
                                     onClick={handleClearAllFiles}
-                                    className="text-[11px] text-rose-600 hover:underline font-bold cursor-pointer"
+                                    disabled={isExtracting || isSavingCloud}
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] text-rose-800 bg-rose-50 hover:bg-rose-100 border border-rose-200 font-bold cursor-pointer disabled:opacity-50"
                                 >
-                                    Xóa hết ảnh đã nạp
+                                    <RotateCcw className="w-3 h-3" aria-hidden="true" />
+                                    <span>Xóa trắng</span>
                                 </button>
                             )}
                         </div>
 
-                        {/* 2 Khung con tải ảnh riêng biệt hiển thị song song trong 1 khung */}
+                        {/* 2 Khung con tải ảnh riêng biệt */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            {/* KHUNG 1: DTQĐ & SỐ LƯỢNG */}
+                            {/* KHUNG 1: DOANH THU QĐ & DT TRẢ GÓP QĐ */}
                             <div
                                 onDragOver={(e) => { e.preventDefault(); setIsDraggingQD(true); }}
                                 onDragLeave={() => setIsDraggingQD(false)}
@@ -676,13 +865,14 @@ export default function DailyEmployeeRevenueOcrModal({
                                 className={`border-2 border-dashed rounded-2xl p-3.5 flex flex-col justify-between transition-all bg-white ${isDraggingQD
                                     ? 'border-emerald-500 bg-emerald-50/70 scale-[0.99]'
                                     : pasteTarget === 'QD'
-                                        ? 'border-emerald-300 ring-2 ring-emerald-100'
+                                        ? 'border-emerald-400 ring-2 ring-emerald-100'
                                         : 'border-slate-200'
                                     }`}
                             >
                                 <input
                                     ref={qdInputRef}
                                     type="file"
+                                    aria-label="Chọn ảnh bảng Doanh Thu QĐ"
                                     multiple
                                     accept="image/*"
                                     onChange={(e) => handleFileInputChange(e, 'QD')}
@@ -693,40 +883,38 @@ export default function DailyEmployeeRevenueOcrModal({
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-1.5">
                                             <div className="w-6 h-6 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center">
-                                                <TrendingUp className="w-3.5 h-3.5" />
+                                                <TrendingUp className="w-3.5 h-3.5" aria-hidden="true" />
                                             </div>
                                             <div>
                                                 <div className="text-xs font-black text-emerald-950 uppercase tracking-tight">
-                                                    1. DTQĐ &amp; Số Lượng
+                                                    1. Doanh Thu QĐ
                                                 </div>
-                                                <div className="text-[10px] text-slate-500 font-medium">
-                                                    Cột: SỐ LƯỢNG, DOANH THU QĐ
+                                                <div className="text-[10px] text-slate-600 font-medium">
+                                                    Ảnh Lưới: DOANH THU QĐ, DT TRẢ GÓP QĐ, SL
                                                 </div>
                                             </div>
                                         </div>
-                                        <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                                        <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-900">
                                             {qdFiles.length} ảnh
                                         </span>
                                     </div>
 
-                                    {/* Nút tải ảnh riêng của DTQĐ (hỗ trợ 1 hoặc nhiều ảnh) */}
                                     <button
                                         type="button"
                                         onClick={() => {
                                             setPasteTarget('QD');
                                             qdInputRef.current?.click();
                                         }}
-                                        className="w-full py-2 px-3 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer shadow-2xs"
+                                        className="w-full py-2 px-3 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-900 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer shadow-sm"
                                     >
-                                        <Camera className="w-3.5 h-3.5 text-emerald-600" />
-                                        <span>📸 Tải Ảnh DTQĐ (+nhiều ảnh)</span>
+                                        <Camera className="w-3.5 h-3.5 text-emerald-700" aria-hidden="true" />
+                                        <span>Tải Ảnh Doanh Thu QĐ (+nhiều ảnh)</span>
                                     </button>
 
-                                    {/* Danh sách ảnh đã chọn */}
                                     <div className="min-h-[50px] max-h-28 overflow-y-auto pt-1">
                                         {qdFiles.length === 0 ? (
-                                            <div className="h-full flex items-center justify-center text-center p-2 text-[10.5px] text-slate-400 italic">
-                                                Kéo thả ảnh hoặc chọn nút trên (Hỗ trợ nhiều ảnh cuộn)
+                                            <div className="h-full flex items-center justify-center text-center p-2 text-[10.5px] text-slate-600 italic">
+                                                Hỗ trợ chọn nhiều ảnh cuộn ngang/dọc (hợp nhất theo Mã NV)
                                             </div>
                                         ) : (
                                             <div className="flex flex-wrap gap-1">
@@ -735,10 +923,11 @@ export default function DailyEmployeeRevenueOcrModal({
                                                         <span className="truncate max-w-[130px]" title={f.name}>{f.name}</span>
                                                         <button
                                                             type="button"
+                                                            aria-label={`Xóa ảnh ${f.name}`}
                                                             onClick={() => setQdFiles(prev => prev.filter((_, idx) => idx !== i))}
-                                                            className="text-slate-400 hover:text-rose-600 cursor-pointer"
+                                                            className="text-slate-600 hover:text-rose-700 cursor-pointer"
                                                         >
-                                                            <X className="w-3 h-3" />
+                                                            <X className="w-3 h-3" aria-hidden="true" />
                                                         </button>
                                                     </span>
                                                 ))}
@@ -748,77 +937,77 @@ export default function DailyEmployeeRevenueOcrModal({
                                 </div>
                             </div>
 
-                            {/* KHUNG 2: DT THỰC & TRẢ GÓP */}
+                            {/* KHUNG 2: % TỶ TRỌNG TRẢ GÓP (BÁO CÁO TRẢ CHẬM) */}
                             <div
-                                onDragOver={(e) => { e.preventDefault(); setIsDraggingReal(true); }}
-                                onDragLeave={() => setIsDraggingReal(false)}
-                                onDrop={(e) => handleDropCategory(e, 'REAL')}
-                                className={`border-2 border-dashed rounded-2xl p-3.5 flex flex-col justify-between transition-all bg-white ${isDraggingReal
-                                    ? 'border-purple-500 bg-purple-50/70 scale-[0.99]'
-                                    : pasteTarget === 'REAL'
-                                        ? 'border-purple-300 ring-2 ring-purple-100'
+                                onDragOver={(e) => { e.preventDefault(); setIsDraggingInstallment(true); }}
+                                onDragLeave={() => setIsDraggingInstallment(false)}
+                                onDrop={(e) => handleDropCategory(e, 'INSTALLMENT')}
+                                className={`border-2 border-dashed rounded-2xl p-3.5 flex flex-col justify-between transition-all bg-white ${isDraggingInstallment
+                                    ? 'border-blue-500 bg-blue-50/70 scale-[0.99]'
+                                    : pasteTarget === 'INSTALLMENT'
+                                        ? 'border-blue-400 ring-2 ring-blue-100'
                                         : 'border-slate-200'
                                     }`}
                             >
                                 <input
-                                    ref={realInputRef}
+                                    ref={installmentInputRef}
                                     type="file"
+                                    aria-label="Chọn ảnh Báo cáo trả chậm (% Tỷ trọng trả góp)"
                                     multiple
                                     accept="image/*"
-                                    onChange={(e) => handleFileInputChange(e, 'REAL')}
+                                    onChange={(e) => handleFileInputChange(e, 'INSTALLMENT')}
                                     className="hidden"
                                 />
 
                                 <div className="space-y-2">
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-1.5">
-                                            <div className="w-6 h-6 rounded-lg bg-purple-100 text-purple-800 flex items-center justify-center">
-                                                <CreditCard className="w-3.5 h-3.5" />
+                                            <div className="w-6 h-6 rounded-lg bg-blue-100 text-blue-800 flex items-center justify-center">
+                                                <Percent className="w-3.5 h-3.5" aria-hidden="true" />
                                             </div>
                                             <div>
-                                                <div className="text-xs font-black text-purple-950 uppercase tracking-tight">
-                                                    2. DT Thực &amp; Trả Góp
+                                                <div className="text-xs font-black text-blue-950 uppercase tracking-tight">
+                                                    2. % Tỷ Trọng Trả Góp
                                                 </div>
-                                                <div className="text-[10px] text-slate-500 font-medium">
-                                                    Cột: DOANH THU, DT TRẢ GÓP
+                                                <div className="text-[10px] text-slate-600 font-medium">
+                                                    Ảnh Báo cáo trả chậm (tự khớp Mã NV theo tên)
                                                 </div>
                                             </div>
                                         </div>
-                                        <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-800">
-                                            {realFiles.length} ảnh
+                                        <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-900">
+                                            {installmentFiles.length} ảnh
                                         </span>
                                     </div>
 
-                                    {/* Nút tải ảnh riêng của DT Thực (hỗ trợ 1 hoặc nhiều ảnh) */}
                                     <button
                                         type="button"
                                         onClick={() => {
-                                            setPasteTarget('REAL');
-                                            realInputRef.current?.click();
+                                            setPasteTarget('INSTALLMENT');
+                                            installmentInputRef.current?.click();
                                         }}
-                                        className="w-full py-2 px-3 bg-purple-50 hover:bg-purple-100 border border-purple-300 text-purple-800 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer shadow-2xs"
+                                        className="w-full py-2 px-3 bg-blue-50 hover:bg-blue-100 border border-blue-300 text-blue-900 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer shadow-sm"
                                     >
-                                        <Camera className="w-3.5 h-3.5 text-purple-600" />
-                                        <span>📸 Tải Ảnh DT Thực (+nhiều ảnh)</span>
+                                        <Camera className="w-3.5 h-3.5 text-blue-700" aria-hidden="true" />
+                                        <span>Tải Ảnh % Tỷ Trọng TG (+nhiều ảnh)</span>
                                     </button>
 
-                                    {/* Danh sách ảnh đã chọn */}
                                     <div className="min-h-[50px] max-h-28 overflow-y-auto pt-1">
-                                        {realFiles.length === 0 ? (
-                                            <div className="h-full flex items-center justify-center text-center p-2 text-[10.5px] text-slate-400 italic">
-                                                Kéo thả ảnh hoặc chọn nút trên (Hỗ trợ nhiều ảnh cuộn)
+                                        {installmentFiles.length === 0 ? (
+                                            <div className="h-full flex items-center justify-center text-center p-2 text-[10.5px] text-slate-600 italic">
+                                                Ảnh Báo cáo trả chậm (chỉ có tên NV, tự đối chiếu danh bạ)
                                             </div>
                                         ) : (
                                             <div className="flex flex-wrap gap-1">
-                                                {realFiles.map((f, i) => (
-                                                    <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-50 text-purple-900 border border-purple-200 rounded-md text-[10.5px] font-medium">
+                                                {installmentFiles.map((f, i) => (
+                                                    <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-blue-900 border border-blue-200 rounded-md text-[10.5px] font-medium">
                                                         <span className="truncate max-w-[130px]" title={f.name}>{f.name}</span>
                                                         <button
                                                             type="button"
-                                                            onClick={() => setRealFiles(prev => prev.filter((_, idx) => idx !== i))}
-                                                            className="text-slate-400 hover:text-rose-600 cursor-pointer"
+                                                            aria-label={`Xóa ảnh ${f.name}`}
+                                                            onClick={() => setInstallmentFiles(prev => prev.filter((_, idx) => idx !== i))}
+                                                            className="text-slate-600 hover:text-rose-700 cursor-pointer"
                                                         >
-                                                            <X className="w-3 h-3" />
+                                                            <X className="w-3 h-3" aria-hidden="true" />
                                                         </button>
                                                     </span>
                                                 ))}
@@ -832,28 +1021,28 @@ export default function DailyEmployeeRevenueOcrModal({
 
                     {/* TIẾN TRÌNH HOẶC NÚT TRÍCH XUẤT */}
                     {isExtracting ? (
-                        <div className="p-4 bg-blue-50 border border-blue-200 rounded-2xl space-y-2 text-center animate-pulse">
+                        <div className="p-4 bg-blue-50 border border-blue-200 rounded-2xl space-y-2 text-center">
                             <div className="flex items-center justify-between text-xs font-bold text-blue-900">
                                 <span>{progressText}</span>
-                                <span>{progressPercent}%</span>
+                                <span className="tabular-nums">{progressPercent}%</span>
                             </div>
                             <div className="w-full bg-blue-200 rounded-full h-2 overflow-hidden">
                                 <div
-                                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                                    className="bg-blue-700 h-2 rounded-full transition-all duration-300"
                                     style={{ width: `${progressPercent}%` }}
                                 />
                             </div>
                         </div>
                     ) : (
                         <div className="flex items-center justify-between gap-3">
-                            {(qdFiles.length > 0 || realFiles.length > 0) && (
+                            {(qdFiles.length > 0 || installmentFiles.length > 0) && (
                                 <button
                                     type="button"
                                     onClick={handleRunOcr}
-                                    className="w-full py-3 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white rounded-2xl text-xs font-black flex items-center justify-center gap-2 shadow-md transition cursor-pointer"
+                                    className="w-full py-3 px-4 bg-blue-700 hover:bg-blue-800 text-white rounded-2xl text-xs font-black flex items-center justify-center gap-2 shadow-md transition cursor-pointer"
                                 >
-                                    <Sparkles className="w-4 h-4 text-amber-300" />
-                                    <span>✨ Bắt Đầu Bóc Tách &amp; Hợp Nhất {qdFiles.length + realFiles.length} Ảnh Bằng Gemini AI</span>
+                                    <Sparkles className="w-4 h-4 text-amber-300" aria-hidden="true" />
+                                    <span>Bắt Đầu Bóc Tách &amp; Hợp Nhất {qdFiles.length + installmentFiles.length} Ảnh Bằng Gemini AI</span>
                                 </button>
                             )}
                         </div>
@@ -861,160 +1050,29 @@ export default function DailyEmployeeRevenueOcrModal({
 
                     {/* BÁO LỖI NẾU CÓ */}
                     {ocrError && (
-                        <div className="p-3 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-2 text-xs text-rose-800 font-medium">
-                            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                        <div role="alert" className="p-3 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-2 text-xs text-rose-800 font-medium">
+                            <AlertCircle className="w-4 h-4 text-rose-700 shrink-0 mt-0.5" aria-hidden="true" />
                             <span>{ocrError}</span>
                         </div>
                     )}
 
-                    {/* BẢNG XEM TRƯỚC & RÀ SOÁT KẾT QUẢ */}
-                    {extractedRecords.length > 0 && (
-                        <div className="space-y-3 pt-2">
-                            {/* Thẻ thống kê KPI bóc tách */}
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-slate-100 p-2.5 rounded-2xl border border-slate-200 text-xs">
-                                <div className="bg-white p-2 rounded-xl border border-slate-200 text-center">
-                                    <div className="text-[10px] text-slate-500 font-bold uppercase">Nhân sự</div>
-                                    <div className="text-sm font-black text-slate-900">{summaryStats.totalEmp} NV</div>
-                                </div>
-                                <div className="bg-white p-2 rounded-xl border border-emerald-200 text-center">
-                                    <div className="text-[10px] text-emerald-700 font-bold uppercase">Tổng DTQĐ</div>
-                                    <div className="text-sm font-black text-emerald-700">{formatValue(summaryStats.totalQd)} tr</div>
-                                </div>
-                                <div className="bg-white p-2 rounded-xl border border-blue-200 text-center">
-                                    <div className="text-[10px] text-blue-700 font-bold uppercase">Tổng DT Thực</div>
-                                    <div className="text-sm font-black text-blue-800">{formatValue(summaryStats.totalActual)} tr</div>
-                                </div>
-                                <div className="bg-white p-2 rounded-xl border border-purple-200 text-center">
-                                    <div className="text-[10px] text-purple-700 font-bold uppercase">Trả Góp (%TG)</div>
-                                    <div className="text-sm font-black text-purple-700">{formatValue(summaryStats.totalInstallment)} tr ({summaryStats.avgInstRate}%)</div>
-                                </div>
-                            </div>
-
-                            <div className="flex items-center justify-between">
-                                <span className="text-xs font-black text-slate-800 uppercase">
-                                    Danh Sách Nhân Viên ({extractedRecords.length} Bạn)
-                                </span>
-                                <button
-                                    type="button"
-                                    onClick={handleAddRecord}
-                                    className="px-2.5 py-1 bg-white border border-slate-300 hover:bg-slate-50 text-slate-800 text-[11px] font-bold rounded-xl shadow-2xs flex items-center gap-1 cursor-pointer"
-                                >
-                                    <Plus className="w-3 h-3 text-blue-600" />
-                                    <span>Thêm dòng</span>
-                                </button>
-                            </div>
-
-                            {/* Bảng dữ liệu chi tiết */}
-                            <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-2xs">
-                                <div className="max-h-72 overflow-y-auto">
-                                    <table className="w-full text-xs text-left border-collapse">
-                                        <thead className="bg-slate-900 text-white font-black text-[10.5px] uppercase sticky top-0 z-10">
-                                            <tr>
-                                                <th className="px-2 py-2 w-8 text-center">#</th>
-                                                <th className="px-2 py-2 w-20">Mã NV</th>
-                                                <th className="px-2 py-2 min-w-[140px]">Họ và Tên Chuẩn</th>
-                                                {selectedStore === 'all' && (
-                                                    <th className="px-2 py-2 min-w-[100px] text-left">ST</th>
-                                                )}
-                                                <th className="px-2 py-2 w-14 text-right">SL</th>
-                                                <th className="px-2 py-2 w-20 text-right">DT Thực</th>
-                                                <th className="px-2 py-2 w-20 text-right bg-[#005a43] text-[#fde047]">DTQĐ</th>
-                                                <th className="px-2 py-2 w-20 text-right">T.Góp</th>
-                                                <th className="px-2 py-2 w-14 text-right">% TG</th>
-                                                <th className="px-2 py-2 w-8 text-center"></th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-slate-100">
-                                            {extractedRecords.map((r, idx) => (
-                                                <tr key={idx} className="hover:bg-blue-50/40 transition">
-                                                    <td className="px-2 py-1.5 text-center text-slate-400 font-bold text-[11px]">
-                                                        {idx + 1}
-                                                    </td>
-                                                    <td className="px-2 py-1.5 font-mono font-bold text-blue-800">
-                                                        <input
-                                                            type="text"
-                                                            value={r.employee_id}
-                                                            onChange={e => handleUpdateRecord(idx, 'employee_id', e.target.value)}
-                                                            className="w-full bg-transparent border-0 font-mono font-bold text-blue-800 text-xs focus:ring-1 focus:ring-blue-500 rounded px-1"
-                                                        />
-                                                    </td>
-                                                    <td className="px-2 py-1.5 font-bold text-slate-900">
-                                                        <input
-                                                            type="text"
-                                                            value={r.full_name}
-                                                            onChange={e => handleUpdateRecord(idx, 'full_name', e.target.value)}
-                                                            className="w-full bg-transparent border-0 font-bold text-slate-900 text-xs focus:ring-1 focus:ring-blue-500 rounded px-1"
-                                                        />
-                                                    </td>
-                                                    {selectedStore === 'all' && (
-                                                        <td className="px-2 py-1.5 text-slate-600 font-medium text-[11px] whitespace-nowrap">
-                                                            <span className="px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200 text-slate-700 font-bold">
-                                                                {empStoreMap[r.employee_id?.trim()] ? getShortStoreName(empStoreMap[r.employee_id?.trim()]) : 'Chưa rõ'}
-                                                            </span>
-                                                        </td>
-                                                    )}
-                                                    <td className="px-2 py-1.5 text-right font-mono font-bold text-slate-700">
-                                                        <input
-                                                            type="number"
-                                                            value={r.quantity || ''}
-                                                            onChange={e => handleUpdateRecord(idx, 'quantity', Number(e.target.value) || 0)}
-                                                            className="w-full text-right bg-slate-50 border border-slate-200 rounded px-1 py-0.5 text-xs font-mono"
-                                                            placeholder="0"
-                                                        />
-                                                    </td>
-                                                    <td className="px-2 py-1.5 text-right font-mono font-bold text-slate-800">
-                                                        <input
-                                                            type="number"
-                                                            step="any"
-                                                            value={r.revenue_actual}
-                                                            onChange={e => handleUpdateRecord(idx, 'revenue_actual', e.target.value)}
-                                                            className="w-full text-right bg-slate-50 border border-slate-200 rounded px-1 py-0.5 text-xs font-mono font-bold"
-                                                        />
-                                                    </td>
-                                                    <td className="px-2 py-1.5 text-right font-mono font-black text-emerald-700 bg-emerald-50/50">
-                                                        <input
-                                                            type="number"
-                                                            step="any"
-                                                            value={r.revenue_qd}
-                                                            onChange={e => handleUpdateRecord(idx, 'revenue_qd', e.target.value)}
-                                                            className="w-full text-right bg-white border border-emerald-300 rounded px-1 py-0.5 text-xs font-mono font-black text-emerald-800"
-                                                        />
-                                                    </td>
-                                                    <td className="px-2 py-1.5 text-right font-mono font-bold text-purple-700">
-                                                        <input
-                                                            type="number"
-                                                            step="any"
-                                                            value={r.installment_revenue}
-                                                            onChange={e => handleUpdateRecord(idx, 'installment_revenue', e.target.value)}
-                                                            className="w-full text-right bg-slate-50 border border-slate-200 rounded px-1 py-0.5 text-xs font-mono"
-                                                        />
-                                                    </td>
-                                                    <td className="px-2 py-1.5 text-right font-mono font-bold text-purple-900">
-                                                        {r.installment_rate}%
-                                                    </td>
-                                                    <td className="px-2 py-1.5 text-center">
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => handleDeleteRecord(idx)}
-                                                            className="text-slate-400 hover:text-rose-600 p-1 rounded cursor-pointer"
-                                                            title="Xóa dòng này"
-                                                        >
-                                                            <Trash2 className="w-3.5 h-3.5" />
-                                                        </button>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-                    )}
+                    {/* BẢNG XEM TRƯỚC & RÀ SOÁT MAPPING KẾT QUẢ */}
+                    <DailyOcrPreviewTable
+                        records={extractedRecords}
+                        selectedStore={selectedStore}
+                        employeesDirectory={directoryForSelectedStore}
+                        empStoreMap={empStoreMap}
+                        summaryStats={summaryStats}
+                        onAddRecord={handleAddRecord}
+                        onUpdateRecord={handleUpdateRecord}
+                        onDeleteRecord={handleDeleteRecord}
+                        onRemapEmployeeId={handleRemapEmployeeId}
+                    />
                 </div>
 
                 {/* 3. FOOTER HÀNH ĐỘNG */}
                 <div className="p-4 sm:p-5 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
-                    <div className="text-xs text-slate-500 font-medium">
+                    <div className="text-xs text-slate-600 font-medium">
                         Đang nạp Realtime cho: <strong className="text-blue-700">{selectedStore === 'all' ? 'Toàn Cụm' : formatStoreDisplayName(selectedStore)}</strong> • {formatDate(reportDate)}
                     </div>
 
@@ -1022,7 +1080,7 @@ export default function DailyEmployeeRevenueOcrModal({
                         <button
                             type="button"
                             onClick={onClose}
-                            className="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-200 transition cursor-pointer"
+                            className="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-200 transition cursor-pointer"
                         >
                             Đóng
                         </button>
@@ -1031,7 +1089,7 @@ export default function DailyEmployeeRevenueOcrModal({
                             type="button"
                             onClick={handleApplyOnly}
                             disabled={extractedRecords.length === 0}
-                            className="px-4 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-800 disabled:opacity-50 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs transition cursor-pointer"
+                            className="px-4 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-800 disabled:opacity-50 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition cursor-pointer"
                             title="Áp dụng số liệu vào báo cáo để xem trước mà chưa lưu Cloud"
                         >
                             <span>Áp Dụng Vào Báo Cáo</span>
@@ -1041,11 +1099,11 @@ export default function DailyEmployeeRevenueOcrModal({
                             type="button"
                             onClick={handleApplyAndSaveCloud}
                             disabled={isSavingCloud || extractedRecords.length === 0}
-                            className="px-5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-50 text-white rounded-xl text-xs font-black flex items-center gap-2 shadow-md transition cursor-pointer"
+                            className="px-5 py-2 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white rounded-xl text-xs font-black flex items-center gap-2 shadow-md transition cursor-pointer"
                             title="Áp dụng vào báo cáo và lưu vĩnh viễn lên Cloud"
                         >
-                            <Save className={`w-4 h-4 ${isSavingCloud ? 'animate-spin' : ''}`} />
-                            <span>{isSavingCloud ? 'Đang lưu Cloud...' : '💾 Áp Dụng & Lưu Cloud Ngay'}</span>
+                            <Save className={`w-4 h-4 ${isSavingCloud ? 'animate-spin' : ''}`} aria-hidden="true" />
+                            <span>{isSavingCloud ? 'Đang lưu Cloud...' : 'Áp Dụng & Lưu Cloud Ngay'}</span>
                         </button>
                     </div>
                 </div>
@@ -1061,7 +1119,7 @@ export default function DailyEmployeeRevenueOcrModal({
                     setIsQuotaExceeded(false);
                 }}
             />
-        </div>
+        </div>,
+        document.body
     );
 }
-

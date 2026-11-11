@@ -15,90 +15,98 @@ export default function EmployeeRankingKpiCards({ summary, displayUnit }: Props)
     };
 
     return (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            {/* THẺ 1: TỔNG DTQĐ TOÀN SHOP / CỤM */}
-            <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-indigo-100 shadow-2xs border-l-4 border-l-indigo-600 flex items-center justify-between">
-                <div className="min-w-0">
-                    <div className="text-[10.5px] font-bold text-indigo-700 uppercase tracking-wider truncate">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
+            {/* THẺ 1: TỔNG DTQĐ TOÀN ST / CỤM */}
+            <div className="bg-white p-3 sm:p-4 rounded-2xl border border-blue-200 shadow-sm flex flex-col justify-between gap-1.5">
+                <div className="flex items-center justify-between gap-1.5">
+                    <div className="text-[10px] sm:text-[10.5px] font-bold text-blue-800 uppercase tracking-wider">
                         Tổng DTQĐ
                     </div>
-                    <div className="text-lg sm:text-xl font-black text-indigo-950 mt-0.5 tracking-tight font-avo">
-                        {formatMoney(summary.totalRevenueQd)}
-                    </div>
-                    <div className="text-[10.5px] text-slate-500 font-medium mt-0.5 truncate">
-                        DT Thực: <b className="text-slate-700">{formatMoney(summary.totalRevenueActual)}</b>
+                    <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-700 shrink-0">
+                        <Coins className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.2]" aria-hidden="true" />
                     </div>
                 </div>
-                <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shrink-0 shadow-2xs">
-                    <Coins className="w-5 h-5 stroke-[2.2]" />
+                <div>
+                    <div className="text-base sm:text-xl font-black text-slate-950 tracking-tight font-avo">
+                        {formatMoney(summary.totalRevenueQd)}
+                    </div>
+                    <div className="text-[10.5px] text-slate-600 font-medium mt-0.5">
+                        DT Thực: <b className="text-slate-800">{formatMoney(summary.totalRevenueActual)}</b>
+                    </div>
                 </div>
             </div>
 
             {/* THẺ 2: %DKHT DOANH THU TRUNG BÌNH */}
-            <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-amber-100 shadow-2xs border-l-4 border-l-amber-500 flex items-center justify-between">
-                <div className="min-w-0">
-                    <div className="text-[10.5px] font-bold text-amber-800 uppercase tracking-wider truncate">
+            <div className="bg-white p-3 sm:p-4 rounded-2xl border border-amber-200 shadow-sm flex flex-col justify-between gap-1.5">
+                <div className="flex items-center justify-between gap-1.5">
+                    <div className="text-[10px] sm:text-[10.5px] font-bold text-amber-800 uppercase tracking-wider">
                         %DKHT Doanh Thu TB
                     </div>
-                    <div className={`text-lg sm:text-xl font-black mt-0.5 tracking-tight font-avo ${summary.avgForecastRate >= 100
-                        ? 'text-emerald-600'
+                    <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-700 shrink-0">
+                        <Target className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.2]" aria-hidden="true" />
+                    </div>
+                </div>
+                <div>
+                    <div className={`text-base sm:text-xl font-black tracking-tight font-avo ${summary.avgForecastRate >= 100
+                        ? 'text-emerald-700'
                         : summary.avgForecastRate >= 90
-                            ? 'text-amber-700'
+                            ? 'text-amber-800'
                             : 'text-rose-600'
                         }`}>
                         {summary.avgForecastRate.toFixed(1)}%
                     </div>
-                    <div className="text-[10.5px] text-slate-500 font-medium mt-0.5 truncate">
-                        Mục tiêu: <b className="text-slate-700">{formatMoney(summary.totalRevenueTarget)}</b>
+                    <div className="text-[10.5px] text-slate-600 font-medium mt-0.5">
+                        Mục tiêu: <b className="text-slate-800">{formatMoney(summary.totalRevenueTarget)}</b>
                     </div>
-                </div>
-                <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-600 shrink-0 shadow-2xs">
-                    <Target className="w-5 h-5 stroke-[2.2]" />
                 </div>
             </div>
 
             {/* THẺ 3: TỶ LỆ HOÀN THÀNH THI ĐUA TB */}
-            <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-purple-100 shadow-2xs border-l-4 border-l-purple-500 flex items-center justify-between">
-                <div className="min-w-0">
-                    <div className="text-[10.5px] font-bold text-purple-800 uppercase tracking-wider truncate">
+            <div className="bg-white p-3 sm:p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between gap-1.5">
+                <div className="flex items-center justify-between gap-1.5">
+                    <div className="text-[10px] sm:text-[10.5px] font-bold text-slate-700 uppercase tracking-wider">
                         Tiến Độ Thi Đua TB
                     </div>
-                    <div className={`text-lg sm:text-xl font-black mt-0.5 tracking-tight font-avo ${summary.avgEmulationRate >= 100
-                        ? 'text-emerald-600'
+                    <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-700 shrink-0">
+                        <Award className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.2]" aria-hidden="true" />
+                    </div>
+                </div>
+                <div>
+                    <div className={`text-base sm:text-xl font-black tracking-tight font-avo ${summary.avgEmulationRate >= 100
+                        ? 'text-emerald-700'
                         : summary.avgEmulationRate >= 80
-                            ? 'text-purple-700'
+                            ? 'text-blue-700'
                             : 'text-rose-600'
                         }`}>
                         {summary.avgEmulationRate.toFixed(1)}%
                     </div>
-                    <div className="text-[10.5px] text-slate-500 font-medium mt-0.5 truncate">
-                        Chế độ: <b className="text-slate-700">{summary.scoringModeLabel}</b>
+                    <div className="text-[10.5px] text-slate-600 font-medium mt-0.5">
+                        Chế độ: <b className="text-slate-800">{summary.scoringModeLabel}</b>
                     </div>
-                </div>
-                <div className="w-10 h-10 rounded-xl bg-purple-50 border border-purple-100 flex items-center justify-center text-purple-600 shrink-0 shadow-2xs">
-                    <Award className="w-5 h-5 stroke-[2.2]" />
                 </div>
             </div>
 
             {/* THẺ 4: SỨC KHỎE NHÂN SỰ & XÉT CỨU */}
-            <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-emerald-100 shadow-2xs border-l-4 border-l-emerald-600 flex items-center justify-between">
-                <div className="min-w-0">
-                    <div className="text-[10.5px] font-bold text-emerald-800 uppercase tracking-wider truncate">
-                        Sức Khỏe & Cứu BOT
+            <div className="bg-white p-3 sm:p-4 rounded-2xl border border-emerald-200 shadow-sm flex flex-col justify-between gap-1.5">
+                <div className="flex items-center justify-between gap-1.5">
+                    <div className="text-[10px] sm:text-[10.5px] font-bold text-emerald-800 uppercase tracking-wider">
+                        Sức Khỏe &amp; Cứu BOT
                     </div>
-                    <div className="text-lg sm:text-xl font-black text-slate-900 mt-0.5 tracking-tight font-avo flex items-center gap-2">
-                        <span className="text-teal-600 font-black">{summary.rescuedCount ?? 0}</span>
-                        <span className="text-xs text-slate-400 font-medium">cứu</span>
-                        <span className="text-slate-300 font-normal">/</span>
-                        <span className="text-rose-600 font-black">{summary.botWarningCount ?? 0}</span>
-                        <span className="text-xs text-slate-400 font-medium">BOT</span>
-                    </div>
-                    <div className="text-[10.5px] text-slate-500 font-medium mt-0.5 truncate">
-                        An toàn: <b className="text-emerald-700 font-bold">{summary.safeCount ?? (summary.totalEmployees - (summary.botWarningCount ?? 0))} NV</b>
+                    <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-700 shrink-0">
+                        <ShieldCheck className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.2]" aria-hidden="true" />
                     </div>
                 </div>
-                <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-700 shrink-0 shadow-2xs">
-                    <ShieldCheck className="w-5 h-5 stroke-[2.2]" />
+                <div>
+                    <div className="text-base sm:text-xl font-black text-slate-900 tracking-tight font-avo flex items-center gap-1.5 flex-wrap">
+                        <span className="text-teal-700 font-black">{summary.rescuedCount ?? 0}</span>
+                        <span className="text-xs text-slate-600 font-medium">cứu</span>
+                        <span className="text-slate-500 font-normal">/</span>
+                        <span className="text-rose-600 font-black">{summary.botWarningCount ?? 0}</span>
+                        <span className="text-xs text-slate-600 font-medium">BOT</span>
+                    </div>
+                    <div className="text-[10.5px] text-slate-600 font-medium mt-0.5">
+                        An toàn: <b className="text-emerald-800 font-bold">{summary.safeCount ?? (summary.totalEmployees - (summary.botWarningCount ?? 0))} NV</b>
+                    </div>
                 </div>
             </div>
         </div>
