@@ -361,7 +361,7 @@ export default function PerformanceConfigModal({
                                         onChange={e => handleStoreChange(e.target.value)}
                                         className="w-full text-xs font-bold text-slate-800 bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-500/20"
                                     >
-                                        <option value="all">🏢 Toàn Cụm ST (Áp dụng chung)</option>
+                                        <option value="all">Toàn Cụm ST (Áp dụng chung)</option>
                                         {stores.map(s => (
                                             <option key={s.id || s.code} value={s.name}>
                                                 {s.name} ({s.code})
@@ -446,7 +446,7 @@ export default function PerformanceConfigModal({
                                 </div>
 
                                 <p className="text-[11px] text-slate-600">
-                                    💡 <em>Ghi chú của Boss:</em> Mặc định là số ngày trong tháng ({defaultDays} ngày). Nếu ST có ngày đóng cửa sửa chữa hoặc nghỉ lễ, Boss điều chỉnh tay số ngày này để hệ thống tính toán <strong>% Dự báo hoàn thành (%DKHT)</strong> chuẩn xác nhất.
+                                    <strong>Ghi chú:</strong> Mặc định là số ngày trong tháng ({defaultDays} ngày). Nếu ST có ngày đóng cửa sửa chữa hoặc nghỉ lễ, hãy điều chỉnh tay số ngày này để hệ thống tính toán <strong>% Dự báo hoàn thành (%DKHT)</strong> chuẩn xác nhất.
                                 </p>
                             </div>
 
@@ -478,7 +478,7 @@ export default function PerformanceConfigModal({
                                         <span>ST cần cấu hình tiêu chuẩn TOP / BOT:</span>
                                     </label>
                                     <span className="text-[11px] font-extrabold text-amber-900 bg-white border border-amber-300 px-2.5 py-0.5 rounded-lg shadow-sm">
-                                        {selectedStore === 'all' ? '🌐 Cấu hình chung mặc định' : `🏢 Đích danh: ${selectedStore}`}
+                                        {selectedStore === 'all' ? 'Cấu hình chung mặc định' : `Đích danh: ${selectedStore}`}
                                     </span>
                                 </div>
                                 <select
@@ -488,15 +488,15 @@ export default function PerformanceConfigModal({
                                     onChange={e => handleStoreChange(e.target.value)}
                                     className="w-full text-xs font-bold text-slate-800 bg-white border border-amber-300 px-3 py-2 rounded-xl outline-none focus:border-amber-600 focus:ring-2 focus:ring-amber-500/20 cursor-pointer shadow-sm"
                                 >
-                                    <option value="all">🌐 Toàn bộ cụm ST (Cấu hình chung mặc định)</option>
+                                    <option value="all">Toàn bộ cụm ST (Cấu hình chung mặc định)</option>
                                     {stores.map(s => (
                                         <option key={s.id || s.name} value={s.name}>
-                                            🏢 {s.name}
+                                            {s.name}
                                         </option>
                                     ))}
                                 </select>
                                 <p className="text-[11px] text-amber-950 leading-relaxed">
-                                    💡 <strong>Cấu hình theo đích danh ST:</strong> Mỗi ST có thể áp dụng tỷ lệ % hoặc số lượng TOP/BOT độc lập để phù hợp với quân số thực tế của ST.
+                                    <strong>Cấu hình theo đích danh ST:</strong> Mỗi ST có thể áp dụng tỷ lệ % hoặc số lượng TOP/BOT độc lập để phù hợp với quân số thực tế của ST.
                                 </p>
                             </div>
 
@@ -616,10 +616,10 @@ export default function PerformanceConfigModal({
                                     onChange={e => setRankBy(e.target.value as TopBotConfig['rankBy'])}
                                     className="w-full text-xs font-bold text-slate-800 bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-500/20"
                                 >
-                                    <option value="FORECAST_COMPLETION_RATE">🎯 % Dự Kiến Hoàn Thành (%DKHT) - [Mặc định]</option>
-                                    <option value="REVENUE_QD">💎 Lũy Kế DT Quy Đổi (DTQĐ)</option>
-                                    <option value="REVENUE_ACTUAL">💵 Lũy Kế DT Thực Tế</option>
-                                    <option value="COMPLETION_RATE">📊 % Hoàn Thành Mục Tiêu (%HT real)</option>
+                                    <option value="FORECAST_COMPLETION_RATE">% Dự Kiến Hoàn Thành (%DKHT) - [Mặc định]</option>
+                                    <option value="REVENUE_QD">Lũy Kế DT Quy Đổi (DTQĐ)</option>
+                                    <option value="REVENUE_ACTUAL">Lũy Kế DT Thực Tế</option>
+                                    <option value="COMPLETION_RATE">% Hoàn Thành Mục Tiêu (%HT real)</option>
                                 </select>
                             </div>
 
@@ -632,23 +632,23 @@ export default function PerformanceConfigModal({
                                     </span>
                                 </div>
 
-                                <div className="grid grid-cols-3 gap-2 pt-1 text-center font-mono">
+                                <div className="grid grid-cols-3 gap-2 pt-1 text-center font-mono tabular-nums">
                                     <div className="bg-amber-500/20 border border-amber-500/30 p-2 rounded-xl">
-                                        <div className="text-[10px] text-amber-300 uppercase font-bold">🏆 Nhóm TOP</div>
+                                        <div className="text-[10px] text-amber-300 uppercase font-bold">Nhóm TOP</div>
                                         <div className="text-base font-black text-amber-300 mt-0.5">
                                             {previewDistribution.topCount} NV
                                         </div>
                                     </div>
 
                                     <div className="bg-slate-800 border border-slate-700 p-2 rounded-xl">
-                                        <div className="text-[10px] text-slate-300 uppercase font-bold">⭐️ Nhóm MID</div>
+                                        <div className="text-[10px] text-slate-300 uppercase font-bold">Nhóm MID</div>
                                         <div className="text-base font-black text-slate-100 mt-0.5">
                                             {previewDistribution.midCount} NV
                                         </div>
                                     </div>
 
                                     <div className="bg-rose-500/20 border border-rose-500/30 p-2 rounded-xl">
-                                        <div className="text-[10px] text-rose-300 uppercase font-bold">⚠️ Nhóm BOT</div>
+                                        <div className="text-[10px] text-rose-300 uppercase font-bold">Nhóm BOT</div>
                                         <div className="text-base font-black text-rose-300 mt-0.5">
                                             {previewDistribution.botCount} NV
                                         </div>

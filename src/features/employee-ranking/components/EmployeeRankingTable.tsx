@@ -143,7 +143,7 @@ export default function EmployeeRankingTable({
                                 className="py-2 px-2 text-center bg-blue-100/80 text-blue-950 font-black border-r border-blue-200 w-24 cursor-pointer hover:bg-blue-200 transition select-none group"
                                 title="Thứ hạng và phân loại TOP / BOT theo Doanh thu"
                             >
-                                <span>XẾP HẠNG DT</span>
+                                <span>XẾP HẠNG</span>
                                 {renderSortIcon('REVENUE_RANK')}
                             </th>
 
@@ -172,7 +172,7 @@ export default function EmployeeRankingTable({
                                 className="py-2 px-2 text-center bg-emerald-50 text-emerald-950 font-black min-w-[125px] sm:w-36"
                                 title="Đánh giá sức khỏe nhân sự & kết quả xét cứu BOT"
                             >
-                                <span>XÉT CỨU / SỨC KHỎE</span>
+                                <span>ĐÁNH GIÁ</span>
                             </th>
                         </tr>
                     </thead>

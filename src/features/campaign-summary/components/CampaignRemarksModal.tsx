@@ -57,6 +57,15 @@ export default function CampaignRemarksModal({
         }
     }, [isOpen, data, analysis]);
 
+    useEffect(() => {
+        if (!isOpen) return;
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') onClose();
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [isOpen, onClose]);
+
     if (!isOpen) return null;
 
     const handleCopy = async () => {
@@ -88,19 +97,24 @@ export default function CampaignRemarksModal({
     };
 
     return (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 overflow-y-auto animate-in fade-in duration-200">
+        <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="campaign-remarks-modal-title"
+            className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 overflow-y-auto font-sans"
+        >
             <div className="bg-white rounded-3xl max-w-3xl w-full flex flex-col shadow-2xl border border-slate-200 overflow-hidden my-auto max-h-[92vh]">
                 {/* Header */}
-                <div className="px-6 py-4.5 bg-gradient-to-r from-purple-700 via-indigo-700 to-purple-800 text-white flex items-center justify-between shadow-xs">
+                <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between shadow-sm">
                     <div className="flex items-center gap-2.5">
-                        <span className="p-2 rounded-xl bg-white/20 backdrop-blur-xs text-amber-300">
-                            <Sparkles className="w-5 h-5" />
+                        <span className="p-2 rounded-xl bg-white/20 backdrop-blur-sm text-amber-300">
+                            <Sparkles className="w-5 h-5" aria-hidden="true" />
                         </span>
                         <div>
-                            <h2 className="text-base sm:text-lg font-black tracking-tight flex items-center gap-2">
+                            <h2 id="campaign-remarks-modal-title" className="text-base sm:text-lg font-black tracking-tight flex items-center gap-2">
                                 Nhận Xét &amp; Đánh Giá Thi Đua Ngành Hàng
                             </h2>
-                            <p className="text-xs text-purple-200 mt-0.5">
+                            <p className="text-xs text-purple-100 mt-0.5">
                                 Phân tích tự động số liệu ngày {data.date_display} • {data.store_name}
                             </p>
                         </div>
@@ -109,9 +123,10 @@ export default function CampaignRemarksModal({
                     <button
                         type="button"
                         onClick={onClose}
-                        className="p-1.5 rounded-full hover:bg-white/20 text-white/80 hover:text-white transition cursor-pointer"
+                        aria-label="Đóng cửa sổ nhận xét"
+                        className="p-1.5 rounded-full hover:bg-white/20 text-white/90 hover:text-white transition cursor-pointer"
                     >
-                        <X className="w-5 h-5" />
+                        <X className="w-5 h-5" aria-hidden="true" />
                     </button>
                 </div>
 
@@ -122,7 +137,7 @@ export default function CampaignRemarksModal({
                         <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200/80 space-y-1">
                             <span className="font-bold text-amber-900 flex items-center gap-1.5">
                                 <Trophy className="w-4 h-4 text-amber-600" />
-                                <span>Quán Quân Thi Đua</span>
+                                <span>TOP Thi Đua</span>
                             </span>
                             <div className="font-extrabold text-sm text-slate-900 line-clamp-1">
                                 {analysis.topEmployees[0]?.name || '—'}
@@ -163,26 +178,27 @@ export default function CampaignRemarksModal({
 
                     {/* Khung Soạn Thảo / Tùy Chỉnh Nội Dung Nhận Xét */}
                     <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                            <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                                <Edit3 className="w-4 h-4 text-purple-600" />
-                                <span>Nội dung nhận xét &amp; tin nhắn mẫu Messaging App (Boss có thể chỉnh sửa trực tiếp):</span>
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                            <label htmlFor="campaign-remarks-textarea" className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                                <Edit3 className="w-4 h-4 text-purple-600" aria-hidden="true" />
+                                <span>Nội dung nhận xét &amp; tin nhắn mẫu Messaging App:</span>
                             </label>
 
                             <button
                                 type="button"
                                 onClick={handleResetDefault}
-                                className="text-[11px] text-purple-600 hover:text-purple-800 hover:underline font-semibold cursor-pointer"
+                                className="text-[11px] text-purple-700 hover:text-purple-900 hover:underline font-semibold cursor-pointer"
                             >
                                 ↺ Khôi phục gợi ý mẫu
                             </button>
                         </div>
 
                         <textarea
+                            id="campaign-remarks-textarea"
                             rows={12}
                             value={editableText}
                             onChange={e => setEditableText(e.target.value)}
-                            className="w-full p-4 text-xs font-mono bg-slate-50 border border-slate-300 rounded-2xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-purple-500 text-slate-800 leading-relaxed shadow-inner"
+                            className="w-full p-4 text-xs font-mono bg-slate-50 border border-slate-300 rounded-2xl focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 text-slate-800 leading-relaxed shadow-inner"
                             placeholder="Nhập nội dung nhận xét hoặc tinh chỉnh tin nhắn gửi nhóm..."
                         />
                     </div>
@@ -190,8 +206,8 @@ export default function CampaignRemarksModal({
 
                 {/* Footer Hành Động */}
                 <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3">
-                    <span className="text-[11px] text-slate-500 flex items-center gap-1">
-                        <MessageSquare className="w-3.5 h-3.5 text-slate-400" />
+                    <span className="text-[11px] text-slate-600 flex items-center gap-1">
+                        <MessageSquare className="w-3.5 h-3.5 text-slate-500" aria-hidden="true" />
                         Đã sẵn sàng để gửi trực tiếp vào Messaging App ST / Quản lý cụm.
                     </span>
 
@@ -199,16 +215,16 @@ export default function CampaignRemarksModal({
                         <button
                             type="button"
                             onClick={handleSave}
-                            className="px-4 py-2.5 bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold rounded-xl border border-slate-300 transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                            className="px-4 py-2.5 bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold rounded-xl border border-slate-300 transition flex items-center gap-1.5 cursor-pointer shadow-sm"
                         >
-                            <Save className="w-4 h-4 text-slate-600" />
+                            <Save className="w-4 h-4 text-slate-600" aria-hidden="true" />
                             <span>{saved ? 'Đã lưu nhận xét!' : 'Lưu Nhận Xét'}</span>
                         </button>
 
                         <button
                             type="button"
                             onClick={handleCopy}
-                            className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white text-xs font-extrabold rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-md"
+                            className="px-5 py-2.5 bg-blue-700 hover:bg-blue-800 text-white text-xs font-extrabold rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                         >
                             {copied ? (
                                 <>

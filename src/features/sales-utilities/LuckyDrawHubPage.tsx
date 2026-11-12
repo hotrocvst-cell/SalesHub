@@ -136,7 +136,7 @@ export default function LuckyDrawHubPage() {
                             Quay Số &amp; Bốc Thăm
                         </h1>
                         <p className="text-xs text-slate-600 mt-0.5">
-                            Bộ công cụ quay số ngẫu nhiên công bằng, vòng quay may mắn, hộp quà bí ẩn và tiện ích quầy ST
+                            Bộ công cụ quay số ngẫu nhiên công bằng, vòng quay may mắn, hộp quà bí ẩn và tiện ích nhỏ
                         </p>
                     </div>
 

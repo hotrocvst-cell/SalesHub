@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { ChevronDown, X, Check, Search } from 'lucide-react';
 import type { CampaignDictItem } from '../../../core/lib/storage';
 
@@ -20,6 +20,25 @@ export default function CampaignKeyMultiSelect({
     const [isOpen, setIsOpen] = useState(false);
     const [searchText, setSearchText] = useState('');
     const [onlyPeriodActive, setOnlyPeriodActive] = useState(true);
+    const containerRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        const handleOutside = (e: MouseEvent) => {
+            if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+                setIsOpen(false);
+            }
+        };
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') setIsOpen(false);
+        };
+        document.addEventListener('mousedown', handleOutside);
+        document.addEventListener('keydown', handleKeyDown);
+        return () => {
+            document.removeEventListener('mousedown', handleOutside);
+            document.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [isOpen]);
 
     const displayedCampaigns = useMemo(() => {
         const baseList = (onlyPeriodActive && periodActiveCampaigns.length > 0)
@@ -35,30 +54,33 @@ export default function CampaignKeyMultiSelect({
     }, [onlyPeriodActive, periodActiveCampaigns, campaignDict, searchText]);
 
     return (
-        <div className="relative">
+        <div ref={containerRef} className="relative min-w-0">
             <button
                 type="button"
+                aria-expanded={isOpen}
+                aria-haspopup="listbox"
                 onClick={() => setIsOpen(!isOpen)}
-                className="w-full inline-flex items-center justify-between gap-1.5 px-3 py-1.5 rounded-xl border border-slate-300 bg-slate-50 hover:bg-slate-100 text-xs font-bold text-slate-700 transition cursor-pointer"
+                className="w-full inline-flex items-center justify-between gap-1.5 px-3 py-1.5 rounded-xl border border-slate-300 bg-slate-50 hover:bg-slate-100 text-xs font-bold text-slate-700 transition cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30"
             >
                 <span className="truncate">
                     Nhóm hàng ({selectedKeys.length} đã chọn)
                 </span>
-                <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                <ChevronDown className={`w-3.5 h-3.5 text-slate-500 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
             </button>
 
             {isOpen && (
                 <div className="absolute top-full mt-1 left-0 right-0 sm:right-auto sm:w-80 bg-white border border-slate-200 rounded-2xl shadow-xl z-30 p-2.5 space-y-2 max-h-80 flex flex-col">
                     <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
-                        <span className="text-[11px] font-black text-slate-500 uppercase">
+                        <span className="text-[11px] font-black text-slate-600 uppercase">
                             Tùy chọn nhóm hàng thi đua
                         </span>
                         <button
                             type="button"
                             onClick={() => setIsOpen(false)}
-                            className="p-1 hover:bg-slate-100 rounded-md text-slate-400 hover:text-slate-600 cursor-pointer"
+                            aria-label="Đóng danh sách nhóm hàng"
+                            className="p-1 hover:bg-slate-100 rounded-md text-slate-500 hover:text-slate-700 cursor-pointer"
                         >
-                            <X className="w-3.5 h-3.5" />
+                            <X className="w-3.5 h-3.5" aria-hidden="true" />
                         </button>
                     </div>
 
@@ -75,13 +97,14 @@ export default function CampaignKeyMultiSelect({
 
                     {/* Ô TÌM KIẾM NHANH (YÊU CẦU 3) */}
                     <div className="relative">
-                        <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2 top-1/2 -translate-y-1/2" />
+                        <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2 top-1/2 -translate-y-1/2" aria-hidden="true" />
                         <input
                             type="text"
+                            aria-label="Tìm nhanh nhóm hàng thi đua"
                             placeholder="Tìm nhanh nhóm hàng..."
                             value={searchText}
                             onChange={(e) => setSearchText(e.target.value)}
-                            className="w-full pl-7 pr-2 py-1 bg-slate-50 border border-slate-200 text-xs rounded-lg outline-hidden focus:bg-white focus:ring-1 focus:ring-indigo-500"
+                            className="w-full pl-7 pr-2 py-1 bg-slate-50 border border-slate-200 text-xs rounded-lg outline-none focus:bg-white focus:ring-2 focus:ring-indigo-500/25 focus:border-indigo-500"
                         />
                     </div>
 
@@ -98,12 +121,12 @@ export default function CampaignKeyMultiSelect({
                                     }`}
                                 >
                                     <span className="truncate">{d.display_name}</span>
-                                    {isChecked && <Check className="w-3.5 h-3.5 text-indigo-600 shrink-0 ml-2" />}
+                                    {isChecked && <Check className="w-3.5 h-3.5 text-indigo-600 shrink-0 ml-2" aria-hidden="true" />}
                                 </button>
                             );
                         })}
                         {displayedCampaigns.length === 0 && (
-                            <div className="py-3 text-center text-xs text-slate-400">
+                            <div className="py-3 text-center text-xs text-slate-600">
                                 Không có nhóm hàng phù hợp.
                             </div>
                         )}

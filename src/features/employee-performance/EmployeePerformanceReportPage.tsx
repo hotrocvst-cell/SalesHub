@@ -99,11 +99,29 @@ export default function EmployeePerformanceReportPage() {
     const [loadError, setLoadError] = useState<string>('');
     const [isExporting, setIsExporting] = useState<boolean>(false);
     const [isConfigModalOpen, setIsConfigModalOpen] = useState<boolean>(false);
-    const [toastMessage, setToastMessage] = useState<string>('');
+    const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+    const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    const showToast = (msg: string) => {
-        setToastMessage(msg);
-        setTimeout(() => setToastMessage(''), 3500);
+    useEffect(() => {
+        return () => {
+            if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+        };
+    }, []);
+
+    const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+        if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+        setToast({ message, type });
+        toastTimerRef.current = setTimeout(() => {
+            setToast(null);
+            toastTimerRef.current = null;
+        }, 3500);
+    };
+
+    const handleResetFilters = () => {
+        setPaceFilter('all');
+        setTopBotFilter('all');
+        setSearchQuery('');
+        setSortBy('FORECAST_RATE_DESC');
     };
 
     // Cấu hình hoạt động ST & TOP/BOT theo đích danh ST
@@ -449,8 +467,6 @@ export default function EmployeePerformanceReportPage() {
                     return a.forecast_completion_rate - b.forecast_completion_rate;
                 case 'REVENUE_QD_DESC':
                     return b.revenue_qd - a.revenue_qd;
-                case 'REVENUE_ACTUAL_DESC':
-                    return b.revenue_actual - a.revenue_actual;
                 case 'COMPLETION_RATE_DESC':
                     return b.completion_rate - a.completion_rate;
                 case 'PROD_QD_DESC':
@@ -495,12 +511,10 @@ export default function EmployeePerformanceReportPage() {
             { header: 'Tên Rút Gọn', key: 'short_name', width: 18 },
             { header: 'ST', key: 'store', width: 28 },
             { header: 'Chức Danh', key: 'role', width: 18 },
-            { header: 'DT Thực (tr)', key: 'actual', width: 16 },
             { header: 'DTQĐ (tr)', key: 'rev_qd', width: 16 },
             { header: 'Target (tr)', key: 'target', width: 16 },
             { header: '%HT Real', key: 'pct_real', width: 14 },
-            { header: '%DKHT', key: 'pct_forecast', width: 14 },
-            { header: '%QĐ', key: 'exchange', width: 14 }
+            { header: '%DKHT', key: 'pct_forecast', width: 14 }
         ];
 
         if (showWorkHours) {
@@ -526,12 +540,10 @@ export default function EmployeePerformanceReportPage() {
                 short_name: r.short_name,
                 store: r.store_name,
                 role: r.job_title,
-                actual: r.revenue_actual,
                 rev_qd: r.revenue_qd,
                 target: r.revenue_target,
                 pct_real: `${r.completion_rate}%`,
-                pct_forecast: `${r.forecast_completion_rate}%`,
-                exchange: `${r.exchange_rate > 0 ? '+' : ''}${r.exchange_rate}%`
+                pct_forecast: `${r.forecast_completion_rate}%`
             };
 
             if (showWorkHours) {
@@ -569,8 +581,8 @@ export default function EmployeePerformanceReportPage() {
         const tableElement = targetElement.querySelector('table');
 
         // Đo đạc chiều rộng thực tế của bảng để không bao giờ bị cắt cột ở bên phải
-        // Bảng 12 cột (có giờ công) cần tối thiểu 1520px; Bảng 10 cột (ẩn giờ công) cần khoảng 1260px
-        const minAutoWidth = showWorkHours ? 1520 : 1260;
+        // Bảng 10 cột (có giờ công) cần tối thiểu 1280px; Bảng 8 cột (ẩn giờ công) cần khoảng 1020px
+        const minAutoWidth = showWorkHours ? 1280 : 1020;
         const tableScrollWidth = tableElement ? tableElement.scrollWidth : 0;
         const contentWidth = Math.max(tableScrollWidth + 64, targetElement.scrollWidth + 64, minAutoWidth);
 
@@ -667,7 +679,7 @@ export default function EmployeePerformanceReportPage() {
                     htmlEl.style.width = '100%';
                 });
 
-                // Căn chỉnh bảng dữ liệu hiển thị toàn bộ 12 cột
+                // Căn chỉnh bảng dữ liệu hiển thị đầy đủ các cột
                 const clonedTable = clonedReport.querySelector('table') as HTMLElement;
                 if (clonedTable) {
                     clonedTable.style.width = '100%';
@@ -726,7 +738,7 @@ export default function EmployeePerformanceReportPage() {
         try {
             const canvas = await generateCanvas();
             if (!canvas) {
-                showToast('⚠️ Không thể khởi tạo canvas để xuất ảnh!');
+                showToast('Không thể khởi tạo canvas để xuất ảnh!', 'error');
                 return;
             }
             const imgData = canvas.toDataURL('image/png', 1.0);
@@ -734,10 +746,10 @@ export default function EmployeePerformanceReportPage() {
             a.href = imgData;
             a.download = `BaoCao_HieuQua_NV_${selectedMonth}_${selectedYear}.png`;
             a.click();
-            showToast('🎉 Đã tải file ảnh báo cáo thành công!');
+            showToast('Đã tải file ảnh báo cáo thành công!');
         } catch (e: any) {
             console.error('Lỗi tải ảnh:', e);
-            showToast('⚠️ Không thể tải ảnh: ' + (e.message || e));
+            showToast('Không thể tải ảnh: ' + (e.message || e), 'error');
         } finally {
             setIsExporting(false);
         }
@@ -748,7 +760,7 @@ export default function EmployeePerformanceReportPage() {
         try {
             const canvas = await generateCanvas();
             if (!canvas) {
-                showToast('⚠️ Không thể khởi tạo canvas!');
+                showToast('Không thể khởi tạo canvas!', 'error');
                 return;
             }
 
@@ -758,7 +770,7 @@ export default function EmployeePerformanceReportPage() {
                         await navigator.clipboard.write([
                             new ClipboardItem({ 'image/png': blob })
                         ]);
-                        showToast('📋 Đã sao chép ảnh vào Clipboard! Bạn hãy nhấn Ctrl + V để dán ngay.');
+                        showToast('Đã sao chép ảnh vào Clipboard! Bạn hãy nhấn Ctrl + V để dán ngay.');
                     } catch (err: any) {
                         console.warn('Lỗi ghi clipboard trực tiếp, tự động chuyển sang tải file:', err);
                         const imgData = canvas.toDataURL('image/png', 1.0);
@@ -766,7 +778,7 @@ export default function EmployeePerformanceReportPage() {
                         a.href = imgData;
                         a.download = `BaoCao_HieuQua_NV_${selectedMonth}_${selectedYear}.png`;
                         a.click();
-                        showToast('💾 Ảnh báo cáo đã tự động được tải về máy của bạn!');
+                        showToast('Ảnh báo cáo đã tự động được tải về máy của bạn!');
                     }
                 } else {
                     handleDownloadImage();
@@ -776,17 +788,21 @@ export default function EmployeePerformanceReportPage() {
         } catch (e: any) {
             console.error('Lỗi sao chép ảnh:', e);
             setIsExporting(false);
-            showToast('⚠️ Không thể copy ảnh: ' + (e.message || e));
+            showToast('Không thể copy ảnh: ' + (e.message || e), 'error');
         }
     };
 
     return (
         <div className="max-w-[1680px] mx-auto space-y-4 pb-12">
             {/* Toast Thông Báo */}
-            {toastMessage && (
-                <div role="status" className="fixed top-5 right-5 z-50 p-4 bg-slate-900 text-white rounded-2xl shadow-2xl flex items-center gap-2.5 text-xs border border-slate-700">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" aria-hidden="true" />
-                    <span className="font-semibold">{toastMessage}</span>
+            {toast && (
+                <div role="status" className="fixed top-5 right-5 z-50 p-4 bg-slate-900 text-white rounded-2xl shadow-2xl flex items-center gap-2.5 text-xs border border-slate-700 max-w-sm">
+                    {toast.type === 'error' ? (
+                        <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0" aria-hidden="true" />
+                    ) : (
+                        <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" aria-hidden="true" />
+                    )}
+                    <span className="font-semibold">{toast.message}</span>
                 </div>
             )}
 
@@ -938,10 +954,10 @@ export default function EmployeePerformanceReportPage() {
                                 }`}
                         >
                             {canViewAllStores && (
-                                <option value="all">🏢 Toàn Cụm ST</option>
+                                <option value="all">Toàn Cụm ST</option>
                             )}
                             {allowedStores.map(s => (
-                                <option key={s.id || s.code} value={s.name}>🏪 {s.name} ({s.code})</option>
+                                <option key={s.id || s.code} value={s.name}>{s.name} ({s.code})</option>
                             ))}
                         </select>
                         {isLockedToSingleStore && (
@@ -954,12 +970,7 @@ export default function EmployeePerformanceReportPage() {
                     <div className="flex items-center gap-2">
                         <button
                             type="button"
-                            onClick={() => {
-                                setPaceFilter('all');
-                                setTopBotFilter('all');
-                                setSearchQuery('');
-                                setSortBy('FORECAST_RATE_DESC');
-                            }}
+                            onClick={handleResetFilters}
                             className="text-slate-600 hover:text-slate-900 text-xs font-bold underline cursor-pointer px-1.5 py-1 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
                         >
                             Đặt lại bộ lọc
@@ -969,7 +980,7 @@ export default function EmployeePerformanceReportPage() {
 
                 {/* HÀNG 2: CÁC TIÊU CHÍ BỘ LỌC KHÁC & TÌM KIẾM */}
                 <div className="flex flex-wrap items-center justify-between gap-2.5 sm:gap-3 pt-0.5">
-                    <div className="flex flex-wrap items-center gap-2 min-w-0 max-w-full">
+                    <div className="flex flex-wrap items-center gap-2 min-w-0 max-w-full w-full lg:w-auto">
                         {/* 1. Chọn Tháng / Năm */}
                         <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl focus-within:ring-2 focus-within:ring-blue-600 focus-within:border-blue-600">
                             <Calendar className="w-4 h-4 text-amber-700 shrink-0" aria-hidden="true" />
@@ -985,7 +996,7 @@ export default function EmployeePerformanceReportPage() {
                                     <option key={m} value={m}>Tháng {m}</option>
                                 ))}
                             </select>
-                            <span className="text-slate-400" aria-hidden="true">/</span>
+                            <span className="text-slate-500" aria-hidden="true">/</span>
                             <label htmlFor="perf-year-select" className="sr-only">Năm báo cáo</label>
                             <select
                                 id="perf-year-select"
@@ -1001,7 +1012,7 @@ export default function EmployeePerformanceReportPage() {
                         </div>
 
                         {/* 2. Bộ lọc SẮP XẾP KẾT QUẢ (Mặc định: %DKHT Cao -> Thấp) */}
-                        <div className="flex items-center gap-1.5 bg-amber-50/80 border border-amber-300 px-3 py-1.5 rounded-xl max-w-full min-w-0 focus-within:ring-2 focus-within:ring-amber-600 focus-within:border-amber-600">
+                        <div className="w-full sm:w-auto flex items-center gap-1.5 bg-amber-50/80 border border-amber-300 px-3 py-1.5 rounded-xl max-w-full min-w-0 focus-within:ring-2 focus-within:ring-amber-600 focus-within:border-amber-600">
                             <ArrowUpDown className="w-4 h-4 text-amber-800 shrink-0" aria-hidden="true" />
                             <label htmlFor="perf-sort-select" className="text-amber-950 font-bold whitespace-nowrap shrink-0">
                                 Xếp theo:
@@ -1013,19 +1024,18 @@ export default function EmployeePerformanceReportPage() {
                                 onChange={e => setSortBy(e.target.value)}
                                 className="bg-transparent text-xs font-extrabold text-amber-950 outline-none cursor-pointer min-w-0 flex-1 sm:flex-none truncate"
                             >
-                                <option value="FORECAST_RATE_DESC">🎯 %DKHT Dự Báo (Cao ➔ Thấp) [Mặc định]</option>
-                                <option value="FORECAST_RATE_ASC">🎯 %DKHT Dự Báo (Thấp ➔ Cao)</option>
-                                <option value="REVENUE_QD_DESC">💎 Lũy kế DTQĐ (Cao ➔ Thấp)</option>
-                                <option value="REVENUE_ACTUAL_DESC">💵 Lũy kế DT Thực (Cao ➔ Thấp)</option>
-                                <option value="COMPLETION_RATE_DESC">📊 %HT Real (Cao ➔ Thấp)</option>
+                                <option value="FORECAST_RATE_DESC">%DKHT Dự báo (Cao → Thấp)</option>
+                                <option value="FORECAST_RATE_ASC">%DKHT Dự báo (Thấp → Cao)</option>
+                                <option value="REVENUE_QD_DESC">Lũy kế DTQĐ (Cao → Thấp)</option>
+                                <option value="COMPLETION_RATE_DESC">%HT Real (Cao → Thấp)</option>
                                 {showWorkHours && (
                                     <>
-                                        <option value="PROD_QD_DESC">⚡ DTQĐ/GC Năng Suất (Cao ➔ Thấp)</option>
-                                        <option value="WORK_HOURS_DESC">⏰ Giờ công (Cao ➔ Thấp)</option>
+                                        <option value="PROD_QD_DESC">DTQĐ/GC Năng suất (Cao → Thấp)</option>
+                                        <option value="WORK_HOURS_DESC">Giờ công (Cao → Thấp)</option>
                                     </>
                                 )}
-                                <option value="INSTALLMENT_RATE_DESC">💳 % Trả chậm (Cao ➔ Thấp)</option>
-                                <option value="RANK_ASC">🥇 Thứ hạng (#1 ➔ #N)</option>
+                                <option value="INSTALLMENT_RATE_DESC">% Trả chậm (Cao → Thấp)</option>
+                                <option value="RANK_ASC">Thứ hạng (#1 → #N)</option>
                             </select>
                         </div>
 
@@ -1041,9 +1051,9 @@ export default function EmployeePerformanceReportPage() {
                                 className="bg-transparent text-xs font-bold text-slate-800 outline-none cursor-pointer"
                             >
                                 <option value="all">Tất cả thứ hạng</option>
-                                <option value="TOP">🏆 Chỉ xem nhóm TOP</option>
-                                <option value="MID">⭐️ Chỉ xem nhóm MID</option>
-                                <option value="BOT">⚠️ Chỉ xem nhóm BOT</option>
+                                <option value="TOP">Chỉ xem nhóm TOP</option>
+                                <option value="MID">Chỉ xem nhóm MID</option>
+                                <option value="BOT">Chỉ xem nhóm BOT</option>
                             </select>
                         </div>
 
@@ -1206,6 +1216,8 @@ export default function EmployeePerformanceReportPage() {
                             rows={filteredRows}
                             showStoreName={selectedStore === 'all'}
                             showWorkHours={showWorkHours}
+                            totalUnfilteredCount={performanceRows.length}
+                            onResetFilters={handleResetFilters}
                             onSelectEmployee={(emp) => {
                                 const targetStore = emp.store_name || (selectedStore !== 'all' ? selectedStore : '');
                                 navigate(`/chi-tiet-nhan-vien?emp=${emp.employee_id}&month=${selectedMonth}&year=${selectedYear}&store=${encodeURIComponent(targetStore)}`);
@@ -1227,7 +1239,7 @@ export default function EmployeePerformanceReportPage() {
                 onConfigSaved={() => {
                     refreshConfigs();
                     loadAllData();
-                    showToast('✅ Đã cập nhật cấu hình hoạt động & phân loại TOP/BOT!');
+                    showToast('Đã cập nhật cấu hình hoạt động & phân loại TOP/BOT!');
                 }}
             />
         </div>

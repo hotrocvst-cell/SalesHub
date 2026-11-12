@@ -545,7 +545,7 @@ const RAW_DEFAULT_PAGE_PERMISSIONS: SystemPagePermission[] = [
     },
     {
         page_key: 'tien_ich_in_an',
-        page_name: 'In Ấn Quầy ST',
+        page_name: 'In Ấn',
         path: '/tien-ich-in-an',
         group_title: 'TIỆN ÍCH BÁN HÀNG',
         description: 'Trung tâm tạo và in Sticker giá, Pop-up bảng giá, Phiếu hỗ trợ bán hàng, Bảng tên NV, QR/Barcode túi & Trang trí ST',

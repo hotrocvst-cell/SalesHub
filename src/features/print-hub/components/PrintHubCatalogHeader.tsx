@@ -94,7 +94,7 @@ export const PrintHubCatalogHeader: React.FC<PrintHubCatalogHeaderProps> = ({
         <div className="flex items-center gap-2 text-xs text-slate-600">
           <Printer className="h-4 w-4 text-slate-500" aria-hidden="true" />
           <span className="font-semibold text-slate-800">
-            In Ấn Quầy ST — Chuẩn kích thước gốc
+            In Ấn — Chuẩn kích thước gốc
           </span>
         </div>
       </div>

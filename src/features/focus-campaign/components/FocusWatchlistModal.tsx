@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { X, Plus, Trash2, Check, Edit2, Save, Search } from 'lucide-react';
 import type { CampaignWatchlist } from '../types';
 import type { StoreItem, CampaignDictItem } from '../../../core/lib/storage';
@@ -31,8 +31,19 @@ export default function FocusWatchlistModal({
 }: Props) {
     const [editingItem, setEditingItem] = useState<Partial<CampaignWatchlist> | null>(null);
     const [isSaving, setIsSaving] = useState(false);
+    const [actionError, setActionError] = useState<string>('');
     const [searchCampaignText, setSearchCampaignText] = useState('');
     const [onlyPeriodActive, setOnlyPeriodActive] = useState(true);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        setActionError('');
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') onClose();
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [isOpen, onClose]);
 
     const displayedCampaigns = useMemo(() => {
         const baseList = (onlyPeriodActive && periodActiveCampaigns.length > 0)
@@ -74,43 +85,62 @@ export default function FocusWatchlistModal({
     const handleSave = async () => {
         if (!editingItem || !editingItem.list_name?.trim()) return;
         setIsSaving(true);
+        setActionError('');
         try {
             await upsertWatchlist(editingItem);
             setEditingItem(null);
             onWatchlistsChanged();
-        } catch (e) {
+        } catch (e: any) {
             console.error('Lỗi lưu watchlist:', e);
+            setActionError(e?.message || 'Không thể lưu danh sách theo dõi. Vui lòng thử lại.');
         } finally {
             setIsSaving(false);
         }
     };
 
     const handleDelete = async (id: string) => {
-        if (!window.confirm('Boss có chắc chắn muốn xóa danh sách theo dõi này?')) return;
+        if (!window.confirm('Bạn có chắc chắn muốn xóa danh sách theo dõi này?')) return;
+        setActionError('');
         try {
             await deleteWatchlist(id);
             onWatchlistsChanged();
-        } catch (e) {
+        } catch (e: any) {
             console.error('Lỗi xóa watchlist:', e);
+            setActionError(e?.message || 'Không thể xóa danh sách theo dõi.');
         }
     };
 
     return (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto font-sans">
+        <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="focus-watchlist-modal-title"
+            className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto font-sans"
+        >
             <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
                 {/* Header */}
                 <div className="px-5 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
                     <div>
-                        <h3 className="text-base font-black text-slate-900">Quản Lý Danh Sách Thi Đua Trọng Tâm</h3>
-                        <p className="text-xs text-slate-400">Cấu hình nhóm hàng trọng điểm theo ST và kỳ thi đua</p>
+                        <h3 id="focus-watchlist-modal-title" className="text-base font-black text-slate-900">Quản Lý Danh Sách Thi Đua Trọng Tâm</h3>
+                        <p className="text-xs text-slate-600">Cấu hình nhóm hàng trọng điểm theo ST và kỳ thi đua</p>
                     </div>
-                    <button type="button" onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded-xl transition cursor-pointer">
-                        <X className="w-5 h-5" />
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        aria-label="Đóng cửa sổ quản lý danh sách"
+                        className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-200/60 rounded-xl transition cursor-pointer"
+                    >
+                        <X className="w-5 h-5" aria-hidden="true" />
                     </button>
                 </div>
 
                 {/* Content */}
                 <div className="p-5 overflow-y-auto flex-1 space-y-4">
+                    {actionError && (
+                        <div role="alert" className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs font-semibold text-rose-800">
+                            {actionError}
+                        </div>
+                    )}
                     {editingItem ? (
                         <div className="space-y-3.5 bg-indigo-50/40 p-4 rounded-2xl border border-indigo-100">
                             <h4 className="text-xs font-black uppercase text-indigo-900">
@@ -118,23 +148,25 @@ export default function FocusWatchlistModal({
                             </h4>
 
                             <div className="space-y-1">
-                                <label className="text-xs font-bold text-slate-700">Tên Danh Sách (*):</label>
+                                <label htmlFor="watchlist-name-input" className="text-xs font-bold text-slate-700">Tên Danh Sách (*):</label>
                                 <input
+                                    id="watchlist-name-input"
                                     type="text"
                                     placeholder="Ví dụ: Top 5 Trọng Tâm Tháng 11..."
                                     value={editingItem.list_name || ''}
                                     onChange={(e) => setEditingItem({ ...editingItem, list_name: e.target.value })}
-                                    className="w-full bg-white border border-slate-300 px-3 py-2 text-xs font-bold rounded-xl outline-hidden focus:ring-2 focus:ring-indigo-500"
+                                    className="w-full bg-white border border-slate-300 px-3 py-2 text-xs font-bold rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                                 />
                             </div>
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div>
-                                    <label className="text-xs font-bold text-slate-700">Phạm Vi ST:</label>
+                                    <label htmlFor="watchlist-store-select" className="text-xs font-bold text-slate-700">Phạm Vi ST:</label>
                                     <select
+                                        id="watchlist-store-select"
                                         value={editingItem.store_name || 'ALL'}
                                         onChange={(e) => setEditingItem({ ...editingItem, store_name: e.target.value })}
-                                        className="w-full bg-white border border-slate-300 px-3 py-2 text-xs font-medium rounded-xl outline-hidden"
+                                        className="w-full bg-white border border-slate-300 px-3 py-2 text-xs font-medium rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                                     >
                                         <option value="ALL">Toàn Cụm ST (Tất cả)</option>
                                         {stores.map(s => <option key={s.id || s.name} value={s.name}>{s.name}</option>)}
@@ -172,13 +204,14 @@ export default function FocusWatchlistModal({
 
                                 {/* Ô TÌM KIẾM NHÓM HÀNG THI ĐUA (YÊU CẦU 3) */}
                                 <div className="relative">
-                                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                                    <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" aria-hidden="true" />
                                     <input
                                         type="text"
+                                        aria-label="Tìm tên nhóm hàng thi đua"
                                         placeholder="Tìm tên nhóm hàng thi đua..."
                                         value={searchCampaignText}
                                         onChange={(e) => setSearchCampaignText(e.target.value)}
-                                        className="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-300 text-xs rounded-xl focus:ring-2 focus:ring-indigo-500 outline-hidden"
+                                        className="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-300 text-xs rounded-xl focus-visible:ring-2 focus-visible:ring-indigo-500 outline-none"
                                     />
                                 </div>
 
@@ -197,12 +230,12 @@ export default function FocusWatchlistModal({
                                                 }`}
                                             >
                                                 <span className="truncate">{d.display_name}</span>
-                                                {isChecked && <Check className="w-3.5 h-3.5 text-indigo-600 shrink-0 ml-1" />}
+                                                {isChecked && <Check className="w-3.5 h-3.5 text-indigo-600 shrink-0 ml-1" aria-hidden="true" />}
                                             </button>
                                         );
                                     })}
                                     {displayedCampaigns.length === 0 && (
-                                        <div className="col-span-full py-4 text-center text-xs text-slate-400">
+                                        <div className="col-span-full py-4 text-center text-xs text-slate-600">
                                             Không tìm thấy nhóm hàng thi đua phù hợp.
                                         </div>
                                     )}
@@ -217,23 +250,23 @@ export default function FocusWatchlistModal({
                                     type="button"
                                     onClick={handleSave}
                                     disabled={isSaving || !editingItem.list_name?.trim()}
-                                    className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-xs disabled:opacity-50 cursor-pointer"
+                                    className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-sm disabled:opacity-50 cursor-pointer"
                                 >
-                                    <Save className="w-3.5 h-3.5" />
-                                    <span>Lưu Danh Sách</span>
+                                    <Save className="w-3.5 h-3.5" aria-hidden="true" />
+                                    <span>{isSaving ? 'Đang lưu...' : 'Lưu Danh Sách'}</span>
                                 </button>
                             </div>
                         </div>
                     ) : (
                         <div className="space-y-3">
                             <div className="flex items-center justify-between">
-                                <span className="text-xs font-black text-slate-500 uppercase">Danh Sách Đang Lưu ({watchlists.length})</span>
+                                <span className="text-xs font-black text-slate-600 uppercase">Danh Sách Đang Lưu ({watchlists.length})</span>
                                 <button
                                     type="button"
                                     onClick={handleCreateNew}
-                                    className="inline-flex items-center gap-1 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs cursor-pointer"
+                                    className="inline-flex items-center gap-1 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-sm cursor-pointer"
                                 >
-                                    <Plus className="w-3.5 h-3.5" />
+                                    <Plus className="w-3.5 h-3.5" aria-hidden="true" />
                                     <span>Thêm Danh Sách Mới</span>
                                 </button>
                             </div>
@@ -241,37 +274,39 @@ export default function FocusWatchlistModal({
                             {watchlists.length === 0 ? (
                                 <div className="p-8 text-center bg-slate-50 border border-dashed border-slate-300 rounded-2xl space-y-1.5">
                                     <p className="text-xs font-bold text-slate-700">Chưa có danh sách thi đua trọng tâm nào.</p>
-                                    <p className="text-[11px] text-slate-400">Bấm nút "Thêm Danh Sách Mới" ở trên để chọn các nhóm hàng cần theo dõi.</p>
+                                    <p className="text-[11px] text-slate-600">Bấm nút &quot;Thêm Danh Sách Mới&quot; ở trên để chọn các nhóm hàng cần theo dõi.</p>
                                 </div>
                             ) : (
                                 <div className="space-y-2">
                                     {watchlists.map((w) => (
                                         <div key={w.id} className="bg-slate-50 border border-slate-200 rounded-2xl p-3 flex items-center justify-between gap-3 hover:border-slate-300 transition">
-                                            <div>
-                                                <div className="flex items-center gap-2">
+                                            <div className="min-w-0">
+                                                <div className="flex items-center gap-2 flex-wrap">
                                                     <h5 className="text-xs font-black text-slate-800">{w.list_name}</h5>
-                                                    {w.is_default && <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.2 rounded-md">Mặc định</span>}
-                                                    <span className="text-[10px] bg-slate-200 text-slate-700 font-semibold px-1.5 py-0.2 rounded-md">ST: {w.store_name}</span>
+                                                    {w.is_default && <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded-md">Mặc định</span>}
+                                                    <span className="text-[10px] bg-slate-200 text-slate-700 font-semibold px-1.5 py-0.5 rounded-md">ST: {w.store_name}</span>
                                                 </div>
-                                                <p className="text-[11px] text-slate-500 line-clamp-1 pt-0.5">Gồm {w.campaign_keys?.length || 0} NH: {w.campaign_keys?.join(', ')}</p>
+                                                <p className="text-[11px] text-slate-600 line-clamp-1 pt-0.5">Gồm {w.campaign_keys?.length || 0} NH: {w.campaign_keys?.join(', ')}</p>
                                             </div>
 
                                             <div className="flex items-center gap-1 shrink-0">
                                                 <button
                                                     type="button"
                                                     onClick={() => { setEditingItem(w); setSearchCampaignText(''); }}
-                                                    className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-slate-200/60 rounded-lg cursor-pointer"
+                                                    className="p-1.5 text-slate-600 hover:text-indigo-700 hover:bg-slate-200/60 rounded-lg cursor-pointer"
                                                     title="Sửa danh sách"
+                                                    aria-label={`Sửa danh sách ${w.list_name}`}
                                                 >
-                                                    <Edit2 className="w-3.5 h-3.5" />
+                                                    <Edit2 className="w-3.5 h-3.5" aria-hidden="true" />
                                                 </button>
                                                 <button
                                                     type="button"
                                                     onClick={() => handleDelete(w.id)}
-                                                    className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-slate-200/60 rounded-lg cursor-pointer"
+                                                    className="p-1.5 text-slate-500 hover:text-rose-700 hover:bg-slate-200/60 rounded-lg cursor-pointer"
                                                     title="Xóa danh sách"
+                                                    aria-label={`Xóa danh sách ${w.list_name}`}
                                                 >
-                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                    <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                                                 </button>
                                             </div>
                                         </div>

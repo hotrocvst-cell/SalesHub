@@ -30,3 +30,12 @@
      - Thay *"Siêu thị TGDD/DMX"* bằng *"ST"*, *"Đơn vị"*, *"Cụm"*.
      - Giữ nguyên các token mã hóa kỹ thuật thuần túy chỉ dùng trong parser dữ liệu gốc nếu có (như regex bóc tách mã).
 
+---
+
+## 3. KHÔNG SÁNG CHẾ THUẬT NGỮ "QUẦY ST" & ĐỒNG NHẤT CÁCH GỌI TẠI ST
+1. **Cấm tự ý sáng chế / sử dụng `"quầy ST"`**:
+   - Dự án **không có** khái niệm hay định nghĩa `"quầy ST"`. Tuyệt đối không tự bịa hoặc đưa cụm từ `"quầy ST"` vào giao diện, tài liệu (`PRODUCT.md`) hoặc câu trả lời.
+2. **Tránh dùng các cụm từ *"tại quầy"*, *"đứng quầy"*, *"quầy kệ"* khi mô tả ngữ cảnh vận hành chung**:
+   - Thay thế đồng nhất bằng **"tại ST"**, **"tác nghiệp tại ST"**, **"vận hành ST"** để giữ ngôn ngữ nhất quán toàn hệ thống.
+   - Ngoại lệ: Không tự ý sửa đổi tên/mô tả vật phẩm in ấn vật lý đã định nghĩa sẵn trong danh mục chuyên biệt nếu không có yêu cầu trực tiếp từ người dùng.
+

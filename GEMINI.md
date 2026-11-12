@@ -163,6 +163,8 @@
   - Tuyệt đối **KHÔNG SỬ DỤNG** các từ ngữ, tên gọi chỉ đích danh các thương hiệu / chuỗi cửa hàng thương mại:
     + *"Thế giới di động"*, *"Thế Giới Di Động"*, *"Điện máy xanh"*, *"Điện Máy Xanh"*, *"Topzone"*, *"TopZone"*, *"TGDD"*, *"DMX"*, *"BHX"*, *"An Khang"*, *"AVAKids"*, v.v. trong tất cả các văn bản giao diện, thông báo, nhãn danh mục, hướng dẫn hoặc ghi chú của hệ thống.
   - **Thay thế bằng các định danh trung lập mang tính quy chuẩn**: *"Hệ thống"*, *"Cụm"*, *"ST"*, *"Đơn vị"*, *"Dashboard BI"*, *"Báo cáo kinh doanh"*.
+- **KHÔNG SÁNG CHẾ THUẬT NGỮ "QUẦY ST" & ĐỒNG NHẤT CÁCH GỌI TẠI ST**:
+  - Dự án **không định nghĩa** khái niệm `"quầy ST"`. Tuyệt đối không tự ý sáng chế hoặc sử dụng `"quầy ST"`, cũng như tránh dùng *"tại quầy"*, *"đứng quầy"*, *"quầy kệ"* khi mô tả ngữ cảnh vận hành chung trong tài liệu hay văn bản giao diện; thay đồng nhất bằng **"tại ST"**, **"tác nghiệp tại ST"**, **"vận hành ST"**.
 
 
 

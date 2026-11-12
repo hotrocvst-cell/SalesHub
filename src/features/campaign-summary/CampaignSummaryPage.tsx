@@ -25,8 +25,6 @@ import ReportDataFreshnessBar from '../../shared/components/report/ReportDataFre
 import ReportActionButtons, { type AssessmentTemplate } from '../../shared/components/report/ReportActionButtons';
 import {
     Sparkles,
-    Download,
-    Copy,
     RefreshCw,
     Search,
     Store,
@@ -36,7 +34,9 @@ import {
     AlertTriangle,
     Layers,
     CheckCircle2,
-    Lock
+    Lock,
+    X,
+    ChevronDown
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import ExcelJS from 'exceljs';
@@ -102,64 +102,79 @@ export default function CampaignSummaryPage() {
     const [searchQuery, setSearchQuery] = useState<string>('');
 
     const [loading, setLoading] = useState<boolean>(true);
+    const [loadError, setLoadError] = useState<string>('');
     const [isRemarksModalOpen, setIsRemarksModalOpen] = useState<boolean>(false);
     const [isExporting, setIsExporting] = useState<boolean>(false);
-    const [toastMessage, setToastMessage] = useState<string>('');
+    const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+    const toastTimerRef = useRef<number | null>(null);
 
-    const showToast = (msg: string) => {
-        setToastMessage(msg);
-        setTimeout(() => setToastMessage(''), 3500);
+    useEffect(() => {
+        return () => {
+            if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+        };
+    }, []);
+
+    const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+        setToast({ message, type });
+        if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+        toastTimerRef.current = window.setTimeout(() => setToast(null), 3500);
     };
 
     // 1. TẢI DỮ LIỆU TỪ HỆ THỐNG
     const loadSystemData = async () => {
         setLoading(true);
+        setLoadError('');
+        try {
+            const [storesRes, dictRes, targetsRes, empsRes, offsetsRes, bonusesList] = await Promise.all([
+                fetchStores(),
+                fetchCampaignDictionary(),
+                fetchEmployeeCampaignTargets(selectedMonth, selectedYear),
+                fetchEmployees(),
+                fetchCampaignOffsets(selectedStore, selectedMonth, selectedYear),
+                fetchEmployeeBonuses({ month: selectedMonth, year: selectedYear })
+            ]);
 
-        const [storesRes, dictRes, targetsRes, empsRes, offsetsRes, bonusesList] = await Promise.all([
-            fetchStores(),
-            fetchCampaignDictionary(),
-            fetchEmployeeCampaignTargets(selectedMonth, selectedYear),
-            fetchEmployees(),
-            fetchCampaignOffsets(selectedStore, selectedMonth, selectedYear),
-            fetchEmployeeBonuses({ month: selectedMonth, year: selectedYear })
-        ]);
+            if (storesRes.success) setStores(storesRes.data);
+            if (dictRes.success && dictRes.data) setCampaignDict(dictRes.data);
+            if (empsRes.success) setEmployees(empsRes.data);
+            if (offsetsRes.success && offsetsRes.data) setOffsets(offsetsRes.data);
+            else setOffsets([]);
+            setBonuses(bonusesList || []);
 
-        if (storesRes.success) setStores(storesRes.data);
-        if (dictRes.success && dictRes.data) setCampaignDict(dictRes.data);
-        if (empsRes.success) setEmployees(empsRes.data);
-        if (offsetsRes.success && offsetsRes.data) setOffsets(offsetsRes.data);
-        else setOffsets([]);
-        setBonuses(bonusesList || []);
+            // Chuyển đổi chỉ tiêu thi đua sang bản đồ [empId][rawKey] = target
+            const tMap: Record<string, Record<string, number>> = {};
+            if (targetsRes.success && targetsRes.data) {
+                targetsRes.data.forEach((row: any) => {
+                    const empId = String(row.employee_id || '').trim();
+                    const rawKey = String(row.raw_key || '').trim();
+                    if (empId && rawKey) {
+                        if (!tMap[empId]) tMap[empId] = {};
+                        tMap[empId][rawKey] = Number(row.target_value) || 0;
+                    }
+                });
+            }
+            setTargetsMap(tMap);
 
-        // Chuyển đổi chỉ tiêu thi đua sang bản đồ [empId][rawKey] = target
-        const tMap: Record<string, Record<string, number>> = {};
-        if (targetsRes.success && targetsRes.data) {
-            targetsRes.data.forEach((row: any) => {
-                const empId = String(row.employee_id || '').trim();
-                const rawKey = String(row.raw_key || '').trim();
-                if (empId && rawKey) {
-                    if (!tMap[empId]) tMap[empId] = {};
-                    tMap[empId][rawKey] = Number(row.target_value) || 0;
-                }
+            // 2. Lấy danh sách các phiên dữ liệu nhân viên đã cập nhật (tự động đồng bộ với Supabase Cloud)
+            const allSessions = await syncAndFetchEmployeeDataSessions({
+                month: selectedMonth,
+                year: selectedYear
             });
+
+            // Chỉ lấy các phiên có dữ liệu thi đua hoặc phiên REVENUE_CAMPAIGN / FULL_SYNC
+            const validSessions = allSessions.filter(s =>
+                (s.session_type === 'REVENUE_CAMPAIGN' || s.session_type === 'FULL_SYNC') &&
+                s.records.length > 0 &&
+                s.records.some(r => r.campaigns && Object.keys(r.campaigns).length > 0)
+            );
+
+            setSessions(validSessions);
+        } catch (err: any) {
+            console.error('Lỗi tải dữ liệu Tổng hợp thi đua:', err);
+            setLoadError(err?.message || 'Không thể tải dữ liệu từ hệ thống. Vui lòng thử lại.');
+        } finally {
+            setLoading(false);
         }
-        setTargetsMap(tMap);
-
-        // 2. Lấy danh sách các phiên dữ liệu nhân viên đã cập nhật (tự động đồng bộ với Supabase Cloud)
-        const allSessions = await syncAndFetchEmployeeDataSessions({
-            month: selectedMonth,
-            year: selectedYear
-        });
-
-        // Chỉ lấy các phiên có dữ liệu thi đua hoặc phiên REVENUE_CAMPAIGN / FULL_SYNC
-        const validSessions = allSessions.filter(s =>
-            (s.session_type === 'REVENUE_CAMPAIGN' || s.session_type === 'FULL_SYNC') &&
-            s.records.length > 0 &&
-            s.records.some(r => r.campaigns && Object.keys(r.campaigns).length > 0)
-        );
-
-        setSessions(validSessions);
-        setLoading(false);
     };
 
     useEffect(() => {
@@ -489,8 +504,8 @@ export default function CampaignSummaryPage() {
         if (clonedSelect) {
             const selectedText = clonedSelect.options[clonedSelect.selectedIndex]?.text || selectedCategoryFilter;
             const badge = document.createElement('div');
-            badge.className = 'px-3.5 py-2 bg-[#0d9488] text-white text-xs font-black rounded-xl shadow-xs flex items-center gap-1.5';
-            badge.innerHTML = `<span>📂 Ngành Hàng: ${selectedText}</span>`;
+            badge.className = 'px-3.5 py-2 bg-[#0d9488] text-white text-xs font-black rounded-xl shadow-sm flex items-center gap-1.5';
+            badge.textContent = `Ngành hàng: ${selectedText}`;
             clonedSelect.parentElement?.replaceWith(badge);
         }
 
@@ -546,7 +561,7 @@ export default function CampaignSummaryPage() {
         try {
             const canvas = await generateCanvas4K();
             if (!canvas) {
-                showToast('⚠️ Không thể tạo ảnh báo cáo!');
+                showToast('Không thể tạo ảnh báo cáo!', 'error');
                 setIsExporting(false);
                 return;
             }
@@ -558,7 +573,7 @@ export default function CampaignSummaryPage() {
                             await navigator.clipboard.write([
                                 new ClipboardItem({ 'image/png': blob })
                             ]);
-                            showToast('📋 Đã sao chép toàn bộ bảng thi đua chuẩn 8K vào Clipboard! Nhấn Ctrl + V để dán ngay.');
+                            showToast('Đã sao chép toàn bộ bảng thi đua chuẩn 8K vào Clipboard! Nhấn Ctrl + V để dán ngay.');
                         } catch (err: any) {
                             console.error('Lỗi clipboard, tự động chuyển sang tải file:', err);
                             handleDownloadImage();
@@ -573,7 +588,7 @@ export default function CampaignSummaryPage() {
         } catch (e: any) {
             console.error('Lỗi sao chép ảnh:', e);
             setIsExporting(false);
-            showToast('⚠️ Không thể copy ảnh: ' + (e.message || e));
+            showToast('Không thể copy ảnh: ' + (e.message || e), 'error');
         }
     };
 
@@ -583,7 +598,7 @@ export default function CampaignSummaryPage() {
         try {
             const canvas = await generateCanvas4K();
             if (!canvas) {
-                showToast('⚠️ Không thể tạo ảnh báo cáo!');
+                showToast('Không thể tạo ảnh báo cáo!', 'error');
                 return;
             }
             const imgData = canvas.toDataURL('image/png', 1.0);
@@ -591,10 +606,10 @@ export default function CampaignSummaryPage() {
             a.href = imgData;
             a.download = `TongHop_ThiDua_${campaignData.date_display || (selectedMonth + '_' + selectedYear)}_8K.png`;
             a.click();
-            showToast('🎉 Đã tải file ảnh toàn bộ bảng thi đua chuẩn 8K thành công!');
+            showToast('Đã tải file ảnh toàn bộ bảng thi đua chuẩn 8K thành công!');
         } catch (e: any) {
             console.error('Lỗi tải ảnh:', e);
-            showToast('⚠️ Không thể tải ảnh: ' + (e.message || e));
+            showToast('Không thể tải ảnh: ' + (e.message || e), 'error');
         } finally {
             setIsExporting(false);
         }
@@ -720,49 +735,55 @@ export default function CampaignSummaryPage() {
     }, [campaignData, campaignDict, selectedStore]);
 
     return (
-        <div className="max-w-[1720px] mx-auto space-y-4 pb-12">
+        <div className="max-w-[1720px] mx-auto space-y-4 pb-12 font-sans">
             {/* Toast Thông Báo */}
-            {toastMessage && (
-                <div className="fixed top-5 right-5 z-50 p-4 bg-slate-900 text-white rounded-2xl shadow-2xl flex items-center gap-2.5 text-xs border border-slate-700 animate-in fade-in slide-in-from-top-2 duration-200">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-                    <span className="font-semibold">{toastMessage}</span>
+            {toast && (
+                <div role="status" aria-live="polite" className="fixed top-5 right-5 z-50 max-w-sm p-4 bg-slate-900 text-white rounded-2xl shadow-2xl flex items-center gap-2.5 text-xs border border-slate-700">
+                    {toast.type === 'error' ? (
+                        <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" aria-hidden="true" />
+                    ) : (
+                        <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" aria-hidden="true" />
+                    )}
+                    <span className="font-semibold">{toast.message}</span>
                 </div>
             )}
 
             {/* Thanh công cụ lọc: Tháng/Năm, ST, Chọn Phiên, Tìm kiếm, Xuất Excel */}
-            <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-3 text-xs">
+            <div className="bg-white rounded-2xl p-3 sm:p-4 border border-slate-200 shadow-sm space-y-3 text-xs">
                 {/* HÀNG 1: BỘ LỌC ST RIÊNG LẺ ĐẦU TIÊN (RULE 10 CONVENTION) */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
-                    <div className="flex items-center gap-2">
-                        <div className={`flex items-center gap-2 px-3.5 py-2 rounded-xl border text-xs font-bold transition-all ${isLockedToSingleStore
-                            ? 'bg-amber-50/90 border-amber-200 text-amber-900 shadow-2xs'
-                            : 'bg-slate-50 border-slate-200 hover:border-emerald-400 text-slate-800 shadow-2xs'
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-3 border-b border-slate-100 min-w-0">
+                    <div className="flex items-center gap-2 w-full sm:w-auto min-w-0">
+                        <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-bold transition-all w-full sm:w-auto min-w-0 max-w-full shadow-sm ${isLockedToSingleStore
+                            ? 'bg-amber-50/90 border-amber-200 text-amber-900'
+                            : 'bg-slate-50 border-slate-200 hover:border-emerald-400 text-slate-800'
                             }`}>
                             {isLockedToSingleStore ? (
-                                <Lock className="w-4 h-4 text-amber-600 shrink-0" />
+                                <Lock className="w-4 h-4 text-amber-600 shrink-0" aria-hidden="true" />
                             ) : (
-                                <Store className="w-4 h-4 text-emerald-600 shrink-0" />
+                                <Store className="w-4 h-4 text-emerald-600 shrink-0" aria-hidden="true" />
                             )}
-                            <span className="text-slate-500 font-bold whitespace-nowrap">ST:</span>
+                            <label htmlFor="summary-store-select" className="text-slate-600 font-bold whitespace-nowrap shrink-0">ST:</label>
                             <select
+                                id="summary-store-select"
+                                name="summary_store_select"
                                 value={selectedStore}
                                 onChange={e => handleStoreChange(e.target.value)}
                                 disabled={isLockedToSingleStore}
                                 title={isLockedToSingleStore ? 'Tài khoản nhân viên được cố định theo ST đang làm việc' : undefined}
-                                className={`bg-transparent text-xs font-black outline-hidden min-w-[200px] sm:min-w-[260px] ${isLockedToSingleStore
+                                className={`bg-transparent text-xs font-black outline-none min-w-0 w-full flex-1 sm:min-w-[240px] truncate ${isLockedToSingleStore
                                     ? 'cursor-not-allowed text-amber-900'
                                     : 'cursor-pointer text-slate-900'
                                     }`}
                             >
                                 {canViewAllStores && (
-                                    <option value="all">🏢 Toàn Cụm ST</option>
+                                    <option value="all">Toàn Cụm ST</option>
                                 )}
                                 {allowedStores.map(s => (
-                                    <option key={s.id || s.code} value={s.name}>🏪 {s.name} ({s.code})</option>
+                                    <option key={s.id || s.code} value={s.name}>{s.name} ({s.code})</option>
                                 ))}
                             </select>
                             {isLockedToSingleStore && (
-                                <span className="text-[10px] bg-amber-200/80 text-amber-800 px-1 py-0.5 rounded font-bold uppercase tracking-wider">
+                                <span className="text-[10px] bg-amber-200/80 text-amber-800 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider shrink-0">
                                     Đã khóa
                                 </span>
                             )}
@@ -771,25 +792,27 @@ export default function CampaignSummaryPage() {
                 </div>
 
                 {/* HÀNG 2: THỜI GIAN, PHIÊN & CÁC BỘ LỌC BỔ TRỢ */}
-                <div className="flex flex-wrap items-center justify-between gap-3 pt-0.5">
-                    <div className="flex flex-wrap items-center gap-2.5">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 pt-0.5 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2 min-w-0">
                         {/* Chọn Tháng / Năm */}
                         <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl">
-                            <Calendar className="w-4 h-4 text-emerald-600" />
+                            <Calendar className="w-4 h-4 text-emerald-600 shrink-0" aria-hidden="true" />
                             <select
+                                aria-label="Chọn tháng báo cáo"
                                 value={selectedMonth}
                                 onChange={e => setSelectedMonth(Number(e.target.value))}
-                                className="bg-transparent text-xs font-bold text-slate-800 outline-hidden cursor-pointer"
+                                className="bg-transparent text-xs font-bold text-slate-800 outline-none cursor-pointer"
                             >
                                 {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
                                     <option key={m} value={m}>Tháng {m}</option>
                                 ))}
                             </select>
-                            <span className="text-slate-300">/</span>
+                            <span className="text-slate-400" aria-hidden="true">/</span>
                             <select
+                                aria-label="Chọn năm báo cáo"
                                 value={selectedYear}
                                 onChange={e => setSelectedYear(Number(e.target.value))}
-                                className="bg-transparent text-xs font-bold text-slate-800 outline-hidden cursor-pointer"
+                                className="bg-transparent text-xs font-bold text-slate-800 outline-none cursor-pointer"
                             >
                                 {[2025, 2026, 2027].map(y => (
                                     <option key={y} value={y}>{y}</option>
@@ -797,106 +820,152 @@ export default function CampaignSummaryPage() {
                             </select>
                         </div>
 
-                    {/* Chọn Phiên Đã Cập Nhật */}
-                    {availableSessions.length > 0 && (
-                        <div className="flex items-center gap-1.5 bg-blue-50/80 border border-blue-200 px-3 py-1.5 rounded-xl">
-                            <Layers className="w-4 h-4 text-blue-600" />
-                            <span className="font-bold text-blue-900">Phiên:</span>
-                            <select
-                                value={selectedSessionId}
-                                onChange={e => setSelectedSessionId(e.target.value)}
-                                className="bg-transparent text-xs font-bold text-blue-950 outline-hidden cursor-pointer max-w-[260px] truncate"
+                        {/* Chọn Phiên Đã Cập Nhật */}
+                        {availableSessions.length > 0 && (
+                            <div className="flex items-center gap-1.5 bg-blue-50/80 border border-blue-200 px-3 py-1.5 rounded-xl w-full sm:w-auto min-w-0 max-w-full">
+                                <Layers className="w-4 h-4 text-blue-600 shrink-0" aria-hidden="true" />
+                                <label htmlFor="summary-session-select" className="font-bold text-blue-900 shrink-0">Phiên:</label>
+                                <select
+                                    id="summary-session-select"
+                                    name="summary_session_select"
+                                    value={selectedSessionId}
+                                    onChange={e => setSelectedSessionId(e.target.value)}
+                                    className="bg-transparent text-xs font-bold text-blue-950 outline-none cursor-pointer min-w-0 w-full flex-1 sm:max-w-[260px] truncate"
+                                >
+                                    {availableSessions.map(s => (
+                                        <option key={s.id} value={s.id}>
+                                            {selectedStore === 'all' && s.id !== 'all_cluster_latest' ? `[${getShortStoreName(s.store_name)}] ` : ''}
+                                            {s.session_title} {s.report_date ? `(${formatDate(s.report_date)})` : ''}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
+
+                        {/* Nút Điều Hướng Sang Trang Cập Nhật Số Liệu NV */}
+                        <button
+                            type="button"
+                            onClick={() => navigate('/cap-nhat-luy-ke-nhan-vien')}
+                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-sm"
+                            title="Đi đến phân hệ Cập nhật số liệu NV để lưu phiên mới"
+                        >
+                            <span>Cập Nhật Số Liệu NV</span>
+                            <ArrowUpRight className="w-3.5 h-3.5" aria-hidden="true" />
+                        </button>
+
+                        {/* BẬT / TẮT ÁP DỤNG CẤN TRỪ THI ĐUA */}
+                        {offsets.length > 0 && (
+                            <button
+                                type="button"
+                                onClick={() => setApplyOffsets(prev => !prev)}
+                                className={`px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition cursor-pointer border shadow-sm ${applyOffsets
+                                    ? 'bg-purple-600 text-white border-purple-700 hover:bg-purple-700'
+                                    : 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200'
+                                    }`}
+                                title={applyOffsets ? 'Đang áp dụng cấn trừ. Nhấp để xem số liệu gốc chưa cấn trừ' : 'Đang xem số liệu gốc. Nhấp để áp dụng cấn trừ thi đua'}
                             >
-                                {availableSessions.map(s => (
-                                    <option key={s.id} value={s.id}>
-                                        {selectedStore === 'all' && s.id !== 'all_cluster_latest' ? `[${getShortStoreName(s.store_name)}] ` : ''}
-                                        {s.session_title} {s.report_date ? `(${formatDate(s.report_date)})` : ''}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-                    )}
+                                <span
+                                    className={`w-2 h-2 rounded-full shrink-0 ${applyOffsets ? 'bg-white' : 'bg-slate-400'}`}
+                                    aria-hidden="true"
+                                />
+                                <span>{applyOffsets ? `Sau cấn trừ (${offsets.length})` : `Số liệu gốc (${offsets.length} cấn)`}</span>
+                            </button>
+                        )}
 
-                    {/* Nút Điều Hướng Sang Trang Cập Nhật Số Liệu NV */}
-                    <button
-                        type="button"
-                        onClick={() => navigate('/cap-nhat-luy-ke-nhan-vien')}
-                        className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
-                        title="Đi đến phân hệ Cập nhật số liệu NV để lưu phiên mới"
-                    >
-                        <span>Cập Nhật Số Liệu NV</span>
-                        <ArrowUpRight className="w-4 h-4" />
-                    </button>
-
-                    {/* BẬT / TẮT ÁP DỤNG CẤN TRỪ THI ĐUA */}
-                    {offsets.length > 0 && (
+                        {/* Nút Điều Hướng Sang Trang Quản Lý Cấn Trừ */}
                         <button
                             type="button"
-                            onClick={() => setApplyOffsets(prev => !prev)}
-                            className={`px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition cursor-pointer border ${applyOffsets
-                                ? 'bg-purple-600 text-white border-purple-700 shadow-2xs hover:bg-purple-700'
-                                : 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200'
-                                }`}
-                            title={applyOffsets ? 'Đang áp dụng cấn trừ. Nhấp để xem số liệu gốc chưa cấn trừ' : 'Đang xem số liệu gốc. Nhấp để áp dụng cấn trừ thi đua'}
+                            onClick={() => navigate('/can-tru-thi-dua')}
+                            className="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200 rounded-xl text-xs font-bold flex items-center gap-1 transition cursor-pointer shadow-sm"
+                            title="Đi đến trang Quản lý Cấn trừ thi đua"
                         >
-                            <span>{applyOffsets ? `🟣 Sau cấn trừ (${offsets.length})` : `⚪ Số liệu gốc (${offsets.length} cấn)`}</span>
+                            <span>Cấn Trừ ({offsets.length})</span>
+                            <ArrowUpRight className="w-3.5 h-3.5" aria-hidden="true" />
                         </button>
-                    )}
 
-                    {/* Nút Điều Hướng Sang Trang Quản Lý Cấn Trừ */}
-                    <button
-                        type="button"
-                        onClick={() => navigate('/can-tru-thi-dua')}
-                        className="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200 rounded-xl text-xs font-bold flex items-center gap-1 transition cursor-pointer shadow-2xs"
-                        title="Đi đến trang Quản lý Cấn trừ thi đua"
-                    >
-                        <span>Cấn Trừ ({offsets.length})</span>
-                        <ArrowUpRight className="w-3.5 h-3.5" />
-                    </button>
-
-                    {/* Nút Xuất Excel (Tuân thủ Quy chuẩn 9: Phân quyền xuất Excel) */}
-                    {campaignData && canExportExcel && (
-                        <button
-                            type="button"
-                            onClick={handleExportExcel}
-                            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer border border-slate-200"
-                        >
-                            <FileSpreadsheet className="w-4 h-4 text-slate-600" />
-                            <span>Xuất Excel</span>
-                        </button>
-                    )}
-                </div>
-
-                <div className="flex items-center gap-2">
-                    {/* Tìm kiếm nhân viên */}
-                    <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl w-60">
-                        <Search className="w-4 h-4 text-slate-400" />
-                        <input
-                            type="text"
-                            placeholder="Tìm nhân viên / MSNV..."
-                            value={searchQuery}
-                            onChange={e => setSearchQuery(e.target.value)}
-                            className="bg-transparent text-xs outline-hidden w-full text-slate-800 placeholder-slate-400 font-medium"
-                        />
+                        {/* Nút Xuất Excel (Tuân thủ Quy chuẩn 9: Phân quyền xuất Excel) */}
+                        {campaignData && canExportExcel && (
+                            <button
+                                type="button"
+                                onClick={handleExportExcel}
+                                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer border border-slate-200"
+                            >
+                                <FileSpreadsheet className="w-4 h-4 text-slate-600" aria-hidden="true" />
+                                <span>Xuất Excel</span>
+                            </button>
+                        )}
                     </div>
 
+                    <div className="flex items-center gap-2 w-full lg:w-auto min-w-0">
+                        {/* Tìm kiếm nhân viên */}
+                        <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl flex-1 sm:flex-initial sm:w-60 min-w-0 focus-within:bg-white focus-within:ring-2 focus-within:ring-emerald-500/20 focus-within:border-emerald-500 transition">
+                            <Search className="w-4 h-4 text-slate-500 shrink-0" aria-hidden="true" />
+                            <input
+                                type="text"
+                                aria-label="Tìm nhân viên hoặc MSNV"
+                                placeholder="Tìm nhân viên / MSNV..."
+                                value={searchQuery}
+                                onChange={e => setSearchQuery(e.target.value)}
+                                className="bg-transparent text-xs outline-none w-full min-w-0 text-slate-800 placeholder-slate-500 font-medium"
+                            />
+                            {searchQuery && (
+                                <button
+                                    type="button"
+                                    onClick={() => setSearchQuery('')}
+                                    aria-label="Xóa từ khóa tìm kiếm"
+                                    className="text-slate-500 hover:text-slate-800 p-0.5 rounded shrink-0 cursor-pointer"
+                                >
+                                    <X className="w-3.5 h-3.5" aria-hidden="true" />
+                                </button>
+                            )}
+                        </div>
+
+                        <button
+                            type="button"
+                            onClick={loadSystemData}
+                            disabled={loading}
+                            className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-700 transition cursor-pointer shrink-0 disabled:opacity-50"
+                            title="Tải lại số liệu từ hệ thống"
+                            aria-label="Tải lại số liệu từ hệ thống"
+                        >
+                            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-emerald-600' : ''}`} aria-hidden="true" />
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            {loadError && (
+                <div role="alert" className="bg-rose-50 border border-rose-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-rose-800">
+                    <div className="flex items-center gap-2 font-semibold">
+                        <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" aria-hidden="true" />
+                        <span>{loadError}</span>
+                    </div>
                     <button
                         type="button"
                         onClick={loadSystemData}
-                        className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-600 transition cursor-pointer"
-                        title="Tải lại số liệu từ hệ thống"
+                        className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold self-start sm:self-auto cursor-pointer"
                     >
-                        <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-emerald-600' : ''}`} />
+                        Thử lại
                     </button>
                 </div>
-            </div>
-        </div>
+            )}
 
-            {/* TRƯỜNG HỢP 1: CHƯA CÓ PHIÊN DỮ LIỆU HOẶC KHÔNG CÓ NHÂN VIÊN NÀO CÓ TARGET TẠI ST NÀY */}
-            {!campaignData || availableSessions.length === 0 || campaignData.rows.length === 0 ? (
-                <div className="bg-white rounded-3xl border border-amber-200 p-12 text-center shadow-xs space-y-4 max-w-3xl mx-auto my-8">
-                    <div className="w-14 h-14 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center mx-auto shadow-2xs">
-                        <AlertTriangle className="w-8 h-8" />
+            {/* TRẠNG THÁI ĐANG TẢI LẦN ĐẦU */}
+            {loading && !campaignData ? (
+                <div className="bg-white rounded-3xl border border-slate-200 p-4 sm:p-5 shadow-sm space-y-4 animate-pulse" aria-busy="true" aria-label="Đang tải tổng hợp thi đua">
+                    <div className="h-24 rounded-2xl bg-emerald-900/15" />
+                    <div className="space-y-2">
+                        <div className="h-12 rounded-xl bg-slate-100" />
+                        {Array.from({ length: 6 }).map((_, i) => (
+                            <div key={i} className="h-11 rounded-lg bg-slate-50 border border-slate-100" />
+                        ))}
+                    </div>
+                </div>
+            ) : !campaignData || availableSessions.length === 0 || campaignData.rows.length === 0 ? (
+                /* TRƯỜNG HỢP 1: CHƯA CÓ PHIÊN DỮ LIỆU HOẶC KHÔNG CÓ NHÂN VIÊN NÀO CÓ TARGET TẠI ST NÀY */
+                <div className="bg-white rounded-3xl border border-amber-200 p-8 sm:p-12 text-center shadow-sm space-y-4 max-w-3xl mx-auto my-8">
+                    <div className="w-14 h-14 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center mx-auto shadow-sm">
+                        <AlertTriangle className="w-8 h-8" aria-hidden="true" />
                     </div>
 
                     <div className="space-y-1.5">
@@ -905,7 +974,7 @@ export default function CampaignSummaryPage() {
                                 ? `Chưa Có Dữ Liệu Phiên Thi Đua Cho ST Này (Tháng ${selectedMonth}/${selectedYear})`
                                 : 'Không Tìm Thấy Nhân Viên Có Khai Báo Target Tại ST Này'}
                         </h3>
-                        <p className="text-xs text-slate-500 max-w-lg mx-auto leading-relaxed">
+                        <p className="text-xs text-slate-600 max-w-lg mx-auto leading-relaxed">
                             {availableSessions.length === 0
                                 ? `Tại ST "${selectedStore === 'all' ? 'Toàn Cụm' : selectedStore}", chưa có phiên dữ liệu Doanh thu & Thi đua nào được cập nhật cho Tháng ${selectedMonth}/${selectedYear}. Vui lòng vào phân hệ Cập nhật số liệu NV để lưu phiên Doanh thu & Thi đua trước khi xem bảng báo cáo.`
                                 : `Tại ST "${selectedStore === 'all' ? 'Toàn Cụm' : selectedStore}", chưa có nhân sự nào được khai báo chỉ tiêu thi đua (target) cho Tháng ${selectedMonth}/${selectedYear}. Theo quy định, báo cáo chỉ hiển thị nhân sự có khai báo target và tổng thi đua có target.`}
@@ -919,7 +988,7 @@ export default function CampaignSummaryPage() {
                             className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black transition cursor-pointer inline-flex items-center gap-2 shadow-sm"
                         >
                             <span>Cập Nhật Số Liệu NV</span>
-                            <ArrowUpRight className="w-4 h-4" />
+                            <ArrowUpRight className="w-4 h-4" aria-hidden="true" />
                         </button>
                         <button
                             type="button"
@@ -927,7 +996,7 @@ export default function CampaignSummaryPage() {
                             className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition cursor-pointer inline-flex items-center gap-2 shadow-sm"
                         >
                             <span>Khai Báo Mục Tiêu NV</span>
-                            <ArrowUpRight className="w-4 h-4" />
+                            <ArrowUpRight className="w-4 h-4" aria-hidden="true" />
                         </button>
                     </div>
                 </div>
@@ -958,35 +1027,35 @@ export default function CampaignSummaryPage() {
                                 TỔNG HỢP THI ĐUA
                             </h1>
                             <div className="text-xs sm:text-sm font-bold text-amber-200/95 tracking-wide flex flex-wrap items-center justify-center md:justify-start gap-1.5">
-                                <span>✨ Luỹ kế dự kiến đến ngày:</span>
-                                <span className="font-mono text-white font-extrabold">{formatDate(campaignData.date_display)}</span>
-                                <span className="text-amber-400">||</span>
+                                <span>Lũy kế dự kiến đến ngày:</span>
+                                <span className="font-mono tabular-nums text-white font-extrabold">{formatDate(campaignData.date_display)}</span>
+                                <span className="text-amber-300" aria-hidden="true">||</span>
                                 <span className="text-[#fde047] font-black">{campaignData.mode_label || 'DỰ KIẾN'}</span>
                                 {campaignData.offsets_applied && (campaignData.offset_count ?? 0) > 0 && (
-                                    <span className="ml-1 px-2 py-0.5 rounded-full bg-purple-500/90 text-white text-[10px] font-black tracking-wide border border-purple-300 shadow-2xs">
-                                        🔀 ĐÃ CẤN TRỪ ({campaignData.offset_count} LƯỢT)
+                                    <span className="ml-1 px-2 py-0.5 rounded-full bg-purple-600 text-white text-[10px] font-black tracking-wide border border-purple-300 shadow-sm inline-flex items-center gap-1">
+                                        <Layers className="w-3 h-3" aria-hidden="true" />
+                                        <span>ĐÃ CẤN TRỪ ({campaignData.offset_count} LƯỢT)</span>
                                     </span>
                                 )}
                             </div>
                         </div>
 
-                        {/* Các Nút Tác Vụ Góc Phải (Khớp 100% Ảnh) */}
+                        {/* Các Nút Tác Vụ Góc Phải */}
                         <div className="flex items-center gap-2.5 z-10 flex-wrap justify-center">
                             {/* 1. Dropdown "TẤT CẢ NH" */}
                             <div className="relative">
                                 <select
+                                    aria-label="Lọc theo nhóm ngành hàng"
                                     value={selectedCategoryFilter}
                                     onChange={e => setSelectedCategoryFilter(e.target.value)}
-                                    className="px-3.5 py-2 bg-[#0d9488] hover:bg-[#0f766e] text-white text-xs font-black rounded-xl appearance-none cursor-pointer pr-7 transition shadow-xs outline-hidden"
+                                    className="px-3.5 py-2 bg-[#0d9488] hover:bg-[#0f766e] text-white text-xs font-black rounded-xl appearance-none cursor-pointer pr-8 transition shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
                                 >
                                     <option value="ALL">TẤT CẢ NH</option>
                                     {campaignData.categories.map(c => (
                                         <option key={c} value={c}>{getCampaignLabel(c, campaignDict)}</option>
                                     ))}
                                 </select>
-                                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-white text-[10px]">
-                                    ⌵
-                                </span>
+                                <ChevronDown className="w-3.5 h-3.5 text-white absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" aria-hidden="true" />
                             </div>
 
                             {/* Cụm button hành động chuẩn dùng chung: Nhận xét 3 mẫu, Xuất ảnh, Copy ảnh */}
@@ -1011,6 +1080,8 @@ export default function CampaignSummaryPage() {
                         categories={campaignData.categories}
                         selectedCategoryFilter={selectedCategoryFilter}
                         campaignDict={campaignDict}
+                        searchQuery={searchQuery}
+                        onClearSearch={() => setSearchQuery('')}
                     />
                 </div>
             )}

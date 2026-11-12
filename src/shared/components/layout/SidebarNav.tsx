@@ -288,7 +288,7 @@ export const NAVIGATION_GROUPS: NavGroup[] = [
                 badge: '🎲 Mới'
             },
             {
-                name: 'In Ấn Quầy ST',
+                name: 'In Ấn',
                 path: '/tien-ich-in-an',
                 icon: Printer,
                 badge: '🖨️ Mới'

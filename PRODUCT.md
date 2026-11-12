@@ -9,20 +9,20 @@ web
 ## Users
 
 - **Primary users — Quản lý cụm ST, Quản lý ST (`QUAN_LY`) và Trưởng ca (`TRUONG_CA`)**: Theo dõi sức khỏe doanh thu, tiến độ chỉ tiêu/thi đua theo ngày và lũy kế tháng ngay trên smartphone; nhanh chóng xuất ảnh báo cáo tỷ lệ dọc gửi vào nhóm chat (Messaging App) để thúc đẩy và điều phối đội ngũ; cấu hình chỉ tiêu và duyệt nhân sự/tài khoản trong phạm vi ST được phân quyền.
-- **Primary users — Nhân viên bán hàng (`NHAN_VIEN`)**: Tra cứu KPI, bảng xếp hạng, tiến độ thi đua cá nhân theo thời gian thực trên điện thoại và sử dụng các tiện ích tác nghiệp trực tiếp tại quầy (cấp mã voucher, kiểm quỹ, cân tồn kho, sinh mã đơn hàng, tra cứu thi đua).
+- **Primary users — Nhân viên bán hàng (`NHAN_VIEN`)**: Tra cứu KPI, bảng xếp hạng, tiến độ thi đua cá nhân theo thời gian thực trên điện thoại và sử dụng các tiện ích tác nghiệp trực tiếp tại ST (cấp mã voucher, kiểm quỹ, cân tồn kho, sinh mã đơn hàng, tra cứu thi đua).
 - **Secondary users — Quản trị viên hệ thống (`ADMIN`)**: Quản trị cấu hình toàn cục, phân quyền trang và phạm vi ST (RBAC + Store Scope), kiểm soát xuất Excel, quản lý phiên dữ liệu và tài khoản trải nghiệm (`Guest`).
 
 ## Product Purpose
 
-SalesHub là nền tảng điều hành bán hàng và tiện ích vận hành ST trên nền web (ưu tiên smartphone), chuyển hóa số liệu kinh doanh rời rạc thành báo cáo trực quan theo thời gian thực, ảnh báo cáo sẵn sàng chia sẻ qua nhóm chat và bộ công cụ tác nghiệp hàng ngày cho đội ngũ tại ST. Thành công của sản phẩm được đo bằng tốc độ đọc hiểu tình hình kinh doanh chỉ qua thao tác lướt dọc trên điện thoại, tính chính xác/đồng bộ dữ liệu đa thiết bị và mức độ sử dụng ổn định tại quầy với chi phí hạ tầng bằng 0.
+SalesHub là nền tảng điều hành bán hàng và tiện ích vận hành ST trên nền web (ưu tiên smartphone), chuyển hóa số liệu kinh doanh rời rạc thành báo cáo trực quan theo thời gian thực, ảnh báo cáo sẵn sàng chia sẻ qua nhóm chat và bộ công cụ tác nghiệp hàng ngày cho đội ngũ tại ST. Thành công của sản phẩm được đo bằng tốc độ đọc hiểu tình hình kinh doanh chỉ qua thao tác lướt dọc trên điện thoại, tính chính xác/đồng bộ dữ liệu đa thiết bị và mức độ sử dụng ổn định tại ST với chi phí hạ tầng bằng 0.
 
 ## Positioning
 
-Là lớp điều hành và tác nghiệp nhanh dành cho ST: cho phép nạp trực tiếp dữ liệu thô (copy-paste hoặc trích xuất ảnh chụp qua AI OCR) từ các nguồn báo cáo rời rạc để tạo ngay bảng điểm real-time chuẩn smartphone, ảnh báo cáo dọc không watermark gửi nhóm chat và tích hợp các tiện ích quầy ST trên cùng một ứng dụng miễn phí hạ tầng (Supabase Free + Cloudflare Pages / Netlify Free).
+Là lớp điều hành và tác nghiệp nhanh dành cho ST: cho phép nạp trực tiếp dữ liệu thô (copy-paste hoặc trích xuất ảnh chụp qua AI OCR) từ các nguồn báo cáo rời rạc để tạo ngay bảng điểm real-time chuẩn smartphone, ảnh báo cáo dọc không watermark gửi nhóm chat và tích hợp các tiện ích trên cùng một ứng dụng miễn phí hạ tầng (Supabase Free + Cloudflare Pages / Netlify Free).
 
 ## Operating Context
 
-- **Môi trường sử dụng**: Nhân sự sử dụng trực tiếp trên trình duyệt điện thoại khi di chuyển/đứng quầy, trên PC khi nạp số liệu/cấu hình, và tiếp nhận báo cáo dạng hình ảnh dọc qua Messaging App (Zalo/chat nội bộ).
+- **Môi trường sử dụng**: Nhân sự sử dụng trực tiếp trên trình duyệt điện thoại khi di chuyển hoặc tác nghiệp tại ST, trên PC khi nạp số liệu/cấu hình, và tiếp nhận báo cáo dạng hình ảnh dọc qua Messaging App (Zalo/chat nội bộ).
 - **Nhịp độ vận hành**: Theo dõi nhiều lần trong ngày (báo cáo real-time, phiên dữ liệu nhân viên), tổng kết theo tuần bắt đầu từ **Thứ Hai** (Monday-first) và lũy kế theo kỳ tháng.
 - **Quy trình dữ liệu**: Dữ liệu được nạp qua nhập thủ công/dán bảng hoặc OCR, lưu trữ tập trung trên Supabase Cloud để đồng bộ tức thì từ PC quản lý xuống điện thoại nhân viên.
 
@@ -67,6 +67,6 @@ Là lớp điều hành và tác nghiệp nhanh dành cho ST: cho phép nạp tr
 
 ## Accessibility & Inclusion
 
-- Tối ưu thao tác một tay trên màn hình dọc smartphone và đảm bảo độ rõ nét, tương phản dễ đọc nhanh dưới điều kiện ánh sáng tại quầy ST.
+- Tối ưu thao tác một tay trên màn hình dọc smartphone và đảm bảo độ rõ nét, tương phản dễ đọc nhanh dưới điều kiện ánh sáng.
 - Nội dung viết bằng tiếng Việt chuẩn dấu, dùng từ viết tắt ngành có giải thích/tooltip khi cần để mọi cấp nhân sự mới hay lâu năm đều nắm bắt nhanh.
 

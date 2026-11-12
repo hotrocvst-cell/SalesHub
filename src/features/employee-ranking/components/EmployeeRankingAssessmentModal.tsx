@@ -71,20 +71,20 @@ export default function EmployeeRankingAssessmentModal({
     // 1. MẪU 1: TOÀN DIỆN & VINH DANH (Comprehensive & Recognition)
     const generateTemplate1 = () => {
         const lines: string[] = [];
-        lines.push(`🌟 BÁO CÁO XẾP HẠNG NHÂN SỰ T${month}/${year} - ${displayName.toUpperCase()}:`);
-        lines.push(`• Tổng quan: ${summary.totalEmployees} nhân sự | DTQĐ: ${(summary.totalRevenueQd).toLocaleString('vi-VN')} tr | %DKHT TB: ${summary.avgForecastRate.toFixed(1)}% | Thi đua TB: ${summary.avgEmulationRate.toFixed(1)}%.`);
-        
+        lines.push(`🌟 BÁO CÁO XẾP HẠNG NHÂN SỰ T${month}/${year} \n🏠 ${displayName.toUpperCase()}:`);
+        lines.push(`• Tổng quan: ${summary.totalEmployees} nhân sự \n• DTQĐ: ${(summary.totalRevenueQd).toLocaleString('vi-VN')} tr \n• %DKHT TB: ${summary.avgForecastRate.toFixed(1)}% \n• Thi đua TB: ${summary.avgEmulationRate.toFixed(1)}%.`);
+
         if (topRev1) {
-            lines.push(`🥇 Dẫn đầu Doanh thu: ${topRev1.short_name} (Top #1 DTQĐ ${topRev1.revenue_qd.toLocaleString('vi-VN')}tr - DKHT ${topRev1.forecast_completion_rate.toFixed(1)}%)${topRev2 ? `, kế tiếp là ${topRev2.short_name} (Top #2)` : ''}.`);
+            lines.push(`\n🥇 TOP Doanh thu: \n• ${topRev1.short_name} (Top #1 DTQĐ ${topRev1.revenue_qd.toLocaleString('vi-VN')}tr - DKHT ${topRev1.forecast_completion_rate.toFixed(1)}%)${topRev2 ? ` \n• ${topRev2.short_name} (Top #2)` : ''}.`);
         }
 
         if (topEmu1) {
-            lines.push(`⭐ Quán quân Thi đua: ${topEmu1.short_name} (Top #1 - Đạt ${topEmu1.emulation_display} ~ ${topEmu1.emulation_rate.toFixed(0)}%).`);
+            lines.push(`\n⭐ TOP Thi đua: ${topEmu1.short_name} (Top #1 - Đạt ${topEmu1.emulation_display} ~ ${topEmu1.emulation_rate.toFixed(0)}%).`);
         }
 
         if (botRevs.length > 0 || botEmus.length > 0) {
-            const botNames = Array.from(new Set([...botRevs, ...botEmus].map(r => r.short_name))).slice(0, 3).join(', ');
-            lines.push(`🚨 Tăng tốc & Hỗ trợ: Các bạn nhóm Bot (${botNames}) cần chủ động bám nhịp khách, tối ưu trả góp và tư vấn chéo sản phẩm phụ kiện.`);
+            const botNames = Array.from(new Set([...botRevs, ...botEmus].map(r => r.short_name))).slice(0, 4).join(', ');
+            lines.push(` \n🚨 Bottom: ${botNames} `);
         }
 
         lines.push(`🎯 Hướng dẫn: Toàn đội giữ vững nhịp ca cao điểm, dồn sức hoàn thành 100% mục tiêu tháng!`);
@@ -96,7 +96,7 @@ export default function EmployeeRankingAssessmentModal({
         const lines: string[] = [];
         lines.push(`🔥 KẾ HOẠCH HÀNH ĐỘNG BỨT PHÁ T${month}/${year} - ${displayName}:`);
         lines.push(`1. Hiện trạng: Đạt ${summary.avgForecastRate.toFixed(1)}% chỉ tiêu doanh thu và ${summary.avgEmulationRate.toFixed(1)}% tiến độ thi đua.`);
-        
+
         if (topRev1) {
             lines.push(`2. Đầu tàu kéo nhịp: Nhân rộng mô hình chốt đơn xuất sắc của ${topRev1.short_name} (Top #1) cho toàn bộ ca trực.`);
         }
@@ -104,7 +104,7 @@ export default function EmployeeRankingAssessmentModal({
         lines.push(`3. Trọng tâm bứt phá:`);
         lines.push(`   • Đẩy mạnh đơn hàng trả góp/trả chậm để gia tăng DTQĐ.`);
         lines.push(`   • Tập trung nhóm thi đua trọng điểm chưa đạt để lấy trọn vẹn điểm thưởng.`);
-        
+
         if (botRevs.length > 0) {
             const needPaceNames = botRevs.slice(0, 3).map(r => r.short_name).join(', ');
             lines.push(`4. Kèm cặp sát sao: Quản lý/Trưởng ca kèm riêng nhóm (${needPaceNames}) trong ca chiều/tối để về đích an toàn.`);
@@ -214,11 +214,10 @@ export default function EmployeeRankingAssessmentModal({
                             <button
                                 type="button"
                                 onClick={() => handleApplyTemplate(1)}
-                                className={`p-2.5 rounded-xl border text-left transition cursor-pointer select-none ${
-                                    activeTemplateIdx === 1
-                                        ? 'bg-blue-50 border-blue-500 text-blue-950 shadow-sm ring-1 ring-blue-500'
-                                        : 'bg-slate-50/80 hover:bg-blue-50/50 border-slate-200 text-slate-800'
-                                }`}
+                                className={`p-2.5 rounded-xl border text-left transition cursor-pointer select-none ${activeTemplateIdx === 1
+                                    ? 'bg-blue-50 border-blue-500 text-blue-950 shadow-sm ring-1 ring-blue-500'
+                                    : 'bg-slate-50/80 hover:bg-blue-50/50 border-slate-200 text-slate-800'
+                                    }`}
                             >
                                 <div className="flex items-center gap-1 text-[11px] font-black mb-0.5">
                                     <Trophy className="w-3.5 h-3.5 text-amber-600 shrink-0" aria-hidden="true" />
@@ -233,11 +232,10 @@ export default function EmployeeRankingAssessmentModal({
                             <button
                                 type="button"
                                 onClick={() => handleApplyTemplate(2)}
-                                className={`p-2.5 rounded-xl border text-left transition cursor-pointer select-none ${
-                                    activeTemplateIdx === 2
-                                        ? 'bg-amber-50 border-amber-500 text-amber-950 shadow-sm ring-1 ring-amber-500'
-                                        : 'bg-slate-50/80 hover:bg-amber-50/50 border-slate-200 text-slate-800'
-                                }`}
+                                className={`p-2.5 rounded-xl border text-left transition cursor-pointer select-none ${activeTemplateIdx === 2
+                                    ? 'bg-amber-50 border-amber-500 text-amber-950 shadow-sm ring-1 ring-amber-500'
+                                    : 'bg-slate-50/80 hover:bg-amber-50/50 border-slate-200 text-slate-800'
+                                    }`}
                             >
                                 <div className="flex items-center gap-1 text-[11px] font-black mb-0.5">
                                     <Flame className="w-3.5 h-3.5 text-rose-600 shrink-0" aria-hidden="true" />
@@ -252,11 +250,10 @@ export default function EmployeeRankingAssessmentModal({
                             <button
                                 type="button"
                                 onClick={() => handleApplyTemplate(3)}
-                                className={`p-2.5 rounded-xl border text-left transition cursor-pointer select-none ${
-                                    activeTemplateIdx === 3
-                                        ? 'bg-emerald-50 border-emerald-500 text-emerald-950 shadow-sm ring-1 ring-emerald-500'
-                                        : 'bg-slate-50/80 hover:bg-emerald-50/50 border-slate-200 text-slate-800'
-                                }`}
+                                className={`p-2.5 rounded-xl border text-left transition cursor-pointer select-none ${activeTemplateIdx === 3
+                                    ? 'bg-emerald-50 border-emerald-500 text-emerald-950 shadow-sm ring-1 ring-emerald-500'
+                                    : 'bg-slate-50/80 hover:bg-emerald-50/50 border-slate-200 text-slate-800'
+                                    }`}
                             >
                                 <div className="flex items-center gap-1 text-[11px] font-black mb-0.5">
                                     <Smartphone className="w-3.5 h-3.5 text-emerald-700 shrink-0" aria-hidden="true" />

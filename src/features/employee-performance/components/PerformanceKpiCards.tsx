@@ -1,6 +1,6 @@
 import type { StorePerformanceSummary } from '../types';
 import { cleanEmployeeName } from '../utils/performanceConfig';
-import { Trophy, Flame, Target, CreditCard } from 'lucide-react';
+import { Trophy, Flame, Target, CreditCard, Crown, Zap, TrendingUp, Wallet } from 'lucide-react';
 
 interface Props {
     summary: StorePerformanceSummary;
@@ -19,8 +19,8 @@ export default function PerformanceKpiCards({ summary, showWorkHours = false }: 
                         <Trophy className="w-4 h-4 text-amber-600 shrink-0" aria-hidden="true" />
                         <span>Top 1 DTQĐ</span>
                     </span>
-                    <span className="inline-block w-7 h-7 rounded-xl bg-amber-100 text-amber-800 text-center leading-7 text-xs font-bold shadow-sm shrink-0" aria-hidden="true">
-                        👑
+                    <span className="inline-flex items-center justify-center w-7 h-7 rounded-xl bg-amber-100 text-amber-800 shadow-sm shrink-0" aria-hidden="true">
+                        <Crown className="w-3.5 h-3.5" aria-hidden="true" />
                     </span>
                 </div>
 
@@ -55,8 +55,8 @@ export default function PerformanceKpiCards({ summary, showWorkHours = false }: 
                             <Flame className="w-4 h-4 text-teal-700 shrink-0" aria-hidden="true" />
                             <span>Top 1 Năng Suất (DTQĐ/GC)</span>
                         </span>
-                        <span className="inline-block w-7 h-7 rounded-xl bg-teal-100 text-teal-800 text-center leading-7 text-xs font-bold shadow-sm shrink-0" aria-hidden="true">
-                            ⚡
+                        <span className="inline-flex items-center justify-center w-7 h-7 rounded-xl bg-teal-100 text-teal-800 shadow-sm shrink-0" aria-hidden="true">
+                            <Zap className="w-3.5 h-3.5" aria-hidden="true" />
                         </span>
                     </div>
 
@@ -84,15 +84,15 @@ export default function PerformanceKpiCards({ summary, showWorkHours = false }: 
                 </div>
             )}
 
-            {/* 3. TOP 1 Dự Báo Hoành Thành (%DKHT) */}
+            {/* 3. TOP 1 Dự Báo Hoàn Thành (%DKHT) */}
             <div className="bg-emerald-50/40 rounded-2xl p-4 border border-emerald-200 shadow-sm hover:shadow-md transition relative">
                 <div className="flex items-center justify-between gap-2">
                     <span className="text-xs font-bold text-emerald-950 uppercase tracking-normal flex items-center gap-1.5">
                         <Target className="w-4 h-4 text-emerald-700 shrink-0" aria-hidden="true" />
                         <span>Top 1 %DKHT</span>
                     </span>
-                    <span className="inline-block w-7 h-7 rounded-xl bg-emerald-100 text-emerald-800 text-center leading-7 text-xs font-bold shadow-sm shrink-0" aria-hidden="true">
-                        🎯
+                    <span className="inline-flex items-center justify-center w-7 h-7 rounded-xl bg-emerald-100 text-emerald-800 shadow-sm shrink-0" aria-hidden="true">
+                        <TrendingUp className="w-3.5 h-3.5" aria-hidden="true" />
                     </span>
                 </div>
 
@@ -126,8 +126,8 @@ export default function PerformanceKpiCards({ summary, showWorkHours = false }: 
                         <CreditCard className="w-4 h-4 text-blue-700 shrink-0" aria-hidden="true" />
                         <span>Top 1 Trả Chậm</span>
                     </span>
-                    <span className="inline-block w-7 h-7 rounded-xl bg-blue-100 text-blue-800 text-center leading-7 text-xs font-bold shadow-sm shrink-0" aria-hidden="true">
-                        💳
+                    <span className="inline-flex items-center justify-center w-7 h-7 rounded-xl bg-blue-100 text-blue-800 shadow-sm shrink-0" aria-hidden="true">
+                        <Wallet className="w-3.5 h-3.5" aria-hidden="true" />
                     </span>
                 </div>
 
