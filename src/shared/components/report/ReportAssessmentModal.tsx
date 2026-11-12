@@ -278,11 +278,11 @@ export default function ReportAssessmentModal({
                         <textarea
                             id="report-assessment-textarea"
                             name="report_assessment_comment"
-                            rows={8}
+                            rows={5}
                             value={comment}
                             onChange={(e) => setComment(e.target.value)}
                             placeholder="Nhập nội dung nhận xét hoặc chọn 1 trong 3 mẫu tạo sẵn ở trên..."
-                            className="w-full p-3.5 bg-slate-50 border border-slate-300 rounded-2xl text-xs leading-relaxed text-slate-800 focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-500/20 outline-none resize-none font-medium transition"
+                            className="w-full min-h-[124px] sm:min-h-[172px] p-3.5 bg-slate-50 border border-slate-300 rounded-2xl text-xs leading-relaxed text-slate-800 focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-500/20 outline-none resize-y font-medium transition"
                         />
                     </div>
 
@@ -314,21 +314,21 @@ export default function ReportAssessmentModal({
                 </div>
 
                 {/* Footer Modal */}
-                <div className="p-4 sm:p-5 border-t border-slate-200 bg-slate-50 flex items-center justify-between gap-3 flex-wrap shrink-0">
+                <div className="p-3.5 sm:p-5 border-t border-slate-200 bg-slate-50 flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-2.5 shrink-0">
                     <button
                         type="button"
                         onClick={onClose}
-                        className="px-4 py-2 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-200 transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500"
+                        className="w-full sm:w-auto px-4 py-2 min-h-[38px] rounded-xl text-xs font-bold bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500"
                     >
                         Đóng
                     </button>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
                         {/* Nút Sao Chép Zalo */}
                         <button
                             type="button"
                             onClick={handleCopyZalo}
-                            className={`px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${
+                            className={`flex-1 sm:flex-initial justify-center px-3.5 sm:px-4 py-2 min-h-[38px] rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${
                                 copySuccess
                                     ? 'bg-emerald-700 text-white'
                                     : 'bg-white hover:bg-slate-100 text-blue-700 border border-blue-200'
@@ -336,7 +336,7 @@ export default function ReportAssessmentModal({
                             title="Sao chép toàn bộ văn bản nhận xét vào Clipboard"
                         >
                             {copySuccess ? <Check className="w-4 h-4 text-white" aria-hidden="true" /> : <Copy className="w-4 h-4 text-blue-700" aria-hidden="true" />}
-                            <span>{copySuccess ? 'Đã copy vào Clipboard!' : 'Sao Chép Zalo'}</span>
+                            <span>{copySuccess ? 'Đã copy!' : 'Sao Chép Zalo'}</span>
                         </button>
 
                         {/* Nút Lưu Nhận Xét (Nếu trang có hàm lưu) */}
@@ -345,7 +345,7 @@ export default function ReportAssessmentModal({
                                 type="button"
                                 onClick={handleSave}
                                 disabled={isBusy}
-                                className="px-5 py-2 rounded-xl text-xs font-extrabold bg-blue-700 hover:bg-blue-800 text-white shadow-sm transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700"
+                                className="flex-1 sm:flex-initial justify-center px-4 sm:px-5 py-2 min-h-[38px] rounded-xl text-xs font-extrabold bg-blue-700 hover:bg-blue-800 text-white shadow-sm transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700"
                             >
                                 {isBusy ? <RefreshCw className="w-4 h-4 animate-spin" aria-hidden="true" /> : <Check className="w-4 h-4" aria-hidden="true" />}
                                 <span>{isBusy ? 'Đang lưu...' : 'Lưu Nhận Xét'}</span>

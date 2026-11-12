@@ -25,10 +25,12 @@ import GeminiApiKeyModal from './components/GeminiApiKeyModal';
 import {
     extractAndMergeEmployeeImages,
     extractAdditionalEmulationImages,
+    extractAdditionalWorkHoursImages,
     convertOcrItemsToSessionRecords,
     convertSessionRecordsToOcrItems,
     type EmployeeOcrParsedItem
 } from './services/geminiEmployeeOcrService';
+import { mergeOcrItemsWithExistingSessions } from './services/employeeOcrSessionMerge';
 import {
     fetchStoreKnownCampaignTargets,
     isQuantityCampaign,
@@ -110,9 +112,10 @@ export default function EmployeeExtractOcrPage() {
     // 3. Tab chuyển đổi
     const [activeTab, setActiveTab] = useState<'ocr' | 'manual'>('ocr');
 
-    // 4. File tải lên (Hỗ trợ tải nhiều ảnh cho Doanh thu QĐ, % Tỷ trọng trả góp và Thi đua)
+    // 4. File tải lên (Hỗ trợ tải nhiều ảnh cho Doanh thu QĐ, % Tỷ trọng trả góp, Giờ công và Thi đua)
     const [qdFiles, setQdFiles] = useState<File[]>([]);
     const [installmentFiles, setInstallmentFiles] = useState<File[]>([]);
+    const [workHoursFiles, setWorkHoursFiles] = useState<File[]>([]);
     const [emulationFiles, setEmulationFiles] = useState<File[]>([]);
 
     // 5. Cấu hình Gemini Key
@@ -137,6 +140,7 @@ export default function EmployeeExtractOcrPage() {
     const [showSqlModal, setShowSqlModal] = useState<boolean>(false);
     const [isSqlCopied, setIsSqlCopied] = useState<boolean>(false);
     const [existingSession, setExistingSession] = useState<EmployeeDataSession | null>(null);
+    const [existingWorkHoursSession, setExistingWorkHoursSession] = useState<EmployeeDataSession | null>(null);
     const [isCheckingDuplicate, setIsCheckingDuplicate] = useState<boolean>(false);
 
     // 9. Quét bổ sung ảnh thi đua
@@ -156,6 +160,7 @@ export default function EmployeeExtractOcrPage() {
     const hasWorkingData =
         qdFiles.length > 0 ||
         installmentFiles.length > 0 ||
+        workHoursFiles.length > 0 ||
         emulationFiles.length > 0 ||
         employeesData.length > 0 ||
         Boolean(ocrError) ||
@@ -230,17 +235,22 @@ export default function EmployeeExtractOcrPage() {
         });
     }, [selectedStore, stores]);
 
-    // Tự động kiểm tra xem đã tồn tại phiên dữ liệu cho ST & Ngày chốt này chưa
+    // Tự động kiểm tra xem đã tồn tại phiên dữ liệu (REVENUE_CAMPAIGN hoặc WORK_HOURS) cho ST & Ngày chốt này chưa
     useEffect(() => {
         if (!selectedStore || !reportDate) return;
         let isMounted = true;
         setExistingSession(null);
+        setExistingWorkHoursSession(null);
         setIsCheckingDuplicate(true);
 
-        findExistingEmployeeSession(selectedStore, reportDate, 'REVENUE_CAMPAIGN')
-            .then(found => {
+        Promise.all([
+            findExistingEmployeeSession(selectedStore, reportDate, 'REVENUE_CAMPAIGN'),
+            findExistingEmployeeSession(selectedStore, reportDate, 'WORK_HOURS')
+        ])
+            .then(([foundRev, foundHours]) => {
                 if (isMounted) {
-                    setExistingSession(found);
+                    setExistingSession(foundRev);
+                    setExistingWorkHoursSession(foundHours);
                     setIsCheckingDuplicate(false);
                 }
             })
@@ -261,6 +271,7 @@ export default function EmployeeExtractOcrPage() {
     const resetWorkingBatch = () => {
         setQdFiles([]);
         setInstallmentFiles([]);
+        setWorkHoursFiles([]);
         setEmulationFiles([]);
         setEmployeesData([]);
         setCampaignMappings([]);
@@ -310,6 +321,7 @@ export default function EmployeeExtractOcrPage() {
         if (isExtracting || isSaving || isScanningAdditional) return;
         setQdFiles([]);
         setInstallmentFiles([]);
+        setWorkHoursFiles([]);
         setEmulationFiles([]);
         setOcrError('');
         setBatchResetKey(prev => prev + 1);
@@ -343,8 +355,13 @@ export default function EmployeeExtractOcrPage() {
             return;
         }
 
-        if (qdFiles.length === 0 && installmentFiles.length === 0 && emulationFiles.length === 0) {
-            showToast('⚠️ Vui lòng chọn ít nhất 1 ảnh (Doanh thu QĐ, % Tỷ trọng trả góp hoặc Thi đua)!');
+        if (
+            qdFiles.length === 0 &&
+            installmentFiles.length === 0 &&
+            workHoursFiles.length === 0 &&
+            emulationFiles.length === 0
+        ) {
+            showToast('⚠️ Vui lòng chọn ít nhất 1 ảnh (Doanh thu QĐ, % Tỷ trọng trả góp, Giờ công hoặc Thi đua)!');
             return;
         }
 
@@ -368,7 +385,7 @@ export default function EmployeeExtractOcrPage() {
         try {
             const result = await extractAndMergeEmployeeImages(
                 activeKey,
-                { qdFiles, installmentFiles, emulationFiles },
+                { qdFiles, installmentFiles, workHoursFiles, emulationFiles },
                 storeEmployees.length > 0 ? storeEmployees : systemEmployees,
                 (msg, pct) => {
                     setProgressText(msg);
@@ -446,25 +463,39 @@ export default function EmployeeExtractOcrPage() {
                 return;
             }
 
-            setEmployeesData(combinedEmployees);
+            const { mergedItems: finalMergedEmployees, hydratedFromExisting } = mergeOcrItemsWithExistingSessions(
+                combinedEmployees,
+                existingSession,
+                existingWorkHoursSession,
+                {
+                    hasQd: qdFiles.length > 0,
+                    hasInstallment: installmentFiles.length > 0,
+                    hasEmulation: emulationFiles.length > 0,
+                    hasWorkHours: workHoursFiles.length > 0
+                },
+                storeEmployees
+            );
+
+            setEmployeesData(finalMergedEmployees);
             setHasSavedCurrentBatch(false);
             setIsQuotaExceeded(false);
             setProgressPercent(100);
-            setProgressText(`Trích xuất thành công! Đã nạp ${combinedEmployees.length} dòng để rà soát...`);
+            setProgressText(`Trích xuất thành công! Đã nạp ${finalMergedEmployees.length} dòng để rà soát...`);
+            const mergeSuffix = hydratedFromExisting ? ' (đã ghép giữ nguyên số liệu phiên đang có)' : '';
             if (unmappedEmployees.length > 0) {
                 showToast(
-                    `⚠️ Đã nạp ${combinedEmployees.length} dòng (${unmappedEmployees.length} dòng từ ảnh không có Mã NV cần rà soát & chọn Mã NV trong bảng)!`
+                    `⚠️ Đã nạp ${finalMergedEmployees.length} dòng (${unmappedEmployees.length} dòng từ ảnh không có Mã NV cần rà soát & chọn Mã NV trong bảng)${mergeSuffix}!`
                 );
             } else if (excludedCount > 0) {
                 showToast(
-                    `✅ Đã nhập ${combinedEmployees.length} nhân viên theo danh bạ ST (loại bỏ ${excludedCount} nhân sự/dòng ngoài danh bạ)!`
+                    `✅ Đã nhập ${finalMergedEmployees.length} nhân viên theo danh bạ ST (loại bỏ ${excludedCount} nhân sự/dòng ngoài danh bạ)${mergeSuffix}!`
                 );
             } else if (nameMatchedCount > 0) {
                 showToast(
-                    `✅ Đã nhập ${combinedEmployees.length} nhân viên (${nameMatchedCount} dòng khớp tự động theo tên — vui lòng kiểm tra lại)!`
+                    `✅ Đã nhập ${finalMergedEmployees.length} nhân viên (${nameMatchedCount} dòng khớp tự động theo tên — vui lòng kiểm tra lại)${mergeSuffix}!`
                 );
             } else {
-                showToast(`✅ Đã nhập thành công ${combinedEmployees.length} nhân viên thuộc danh bạ ST!`);
+                showToast(`✅ Đã nhập thành công ${finalMergedEmployees.length} nhân viên thuộc danh bạ ST${mergeSuffix}!`);
             }
 
             setTimeout(() => {
@@ -529,12 +560,25 @@ export default function EmployeeExtractOcrPage() {
         try {
             const storeShortName = getShortStoreName(selectedStore);
             const totalQd = validEmployees.reduce((s, e) => s + (Number(e.revenueQd) || 0), 0);
+            const totalHours = Number(
+                validEmployees.reduce((s, e) => s + (Number(e.workHours) || 0), 0).toFixed(1)
+            );
+            const hasAnyRevOrCamp = validEmployees.some(
+                e =>
+                    (Number(e.revenueQd) || 0) !== 0 ||
+                    (Number(e.installmentQd) || 0) !== 0 ||
+                    (Number(e.installmentRate) || 0) > 0 ||
+                    Object.keys(e.campaigns || {}).length > 0
+            );
+            const isHoursOnlySession = !existingSession && !hasAnyRevOrCamp && totalHours > 0;
 
             const sessionRecords = convertOcrItemsToSessionRecords(validEmployees, selectedStore);
 
             const sessionPayload = {
-                session_type: 'REVENUE_CAMPAIGN' as const,
-                session_title: `Phiên Doanh Thu & Thi Đua NV - ${storeShortName} - Ngày ${formatDate(reportDate)}`,
+                session_type: isHoursOnlySession ? ('WORK_HOURS' as const) : ('REVENUE_CAMPAIGN' as const),
+                session_title: isHoursOnlySession
+                    ? `Phiên Giờ Công NV - ${storeShortName} - Ngày ${formatDate(reportDate)}`
+                    : `Phiên Doanh Thu & Thi Đua NV - ${storeShortName} - Ngày ${formatDate(reportDate)}`,
                 store_name: selectedStore,
                 month: selectedMonth,
                 year: selectedYear,
@@ -542,8 +586,8 @@ export default function EmployeeExtractOcrPage() {
                 created_by: userDisplayName,
                 employee_count: sessionRecords.length,
                 total_revenue_actual: 0,
-                total_revenue_qd: totalQd,
-                total_work_hours: 0,
+                total_revenue_qd: isHoursOnlySession ? 0 : totalQd,
+                total_work_hours: totalHours,
                 source_type: 'OCR_IMAGE' as any,
                 records: sessionRecords,
                 note: `Nạp tự động qua OCR lúc ${new Date().toLocaleTimeString('vi-VN')} - Ảnh chụp: ${screenshotTimestamp || 'N/A'}`
@@ -558,7 +602,11 @@ export default function EmployeeExtractOcrPage() {
                 return;
             }
 
-            setExistingSession(res.session);
+            if (isHoursOnlySession) {
+                setExistingWorkHoursSession(res.session);
+            } else {
+                setExistingSession(res.session);
+            }
             setHasSavedCurrentBatch(true);
             showToast(isOverwrite
                 ? `🔄 Đã ghi đè & cập nhật thành công phiên ${sessionRecords.length} nhân viên danh bạ ST!`
@@ -572,18 +620,26 @@ export default function EmployeeExtractOcrPage() {
         }
     };
 
-    // Nạp lại dữ liệu từ phiên đã có vào bảng rà soát
-    const handleRestoreExistingSession = () => {
-        if (!existingSession || !existingSession.records || existingSession.records.length === 0) {
+    // Nạp lại dữ liệu từ phiên đã có vào bảng rà soát (hỗ trợ cả REVENUE_CAMPAIGN lẫn WORK_HOURS)
+    const handleRestoreExistingSession = (targetSession?: EmployeeDataSession) => {
+        const sessToRestore = targetSession || existingSession || existingWorkHoursSession;
+        if (!sessToRestore || !sessToRestore.records || sessToRestore.records.length === 0) {
             showToast('⚠️ Phiên này không có bản ghi nhân viên nào!');
             return;
         }
-        let records = existingSession.records;
+        let records = sessToRestore.records;
         if (storeEmployees.length > 0) {
             const storeEmpIdSet = new Set(
                 storeEmployees.map(e => String(e.employee_id || '').trim().toLowerCase())
             );
             records = records.filter(r => storeEmpIdSet.has(String(r.employee_id || '').trim().toLowerCase()));
+        }
+        const hoursById = new Map<string, number>();
+        if (sessToRestore.session_type !== 'WORK_HOURS' && existingWorkHoursSession?.records) {
+            existingWorkHoursSession.records.forEach(hr => {
+                const k = String(hr.employee_id || '').trim().toLowerCase();
+                if (k && (hr.work_hours || 0) > 0) hoursById.set(k, Number(hr.work_hours) || 0);
+            });
         }
         const items = convertSessionRecordsToOcrItems(records);
         // Đảm bảo các chỉ tiêu số lượng (SL) được làm tròn chuẩn số nguyên (ví dụ 47,8 -> 48)
@@ -606,7 +662,9 @@ export default function EmployeeExtractOcrPage() {
                     campaigns[cName] = Math.round(cVal);
                 }
             });
-            return { ...emp, campaigns, campaignDetails: details };
+            const empKey = String(emp.employeeId || '').trim().toLowerCase();
+            const workHours = (emp.workHours || 0) > 0 ? emp.workHours : (hoursById.get(empKey) || 0);
+            return { ...emp, workHours, campaigns, campaignDetails: details };
         });
         setEmployeesData(normalizedItems);
         setHasSavedCurrentBatch(true);
@@ -708,6 +766,80 @@ export default function EmployeeExtractOcrPage() {
         }
     };
 
+    // Quét bổ sung ảnh giờ công và cập nhật vào bảng nhân viên hiện tại
+    const handleScanAdditionalWorkHours = async (additionalFiles: File[]) => {
+        const activeKey = keyInfo.key;
+        if (!activeKey) {
+            setIsKeyModalOpen(true);
+            return;
+        }
+        if (additionalFiles.length === 0) return;
+
+        setIsScanningAdditional(true);
+        setAdditionalProgressText('Đang nén ảnh giờ công bổ sung...');
+
+        try {
+            const result = await extractAdditionalWorkHoursImages(
+                activeKey,
+                additionalFiles,
+                employeesData,
+                storeEmployees.length > 0 ? storeEmployees : systemEmployees,
+                (msg) => setAdditionalProgressText(msg),
+                keyInfo.source
+            );
+
+            if (result.screenshotTimestamp) {
+                setScreenshotTimestamp(result.screenshotTimestamp);
+            }
+
+            if (result.success && result.employees.length > 0) {
+                const storeEmpIdSet = new Set(
+                    storeEmployees.map(e => String(e.employee_id || '').trim().toLowerCase())
+                );
+                const storeEmpNameMap = new Map(
+                    storeEmployees.map(e => [String(e.employee_id || '').trim().toLowerCase(), e.full_name?.trim() || ''])
+                );
+
+                const unmappedRows: EmployeeOcrParsedItem[] = [];
+                const validRows: EmployeeOcrParsedItem[] = [];
+
+                result.employees.forEach(e => {
+                    const rawId = String(e.employeeId || '').trim();
+                    const cleanId = rawId.toLowerCase();
+                    if (e.isUnmappedName || rawId.startsWith('UNMAPPED::')) {
+                        unmappedRows.push({
+                            ...e,
+                            isUnmappedName: true,
+                            mappingSource: 'UNMAPPED'
+                        });
+                    } else if (storeEmployees.length === 0 || storeEmpIdSet.has(cleanId)) {
+                        validRows.push({
+                            ...e,
+                            fullName: storeEmpNameMap.get(cleanId) || e.fullName
+                        });
+                    }
+                });
+
+                setEmployeesData([...unmappedRows, ...validRows]);
+                setHasSavedCurrentBatch(false);
+                showToast(`✅ Đã quét & cập nhật giờ công từ ${additionalFiles.length} ảnh cho nhân sự ST!`);
+            } else {
+                showToast('⚠️ Không trích xuất được số liệu giờ công từ các ảnh đã chọn.');
+            }
+        } catch (err: any) {
+            console.error('Lỗi khi quét giờ công bổ sung:', err);
+            if (err instanceof GeminiQuotaExceededError) {
+                setIsQuotaExceeded(true);
+                setIsKeyModalOpen(true);
+            } else {
+                showToast(`⚠️ Lỗi: ${err?.message || 'Không thể quét ảnh giờ công'}`);
+            }
+        } finally {
+            setIsScanningAdditional(false);
+            setAdditionalProgressText('');
+        }
+    };
+
     // Đổi tên chương trình thi đua đã mapping cho toàn bộ nhân viên
     const handleRemapCampaign = (oldName: string, newName: string) => {
         if (!oldName || !newName || oldName === newName) return;
@@ -751,6 +883,19 @@ export default function EmployeeExtractOcrPage() {
         showToast(`🔄 Đã đổi tên chỉ tiêu [${oldName}] thành [${newName}] cho toàn bộ nhân viên!`);
     };
 
+    const hasAnyRevOrCampInTable = useMemo(
+        () =>
+            employeesData.some(
+                e =>
+                    (Number(e.revenueQd) || 0) !== 0 ||
+                    (Number(e.installmentQd) || 0) !== 0 ||
+                    (Number(e.installmentRate) || 0) > 0 ||
+                    Object.keys(e.campaigns || {}).length > 0
+            ),
+        [employeesData]
+    );
+    const activeExistingSession = existingSession || (!hasAnyRevOrCampInTable ? existingWorkHoursSession : null);
+
     const handleCopySql = () => {
         navigator.clipboard.writeText(EMPLOYEE_DATA_SESSIONS_SQL);
         setIsSqlCopied(true);
@@ -761,7 +906,7 @@ export default function EmployeeExtractOcrPage() {
         <div className="p-3 sm:p-6 max-w-5xl mx-auto space-y-4">
             {/* Toast popup */}
             {toastMessage && (
-                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-5 py-2.5 rounded-full text-xs sm:text-sm font-bold shadow-2xl z-50 animate-bounce">
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-5 py-2.5 rounded-full text-xs sm:text-sm font-bold shadow-2xl z-50 animate-in fade-in slide-in-from-bottom-2 duration-200">
                     {toastMessage}
                 </div>
             )}
@@ -794,7 +939,7 @@ export default function EmployeeExtractOcrPage() {
                             </span>
                         </div>
                         <p className="text-xs text-slate-500 mt-0.5">
-                            Trích xuất số liệu nhân viên từ ảnh chụp BI (DTQĐ, DT Trả góp QĐ, % Tỷ trọng trả góp, Thi đua) • Lưu phiên lũy kế liên tiếp
+                            Trích xuất số liệu nhân viên từ ảnh chụp BI (DTQĐ, DT Trả góp QĐ, % Tỷ trọng trả góp, Thi đua, Giờ công) • Lưu phiên lũy kế liên tiếp
                         </p>
                     </div>
                 </div>
@@ -965,7 +1110,11 @@ export default function EmployeeExtractOcrPage() {
                                 <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
                                 <div>
                                     <span className="font-bold text-amber-900 tabular-nums">
-                                        Đã có phiên ngày {formatDate(reportDate)} ({existingSession.employee_count} NV • DTQĐ: {formatValue(existingSession.total_revenue_qd)} tr)
+                                        Đã có phiên ngày {formatDate(reportDate)} ({existingSession.employee_count} NV • DTQĐ: {formatValue(existingSession.total_revenue_qd)} tr
+                                        {(existingSession.total_work_hours || 0) > 0
+                                            ? ` • Giờ công: ${Number(existingSession.total_work_hours.toFixed(1)).toLocaleString('vi-VN')} h`
+                                            : ''}
+                                        )
                                     </span>
                                     <span className="text-[11px] text-amber-700 block">
                                         Nạp bởi: {existingSession.created_by} lúc {formatDateTime(existingSession.created_at)}
@@ -975,11 +1124,34 @@ export default function EmployeeExtractOcrPage() {
 
                             <button
                                 type="button"
-                                onClick={handleRestoreExistingSession}
+                                onClick={() => handleRestoreExistingSession(existingSession)}
                                 className="px-3 py-1 bg-white hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition shadow-xs cursor-pointer self-start sm:self-auto shrink-0"
                             >
                                 <RotateCcw className="w-3 h-3 text-amber-600" />
                                 <span>Xem Lại Phiên Đang Có</span>
+                            </button>
+                        </div>
+                    ) : existingWorkHoursSession ? (
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-xl bg-teal-50 border border-teal-200 text-xs">
+                            <div className="flex items-center gap-2">
+                                <Clock className="w-4 h-4 text-teal-700 shrink-0" />
+                                <div>
+                                    <span className="font-bold text-teal-950 tabular-nums">
+                                        Đã có phiên Giờ Công ngày {formatDate(reportDate)} ({existingWorkHoursSession.employee_count} NV • {Number((existingWorkHoursSession.total_work_hours || 0).toFixed(1)).toLocaleString('vi-VN')} h)
+                                    </span>
+                                    <span className="text-[11px] text-teal-800 block">
+                                        Nạp bởi: {existingWorkHoursSession.created_by} lúc {formatDateTime(existingWorkHoursSession.created_at)} • Chưa có phiên DTQĐ/Thi đua
+                                    </span>
+                                </div>
+                            </div>
+
+                            <button
+                                type="button"
+                                onClick={() => handleRestoreExistingSession(existingWorkHoursSession)}
+                                className="px-3 py-1 bg-white hover:bg-teal-100 text-teal-900 border border-teal-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition shadow-xs cursor-pointer self-start sm:self-auto shrink-0"
+                            >
+                                <RotateCcw className="w-3 h-3 text-teal-700" />
+                                <span>Xem Lại Phiên Giờ Công</span>
                             </button>
                         </div>
                     ) : (
@@ -1055,6 +1227,8 @@ export default function EmployeeExtractOcrPage() {
                         onQdFilesChange={setQdFiles}
                         installmentFiles={installmentFiles}
                         onInstallmentFilesChange={setInstallmentFiles}
+                        workHoursFiles={workHoursFiles}
+                        onWorkHoursFilesChange={setWorkHoursFiles}
                         emulationFiles={emulationFiles}
                         onEmulationFilesChange={setEmulationFiles}
                         hasGeminiKey={Boolean(keyInfo.key)}
@@ -1077,10 +1251,11 @@ export default function EmployeeExtractOcrPage() {
                     reportDate={reportDate}
                     onSaveToSupabase={handleSaveToCloud}
                     isSaving={isSaving}
-                    existingSession={existingSession}
+                    existingSession={activeExistingSession}
                     isCheckingExisting={isCheckingDuplicate}
-                    onRestoreExistingSession={handleRestoreExistingSession}
+                    onRestoreExistingSession={() => handleRestoreExistingSession(activeExistingSession || undefined)}
                     onScanAdditionalEmulation={handleScanAdditionalEmulation}
+                    onScanAdditionalWorkHours={handleScanAdditionalWorkHours}
                     isScanningAdditional={isScanningAdditional}
                     additionalProgressText={additionalProgressText}
                     storeEmployees={storeEmployees}

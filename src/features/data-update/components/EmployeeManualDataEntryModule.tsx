@@ -19,7 +19,8 @@ import {
     RefreshCw,
     UploadCloud,
     UserCheck,
-    X
+    X,
+    Clock
 } from 'lucide-react';
 import type { EmployeeOcrParsedItem } from '../services/geminiEmployeeOcrService';
 import { getShortenedEmployeeName, formatValue, formatDate, formatDateTime } from '../../../core/lib/formatters';
@@ -40,6 +41,7 @@ interface Props {
     isCheckingExisting?: boolean;
     onRestoreExistingSession?: () => void;
     onScanAdditionalEmulation?: (files: File[]) => void;
+    onScanAdditionalWorkHours?: (files: File[]) => void;
     isScanningAdditional?: boolean;
     additionalProgressText?: string;
     storeEmployees?: EmployeeItem[];
@@ -62,6 +64,7 @@ export default function EmployeeManualDataEntryModule({
     isCheckingExisting,
     onRestoreExistingSession,
     onScanAdditionalEmulation,
+    onScanAdditionalWorkHours,
     isScanningAdditional = false,
     additionalProgressText = '',
     storeEmployees = [],
@@ -75,6 +78,7 @@ export default function EmployeeManualDataEntryModule({
     const [searchTerm, setSearchTerm] = useState('');
     const [expandedEmployeeId, setExpandedEmployeeId] = useState<string | null>(null);
     const addEmuInputRef = useRef<HTMLInputElement>(null);
+    const addWorkHoursInputRef = useRef<HTMLInputElement>(null);
 
     // Danh sách tên các chương trình đang phát sinh trong phiên
     const activeCampaignNames = useMemo(() => {
@@ -127,6 +131,7 @@ export default function EmployeeManualDataEntryModule({
         const totalEmployees = employees.length;
         const totalQd = employees.reduce((sum, e) => sum + (Number(e.revenueQd) || 0), 0);
         const totalInstallmentQd = employees.reduce((sum, e) => sum + (Number(e.installmentQd) || 0), 0);
+        const totalWorkHours = employees.reduce((sum, e) => sum + (Number(e.workHours) || 0), 0);
         const weightedRateWeight = employees.reduce((sum, e) => sum + ((Number(e.revenueQd) || 0) > 0 ? Number(e.revenueQd) : 0), 0);
         const avgInstallmentRate = weightedRateWeight > 0
             ? employees.reduce((sum, e) => sum + (Number(e.installmentRate) || 0) * (Number(e.revenueQd) || 0), 0) / weightedRateWeight
@@ -138,6 +143,7 @@ export default function EmployeeManualDataEntryModule({
             totalEmployees,
             totalQd,
             totalInstallmentQd,
+            totalWorkHours,
             avgInstallmentRate
         };
     }, [employees]);
@@ -163,10 +169,10 @@ export default function EmployeeManualDataEntryModule({
         [employees]
     );
 
-    // Cập nhật trường Doanh thu & % Tỷ trọng trả góp nhân viên
+    // Cập nhật trường Doanh thu, % Tỷ trọng trả góp & Giờ công nhân viên
     const handleUpdateField = (
         empId: string,
-        field: 'revenueQd' | 'installmentQd' | 'installmentRate' | 'fullName',
+        field: 'revenueQd' | 'installmentQd' | 'installmentRate' | 'workHours' | 'fullName',
         val: any
     ) => {
         const updated = employees.map(e => {
@@ -175,6 +181,9 @@ export default function EmployeeManualDataEntryModule({
 
             if (field === 'fullName') {
                 item.fullName = String(val);
+            } else if (field === 'workHours') {
+                const parsed = parseFloat(String(val));
+                item.workHours = isNaN(parsed) || parsed < 0 ? 0 : Math.round(parsed * 100) / 100;
             } else {
                 const numVal = parseFloat(String(val)) || 0;
                 item[field] = numVal;
@@ -239,6 +248,7 @@ export default function EmployeeManualDataEntryModule({
                         revenueQd: e.revenueQd || sourceEmp.revenueQd,
                         installmentQd: e.installmentQd || sourceEmp.installmentQd,
                         installmentRate: e.installmentRate || sourceEmp.installmentRate,
+                        workHours: (Number(e.workHours) || 0) > 0 ? e.workHours : (sourceEmp.workHours || 0),
                         campaigns: mergedCampaigns,
                         campaignDetails: Array.from(detailMap.values()),
                         mappingSource: 'ID',
@@ -305,6 +315,7 @@ export default function EmployeeManualDataEntryModule({
             revenueQd: 0,
             installmentQd: 0,
             installmentRate: 0,
+            workHours: 0,
             campaigns: {},
             campaignDetails: []
         };
@@ -326,6 +337,7 @@ export default function EmployeeManualDataEntryModule({
             revenueQd: 0,
             installmentQd: 0,
             installmentRate: 0,
+            workHours: 0,
             campaigns: {},
             campaignDetails: []
         }));
@@ -361,7 +373,7 @@ export default function EmployeeManualDataEntryModule({
     return (
         <div className="space-y-4">
             {/* THẺ CHỈ SỐ KPI TỔNG HỢP PHIÊN */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                 <div className="bg-blue-50/70 border border-blue-200 rounded-xl p-3 shadow-xs">
                     <span className="text-[10px] font-bold text-blue-800 uppercase tracking-wider block">TỔNG NHÂN VIÊN</span>
                     <span className="text-lg font-black text-slate-900 font-mono tabular-nums">
@@ -383,9 +395,17 @@ export default function EmployeeManualDataEntryModule({
                     <span className="text-lg font-black text-purple-800 font-mono tabular-nums">
                         {formatValue(kpiSummary.totalInstallmentQd)} tr
                     </span>
-                    <span className="text-[10px] text-purple-700 font-bold block mt-0.5 tabular-nums">
+                    <span className="text-[10px] text-purple-800 font-bold block mt-0.5 tabular-nums">
                         TB tỷ trọng trả góp: {kpiSummary.avgInstallmentRate.toFixed(1)}%
                     </span>
+                </div>
+
+                <div className="bg-teal-50/80 border border-teal-200 rounded-xl p-3 shadow-xs">
+                    <span className="text-[10px] font-bold text-teal-900 uppercase tracking-wider block">TỔNG GIỜ CÔNG</span>
+                    <span className="text-lg font-black text-teal-900 font-mono tabular-nums">
+                        {Number(kpiSummary.totalWorkHours.toFixed(1)).toLocaleString('vi-VN')} h
+                    </span>
+                    <span className="text-[10px] text-teal-800 font-medium block mt-0.5">giờ công tại ST làm việc</span>
                 </div>
             </div>
 
@@ -444,6 +464,9 @@ export default function EmployeeManualDataEntryModule({
                         <span>Lúc: <strong>{formatDateTime(existingSession.created_at)}</strong></span>
                         <span>Quy mô: <strong>{existingSession.employee_count}</strong> nhân viên</span>
                         <span>DTQĐ: <strong>{formatValue(existingSession.total_revenue_qd)} tr</strong></span>
+                        {(existingSession.total_work_hours || 0) > 0 && (
+                            <span>Giờ công: <strong>{Number(existingSession.total_work_hours.toFixed(1)).toLocaleString('vi-VN')} h</strong></span>
+                        )}
                     </div>
 
                     <p className="text-[11px] text-amber-800 leading-relaxed">
@@ -477,6 +500,35 @@ export default function EmployeeManualDataEntryModule({
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap justify-end">
+                    {/* Nút quét bổ sung ảnh giờ công */}
+                    {onScanAdditionalWorkHours && (
+                        <>
+                            <input
+                                type="file"
+                                ref={addWorkHoursInputRef}
+                                multiple
+                                accept="image/*"
+                                className="hidden"
+                                onChange={(e) => {
+                                    if (e.target.files && e.target.files.length > 0) {
+                                        onScanAdditionalWorkHours(Array.from(e.target.files));
+                                        e.target.value = '';
+                                    }
+                                }}
+                            />
+                            <button
+                                type="button"
+                                onClick={() => addWorkHoursInputRef.current?.click()}
+                                disabled={isScanningAdditional}
+                                className="px-3 py-2 bg-teal-50 hover:bg-teal-100 text-teal-900 border border-teal-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-2xs disabled:opacity-50"
+                                title="Nạp thêm ảnh Theo giờ công để AI quét và cập nhật cột Giờ công trong bảng hiện tại"
+                            >
+                                <Clock className="w-3.5 h-3.5 text-teal-700" aria-hidden="true" />
+                                <span>Thêm Giờ Công</span>
+                            </button>
+                        </>
+                    )}
+
                     {/* Nút quét bổ sung ảnh thi đua theo từng đợt */}
                     {onScanAdditionalEmulation && (
                         <>
@@ -540,7 +592,7 @@ export default function EmployeeManualDataEntryModule({
                                 type="button"
                                 onClick={() => onSaveToSupabase({ overwriteSessionId: existingSession.id })}
                                 disabled={isSaving || employees.length === 0}
-                                className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition shadow-sm cursor-pointer disabled:opacity-50"
+                                className="px-4 py-2 bg-blue-700 hover:bg-blue-600 text-white rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition shadow-sm cursor-pointer disabled:opacity-50"
                                 title="Cập nhật trực tiếp số liệu vào phiên đã có, không sinh phiên rác"
                             >
                                 <RefreshCw className={`w-3.5 h-3.5 ${isSaving ? 'animate-spin' : ''}`} />
@@ -627,6 +679,7 @@ export default function EmployeeManualDataEntryModule({
                                 <th className="px-2 py-2.5 text-right w-24">DTQĐ (Tr)</th>
                                 <th className="px-2 py-2.5 text-right w-28">DT Trả Góp QĐ</th>
                                 <th className="px-2 py-2.5 text-right w-24">% Tỷ Trọng TG</th>
+                                <th className="px-2 py-2.5 text-right w-24">Giờ Công (h)</th>
                                 <th className="px-2 py-2.5 text-center w-24">Thi Đua</th>
                                 <th className="px-2 py-2.5 text-center w-12">Xóa</th>
                             </tr>
@@ -634,7 +687,7 @@ export default function EmployeeManualDataEntryModule({
                         <tbody className="divide-y divide-slate-100">
                             {filteredEmployees.length === 0 ? (
                                 <tr>
-                                    <td colSpan={7} className="text-center py-8 text-slate-500 text-xs">
+                                    <td colSpan={8} className="text-center py-8 text-slate-500 text-xs">
                                         Không tìm thấy nhân viên nào phù hợp.
                                     </td>
                                 </tr>
@@ -778,6 +831,7 @@ export default function EmployeeManualDataEntryModule({
                                                             type="number"
                                                             step="any"
                                                             min={0}
+                                                            aria-label={`Tỷ trọng trả góp của ${emp.fullName}`}
                                                             value={emp.installmentRate === 0 ? '' : emp.installmentRate}
                                                             placeholder="0"
                                                             onChange={(e) => handleUpdateField(emp.employeeId, 'installmentRate', e.target.value)}
@@ -791,6 +845,20 @@ export default function EmployeeManualDataEntryModule({
                                                         />
                                                         <span className="text-[11px] font-bold text-slate-500">%</span>
                                                     </div>
+                                                </td>
+
+                                                {/* Giờ công tại ST làm việc (h) */}
+                                                <td className="px-2 py-2 text-right">
+                                                    <input
+                                                        type="number"
+                                                        step="0.1"
+                                                        min={0}
+                                                        aria-label={`Giờ công của ${emp.fullName}`}
+                                                        value={emp.workHours ? emp.workHours : ''}
+                                                        placeholder="0"
+                                                        onChange={(e) => handleUpdateField(emp.employeeId, 'workHours', e.target.value)}
+                                                        className="w-20 text-right font-mono font-bold tabular-nums text-teal-900 bg-slate-50 border border-slate-200 rounded px-1.5 py-1 text-xs outline-none focus:ring-1 focus:ring-teal-500"
+                                                    />
                                                 </td>
 
                                                 {/* Nút xem Thi đua */}
@@ -827,7 +895,7 @@ export default function EmployeeManualDataEntryModule({
                                             {/* DÒNG MỞ RỘNG CHI TIẾT THI ĐUA */}
                                             {isExpanded && (
                                                 <tr className="bg-slate-50/90 border-y border-blue-100">
-                                                    <td colSpan={7} className="p-3 sm:px-6">
+                                                    <td colSpan={8} className="p-3 sm:px-6">
                                                         <div className="space-y-2">
                                                             <div className="flex items-center justify-between">
                                                                 <span className="text-[11px] font-bold text-slate-700 flex items-center gap-1.5 uppercase tracking-wider">

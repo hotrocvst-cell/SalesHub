@@ -41,7 +41,8 @@ import {
     Camera,
     Crosshair,
     Hash,
-    Bot
+    Bot,
+    Printer
 } from 'lucide-react';
 
 export interface NavItem {
@@ -82,7 +83,7 @@ export const NAVIGATION_GROUPS: NavGroup[] = [
                 name: 'BC Cụm ST',
                 path: '/bao-cao-cum-sieu-thi',
                 icon: Store,
-                badge: '💎 11 Cột'
+                badge: '💎 9 Cột'
             },
             {
                 name: 'BC Ngày (Realtime)',
@@ -285,6 +286,12 @@ export const NAVIGATION_GROUPS: NavGroup[] = [
                 path: '/tien-ich-quay-so',
                 icon: Sparkles,
                 badge: '🎲 Mới'
+            },
+            {
+                name: 'In Ấn Quầy ST',
+                path: '/tien-ich-in-an',
+                icon: Printer,
+                badge: '🖨️ Mới'
             }
         ]
     },

@@ -95,13 +95,13 @@ const RAW_DEFAULT_PAGE_PERMISSIONS: SystemPagePermission[] = [
         page_name: 'BC Cụm ST',
         path: '/bao-cao-cum-sieu-thi',
         group_title: 'BÁO CÁO KINH DOANH',
-        description: 'Báo cáo sức khỏe cụm ST 11 cột, theo dõi lũy kế doanh thu thực, DTQĐ, target vượt trội và trả chậm',
+        description: 'Báo cáo sức khỏe cụm ST, theo dõi lũy kế DTQĐ, target chuẩn, target vượt trội và trả chậm',
         is_enabled: true,
         allowed_roles: ['ADMIN', 'QUAN_LY', 'TRUONG_CA'],
         order_index: 1,
         badge_enabled: true,
         badge_icon: '💎',
-        badge_text: '11 Cột',
+        badge_text: '9 Cột',
         badge_color: 'blue'
     },
     {
@@ -365,7 +365,7 @@ const RAW_DEFAULT_PAGE_PERMISSIONS: SystemPagePermission[] = [
         page_name: 'Cập nhật NV qua OCR',
         path: '/cap-nhat-nhan-vien-ocr',
         group_title: 'DỮ LIỆU & PHIÊN LÀM VIỆC',
-        description: 'Trích xuất số liệu nhân viên từ ảnh chụp BI (DTQĐ, % Tỷ trọng trả góp, Thi đua) và lưu phiên lũy kế',
+        description: 'Trích xuất số liệu nhân viên từ ảnh chụp BI (DTQĐ, % Tỷ trọng trả góp, Thi đua, Giờ công) và lưu phiên lũy kế',
         is_enabled: true,
         allowed_roles: ['ADMIN'],
         order_index: 7,
@@ -540,6 +540,22 @@ const RAW_DEFAULT_PAGE_PERMISSIONS: SystemPagePermission[] = [
         badge_icon: '🎲',
         badge_text: 'Mới',
         badge_color: 'amber',
+        allow_excel_export: false,
+        allowed_excel_roles: ['ADMIN']
+    },
+    {
+        page_key: 'tien_ich_in_an',
+        page_name: 'In Ấn Quầy ST',
+        path: '/tien-ich-in-an',
+        group_title: 'TIỆN ÍCH BÁN HÀNG',
+        description: 'Trung tâm tạo và in Sticker giá, Pop-up bảng giá, Phiếu hỗ trợ bán hàng, Bảng tên NV, QR/Barcode túi & Trang trí ST',
+        is_enabled: true,
+        allowed_roles: ['ADMIN'], // Theo Rule 4 GEMINI.MD: Mặc định chỉ duy nhất ADMIN
+        order_index: 14.7,
+        badge_enabled: true,
+        badge_icon: '🖨️',
+        badge_text: 'Mới',
+        badge_color: 'blue',
         allow_excel_export: false,
         allowed_excel_roles: ['ADMIN']
     },

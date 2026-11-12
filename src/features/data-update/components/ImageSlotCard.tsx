@@ -4,7 +4,7 @@ import { UploadCloud, FileImage, Trash2, CheckCircle2, Plus, X } from 'lucide-re
 export interface ImageSlotCardProps {
     title: string;
     description?: string;
-    theme: 'blue' | 'emerald';
+    theme: 'blue' | 'emerald' | 'teal';
     files: File[];
     isMulti: boolean;
     emptyTitle: string;
@@ -38,6 +38,17 @@ const THEME_STYLES = {
         singleIconBox: 'bg-emerald-100 text-emerald-700',
         dropButton: 'border-emerald-200 hover:border-emerald-400 hover:bg-emerald-50/40 text-emerald-800',
         dropIcon: 'text-emerald-600'
+    },
+    teal: {
+        title: 'text-teal-900',
+        icon: 'text-teal-700',
+        badgeActive: 'bg-teal-700 text-white',
+        badgeIdle: 'bg-teal-100 text-teal-900',
+        hintBox: 'text-teal-950 bg-teal-50/80 border-teal-200',
+        fileBorder: 'border-teal-200',
+        singleIconBox: 'bg-teal-100 text-teal-800',
+        dropButton: 'border-teal-200 hover:border-teal-500 hover:bg-teal-50/50 text-teal-900',
+        dropIcon: 'text-teal-700'
     }
 };
 

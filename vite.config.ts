@@ -29,6 +29,17 @@ export default defineConfig({
             '@': path.resolve(__dirname, './src')
         }
     },
+    optimizeDeps: {
+        include: [
+            'qrcode',
+            'html2canvas',
+            'exceljs',
+            'mammoth',
+            'lucide-react',
+            'react-router-dom',
+            '@supabase/supabase-js'
+        ]
+    },
     server: {
         port: 5173,
         host: true

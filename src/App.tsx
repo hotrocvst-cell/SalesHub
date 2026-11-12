@@ -47,6 +47,7 @@ const CampaignOffsetPage = lazy(() => import('./features/campaign-offset/Campaig
 const SampleDataPage = lazy(() => import('./features/sample-data/SampleDataPage'));
 const FocusCampaignPage = lazy(() => import('./features/focus-campaign/FocusCampaignPage'));
 const LuckyDrawHubPage = lazy(() => import('./features/sales-utilities/LuckyDrawHubPage'));
+const PrintHubPage = lazy(() => import('./features/print-hub/PrintHubPage'));
 
 // Các trang Định danh, Đăng ký & Onboarding
 const LoginPage = lazy(() => import('./features/auth/LoginPage'));
@@ -88,7 +89,7 @@ export default function App() {
                                     </ProtectedRoute>
                                 } />
 
-                                {/* Phân hệ Báo Cáo Cụm ST (Bảng 11 Cột) */}
+                                {/* Phân hệ Báo Cáo Cụm ST */}
                                 <Route path="/bao-cao-cum-sieu-thi" element={
                                     <ProtectedRoute path="/bao-cao-cum-sieu-thi">
                                         <ClusterReportPage />
@@ -261,6 +262,11 @@ export default function App() {
                                 <Route path="/tien-ich-quay-so" element={
                                     <ProtectedRoute path="/tien-ich-quay-so">
                                         <LuckyDrawHubPage />
+                                    </ProtectedRoute>
+                                } />
+                                <Route path="/tien-ich-in-an" element={
+                                    <ProtectedRoute path="/tien-ich-in-an">
+                                        <PrintHubPage />
                                     </ProtectedRoute>
                                 } />
                                 <Route path="/kiem-quy" element={

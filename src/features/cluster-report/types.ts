@@ -5,16 +5,13 @@ export interface ClusterStoreRow {
     orderIndex: number;
 
     // === BẢNG 1: DỮ LIỆU CHUẨN CỦA HỆ THỐNG ===
-    revenueActual: number;           // DT thực
     revenueQd: number;               // Lũy kế DTQĐ
     baseTarget: number;              // Target (Target chuẩn DTQĐ hệ thống)
-    targetReal?: number;             // Target DT Thực (đối soát)
     pctHtStandard: number;           // %HT chuẩn
     targetRemainingStandard: number; // Target còn lại
     forecastRevenueQd: number;       // DTQĐ Dự kiến
     pctDkhtStandard: number;         // %DKHT chuẩn
-    pctQd: number;                   // %QĐ
-    revenueInstallment: number;      // DT trả góp
+    targetDailyRemainingStandard: number; // Target chuẩn mỗi ngày còn lại (tr/ngày)
     installmentRate: number;         // % Trả góp
     hasInstallmentRate?: boolean;    // Cờ đánh dấu có % trả góp hay không
 
@@ -39,17 +36,16 @@ export interface ClusterStoreRow {
 
 export interface ClusterSummaryData {
     // Bảng 1
-    totalRevenueActual: number;
     totalRevenueQd: number;
     totalBaseTarget: number;
     avgPctHtStandard: number;
     totalTargetRemainingStandard: number;
     totalForecastRevenueQd: number;
     avgPctDkhtStandard: number;
-    avgPctQd: number;
-    totalRevenueInstallment: number;
+    totalTargetDailyRemainingStandard: number;
     avgInstallmentRate: number;
     hasInstallmentRate?: boolean;
+    installmentStoresCount: number;
 
     // Bảng 2
     avgTargetRate: number;

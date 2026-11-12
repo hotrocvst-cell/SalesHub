@@ -183,29 +183,36 @@ export default function EmployeePerformanceReportPage() {
 
             // Quét qua các phiên lưu trữ (tự động đồng bộ với Cloud Supabase)
             const allSessions = await syncAndFetchEmployeeDataSessions({ month: selectedMonth, year: selectedYear });
+            const sortedSessions = allSessions.slice().sort((a, b) =>
+                (b.report_date || '').localeCompare(a.report_date || '') ||
+                (b.created_at || '').localeCompare(a.created_at || '')
+            );
 
             // Xác định phiên mới nhất
-            const revSessions = allSessions.filter(sess =>
+            const revSessions = sortedSessions.filter(sess =>
                 (sess.session_type === 'REVENUE_CAMPAIGN' || sess.session_type === 'FULL_SYNC') &&
                 (selectedStore === 'all' || isStoreMatch(sess.store_name, selectedStore, storesRes.data || stores))
             );
-            const newest = revSessions.slice().sort((a, b) =>
-                (b.report_date || '').localeCompare(a.report_date || '') ||
-                (b.created_at || '').localeCompare(a.created_at || '')
-            )[0] || null;
+            const newest = revSessions[0] || null;
             setLatestSession(newest);
-            allSessions.forEach(sess => {
-                if (sess.session_type === 'REVENUE_CAMPAIGN') {
-                    if (selectedStore === 'all' || sess.store_name === selectedStore) {
+
+            sortedSessions.forEach(sess => {
+                if (sess.session_type === 'REVENUE_CAMPAIGN' || sess.session_type === 'FULL_SYNC') {
+                    if (selectedStore === 'all' || isStoreMatch(sess.store_name, selectedStore, storesRes.data || stores)) {
                         sess.records.forEach(r => {
                             const key = (r.employee_id || '').trim();
                             if (!revMap[key]) revMap[key] = r;
+                            if (r.work_hours && r.work_hours > 0 && !hoursMap[key]) {
+                                hoursMap[key] = r.work_hours;
+                            }
                         });
                     }
                 } else if (sess.session_type === 'WORK_HOURS') {
                     sess.records.forEach(r => {
                         const key = (r.employee_id || '').trim();
-                        if (r.work_hours && !hoursMap[key]) hoursMap[key] = r.work_hours;
+                        if (r.work_hours && r.work_hours > 0 && !hoursMap[key]) {
+                            hoursMap[key] = r.work_hours;
+                        }
                     });
                 }
             });

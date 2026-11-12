@@ -18,9 +18,11 @@ import {
 import { prepareImageForOcr, fileToBase64 } from './imageCompressionService';
 import {
     cleanBiPercent,
+    cleanWorkHoursValue,
     normalizeViName,
     buildRevenueQdOcrPrompt,
     buildInstallmentRateOcrPrompt,
+    buildWorkHoursOcrPrompt,
     findMatchedCandidateByName,
     findDirectoryEmployeeByName
 } from './employeeOcrShared';
@@ -58,6 +60,7 @@ export interface EmployeeOcrParsedItem {
     revenueQd: number;         // Doanh thu QĐ (triệu đồng)
     installmentQd: number;     // DT Trả góp QĐ (triệu đồng)
     installmentRate: number;   // % Tỷ trọng trả góp (%)
+    workHours?: number;        // Giờ công tại ST làm việc (h)
     campaigns: Record<string, number>;
     campaignDetails?: EmployeeOcrCampaignItem[];
     mappingSource?: 'ID' | 'NAME_EXACT' | 'NAME_FUZZY' | 'UNMAPPED';
@@ -306,6 +309,7 @@ function resolveOrCreateEmployeeByIdOrName(
             revenueQd: 0,
             installmentQd: 0,
             installmentRate: 0,
+            workHours: 0,
             campaigns: {},
             campaignDetails: [],
             mappingSource: 'ID',
@@ -340,6 +344,7 @@ function resolveOrCreateEmployeeByIdOrName(
             revenueQd: 0,
             installmentQd: 0,
             installmentRate: 0,
+            workHours: 0,
             campaigns: {},
             campaignDetails: [],
             mappingSource: dictRes.mode,
@@ -361,6 +366,7 @@ function resolveOrCreateEmployeeByIdOrName(
         revenueQd: 0,
         installmentQd: 0,
         installmentRate: 0,
+        workHours: 0,
         campaigns: {},
         campaignDetails: [],
         mappingSource: 'UNMAPPED',
@@ -506,9 +512,37 @@ function processEmulationChunkResult(
 }
 
 /**
- * Trích xuất và hợp nhất toàn bộ các ảnh chụp nhân viên (DT-QĐ, % Tỷ trọng trả góp, Thi đua)
+ * Gộp danh sách giờ công nhân viên từ 1 ảnh "Theo giờ công" vào employeeMap (bỏ qua dòng bị cắt mất số liệu)
+ */
+function applyWorkHoursEntries(
+    hoursEmployees: any[],
+    employeeMap: Map<string, EmployeeOcrParsedItem>,
+    systemEmployees: EmployeeItem[]
+) {
+    hoursEmployees.forEach(e => {
+        if (!e || e.workHours === null || e.workHours === undefined || e.workHours === '') {
+            return;
+        }
+        const hoursVal = cleanWorkHoursValue(e.workHours);
+        const targetEmp = resolveOrCreateEmployeeByIdOrName(
+            employeeMap,
+            systemEmployees,
+            e.employeeId,
+            e.fullName || ''
+        );
+        if (!targetEmp) return;
+
+        if (hoursVal > 0 || !(targetEmp.workHours && targetEmp.workHours > 0)) {
+            targetEmp.workHours = hoursVal;
+        }
+    });
+}
+
+/**
+ * Trích xuất và hợp nhất toàn bộ các ảnh chụp nhân viên (DT-QĐ, % Tỷ trọng trả góp, Giờ công, Thi đua)
  * - Ảnh 1 & 2 (Doanh thu hợp nhất): Lấy Doanh thu QĐ & DT Trả góp QĐ (hỗ trợ nhiều ảnh cuộn ngang/dọc)
  * - Ảnh 3 (Báo cáo trả chậm): Lấy % Tỷ trọng trả góp (đối chiếu theo Họ tên nếu ảnh không hiện Mã NV)
+ * - Ảnh 4 (Theo giờ công): Lấy Giờ công tại ST làm việc (hỗ trợ nhiều ảnh cuộn trùng dòng)
  * - Ảnh Thi đua: giữ nguyên theo lô 3 ảnh/lần
  */
 export async function extractAndMergeEmployeeImages(
@@ -518,6 +552,8 @@ export async function extractAndMergeEmployeeImages(
         qdFiles?: File[];
         installmentFile?: File | null;
         installmentFiles?: File[];
+        workHoursFile?: File | null;
+        workHoursFiles?: File[];
         emulationFiles: File[];
     },
     systemEmployees: EmployeeItem[] = [],
@@ -534,12 +570,16 @@ export async function extractAndMergeEmployeeImages(
     const installmentFilesList: File[] = files.installmentFiles && files.installmentFiles.length > 0
         ? files.installmentFiles
         : (files.installmentFile ? [files.installmentFile] : []);
+    const workHoursFilesList: File[] = files.workHoursFiles && files.workHoursFiles.length > 0
+        ? files.workHoursFiles
+        : (files.workHoursFile ? [files.workHoursFile] : []);
     const emulationFiles = files.emulationFiles || [];
 
     const totalRevenueFiles = qdFilesList.length + installmentFilesList.length;
+    const totalWorkHoursFiles = workHoursFilesList.length;
     const totalEmulation = emulationFiles.length;
 
-    if (totalRevenueFiles === 0 && totalEmulation === 0) {
+    if (totalRevenueFiles === 0 && totalWorkHoursFiles === 0 && totalEmulation === 0) {
         return { success: false, employees: [], errors: ['Chưa chọn hình ảnh nào để trích xuất.'] };
     }
 
@@ -557,7 +597,13 @@ export async function extractAndMergeEmployeeImages(
         preparedInstallmentImages.push(await prepareImageForOcr(installmentFilesList[i]));
     }
 
-    // 3. Nén ảnh Thi đua
+    // 3. Nén ảnh Giờ công nhân viên (Theo giờ công)
+    const preparedWorkHoursImages: Array<{ data: string; mimeType: string }> = [];
+    for (let i = 0; i < workHoursFilesList.length; i++) {
+        preparedWorkHoursImages.push(await prepareImageForOcr(workHoursFilesList[i]));
+    }
+
+    // 4. Nén ảnh Thi đua
     const preparedEmulationImages: Array<{ data: string; mimeType: string }> = [];
     for (let i = 0; i < emulationFiles.length; i++) {
         preparedEmulationImages.push(await prepareImageForOcr(emulationFiles[i]));
@@ -600,6 +646,7 @@ export async function extractAndMergeEmployeeImages(
                     revenueQd: revQdVal ?? 0,
                     installmentQd: instQdVal ?? 0,
                     installmentRate: 0,
+                    workHours: 0,
                     campaigns: {},
                     campaignDetails: []
                 });
@@ -633,8 +680,17 @@ export async function extractAndMergeEmployeeImages(
         installmentChunks.push(preparedInstallmentImages.slice(i, i + REV_CHUNK_SIZE));
     }
 
+    const workHoursChunks: Array<Array<{ data: string; mimeType: string }>> = [];
+    for (let i = 0; i < preparedWorkHoursImages.length; i += REV_CHUNK_SIZE) {
+        workHoursChunks.push(preparedWorkHoursImages.slice(i, i + REV_CHUNK_SIZE));
+    }
+
     const EMU_CONCURRENCY = 3;
-    const totalSteps = qdChunks.length + installmentChunks.length + preparedEmulationImages.length;
+    const totalSteps =
+        qdChunks.length +
+        installmentChunks.length +
+        workHoursChunks.length +
+        preparedEmulationImages.length;
     let currentStep = 0;
 
     // =========================================================================
@@ -669,7 +725,7 @@ export async function extractAndMergeEmployeeImages(
         } catch (err: any) {
             if (err instanceof GeminiQuotaExceededError || err?.isQuotaExceeded) throw err;
             console.error(`Lỗi khi quét ảnh DT-QĐ #${qIdx + 1}:`, err);
-            if (qdChunks.length === 1 && installmentChunks.length === 0 && preparedEmulationImages.length === 0) {
+            if (qdChunks.length === 1 && installmentChunks.length === 0 && workHoursChunks.length === 0 && preparedEmulationImages.length === 0) {
                 throw err;
             }
         }
@@ -707,7 +763,45 @@ export async function extractAndMergeEmployeeImages(
         } catch (err: any) {
             if (err instanceof GeminiQuotaExceededError || err?.isQuotaExceeded) throw err;
             console.error(`Lỗi khi quét ảnh % Tỷ trọng trả góp #${rIdx + 1}:`, err);
-            if (installmentChunks.length === 1 && qdChunks.length === 0 && preparedEmulationImages.length === 0) {
+            if (installmentChunks.length === 1 && qdChunks.length === 0 && workHoursChunks.length === 0 && preparedEmulationImages.length === 0) {
+                throw err;
+            }
+        }
+    }
+
+    // =========================================================================
+    // GIAI ĐOẠN 1C: TRÍCH XUẤT GIỜ CÔNG NHÂN VIÊN (THEO GIỜ CÔNG)
+    // =========================================================================
+    for (let wIdx = 0; wIdx < workHoursChunks.length; wIdx++) {
+        currentStep++;
+        const chunk = workHoursChunks[wIdx];
+        const pct = Math.round((currentStep / (totalSteps + 1)) * 90);
+
+        onProgress?.(
+            `Đang trích xuất Giờ công nhân viên (ảnh ${wIdx + 1}/${workHoursFilesList.length})...`,
+            pct
+        );
+
+        try {
+            const hoursParsed = await callGeminiVisionJson(
+                apiKey,
+                buildWorkHoursOcrPrompt(),
+                chunk,
+                60000,
+                keySource,
+                (msg) => onProgress?.(`Giờ công (ảnh ${wIdx + 1}): ${msg}`, pct)
+            );
+
+            if (hoursParsed.screenshotTimestamp && !detectedTimestamp) {
+                detectedTimestamp = hoursParsed.screenshotTimestamp;
+            }
+
+            const hoursEmployees: any[] = Array.isArray(hoursParsed.employees) ? hoursParsed.employees : [];
+            applyWorkHoursEntries(hoursEmployees, employeeMap, systemEmployees);
+        } catch (err: any) {
+            if (err instanceof GeminiQuotaExceededError || err?.isQuotaExceeded) throw err;
+            console.error(`Lỗi khi quét ảnh Giờ công #${wIdx + 1}:`, err);
+            if (workHoursChunks.length === 1 && qdChunks.length === 0 && installmentChunks.length === 0 && preparedEmulationImages.length === 0) {
                 throw err;
             }
         }
@@ -886,6 +980,66 @@ export async function extractAdditionalEmulationImages(
 }
 
 /**
+ * Trích xuất BỔ SUNG ảnh giờ công và hợp nhất vào danh sách nhân viên hiện tại
+ */
+export async function extractAdditionalWorkHoursImages(
+    apiKey: string,
+    additionalFiles: File[],
+    currentEmployees: EmployeeOcrParsedItem[],
+    systemEmployees: EmployeeItem[] = [],
+    onProgress?: (status: string, percent: number) => void,
+    keySource: GeminiKeySource = 'ADMIN'
+): Promise<EmployeeOcrResult> {
+    if (additionalFiles.length === 0) {
+        return { success: true, employees: currentEmployees };
+    }
+
+    onProgress?.('Đang nén ảnh giờ công bổ sung...', 10);
+
+    const employeeMap = new Map<string, EmployeeOcrParsedItem>();
+    currentEmployees.forEach(e => {
+        employeeMap.set(e.employeeId, {
+            ...e,
+            campaigns: { ...e.campaigns },
+            campaignDetails: [...(e.campaignDetails || [])]
+        });
+    });
+
+    let detectedTimestamp: string | undefined;
+    for (let i = 0; i < additionalFiles.length; i++) {
+        const pct = Math.round(((i + 1) / (additionalFiles.length + 1)) * 85);
+        onProgress?.(`Đang quét giờ công bổ sung (${i + 1}/${additionalFiles.length})...`, pct);
+        try {
+            const prepared = await prepareImageForOcr(additionalFiles[i]);
+            const hoursParsed = await callGeminiVisionJson(
+                apiKey,
+                buildWorkHoursOcrPrompt(),
+                [prepared],
+                60000,
+                keySource
+            );
+            if (hoursParsed?.screenshotTimestamp && !detectedTimestamp) {
+                detectedTimestamp = hoursParsed.screenshotTimestamp;
+            }
+            const hoursEmployees: any[] = Array.isArray(hoursParsed?.employees) ? hoursParsed.employees : [];
+            applyWorkHoursEntries(hoursEmployees, employeeMap, systemEmployees);
+        } catch (err: any) {
+            if (err instanceof GeminiQuotaExceededError || err?.isQuotaExceeded) throw err;
+            console.warn(`Lỗi khi quét ảnh giờ công bổ sung #${i + 1}:`, err);
+            if (additionalFiles.length === 1) throw err;
+        }
+    }
+
+    onProgress?.('Đã hợp nhất xong giờ công nhân viên!', 100);
+
+    return {
+        success: true,
+        employees: Array.from(employeeMap.values()),
+        screenshotTimestamp: detectedTimestamp
+    };
+}
+
+/**
  * Chuyển đổi EmployeeOcrParsedItem[] thành EmployeeSessionRecord[] để lưu vào Supabase
  */
 export function convertOcrItemsToSessionRecords(
@@ -900,6 +1054,7 @@ export function convertOcrItemsToSessionRecords(
         revenue_actual: 0,
         installment_revenue: item.installmentQd,
         installment_rate: item.installmentRate,
+        work_hours: Number(item.workHours) || 0,
         campaigns: item.campaigns,
         short_name: getShortenedEmployeeName(item.fullName),
         store_name: storeName
@@ -918,6 +1073,7 @@ export function convertSessionRecordsToOcrItems(
         revenueQd: r.revenue_qd || 0,
         installmentQd: r.installment_revenue || 0,
         installmentRate: r.installment_rate || 0,
+        workHours: Number(r.work_hours) || 0,
         campaigns: r.campaigns || {},
         campaignDetails: Object.entries(r.campaigns || {}).map(([cName, cVal]) => ({
             campaignName: cName,

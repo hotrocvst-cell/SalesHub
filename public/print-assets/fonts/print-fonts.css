@@ -1,0 +1,56 @@
+@import url('https://fonts.googleapis.com/css2?family=Bai+Jamjuree:wght@400;600;700&family=Montserrat:wght@400;600;700;800;900&display=swap');
+
+@font-face {
+  font-family: 'UTM-Colossalis';
+  src: url('/print-assets/fonts/UTM-Colossalis.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'mt2-font';
+  src: url('/print-assets/fonts/mt2-font.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'mt2-mincap';
+  src: url('/print-assets/fonts/mt2-mincap.woff2') format('woff2');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+#sal-print-paper {
+  width: 780px;
+  min-height: 1100px;
+  background: #ffffff;
+  color: #000000;
+  margin: 0 auto;
+  position: relative;
+  box-sizing: border-box;
+  line-height: normal;
+}
+
+#sal-print-paper *,
+#sal-print-paper *::before,
+#sal-print-paper *::after {
+  box-sizing: border-box;
+}
+
+#sal-print-paper .paper_content {
+  width: 738px;
+  margin: 0 auto;
+  padding-top: 20px;
+  color: #000000;
+}
+
+#sal-print-paper input[type='text']:focus,
+#sal-print-paper [contenteditable='true']:focus {
+  outline: 1.5px dashed #2563eb;
+  background-color: rgba(59, 130, 246, 0.06);
+}
+

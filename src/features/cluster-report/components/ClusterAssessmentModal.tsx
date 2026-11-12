@@ -54,7 +54,7 @@ export default function ClusterAssessmentModal({
         const lines: string[] = [];
 
         lines.push(`📊 ĐÁNH GIÁ SỨC KHỎE CỤM T${month}/${year}:`);
-        lines.push(`• DTQĐ: ${summary.totalRevenueQd.toFixed(3)} tỷ (+${summary.avgPctQd.toFixed(1)}% QĐ) • %HT: ${summary.avgPctHtOver.toFixed(1)}%${hasInstallment ? ` • Trả góp: ${summary.avgInstallmentRate.toFixed(1)}%` : ''}.`);
+        lines.push(`• DTQĐ: ${summary.totalRevenueQd.toFixed(3)} tỷ • %HT: ${summary.avgPctHtOver.toFixed(1)}%${hasInstallment ? ` • Trả góp: ${summary.avgInstallmentRate.toFixed(1)}%` : ''}.`);
 
         if (topPctHt) {
             lines.push(`🌟 Dẫn đầu: [${getShortStoreName(topPctHt.storeName)}] đạt ${topPctHt.pctHtOver.toFixed(1)}% target vượt trội.`);

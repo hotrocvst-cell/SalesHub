@@ -21,6 +21,38 @@ export function cleanBiPercent(val: any): number {
 }
 
 /**
+ * Chuẩn hóa số giờ công trích xuất từ OCR (ví dụ: "101.0" -> 101, "94.5" -> 94.5, "94,5" -> 94.5)
+ */
+export function cleanWorkHoursValue(val: any): number {
+    if (val === null || val === undefined || val === '') return 0;
+    if (typeof val === 'number') {
+        if (!Number.isFinite(val) || val < 0) return 0;
+        return Math.round(val * 100) / 100;
+    }
+
+    let cleaned = String(val)
+        .replace(/giờ|gio|h/gi, '')
+        .replace(/\s+/g, '')
+        .trim();
+    if (!cleaned || cleaned === '—' || cleaned === '-' || cleaned === '–') return 0;
+
+    if (cleaned.includes(',') && cleaned.includes('.')) {
+        cleaned = cleaned.replace(/,/g, '');
+    } else if (cleaned.includes(',')) {
+        const commaParts = cleaned.split(',');
+        if (commaParts.length === 2 && commaParts[1].length <= 2) {
+            cleaned = `${commaParts[0]}.${commaParts[1]}`;
+        } else {
+            cleaned = cleaned.replace(/,/g, '');
+        }
+    }
+
+    const num = parseFloat(cleaned);
+    if (isNaN(num) || num < 0) return 0;
+    return Math.round(num * 100) / 100;
+}
+
+/**
  * Chuẩn hóa họ tên tiếng Việt để đối chiếu ảnh không có Mã NV ("Báo cáo trả chậm", "Thi đua")
  */
 export function normalizeViName(name: string, stripDiacritics = false): string {
@@ -209,5 +241,48 @@ export function findDirectoryEmployeeByName(
     }
 
     return null;
+}
+
+/**
+ * Prompt chuyên biệt cho trích xuất ẢNH "GIỜ CÔNG NHÂN VIÊN"
+ * (Ứng dụng BI -> "Doanh thu hợp nhất" -> chế độ Lưới -> tab "Theo giờ công")
+ */
+export function buildWorkHoursOcrPrompt(): string {
+    return `
+Bạn là chuyên gia phân tích dữ liệu nhân sự bán lẻ từ ảnh chụp màn hình ứng dụng BI ("Doanh thu hợp nhất" - chế độ "Lưới" + "Theo giờ công").
+
+CẤU TRÚC BẢNG TRÊN ẢNH:
+- Tiêu đề bảng gồm đúng 3 cột:
+  1) "NHÂN VIÊN": Gồm 3 dòng trên mỗi ô:
+     - Dòng 1 (chữ xanh dương): Họ và tên nhân viên (ví dụ: "Nguyễn Thị Diễm Mi", "Vũ Trọng Khiêm", "Đào Bá Linh").
+     - Dòng 2 (chữ xám): "id: <mã nhân viên>" (ví dụ: "id: 44213", "id: 105851", "id: 26479").
+     - Dòng 3 (chữ xám): "ST làm việc: <mã ST>" (ví dụ: "ST làm việc: 111"). KHÔNG lấy mã ST làm employeeId hay giờ công.
+  2) "GIỜ CÔNG TẠI ST LÀM VIỆC": Số thập phân (ví dụ: 101.0, 99.9, 94.5, 86.0, 3.0). ĐÂY LÀ GIÁ TRỊ CẦN LẤY VÀO "workHours".
+  3) "GIỜ CÔNG HỖ TRỢ ST KHÁC": Số thập phân (ví dụ: 0.0, 12.9, 10.0, 12.5, 9.5). TUYỆT ĐỐI KHÔNG lấy cột này và KHÔNG cộng dồn vào "workHours".
+
+QUY TẮC TRÍCH XUẤT BẮT BUỘC:
+1. BỎ QUA HOÀN TOÀN các chữ mờ watermark in chéo trên ảnh (ví dụ: "26479 Đào Bá Linh"), dòng "Tổng", thanh phân trang ("1-16 / Tổng 16 dòng"), và dòng "Đơn vị: giờ". Lưu ý không nhầm watermark với dữ liệu thật, nhưng vẫn phải trích xuất bình thường nếu nhân viên đó xuất hiện trong một dòng bảng chính thức có "id:" và cột số liệu rõ ràng.
+2. XỬ LÝ DÒNG BỊ CẮT Ở MÉP TRÊN / MÉP DƯỚI KHI CUỘN MÀN HÌNH:
+   - Nếu một dòng ở mép trên hoặc mép dưới bị cắt mất số ở cột "GIỜ CÔNG TẠI ST LÀM VIỆC" hoặc mất cả "id:" lẫn tên -> BỎ QUA DÒNG ĐÓ (hoặc trả về "workHours": null), tuyệt đối không tự điền 0.
+   - Nếu dòng ở mép trên bị che mất tên nhưng vẫn đọc rõ ràng cả "id: <mã NV>" VÀ số ở cột "GIỜ CÔNG TẠI ST LÀM VIỆC" -> giữ nguyên "employeeId" và "workHours" tương ứng.
+3. Với mỗi dòng hợp lệ:
+   - employeeId: Chỉ lấy phần số sau chữ "id:" (ví dụ: "id: 265379" -> "265379"). Trả null nếu không thấy "id:".
+   - fullName: Họ và tên đầy đủ ở dòng 1 cột "NHÂN VIÊN" (hoặc "" nếu phần tên bị cắt ở mép trên nhưng có "id:").
+   - workHours: ĐÚNG giá trị ở cột "GIỜ CÔNG TẠI ST LÀM VIỆC" (giữ đúng dấu thập phân, ví dụ 94.5 -> 94.5, 101.0 -> 101.0).
+4. THỜI GIAN CHỤP: Nếu thấy "Cập nhật lúc: HH:mm:ss DD/MM/YYYY" ở phía trên ảnh, trích xuất vào "screenshotTimestamp".
+
+Trả về DUY NHẤT một khối JSON thuần:
+{
+  "screenshotTimestamp": string | null,
+  "employees": [
+    {
+      "employeeId": string | null,
+      "fullName": string,
+      "workHours": number | null
+    }
+  ]
+}
+Chỉ trả về JSON thuần, không bọc markdown \`\`\`json.
+`;
 }
 

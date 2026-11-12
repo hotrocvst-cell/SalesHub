@@ -120,11 +120,15 @@ export default function SessionDetailModal({ session, onClose, onRestore }: Prop
                     </div>
                     <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 col-span-2 sm:col-span-1">
                         <span className="text-slate-400 block text-[10px] font-bold uppercase">
-                            {isRevenue ? 'Tổng Doanh Thu Thực' : 'Tổng Giờ Công'}
-                        </span>
-                        <strong className="text-emerald-700 font-mono">
                             {isRevenue
-                                ? `${session.total_revenue_actual.toLocaleString('vi-VN')} tr`
+                                ? (session.total_work_hours > 0 ? 'Tổng DT QĐ / Giờ Công' : 'Tổng Doanh Thu QĐ')
+                                : 'Tổng Giờ Công'}
+                        </span>
+                        <strong className="text-emerald-700 font-mono tabular-nums">
+                            {isRevenue
+                                ? session.total_work_hours > 0
+                                    ? `${session.total_revenue_qd.toLocaleString('vi-VN')} tr · ${session.total_work_hours.toLocaleString('vi-VN')} h`
+                                    : `${session.total_revenue_qd.toLocaleString('vi-VN')} tr`
                                 : `${session.total_work_hours.toLocaleString('vi-VN')} giờ`}
                         </strong>
                     </div>
@@ -145,6 +149,7 @@ export default function SessionDetailModal({ session, onClose, onRestore }: Prop
                                         <th className="p-2.5 text-right border-b text-emerald-700">DT Thực (tr)</th>
                                         <th className="p-2.5 text-right border-b">Trả Góp (tr)</th>
                                         <th className="p-2.5 text-right border-b">% Trả Góp</th>
+                                        <th className="p-2.5 text-right border-b text-teal-800">Giờ Công (h)</th>
                                     </>
                                 ) : (
                                     <th className="p-2.5 text-right border-b text-blue-700">Giờ Công (giờ)</th>
@@ -171,6 +176,9 @@ export default function SessionDetailModal({ session, onClose, onRestore }: Prop
                                             </td>
                                             <td className="p-2 text-right font-mono text-slate-600">
                                                 {r.installment_rate}%
+                                            </td>
+                                            <td className="p-2 text-right font-mono font-bold text-teal-800">
+                                                {(r.work_hours || 0) > 0 ? `${Number((r.work_hours || 0).toFixed(1)).toLocaleString('vi-VN')}h` : '—'}
                                             </td>
                                         </>
                                     ) : (

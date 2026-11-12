@@ -26,6 +26,10 @@ interface Props {
     onInstallmentFileChange?: (file: File | null) => void;
     onInstallmentFilesChange?: (files: File[]) => void;
 
+    // Ảnh Giờ công nhân viên (theo tab "Theo giờ công" trên BI Mobile)
+    workHoursFiles?: File[];
+    onWorkHoursFilesChange?: (files: File[]) => void;
+
     emulationFiles: File[];
     onEmulationFilesChange: (files: File[]) => void;
     engineType?: OcrEngineType;
@@ -58,6 +62,8 @@ export default function OcrUploadZone({
     installmentFiles,
     onInstallmentFileChange,
     onInstallmentFilesChange,
+    workHoursFiles,
+    onWorkHoursFilesChange,
     emulationFiles,
     onEmulationFilesChange,
     keySource = 'NONE',
@@ -139,9 +145,13 @@ export default function OcrUploadZone({
         ? emulationFiles.length > 0
         : singleStoreEmulations.some(e => e.files.length > 0);
 
+    const showWorkHoursSlot = mode === 'EMPLOYEE' && (workHoursFiles !== undefined || onWorkHoursFilesChange !== undefined);
+    const currentWorkHoursFiles: File[] = workHoursFiles ?? [];
+
     const hasQd = currentQdFiles.length > 0;
     const hasSecondBlock = currentInstallmentFiles.length > 0;
-    const canExtract = Boolean(hasQd || hasSecondBlock || hasEmulation);
+    const hasWorkHours = currentWorkHoursFiles.length > 0;
+    const canExtract = Boolean(hasQd || hasSecondBlock || hasEmulation || hasWorkHours);
 
     const totalEmulationFiles = emulationMode === 'CLUSTER'
         ? emulationFiles.length
@@ -164,7 +174,7 @@ export default function OcrUploadZone({
                             type="button"
                             onClick={onClearAllFiles}
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 transition cursor-pointer shadow-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
-                            title="Xóa toàn bộ ảnh đã chọn ở 3 mục để tải lại đợt ảnh mới"
+                            title="Xóa toàn bộ ảnh đã chọn ở các mục để tải lại đợt ảnh mới"
                         >
                             <Trash2 className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
                             <span>Xóa hết ảnh</span>
@@ -198,8 +208,8 @@ export default function OcrUploadZone({
                 </div>
             </div>
 
-            {/* 3 KHỐI TIẾP NHẬN ẢNH */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {/* CÁC KHỐI TIẾP NHẬN ẢNH */}
+            <div className={`grid gap-3 ${showWorkHoursSlot ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1 md:grid-cols-3'}`}>
                 {/* 1. KHỐI DOANH THU QUY ĐỔI (DT-QĐ) */}
                 <ImageSlotCard
                     title="1. Doanh Thu QĐ"
@@ -483,6 +493,26 @@ export default function OcrUploadZone({
                         </div>
                     )}
                 </div>
+
+                {/* 4. KHỐI GIỜ CÔNG NHÂN VIÊN (CHỈ HIỂN THỊ KHI CHẾ ĐỘ EMPLOYEE & CÓ CALLBACK) */}
+                {showWorkHoursSlot && onWorkHoursFilesChange && (
+                    <ImageSlotCard
+                        title="4. Giờ Công"
+                        description="Ảnh Doanh thu hợp nhất (tab Theo giờ công) • Lấy cột GIỜ CÔNG TẠI ST LÀM VIỆC (chọn nhiều ảnh cuộn nếu danh sách dài)."
+                        theme="teal"
+                        files={currentWorkHoursFiles}
+                        isMulti={true}
+                        emptyTitle="Chọn ảnh Giờ Công"
+                        emptySubtitle="Tab Theo giờ công (chọn 1 hoặc nhiều ảnh)"
+                        addMoreLabel="Thêm ảnh Giờ Công..."
+                        addInitialLabel="Nạp ảnh Giờ Công (chọn 1 hoặc nhiều)"
+                        onAddFiles={(added) => onWorkHoursFilesChange([...currentWorkHoursFiles, ...added])}
+                        onRemoveFile={(index) =>
+                            onWorkHoursFilesChange(currentWorkHoursFiles.filter((_, idx) => idx !== index))
+                        }
+                        onClearAll={() => onWorkHoursFilesChange([])}
+                    />
+                )}
             </div>
 
             {/* THANH TIẾN TRÌNH & NÚT TRÍCH XUẤT OCR */}
@@ -511,7 +541,7 @@ export default function OcrUploadZone({
                                 : 'Sẵn sàng trích xuất. Nhấn nút để AI quét số liệu và hợp nhất theo từng nhân viên.'
                             : mode === 'STORE'
                                 ? 'Mẹo: Bạn có thể chọn nhiều ảnh chụp màn hình cùng lúc cho từng mục nếu cụm có nhiều ST.'
-                                : 'Mẹo: Có thể chọn nhiều ảnh cuộn ngang/dọc (ảnh lấy DOANH THU QĐ và ảnh lấy DT TRẢ GÓP QĐ), hệ thống sẽ tự hợp nhất theo Mã NV.'}
+                                : 'Mẹo: Có thể nạp đủ bộ hoặc nạp riêng lẻ từng loại ảnh (Doanh thu QĐ, % Tỷ trọng trả góp, Thi đua, Giờ công), hệ thống sẽ tự hợp nhất theo Mã NV.'}
                     </div>
 
                     <button
