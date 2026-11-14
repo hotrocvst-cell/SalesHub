@@ -1,15 +1,25 @@
-import './exactPrintFonts.css';
-import CloudDataSyncStatusBanner from '../../shared/components/report/CloudDataSyncStatusBanner';
-import { ExactDecorTool } from './components/ExactDecorTool';
-import { ExactPaperWorkspace } from './components/ExactPaperWorkspace';
-import { PrintHubCatalogHeader } from './components/PrintHubCatalogHeader';
-import { PrintPresetBar } from './components/PrintPresetBar';
-import { QuickBatchFillBar } from './components/QuickBatchFillBar';
-import { usePrintHubController } from './hooks/usePrintHubController';
-import { PRINT_PRESETS_SQL_DDL } from './services/printPresetCloudService';
+import React from 'react';
+import '../exactPrintFonts.css';
+import CloudDataSyncStatusBanner from '../../../shared/components/report/CloudDataSyncStatusBanner';
+import { ExactDecorTool } from './ExactDecorTool';
+import { ExactPaperWorkspace } from './ExactPaperWorkspace';
+import { PrintHubCatalogHeader } from './PrintHubCatalogHeader';
+import { PrintPresetBar } from './PrintPresetBar';
+import { QuickBatchFillBar } from './QuickBatchFillBar';
+import { usePrintHubController } from '../hooks/usePrintHubController';
+import { PRINT_PRESETS_SQL_DDL } from '../services/printPresetCloudService';
+import type { PrintCategoryKey } from '../types';
 
-export default function PrintHubPage() {
-  const c = usePrintHubController();
+export interface PrintCategoryPageProps {
+  fixedCategory?: PrintCategoryKey;
+  pageTitle?: string;
+}
+
+export const PrintCategoryPage: React.FC<PrintCategoryPageProps> = ({
+  fixedCategory,
+  pageTitle,
+}) => {
+  const c = usePrintHubController({ fixedCategory });
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 p-2.5 pb-10 sm:p-4">
@@ -29,6 +39,8 @@ export default function PrintHubPage() {
         isLockedToSingleStore={c.isLockedToSingleStore}
         canViewAllStores={c.canViewAllStores}
         activeCategory={c.activeCategory}
+        fixedCategory={fixedCategory}
+        pageTitle={pageTitle}
         activeTool={c.activeTool}
         activeVariantRel={c.activeVariantRel}
         searchQuery={c.searchQuery}
@@ -96,4 +108,5 @@ export default function PrintHubPage() {
       />
     </div>
   );
-}
+};
+

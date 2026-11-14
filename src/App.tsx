@@ -22,6 +22,7 @@ const StoreEmployeeConfigPage = lazy(() => import('./features/store-management/S
 const EmployeeCumulativePage = lazy(() => import('./features/employee-cumulative/EmployeeCumulativePage'));
 const EmployeeExtractOcrPage = lazy(() => import('./features/data-update/EmployeeExtractOcrPage'));
 const EmployeeRankingSummaryPage = lazy(() => import('./features/employee-ranking/EmployeeRankingSummaryPage'));
+const EmployeeQuarterlyRankingPage = lazy(() => import('./features/quarterly-ranking/EmployeeQuarterlyRankingPage'));
 const EmployeePerformanceReportPage = lazy(() => import('./features/employee-performance/EmployeePerformanceReportPage'));
 const EmployeeDetailReportPage = lazy(() => import('./features/employee-detail/EmployeeDetailReportPage'));
 const EmployeeSessionManagerPage = lazy(() => import('./features/employee-cumulative/EmployeeSessionManagerPage'));
@@ -47,7 +48,11 @@ const CampaignOffsetPage = lazy(() => import('./features/campaign-offset/Campaig
 const SampleDataPage = lazy(() => import('./features/sample-data/SampleDataPage'));
 const FocusCampaignPage = lazy(() => import('./features/focus-campaign/FocusCampaignPage'));
 const LuckyDrawHubPage = lazy(() => import('./features/sales-utilities/LuckyDrawHubPage'));
-const PrintHubPage = lazy(() => import('./features/print-hub/PrintHubPage'));
+const PrintStickerPage = lazy(() => import('./features/print-hub/PrintStickerPage'));
+const PrintPopupPage = lazy(() => import('./features/print-hub/PrintPopupPage'));
+const PrintSalesPage = lazy(() => import('./features/print-hub/PrintSalesPage'));
+const PrintWorkPage = lazy(() => import('./features/print-hub/PrintWorkPage'));
+const PrintDecorPage = lazy(() => import('./features/print-hub/PrintDecorPage'));
 
 // Các trang Định danh, Đăng ký & Onboarding
 const LoginPage = lazy(() => import('./features/auth/LoginPage'));
@@ -167,6 +172,13 @@ export default function App() {
                                     </ProtectedRoute>
                                 } />
 
+                                {/* Báo Cáo Xếp Hạng Nhân Sự Theo Quý & Nhiều Tháng */}
+                                <Route path="/xep-hang-quy-nhan-vien" element={
+                                    <ProtectedRoute path="/xep-hang-quy-nhan-vien">
+                                        <EmployeeQuarterlyRankingPage />
+                                    </ProtectedRoute>
+                                } />
+
                                 {/* Quản Lý & Chốt Cấn Trừ Thi Đua Cuối Tháng */}
                                 <Route path="/can-tru-thi-dua" element={
                                     <ProtectedRoute path="/can-tru-thi-dua">
@@ -264,9 +276,30 @@ export default function App() {
                                         <LuckyDrawHubPage />
                                     </ProtectedRoute>
                                 } />
-                                <Route path="/tien-ich-in-an" element={
-                                    <ProtectedRoute path="/tien-ich-in-an">
-                                        <PrintHubPage />
+                                <Route path="/tien-ich-in-an" element={<Navigate to="/in-an/sticker" replace />} />
+                                <Route path="/in-an/sticker" element={
+                                    <ProtectedRoute path="/in-an/sticker">
+                                        <PrintStickerPage />
+                                    </ProtectedRoute>
+                                } />
+                                <Route path="/in-an/popup" element={
+                                    <ProtectedRoute path="/in-an/popup">
+                                        <PrintPopupPage />
+                                    </ProtectedRoute>
+                                } />
+                                <Route path="/in-an/phieu-ban-hang" element={
+                                    <ProtectedRoute path="/in-an/phieu-ban-hang">
+                                        <PrintSalesPage />
+                                    </ProtectedRoute>
+                                } />
+                                <Route path="/in-an/cong-viec" element={
+                                    <ProtectedRoute path="/in-an/cong-viec">
+                                        <PrintWorkPage />
+                                    </ProtectedRoute>
+                                } />
+                                <Route path="/in-an/trang-tri" element={
+                                    <ProtectedRoute path="/in-an/trang-tri">
+                                        <PrintDecorPage />
                                     </ProtectedRoute>
                                 } />
                                 <Route path="/kiem-quy" element={

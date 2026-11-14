@@ -29,9 +29,15 @@ import {
 import { injectStorePlaceholders, type BatchFieldSlot } from '../utils/exactSheetEngine';
 import type { ExactPaperHandle } from '../components/ExactPaperWorkspace';
 
-export function usePrintHubController() {
+export interface UsePrintHubControllerOptions {
+  fixedCategory?: PrintCategoryKey;
+  defaultToolId?: string;
+}
+
+export function usePrintHubController(options?: UsePrintHubControllerOptions) {
   const { currentUser, isAdmin } = useAuth();
   const paperHandleRef = useRef<ExactPaperHandle | null>(null);
+  const fixedCategory = options?.fixedCategory;
 
   const [stores, setStores] = useState<StoreItem[]>([]);
   const [employees, setEmployees] = useState<EmployeeItem[]>([]);
@@ -43,10 +49,28 @@ export function usePrintHubController() {
     setSelectedStore
   );
 
-  const [activeCategory, setActiveCategory] = useState<PrintCategoryKey>('sticker');
-  const [activeToolId, setActiveToolId] = useState<string>('stk_ptg');
-  const [activeVariantRel, setActiveVariantRel] = useState<string>('in-sticker/in-ptg-6s.html');
-  const [paperSize, setPaperSize] = useState<PaperSize>('A4');
+  const initialTool = useMemo(() => {
+    if (options?.defaultToolId) {
+      const found = PRINT_TOOLS_CATALOG.find((t) => t.id === options.defaultToolId);
+      if (found) return found;
+    }
+    if (fixedCategory) {
+      const found = PRINT_TOOLS_CATALOG.find((t) => t.category === fixedCategory);
+      if (found) return found;
+    }
+    return PRINT_TOOLS_CATALOG[0];
+  }, [fixedCategory, options?.defaultToolId]);
+
+  const [activeCategory, setActiveCategory] = useState<PrintCategoryKey>(
+    fixedCategory || initialTool.category || 'sticker'
+  );
+  const [activeToolId, setActiveToolId] = useState<string>(initialTool.id);
+  const [activeVariantRel, setActiveVariantRel] = useState<string>(
+    initialTool.variants[0]?.rel || 'in-sticker/in-ptg-6s.html'
+  );
+  const [paperSize, setPaperSize] = useState<PaperSize>(
+    initialTool.variants[0]?.paperSize || 'A4'
+  );
   const [searchQuery, setSearchQuery] = useState('');
 
   const [syncAllCards, setSyncAllCards] = useState(true);
@@ -103,6 +127,7 @@ export function usePrintHubController() {
   const selectTool = useCallback((toolId: string) => {
     const found = PRINT_TOOLS_CATALOG.find((t) => t.id === toolId);
     if (!found) return;
+    if (fixedCategory && found.category !== fixedCategory) return;
     setActiveToolId(found.id);
     setActiveCategory(found.category);
     const firstVar = found.variants[0];
@@ -111,7 +136,23 @@ export function usePrintHubController() {
       setPaperSize(firstVar.paperSize || 'A4');
     }
     setActivePresetId(null);
-  }, []);
+  }, [fixedCategory]);
+
+  useEffect(() => {
+    if (fixedCategory && fixedCategory !== activeCategory) {
+      setActiveCategory(fixedCategory);
+      const first = PRINT_TOOLS_CATALOG.find((t) => t.category === fixedCategory);
+      if (first) {
+        setActiveToolId(first.id);
+        const firstVar = first.variants[0];
+        if (firstVar) {
+          setActiveVariantRel(firstVar.rel);
+          setPaperSize(firstVar.paperSize || 'A4');
+        }
+        setActivePresetId(null);
+      }
+    }
+  }, [fixedCategory, activeCategory]);
 
   useEffect(() => {
     if (activeToolId !== 'wrk_codetui') return;
@@ -253,6 +294,7 @@ export function usePrintHubController() {
     setSelectedStore,
     activeStoreShort,
     storeEmployees,
+    fixedCategory,
     activeCategory,
     activeToolId,
     activeTool,

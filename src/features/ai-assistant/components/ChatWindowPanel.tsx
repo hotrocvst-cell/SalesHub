@@ -19,7 +19,7 @@ interface Props {
     isSyncingDocs: boolean;
     onChangeInput: (val: string) => void;
     onChangeMode: (mode: 'AI' | 'SEARCH') => void;
-    onSend: (overrideQuestion?: string) => void;
+    onSend: (overrideQuestion?: string, overrideMode?: 'AI' | 'SEARCH') => void;
     onOpenImage: (image: ChatAttachmentImage) => void;
 }
 
@@ -100,12 +100,18 @@ export default function ChatWindowPanel({
                             </div>
                         )}
                         {messages.map((msg) => (
-                            <ChatMessageBubble key={msg.id} message={msg} onOpenImage={onOpenImage} />
+                            <ChatMessageBubble
+                                key={msg.id}
+                                message={msg}
+                                onOpenImage={onOpenImage}
+                                onSelectClarification={(q, m) => onSend(q, m || 'SEARCH')}
+                                onAskAiSynthesis={(q) => onSend(q, 'AI')}
+                            />
                         ))}
                         {isThinking && (
                             <div className="flex items-center gap-2 text-xs font-bold text-slate-600 pl-2" role="status" aria-live="polite">
                                 <Loader2 className="w-4 h-4 animate-spin text-blue-600 shrink-0" aria-hidden="true" />
-                                <span>Đang tra cứu kho tài liệu &amp; tổng hợp câu trả lời...</span>
+                                <span>Đang tra cứu kho tài liệu &amp; xử lý câu trả lời...</span>
                             </div>
                         )}
                     </>
@@ -115,29 +121,34 @@ export default function ChatWindowPanel({
             {/* Khung nhập câu hỏi cố định đáy */}
             <div className="bg-white border-t border-slate-200 p-2.5 sm:p-3 space-y-2">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
+                    {/* Chế độ tra cứu: Ưu tiên Tài Liệu Gốc lên đầu */}
                     <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg" role="group" aria-label="Chế độ tra cứu">
-                        <button
-                            type="button"
-                            aria-pressed={queryMode === 'AI'}
-                            onClick={() => onChangeMode('AI')}
-                            className={`px-2 py-1 rounded-md text-[10.5px] font-bold flex items-center gap-1 transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-                                queryMode === 'AI' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-white/70'
-                            }`}
-                        >
-                            <Sparkles className="w-3 h-3 shrink-0" aria-hidden="true" />
-                            <span>AI Tổng Hợp</span>
-                        </button>
                         <button
                             type="button"
                             aria-pressed={queryMode === 'SEARCH'}
                             onClick={() => onChangeMode('SEARCH')}
-                            className={`px-2 py-1 rounded-md text-[10.5px] font-bold flex items-center gap-1 transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${
-                                queryMode === 'SEARCH' ? 'bg-amber-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-white/70'
+                            className={`px-2.5 py-1 rounded-md text-[10.5px] font-bold flex items-center gap-1.5 transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                                queryMode === 'SEARCH' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-white/70'
                             }`}
-                            title="Tìm thẳng đoạn tài liệu & ảnh gốc (không tốn lượt AI)"
+                            title="Ưu tiên tra cứu nguyên văn tài liệu & ảnh gốc (0 Token AI, phản hồi tức thì)"
                         >
                             <Search className="w-3 h-3 shrink-0" aria-hidden="true" />
                             <span>Tìm Tài Liệu Gốc</span>
+                            <span className={`text-[9px] px-1 py-0.2 rounded font-extrabold ${queryMode === 'SEARCH' ? 'bg-blue-800 text-blue-100' : 'bg-slate-200 text-slate-700'}`}>
+                                Ưu tiên
+                            </span>
+                        </button>
+                        <button
+                            type="button"
+                            aria-pressed={queryMode === 'AI'}
+                            onClick={() => onChangeMode('AI')}
+                            className={`px-2 py-1 rounded-md text-[10.5px] font-bold flex items-center gap-1 transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 ${
+                                queryMode === 'AI' ? 'bg-purple-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-white/70'
+                            }`}
+                            title="AI đọc hiểu, tóm tắt và hành văn kịch bản tư vấn"
+                        >
+                            <Sparkles className="w-3 h-3 shrink-0" aria-hidden="true" />
+                            <span>AI Tổng Hợp</span>
                         </button>
                     </div>
 
@@ -161,7 +172,11 @@ export default function ChatWindowPanel({
                             }
                         }}
                         aria-label="Nhập câu hỏi cho Trợ lý AI"
-                        placeholder="Nhập câu hỏi tra cứu quy trình, thưởng thi đua, cách xử lý nghiệp vụ..."
+                        placeholder={
+                            queryMode === 'SEARCH'
+                                ? 'Nhập từ khóa tra cứu tài liệu gốc (VD: QR, đổi trả, bảo hành, thi đua, voucher...)...'
+                                : 'Nhập câu hỏi để AI đọc hiểu, tóm tắt và hướng dẫn nghiệp vụ...'
+                        }
                         className="flex-1 min-w-0 px-3 py-2 bg-slate-50 border border-slate-300 rounded-2xl text-xs sm:text-[13px] text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white resize-none"
                     />
                     <button

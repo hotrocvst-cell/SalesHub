@@ -29,6 +29,8 @@ interface PrintHubCatalogHeaderProps {
   isLockedToSingleStore: boolean;
   canViewAllStores: boolean;
   activeCategory: PrintCategoryKey;
+  fixedCategory?: PrintCategoryKey;
+  pageTitle?: string;
   activeTool: PrintToolMeta;
   activeVariantRel: string;
   searchQuery: string;
@@ -44,6 +46,8 @@ export const PrintHubCatalogHeader: React.FC<PrintHubCatalogHeaderProps> = ({
   isLockedToSingleStore,
   canViewAllStores,
   activeCategory,
+  fixedCategory,
+  pageTitle,
   activeTool,
   activeVariantRel,
   searchQuery,
@@ -52,17 +56,19 @@ export const PrintHubCatalogHeader: React.FC<PrintHubCatalogHeaderProps> = ({
   onSelectVariant,
 }) => {
   const filteredTools = useMemo(() => {
+    const categoryToFilter = fixedCategory || activeCategory;
+    const baseTools = PRINT_TOOLS_CATALOG.filter((t) => t.category === categoryToFilter);
     const q = searchQuery.trim().toLowerCase();
     if (q) {
-      return PRINT_TOOLS_CATALOG.filter(
+      return baseTools.filter(
         (t) =>
           t.name.toLowerCase().includes(q) ||
           t.shortDesc.toLowerCase().includes(q) ||
           t.variants.some((v) => v.label.toLowerCase().includes(q))
       );
     }
-    return PRINT_TOOLS_CATALOG.filter((t) => t.category === activeCategory);
-  }, [activeCategory, searchQuery]);
+    return baseTools;
+  }, [activeCategory, fixedCategory, searchQuery]);
 
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm sm:p-4">
@@ -100,31 +106,49 @@ export const PrintHubCatalogHeader: React.FC<PrintHubCatalogHeaderProps> = ({
       </div>
 
       <div className="flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex flex-wrap gap-1.5">
-          {PRINT_CATEGORIES.map((cat) => {
-            const Icon = CATEGORY_ICONS[cat.key];
-            const isActive = !searchQuery && activeCategory === cat.key;
-            return (
-              <button
-                key={cat.key}
-                type="button"
-                onClick={() => {
-                  onSearchChange('');
-                  const first = PRINT_TOOLS_CATALOG.find((t) => t.category === cat.key);
-                  if (first) onSelectTool(first.id);
-                }}
-                className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-bold transition ${
-                  isActive
-                    ? 'border-blue-700 bg-blue-700 text-white shadow-sm'
-                    : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
-                }`}
-              >
-                <Icon className="h-3.5 w-3.5" aria-hidden="true" />
-                <span>{cat.label}</span>
-              </button>
-            );
-          })}
-        </div>
+        {!fixedCategory ? (
+          <div className="flex flex-wrap gap-1.5">
+            {PRINT_CATEGORIES.map((cat) => {
+              const Icon = CATEGORY_ICONS[cat.key];
+              const isActive = !searchQuery && activeCategory === cat.key;
+              return (
+                <button
+                  key={cat.key}
+                  type="button"
+                  onClick={() => {
+                    onSearchChange('');
+                    const first = PRINT_TOOLS_CATALOG.find((t) => t.category === cat.key);
+                    if (first) onSelectTool(first.id);
+                  }}
+                  className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-bold transition ${
+                    isActive
+                      ? 'border-blue-700 bg-blue-700 text-white shadow-sm'
+                      : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
+                  }`}
+                >
+                  <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span>{cat.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center gap-2">
+            {(() => {
+              const currentCat = PRINT_CATEGORIES.find((c) => c.key === fixedCategory);
+              const Icon = CATEGORY_ICONS[fixedCategory];
+              return (
+                <div className="inline-flex items-center gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-1.5 text-sky-800 shadow-sm">
+                  <Icon className="h-4 w-4 text-sky-600" aria-hidden="true" />
+                  <span className="text-xs font-bold">{pageTitle || currentCat?.label}</span>
+                  <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700">
+                    {filteredTools.length} công cụ
+                  </span>
+                </div>
+              );
+            })()}
+          </div>
+        )}
 
         <div className="relative w-full lg:w-64">
           <Search
@@ -135,7 +159,7 @@ export const PrintHubCatalogHeader: React.FC<PrintHubCatalogHeaderProps> = ({
             type="text"
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Tìm mẫu in (6s, máy lạnh, biên bản...)"
+            placeholder={fixedCategory ? 'Tìm mẫu trong danh mục...' : 'Tìm mẫu in (6s, máy lạnh, biên bản...)'}
             className="w-full rounded-lg border border-slate-300 bg-slate-50 py-1.5 pl-8 pr-3 text-xs text-slate-900 placeholder:text-slate-400 focus:border-blue-600 focus:bg-white focus:outline-none"
           />
         </div>

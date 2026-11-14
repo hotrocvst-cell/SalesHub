@@ -40,7 +40,8 @@ export function useAiAssistant(params: {
     const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [inputText, setInputText] = useState('');
-    const [queryMode, setQueryMode] = useState<'AI' | 'SEARCH'>('AI');
+    // Mặc định ưu tiên chế độ Tìm Tài Liệu Gốc (0 token, tức thì)
+    const [queryMode, setQueryMode] = useState<'AI' | 'SEARCH'>('SEARCH');
     const [isThinking, setIsThinking] = useState(false);
 
     const userStoresKey = userStores.join('|');
@@ -157,7 +158,7 @@ export function useAiAssistant(params: {
     const quickPrompts = documents
         .filter((d) => d.is_active)
         .slice(0, 4)
-        .map((d) => `Tóm tắt nội dung chính trong "${d.title}"`);
+        .map((d) => `Tra cứu "${d.title}"`);
 
     return {
         activeTab,

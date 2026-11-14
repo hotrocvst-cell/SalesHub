@@ -42,7 +42,11 @@ import {
     Crosshair,
     Hash,
     Bot,
-    Printer
+    Printer,
+    LayoutGrid,
+    FileText,
+    Briefcase,
+    Flower2
 } from 'lucide-react';
 
 export interface NavItem {
@@ -141,6 +145,12 @@ export const NAVIGATION_GROUPS: NavGroup[] = [
                 path: '/xep-hang-doanh-thu-luy-ke',
                 icon: Trophy,
                 badge: '⭐ Mới'
+            },
+            {
+                name: 'Xếp hạng Quý NV',
+                path: '/xep-hang-quy-nhan-vien',
+                icon: Award,
+                badge: '🏅 Mới'
             },
             {
                 name: 'Doanh thu lũy kế',
@@ -286,12 +296,44 @@ export const NAVIGATION_GROUPS: NavGroup[] = [
                 path: '/tien-ich-quay-so',
                 icon: Sparkles,
                 badge: '🎲 Mới'
+            }
+        ]
+    },
+    {
+        groupTitle: 'IN ẤN',
+        icon: Printer,
+        colorClass: 'text-sky-700',
+        bgClass: 'bg-sky-100 text-sky-700',
+        items: [
+            {
+                name: 'In Sticker',
+                path: '/in-an/sticker',
+                icon: Tag,
+                badge: '🏷️ 9 mẫu'
             },
             {
-                name: 'In Ấn',
-                path: '/tien-ich-in-an',
-                icon: Printer,
-                badge: '🖨️ Mới'
+                name: 'In Pop-up',
+                path: '/in-an/popup',
+                icon: LayoutGrid,
+                badge: '📐 4 cụm'
+            },
+            {
+                name: 'Phiếu Bán Hàng',
+                path: '/in-an/phieu-ban-hang',
+                icon: FileText,
+                badge: '📝 5 mẫu'
+            },
+            {
+                name: 'Công Việc ST',
+                path: '/in-an/cong-viec',
+                icon: Briefcase,
+                badge: '💼 4 mẫu'
+            },
+            {
+                name: 'In Trang Trí',
+                path: '/in-an/trang-tri',
+                icon: Flower2,
+                badge: '🎨 28 mẫu'
             }
         ]
     },

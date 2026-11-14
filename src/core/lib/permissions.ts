@@ -219,6 +219,21 @@ const RAW_DEFAULT_PAGE_PERMISSIONS: SystemPagePermission[] = [
         badge_color: 'amber'
     },
     {
+        page_key: 'xep_hang_quy_nhan_vien',
+        page_name: 'Xếp hạng Quý NV',
+        path: '/xep-hang-quy-nhan-vien',
+        group_title: 'SỨC KHỎE NHÂN VIÊN',
+        description: 'Báo cáo xếp hạng nhân sự theo Doanh thu và Thi đua lũy kế theo Quý hoặc nhiều tháng',
+        is_enabled: true,
+        allowed_roles: ['ADMIN'],
+        order_index: 7,
+        badge_enabled: true,
+        badge_icon: '🏅',
+        badge_text: 'Mới',
+        badge_color: 'amber',
+        allow_excel_export: false
+    },
+    {
         page_key: 'tong_hop_thi_dua',
         page_name: 'Tổng hợp thi đua',
         path: '/tong-hop-thi-dua',
@@ -543,19 +558,84 @@ const RAW_DEFAULT_PAGE_PERMISSIONS: SystemPagePermission[] = [
         allow_excel_export: false,
         allowed_excel_roles: ['ADMIN']
     },
+    // IN ẤN
     {
-        page_key: 'tien_ich_in_an',
-        page_name: 'In Ấn',
-        path: '/tien-ich-in-an',
-        group_title: 'TIỆN ÍCH BÁN HÀNG',
-        description: 'Trung tâm tạo và in Sticker giá, Pop-up bảng giá, Phiếu hỗ trợ bán hàng, Bảng tên NV, QR/Barcode túi & Trang trí ST',
+        page_key: 'in_sticker',
+        page_name: 'In Sticker',
+        path: '/in-an/sticker',
+        group_title: 'IN ẤN',
+        description: 'Tạo và in tem bát giác giảm %, tem gạch giá, PMH, tem bảo hiểm và tem trả chậm 0%',
         is_enabled: true,
-        allowed_roles: ['ADMIN'], // Theo Rule 4 GEMINI.MD: Mặc định chỉ duy nhất ADMIN
-        order_index: 14.7,
+        allowed_roles: ['ADMIN'],
+        order_index: 14.71,
         badge_enabled: true,
-        badge_icon: '🖨️',
-        badge_text: 'Mới',
+        badge_icon: '🏷️',
+        badge_text: '9 mẫu',
+        badge_color: 'emerald',
+        allow_excel_export: false,
+        allowed_excel_roles: ['ADMIN']
+    },
+    {
+        page_key: 'in_popup',
+        page_name: 'In Pop-up',
+        path: '/in-an/popup',
+        group_title: 'IN ẤN',
+        description: 'Tạo và in Pop-up bảng giá cho Bàn trải nghiệm, LED điện thoại, Điện máy & Pop-up dịch vụ',
+        is_enabled: true,
+        allowed_roles: ['ADMIN'],
+        order_index: 14.72,
+        badge_enabled: true,
+        badge_icon: '📐',
+        badge_text: '4 cụm',
         badge_color: 'blue',
+        allow_excel_export: false,
+        allowed_excel_roles: ['ADMIN']
+    },
+    {
+        page_key: 'in_phieu_ban_hang',
+        page_name: 'Phiếu Bán Hàng',
+        path: '/in-an/phieu-ban-hang',
+        group_title: 'IN ẤN',
+        description: 'Tạo và in phiếu tư vấn trả chậm, phiếu bảo hiểm, thẻ thanh toán, tài khoản và tổng đài ST',
+        is_enabled: true,
+        allowed_roles: ['ADMIN'],
+        order_index: 14.73,
+        badge_enabled: true,
+        badge_icon: '📝',
+        badge_text: '5 mẫu',
+        badge_color: 'amber',
+        allow_excel_export: false,
+        allowed_excel_roles: ['ADMIN']
+    },
+    {
+        page_key: 'in_cong_viec',
+        page_name: 'Công Việc ST',
+        path: '/in-an/cong-viec',
+        group_title: 'IN ẤN',
+        description: 'Tạo và in bảng tên nhân viên ST, Code QR/Barcode túi POS, biên bản nhận hàng và tem dán máy',
+        is_enabled: true,
+        allowed_roles: ['ADMIN'],
+        order_index: 14.74,
+        badge_enabled: true,
+        badge_icon: '💼',
+        badge_text: '4 mẫu',
+        badge_color: 'purple',
+        allow_excel_export: false,
+        allowed_excel_roles: ['ADMIN']
+    },
+    {
+        page_key: 'in_trang_tri',
+        page_name: 'In Trang Trí',
+        path: '/in-an/trang-tri',
+        group_title: 'IN ẤN',
+        description: 'Tạo và in dây treo trần và bộ họa tiết cắt dán trang trí tại ST',
+        is_enabled: true,
+        allowed_roles: ['ADMIN'],
+        order_index: 14.75,
+        badge_enabled: true,
+        badge_icon: '🎨',
+        badge_text: '28 mẫu',
+        badge_color: 'rose',
         allow_excel_export: false,
         allowed_excel_roles: ['ADMIN']
     },
@@ -715,11 +795,13 @@ export function auditRouteCoverage(currentPermissions: SystemPagePermission[]): 
 }
 
 export const DEPRECATED_SYSTEM_PATHS = new Set<string>([
-    '/bc-realtime-con-lai'
+    '/bc-realtime-con-lai',
+    '/tien-ich-in-an'
 ]);
 
 export const DEPRECATED_SYSTEM_PAGE_KEYS = new Set<string>([
-    'bc_realtime_con_lai'
+    'bc_realtime_con_lai',
+    'tien_ich_in_an'
 ]);
 
 /**
@@ -810,9 +892,9 @@ export async function fetchSystemPagePermissions(): Promise<{ success: boolean; 
                 supabase
                     .from('system_page_permissions')
                     .delete()
-                    .or('path.eq./bc-realtime-con-lai,page_key.eq.bc_realtime_con_lai')
+                    .or('path.eq./bc-realtime-con-lai,page_key.eq.bc_realtime_con_lai,path.eq./tien-ich-in-an,page_key.eq.tien_ich_in_an')
                     .then(() => {
-                        console.log('Đã dọn dẹp route cũ bc_realtime_con_lai khỏi Supabase');
+                        console.log('Đã dọn dẹp các route cũ deprecated khỏi Supabase');
                     });
             }
 

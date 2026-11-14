@@ -141,10 +141,7 @@ export default function PerformanceKpiCards({ summary, showWorkHours = false }: 
                 </div>
 
                 <div className="mt-3 flex items-center justify-between text-xs pt-2.5 border-t border-blue-200/70 leading-normal">
-                    <span className="text-blue-950 font-medium">Doanh thu trả chậm:</span>
-                    <strong className="font-mono tabular-nums text-blue-700 font-bold text-sm">
-                        {topInstallmentEmp ? `${topInstallmentEmp.installment_revenue.toLocaleString('vi-VN')} tr` : '0 tr'}
-                    </strong>
+
                 </div>
                 <div className="flex items-center justify-between text-[11px] text-slate-600 mt-1 leading-normal">
                     <span>Tỷ lệ trả chậm:</span>

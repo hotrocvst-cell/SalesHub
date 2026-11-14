@@ -187,7 +187,7 @@ export default function AiAssistantPage() {
                         isSyncingDocs={assistant.isSyncingDocs}
                         onChangeInput={assistant.setInputText}
                         onChangeMode={assistant.setQueryMode}
-                        onSend={(q) => assistant.handleSendMessage(q)}
+                        onSend={(q, mode) => assistant.handleSendMessage(q, mode)}
                         onOpenImage={setLightboxImage}
                     />
                 )}

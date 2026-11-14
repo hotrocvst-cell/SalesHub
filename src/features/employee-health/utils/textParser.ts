@@ -1,9 +1,9 @@
 import type { CampaignDictItem } from '../../../core/lib/storage';
-import type { ParsedTargetRow } from './excelHelper';
+import { matchCampaignColumns, type ParsedTargetRow } from './campaignMatchHelper';
 import { normalizeToMillion } from '../../../core/lib/formatters';
 
 /**
- * Phân tích chuỗi văn bản copy từ Excel / Google Sheet / Clipboard
+ * Phân tích chuỗi văn bản copy từ Excel / Google Sheet / CSV / Clipboard
  */
 export function parseClipboardTargetText(
     rawText: string,
@@ -26,7 +26,7 @@ export function parseClipboardTargetText(
 
     let empIdCol = 0;
     let revCol = -1;
-    const campColMap: { raw_key: string; colIndex: number }[] = [];
+    let campColMap: { raw_key: string; colIndex: number }[] = [];
 
     let startIndex = 0;
     if (hasHeader) {
@@ -38,17 +38,15 @@ export function parseClipboardTargetText(
             } else if (lower.includes('doanh thu') || lower.includes('revenue') || lower.includes('target dt')) {
                 revCol = colIdx;
             }
-
-            campaigns.forEach(c => {
-                if (
-                    part.includes(`[${c.raw_key}]`) ||
-                    lower.includes(c.display_name.toLowerCase()) ||
-                    lower.includes(c.raw_key.toLowerCase())
-                ) {
-                    campColMap.push({ raw_key: c.raw_key, colIndex: colIdx });
-                }
-            });
         });
+
+        // Bỏ qua cột mã NV và cột doanh thu khi tìm kiếm các cột thi đua
+        const candidateHeaders = firstParts.map((part, idx) => {
+            if (idx === empIdCol || idx === revCol) return '';
+            return part;
+        });
+
+        campColMap = matchCampaignColumns(candidateHeaders, campaigns);
     }
 
     for (let i = startIndex; i < lines.length; i++) {
@@ -100,16 +98,45 @@ export function parseClipboardTargetText(
     return results;
 }
 
-function splitLineIntoCells(line: string): string[] {
+/**
+ * Tách một dòng thành các ô, hỗ trợ TSV (tab) và CSV có dấu ngoặc kép bọc chuỗi (quote-aware)
+ */
+export function splitLineIntoCells(line: string): string[] {
     if (line.includes('\t')) {
         return line.split('\t').map(p => p.trim());
     }
-    if (line.includes(',')) {
-        return line.split(',').map(p => p.trim());
+
+    // Nếu dòng có dấu phẩy hoặc chấm phẩy
+    if (line.includes(',') || line.includes(';')) {
+        const delimiter = line.includes(';') ? ';' : ',';
+        const result: string[] = [];
+        let current = '';
+        let inQuotes = false;
+
+        for (let i = 0; i < line.length; i++) {
+            const char = line[i];
+            if (char === '"') {
+                if (inQuotes && line[i + 1] === '"') {
+                    // Ký tự nháy kép escaped: ""
+                    current += '"';
+                    i++;
+                } else {
+                    inQuotes = !inQuotes;
+                }
+            } else if (char === delimiter && !inQuotes) {
+                result.push(current.trim());
+                current = '';
+            } else {
+                current += char;
+            }
+        }
+        result.push(current.trim());
+
+        if (result.length > 1) {
+            return result;
+        }
     }
-    if (line.includes(';')) {
-        return line.split(';').map(p => p.trim());
-    }
+
     return line.split(/\s{2,}/).map(p => p.trim());
 }
 

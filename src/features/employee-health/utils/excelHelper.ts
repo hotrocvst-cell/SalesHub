@@ -1,14 +1,10 @@
 import ExcelJS from 'exceljs';
 import type { EmployeeItem, CampaignDictItem } from '../../../core/lib/storage';
 import { getShortStoreName, normalizeToMillion } from '../../../core/lib/formatters';
+import { matchCampaignColumns, type ParsedTargetRow } from './campaignMatchHelper';
+import { parseClipboardTargetText } from './textParser';
 
-export interface ParsedTargetRow {
-    employee_id: string;
-    full_name?: string;
-    store_name?: string;
-    target_revenue?: number;
-    campaign_targets: Record<string, number>;
-}
+export type { ParsedTargetRow };
 
 /**
  * 1. XUẤT FILE EXCEL MẪU DỰA THEO CÁC CỘT ĐANG HIỂN THỊ
@@ -139,6 +135,12 @@ export async function parseExcelFile(
     file: File,
     campaigns: CampaignDictItem[]
 ): Promise<ParsedTargetRow[]> {
+    // Nếu là file CSV, đọc trực tiếp bằng bộ phân tích văn bản (hỗ trợ quote-aware CSV)
+    if (file.name.toLowerCase().endsWith('.csv')) {
+        const text = await file.text();
+        return parseClipboardTargetText(text, campaigns);
+    }
+
     const arrayBuffer = await file.arrayBuffer();
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(arrayBuffer);
@@ -150,31 +152,40 @@ export async function parseExcelFile(
 
     // 1. Quét hàng Header để nhận diện cột
     const headerRow = worksheet.getRow(1);
+    const maxCols = Math.max(headerRow.cellCount || 0, worksheet.columnCount || 0);
+    const rawHeaders: string[] = [];
+
+    for (let col = 1; col <= maxCols; col++) {
+        const val = headerRow.getCell(col).value;
+        rawHeaders.push(String(val || '').trim());
+    }
+
     let empIdCol = -1;
     let revCol = -1;
-    const campCols: { raw_key: string; colIndex: number }[] = [];
 
-    headerRow.eachCell((cell, colNumber) => {
-        const text = String(cell.value || '').trim();
+    rawHeaders.forEach((text, idx) => {
+        const colNumber = idx + 1;
         const lower = text.toLowerCase();
-
         if (lower.includes('mã nv') || lower.includes('employee_id') || lower === 'manv') {
             empIdCol = colNumber;
         } else if (lower.includes('doanh thu') || lower.includes('revenue') || lower.includes('target dt')) {
             revCol = colNumber;
         }
-
-        // Tìm khớp cột thi đua dựa trên [RAW_KEY] hoặc tên hiển thị
-        campaigns.forEach(c => {
-            if (
-                text.includes(`[${c.raw_key}]`) ||
-                lower.includes(c.display_name.toLowerCase()) ||
-                lower.includes(c.raw_key.toLowerCase())
-            ) {
-                campCols.push({ raw_key: c.raw_key, colIndex: colNumber });
-            }
-        });
     });
+
+    // Lọc bỏ cột Mã NV và Doanh thu để tránh match nhầm thi đua
+    const candidateHeaders = rawHeaders.map((h, idx) => {
+        const colNumber = idx + 1;
+        if (colNumber === empIdCol || colNumber === revCol) return '';
+        return h;
+    });
+
+    // Khớp 1-to-1 các cột thi đua theo thuật toán ưu tiên chính xác
+    const matchedCamps = matchCampaignColumns(candidateHeaders, campaigns);
+    const campCols = matchedCamps.map(m => ({
+        raw_key: m.raw_key,
+        colIndex: m.colIndex + 1
+    }));
 
     // Nếu không tìm thấy cột Mã NV ở header, mặc định lấy cột 1
     if (empIdCol === -1) empIdCol = 1;

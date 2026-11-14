@@ -277,8 +277,8 @@ export const PRINT_TOOLS_CATALOG: PrintToolMeta[] = [
   {
     id: 'wrk_stickermay',
     category: 'work',
-    name: 'Sticker Dán Máy Quầy Trải Nghiệm',
-    shortDesc: 'Khung 650x320px dán máy quầy (Máy trưng bày / Liên hệ NV)',
+    name: 'Sticker Dán Máy Trải Nghiệm',
+    shortDesc: 'Khung 650x320px dán máy tại ST (Máy trưng bày / Liên hệ NV)',
     variants: [
       { label: 'Mẫu 01 (Máy trưng bày)', rel: 'in-cong-viec/in-sticker-may-01.html' },
       { label: 'Mẫu 02 (Liên hệ NV)', rel: 'in-cong-viec/in-sticker-may-02.html' },
@@ -290,7 +290,7 @@ export const PRINT_TOOLS_CATALOG: PrintToolMeta[] = [
     id: 'dec_ceiling',
     category: 'decor',
     name: 'Dây Treo Trần (01–04)',
-    shortDesc: '4 mẫu dây treo đen trắng nét đậm, cắt dán trang trí quầy kệ',
+    shortDesc: '4 mẫu dây treo đen trắng nét đậm, cắt dán trang trí tại ST',
     variants: [{ label: 'Chọn mẫu 01–04', rel: 'decor/ceiling' }],
   },
   {

@@ -82,6 +82,13 @@ export interface ChatSourceRef {
     category?: string;
 }
 
+export interface ChatClarificationOption {
+    label: string;
+    query: string;
+    documentId?: string;
+    category?: string;
+}
+
 export interface ChatMessage {
     id: string;
     role: 'user' | 'assistant';
@@ -93,6 +100,8 @@ export interface ChatMessage {
     fromCache?: boolean;
     modelUsed?: string;
     isError?: boolean;
+    clarificationOptions?: ChatClarificationOption[];
+    originalQuestion?: string;
 }
 
 export interface AiChatSession {

@@ -9,13 +9,18 @@ import {
     Zap,
     Search,
     ZoomIn,
-    AlertTriangle
+    AlertTriangle,
+    Sparkles,
+    HelpCircle,
+    ArrowRight
 } from 'lucide-react';
 import type { ChatAttachmentImage, ChatMessage } from '../types/aiAssistantTypes';
 
 interface Props {
     message: ChatMessage;
     onOpenImage: (image: ChatAttachmentImage) => void;
+    onSelectClarification?: (query: string, mode?: 'AI' | 'SEARCH') => void;
+    onAskAiSynthesis?: (question: string) => void;
 }
 
 function renderInlineFormatting(text: string): React.ReactNode[] {
@@ -147,7 +152,12 @@ function SimpleMarkdownContent({ content }: { content: string }) {
     return <div className="text-xs sm:text-[13px] text-slate-700 leading-relaxed">{nodes}</div>;
 }
 
-export default function ChatMessageBubble({ message, onOpenImage }: Props) {
+export default function ChatMessageBubble({
+    message,
+    onOpenImage,
+    onSelectClarification,
+    onAskAiSynthesis
+}: Props) {
     const [copied, setCopied] = useState(false);
     const isUser = message.role === 'user';
 
@@ -236,6 +246,30 @@ export default function ChatMessageBubble({ message, onOpenImage }: Props) {
                 {/* Nội dung phản hồi */}
                 <SimpleMarkdownContent content={displayContent} />
 
+                {/* Danh sách lựa chọn làm rõ khi có nhiều tài liệu tương đồng (VD: "QR MÁY LỌC NƯỚC", "QR Nồi cơm"...) */}
+                {message.clarificationOptions && message.clarificationOptions.length > 0 && (
+                    <div className="pt-1.5 space-y-2 border-t border-amber-200/70 bg-amber-50/70 p-2.5 rounded-2xl border">
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-amber-950">
+                            <HelpCircle className="w-4 h-4 text-amber-600 shrink-0" aria-hidden="true" />
+                            <span>Chạm chọn tài liệu cụ thể bạn muốn xem nguyên văn:</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5 pt-0.5">
+                            {message.clarificationOptions.map((opt, idx) => (
+                                <button
+                                    key={idx}
+                                    type="button"
+                                    onClick={() => onSelectClarification?.(opt.query, 'SEARCH')}
+                                    className="px-3 py-1.5 rounded-xl bg-white hover:bg-amber-100/80 border border-amber-300 hover:border-amber-400 text-slate-800 text-xs font-bold transition flex items-center gap-1.5 shadow-2xs cursor-pointer active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                                >
+                                    <Search className="w-3.5 h-3.5 text-amber-600 shrink-0" aria-hidden="true" />
+                                    <span>{opt.label}</span>
+                                    <ArrowRight className="w-3 h-3 text-amber-500 shrink-0 opacity-60" aria-hidden="true" />
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
                 {/* Hình ảnh gốc đính kèm (tối đa 3 ảnh) */}
                 {message.images && message.images.length > 0 && (
                     <div className="pt-1 space-y-1.5">
@@ -287,6 +321,24 @@ export default function ChatMessageBubble({ message, onOpenImage }: Props) {
                                 {src.documentTitle}
                             </span>
                         ))}
+                    </div>
+                )}
+
+                {/* Tùy chọn chuyển sang AI tổng hợp nếu muốn tóm tắt / kịch bản */}
+                {message.mode === 'SEARCH' && !isError && onAskAiSynthesis && (
+                    <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2 flex-wrap">
+                        <span className="text-[10.5px] text-slate-500 italic">
+                            💡 Cần AI tóm tắt ngắn hoặc viết kịch bản tư vấn?
+                        </span>
+                        <button
+                            type="button"
+                            onClick={() => onAskAiSynthesis(message.originalQuestion || displayContent)}
+                            className="px-2.5 py-1 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-[11px] font-bold flex items-center gap-1.5 transition cursor-pointer active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                            title="Chuyển câu hỏi này sang chế độ AI Tổng Hợp"
+                        >
+                            <Sparkles className="w-3.5 h-3.5 text-blue-600 shrink-0" aria-hidden="true" />
+                            <span>Nhờ AI Tổng Hợp Lại</span>
+                        </button>
                     </div>
                 )}
             </div>

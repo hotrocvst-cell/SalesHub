@@ -187,7 +187,7 @@ export function calculateDataStatus(input: StatusCalculationInput): {
             : latestEmpRevDate
                 ? `Phiên doanh thu nhân sự gần nhất ngày ${latestEmpRevDate}. Cần nạp phiên ngày ${expectedDate} (n-1).`
                 : `Chưa có phiên doanh thu nhân sự nào được lưu cho tháng ${selectedMonth}/${selectedYear}.`,
-        actionUrl: '/cap-nhat-luy-ke-nhan-vien',
+        actionUrl: '/cap-nhat-nhan-vien-ocr',
         actionLabel: 'Cập nhật số liệu NV'
     };
 
@@ -232,7 +232,7 @@ export function calculateDataStatus(input: StatusCalculationInput): {
             : latestEmpCampDate
                 ? `Phiên thi đua nhân viên gần nhất ngày ${latestEmpCampDate}. Cần nạp phiên ngày ${expectedDate} (n-1).`
                 : `Chưa có phiên thi đua nhân viên nào được bóc tách cho tháng ${selectedMonth}/${selectedYear}.`,
-        actionUrl: '/cap-nhat-luy-ke-nhan-vien',
+        actionUrl: '/cap-nhat-nhan-vien-ocr',
         actionLabel: 'Nạp thi đua NV'
     };
 
@@ -365,7 +365,7 @@ export function calculateDataStatus(input: StatusCalculationInput): {
             : latestHoursDate
                 ? `Phiên giờ công gần nhất ngày ${latestHoursDate}. Cần nạp phiên ngày ${expectedDate} (n-1).`
                 : `Chưa có phiên giờ công nào cho ${targetStore !== 'all' ? targetStore : 'các ST'} trong tháng ${selectedMonth}/${selectedYear}.`,
-        actionUrl: '/cap-nhat-luy-ke-nhan-vien',
+        actionUrl: '/cap-nhat-nhan-vien-ocr',
         actionLabel: 'Nạp giờ công'
     };
 

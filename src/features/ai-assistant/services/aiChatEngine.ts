@@ -3,7 +3,11 @@ import {
     sanitizeCachedGeminiModel
 } from '../../data-update/services/geminiApiKeyService';
 import { removeVietnameseTones } from '../utils/markdownChunker';
-import type { ScoredKnowledgeChunk } from '../utils/retrievalScorer';
+import {
+    detectDisambiguationOptions,
+    extractSearchKeywords,
+    type ScoredKnowledgeChunk
+} from '../utils/retrievalScorer';
 import { getSignedImageUrlsBatch } from './knowledgeStorageService';
 import { getCachedFaqAnswer, saveFaqCacheEntry } from './faqCacheService';
 import { resolveImageAttachments, searchKnowledgeChunksForUser } from './knowledgeService';
@@ -151,11 +155,12 @@ export async function askAiAssistant(params: {
         }
     }
 
+    const keywords = extractSearchKeywords(cleanQuestion);
     const { chunks, error: searchErr } = await searchKnowledgeChunksForUser({
         query: cleanQuestion,
         userRole: params.userRole,
         userStores: params.userStores,
-        limit: 5
+        limit: 8
     });
 
     if (searchErr) {
@@ -180,11 +185,37 @@ export async function askAiAssistant(params: {
         };
     }
 
+    const disambiguation = detectDisambiguationOptions(chunks, cleanQuestion, keywords);
+
     if (params.mode === 'SEARCH') {
         const [images, sources] = await Promise.all([
             resolveImageAttachments(chunks, MAX_ATTACHMENT_IMAGES_PER_REPLY, getSignedImageUrlsBatch),
             Promise.resolve(extractUniqueSources(chunks))
         ]);
+
+        if (disambiguation.needsDisambiguation && disambiguation.options.length >= 2) {
+            const optionsList = disambiguation.options
+                .map((opt, idx) => `${idx + 1}. **${opt.label}**${opt.category ? ` *(${opt.category})*` : ''}`)
+                .join('\n');
+
+            const clarifyContent = `Tìm thấy **${disambiguation.options.length} tài liệu** có nội dung tương đồng về **"${cleanQuestion}"**.\n\n` +
+                `Bạn đang muốn xem tài liệu nào dưới đây? Vui lòng bấm vào nút tương ứng bên dưới để xem chính xác nguyên văn & hình ảnh gốc:\n\n` +
+                `${optionsList}\n\n` +
+                `*(Bạn cũng có thể xem nhanh các đoạn trích liên quan bên dưới hoặc bấm nút **Nhờ AI Tổng Hợp Lại** nếu muốn AI diễn giải chung).*`;
+
+            return {
+                id: msgId,
+                role: 'assistant',
+                content: clarifyContent,
+                createdAt: new Date().toISOString(),
+                mode: 'SEARCH',
+                sources,
+                images,
+                clarificationOptions: disambiguation.options,
+                originalQuestion: cleanQuestion
+            };
+        }
+
         const excerpts = chunks
             .slice(0, 4)
             .map((c, idx) => `### ${idx + 1}. ${c.document_title}${c.section_title && c.section_title !== c.document_title ? ` — ${c.section_title}` : ''}\n${c.content}`)
@@ -197,7 +228,30 @@ export async function askAiAssistant(params: {
             createdAt: new Date().toISOString(),
             mode: 'SEARCH',
             sources,
-            images
+            images,
+            originalQuestion: cleanQuestion
+        };
+    }
+
+    // Nếu người dùng chọn mode AI nhưng từ khóa quá ngắn/mơ hồ và có nhiều tài liệu tương đồng
+    if (params.mode === 'AI' && disambiguation.needsDisambiguation && disambiguation.options.length >= 2 && keywords.length <= 2) {
+        const optionsList = disambiguation.options
+            .map((opt, idx) => `${idx + 1}. **${opt.label}**${opt.category ? ` *(${opt.category})*` : ''}`)
+            .join('\n');
+
+        const clarifyContent = `Kho tài liệu có **${disambiguation.options.length} chủ đề** liên quan đến từ khóa **"${cleanQuestion}"**.\n\n` +
+            `Bạn đang cần hỏi hoặc tư vấn về nội dung nào dưới đây? Vui lòng chọn chủ đề để Trợ lý giải đáp đúng trọng tâm nhất:\n\n` +
+            `${optionsList}`;
+
+        return {
+            id: msgId,
+            role: 'assistant',
+            content: clarifyContent,
+            createdAt: new Date().toISOString(),
+            mode: 'AI',
+            sources: extractUniqueSources(chunks),
+            clarificationOptions: disambiguation.options,
+            originalQuestion: cleanQuestion
         };
     }
 
@@ -278,7 +332,8 @@ NGUYÊN TẮC BẮT BUỘC:
             mode: 'AI',
             sources,
             images,
-            modelUsed
+            modelUsed,
+            originalQuestion: cleanQuestion
         };
     } catch (err: any) {
         const topScore = chunks[0]?.score || 0;

@@ -1,5 +1,5 @@
 import { removeVietnameseTones } from './markdownChunker';
-import type { KnowledgeChunk } from '../types/aiAssistantTypes';
+import type { KnowledgeChunk, ChatClarificationOption } from '../types/aiAssistantTypes';
 
 const VN_STOPWORDS = new Set([
     'la', 'gi', 'cua', 'cho', 'nhu', 'the', 'nao', 'co', 'duoc', 'khong', 'ko',
@@ -140,5 +140,90 @@ export function scoreAndFilterKnowledgeChunks(
     }
 
     return filtered.slice(0, limit);
+}
+
+export interface DisambiguationResult {
+    needsDisambiguation: boolean;
+    options: ChatClarificationOption[];
+}
+
+/**
+ * Nhận diện trường hợp nhiều tài liệu có tính tương đồng cao hoặc từ khóa tìm kiếm chung chung (VD: "QR", "Bảo hành", "Sim"...)
+ * để Trợ lý đặt câu hỏi gợi ý cho người dùng chọn chính xác tài liệu cần xem, tránh hiển thị lộn xộn.
+ */
+export function detectDisambiguationOptions(
+    chunks: ScoredKnowledgeChunk[],
+    query: string,
+    keywords: string[]
+): DisambiguationResult {
+    if (!chunks || chunks.length === 0) {
+        return { needsDisambiguation: false, options: [] };
+    }
+
+    const docMap = new Map<string, {
+        documentId: string;
+        title: string;
+        category?: string;
+        maxScore: number;
+        hasExactPhrase: boolean;
+    }>();
+
+    const normalizedQuery = removeVietnameseTones(query).trim().toLowerCase();
+
+    chunks.forEach((c) => {
+        const title = (c.document_title || 'Tài liệu nội bộ').trim();
+        const normTitle = removeVietnameseTones(title).toLowerCase();
+        const hasExactPhrase = normalizedQuery.length >= 4 && normTitle.includes(normalizedQuery);
+        const existing = docMap.get(c.document_id);
+
+        if (!existing) {
+            docMap.set(c.document_id, {
+                documentId: c.document_id,
+                title,
+                category: c.category,
+                maxScore: c.score || 0,
+                hasExactPhrase
+            });
+        } else {
+            if ((c.score || 0) > existing.maxScore) {
+                existing.maxScore = c.score || 0;
+            }
+            if (hasExactPhrase) existing.hasExactPhrase = true;
+        }
+    });
+
+    const uniqueDocs = Array.from(docMap.values()).sort((a, b) => b.maxScore - a.maxScore);
+
+    // Nếu chỉ có 1 tài liệu duy nhất -> Không cần làm rõ
+    if (uniqueDocs.length < 2) {
+        return { needsDisambiguation: false, options: [] };
+    }
+
+    // Nếu có 1 tài liệu khớp nguyên cụm từ dài độc nhất và không phải câu hỏi so sánh
+    const exactPhraseDocs = uniqueDocs.filter((d) => d.hasExactPhrase);
+    if (exactPhraseDocs.length === 1 && !MULTI_TOPIC_CUES.some((cue) => ` ${normalizedQuery} `.includes(cue))) {
+        return { needsDisambiguation: false, options: [] };
+    }
+
+    const topScore = uniqueDocs[0].maxScore;
+    const secondScore = uniqueDocs[1].maxScore;
+    const isShortQuery = normalizedQuery.length <= 16 || keywords.length <= 2;
+    const isScoreCompetitive = topScore > 0 && secondScore >= topScore * 0.45;
+
+    if (isShortQuery || isScoreCompetitive) {
+        const options: ChatClarificationOption[] = uniqueDocs.slice(0, 5).map((doc) => ({
+            label: doc.title,
+            query: doc.title,
+            documentId: doc.documentId,
+            category: doc.category
+        }));
+
+        return {
+            needsDisambiguation: true,
+            options
+        };
+    }
+
+    return { needsDisambiguation: false, options: [] };
 }
 

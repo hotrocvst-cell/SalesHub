@@ -33,6 +33,7 @@ Là lớp điều hành và tác nghiệp nhanh dành cho ST: cho phép nạp tr
   - Sức khỏe nhân viên & Thi đua: Tổng hợp xếp hạng, Xếp hạng DT lũy kế, Hiệu quả NV lũy kế, Tiến độ/Tổng hợp/Tra cứu/Cấn trừ/Trọng tâm thi đua, Chi tiết nhân viên.
   - Dữ liệu & Phiên làm việc: Cập nhật số liệu LK & NV (dán dữ liệu & AI OCR), Quản lý phiên nhân viên, Quản lý bản ghi ST, Trạng thái dữ liệu, Dữ liệu mẫu.
   - Tiện ích bán hàng & Hỗ trợ ST: Cấp mã & Quản lý kho voucher, Sinh mã đơn hàng, Cân tồn kho, Kiểm quỹ - Kiểm tiền, Xmusic Playlist, Trợ lý AI, Hỗ trợ & Góp ý, Đấu trường giải trí.
+  - Phân hệ In Ấn: In Sticker, In Pop-up, Phiếu Bán Hàng, Công Việc ST, In Trang Trí.
   - Hệ thống & Phân quyền: Đăng nhập/Đăng ký/Onboarding xét duyệt tài khoản, Cấu hình ST & NV, Cấu hình thi đua, Mục tiêu nhân viên, Phân quyền ST, Tài khoản trải nghiệm (`Guest` bị khóa cứng các route cấu hình/nạp liệu), Quản trị hệ thống.
 - **Chiến lược hạ tầng & bảo mật (Free-First)**: 100% không dùng hạ tầng trả phí (Supabase Free, Cloudflare Pages chính, Netlify dự phòng); Row Level Security (RLS) tại Supabase là chốt chặn bảo mật cuối cùng; Cloud-first cho mọi dữ liệu dùng chung (LocalStorage chỉ làm cache/dự phòng offline).
 - **Quy chuẩn số liệu & nghiệp vụ**:
