@@ -20,7 +20,7 @@ import {
 import { Trophy, CheckCircle2, AlertCircle } from 'lucide-react';
 import ExcelJS from 'exceljs';
 import html2canvas from 'html2canvas';
-import { calculate8KScale } from '../../shared/utils/exportImage';
+import { calculate8KScale, buildReportImageFileName } from '../../shared/utils/exportImage';
 
 export default function EmployeeCumulativeRankingPage() {
     const reportRef = useRef<HTMLDivElement>(null);
@@ -451,7 +451,11 @@ export default function EmployeeCumulativeRankingPage() {
 
             if (mode === 'DOWNLOAD') {
                 const link = document.createElement('a');
-                link.download = `XepHangDoanhThuLuyKe_${fromDate}_den_${toDate}_8K.png`;
+                link.download = buildReportImageFileName(
+                    'Xep_Hang_Luy_Ke',
+                    selectedStore,
+                    `${fromDate}_den_${toDate}`
+                );
                 link.href = canvas.toDataURL('image/png');
                 link.click();
                 showToast('✅ Đã tải xuống ảnh báo cáo 8K thành công!');

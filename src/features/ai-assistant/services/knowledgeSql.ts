@@ -16,13 +16,31 @@ CREATE TABLE IF NOT EXISTS public.knowledge_documents (
     image_paths TEXT[] DEFAULT '{}'::TEXT[],         -- Đường dẫn ảnh gốc trong Private Bucket
     allowed_roles TEXT[] NOT NULL DEFAULT '{ALL}'::TEXT[],
     allowed_stores TEXT[] NOT NULL DEFAULT '{ALL}'::TEXT[],
+    valid_until DATE NOT NULL DEFAULT '2030-12-31',  -- Thời hạn áp dụng (Mặc định 31/12/2030)
+    view_count INTEGER NOT NULL DEFAULT 0,           -- Lượt tra cứu tích lũy toàn thời gian
+    last_viewed_at TIMESTAMPTZ DEFAULT NULL,         -- Lần tra cứu gần nhất
     is_active BOOLEAN NOT NULL DEFAULT true,
     created_by TEXT DEFAULT 'ADMIN',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 2. BẢNG PHÂN ĐOẠN TRI THỨC PHỤC VỤ RAG & TÌM KIẾM NHANH (KNOWLEDGE CHUNKS)
+-- CẬP NHẬT AN TOÀN CHO HỆ THỐNG ĐÃ TỒN TẠI BẢNG TRƯỚC ĐÓ:
+ALTER TABLE public.knowledge_documents
+    ADD COLUMN IF NOT EXISTS valid_until DATE NOT NULL DEFAULT '2030-12-31',
+    ADD COLUMN IF NOT EXISTS view_count INTEGER NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS last_viewed_at TIMESTAMPTZ DEFAULT NULL;
+
+-- 2. BẢNG THỐNG KÊ LƯỢT TRA CỨU THEO NGÀY SIÊU NHẸ (KNOWLEDGE DAILY STATS)
+-- Mục đích: Đếm top tài liệu hot theo tuần (Thứ Hai -> CN), theo tháng, không làm phình DB
+CREATE TABLE IF NOT EXISTS public.knowledge_daily_stats (
+    document_id UUID NOT NULL REFERENCES public.knowledge_documents(id) ON DELETE CASCADE,
+    view_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    view_count INTEGER NOT NULL DEFAULT 1,
+    PRIMARY KEY (document_id, view_date)
+);
+
+-- 3. BẢNG PHÂN ĐOẠN TRI THỨC PHỤC VỤ RAG & TÌM KIẾM NHANH (KNOWLEDGE CHUNKS)
 CREATE TABLE IF NOT EXISTS public.knowledge_chunks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     document_id UUID NOT NULL REFERENCES public.knowledge_documents(id) ON DELETE CASCADE,
@@ -36,7 +54,7 @@ CREATE TABLE IF NOT EXISTS public.knowledge_chunks (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 3. BẢNG CACHE CÂU HỎI THƯỜNG GẶP (GIẢM TẢI GEMINI KHI 50-70 USER CÙNG HỎI)
+-- 4. BẢNG CACHE CÂU HỎI THƯỜNG GẶP (GIẢM TẢI GEMINI KHI 50-70 USER CÙNG HỎI)
 CREATE TABLE IF NOT EXISTS public.knowledge_faq_cache (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     question_hash TEXT NOT NULL,
@@ -51,7 +69,7 @@ CREATE TABLE IF NOT EXISTS public.knowledge_faq_cache (
     UNIQUE (question_hash, allowed_roles, allowed_stores)
 );
 
--- 4. BẢNG LỊCH SỬ CHAT CÓ GIỚI HẠN THEO TÀI KHOẢN (AI CHAT SESSIONS)
+-- 5. BẢNG LỊCH SỬ CHAT CÓ GIỚI HẠN THEO TÀI KHOẢN (AI CHAT SESSIONS)
 CREATE TABLE IF NOT EXISTS public.ai_chat_sessions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     employee_id TEXT NOT NULL,
@@ -62,10 +80,12 @@ CREATE TABLE IF NOT EXISTS public.ai_chat_sessions (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 5. CHỈ MỤC TĂNG TỐC TÌM KIẾM & LỌC PHÂN QUYỀN
+-- 6. CHỈ MỤC TĂNG TỐC TÌM KIẾM & LỌC PHÂN QUYỀN
 CREATE INDEX IF NOT EXISTS idx_kdocs_roles ON public.knowledge_documents USING GIN (allowed_roles);
 CREATE INDEX IF NOT EXISTS idx_kdocs_stores ON public.knowledge_documents USING GIN (allowed_stores);
 CREATE INDEX IF NOT EXISTS idx_kdocs_active ON public.knowledge_documents (is_active, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_kdocs_validity ON public.knowledge_documents (is_active, valid_until, view_count DESC);
+CREATE INDEX IF NOT EXISTS idx_kdaily_date ON public.knowledge_daily_stats (view_date DESC);
 
 CREATE INDEX IF NOT EXISTS idx_kchunks_doc_id ON public.knowledge_chunks (document_id);
 CREATE INDEX IF NOT EXISTS idx_kchunks_roles ON public.knowledge_chunks USING GIN (allowed_roles);
@@ -75,14 +95,18 @@ CREATE INDEX IF NOT EXISTS idx_kchunks_fts ON public.knowledge_chunks USING GIN 
 CREATE INDEX IF NOT EXISTS idx_kfaq_hash ON public.knowledge_faq_cache (question_hash);
 CREATE INDEX IF NOT EXISTS idx_chat_sessions_emp ON public.ai_chat_sessions (employee_id, updated_at DESC);
 
--- 6. KÍCH HOẠT ROW LEVEL SECURITY (RLS)
+-- 7. KÍCH HOẠT ROW LEVEL SECURITY (RLS)
 ALTER TABLE public.knowledge_documents ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.knowledge_daily_stats ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.knowledge_chunks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.knowledge_faq_cache ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ai_chat_sessions ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Allow read/write knowledge_documents" ON public.knowledge_documents;
 CREATE POLICY "Allow read/write knowledge_documents" ON public.knowledge_documents FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow read/write knowledge_daily_stats" ON public.knowledge_daily_stats;
+CREATE POLICY "Allow read/write knowledge_daily_stats" ON public.knowledge_daily_stats FOR ALL USING (true) WITH CHECK (true);
 
 DROP POLICY IF EXISTS "Allow read/write knowledge_chunks" ON public.knowledge_chunks;
 CREATE POLICY "Allow read/write knowledge_chunks" ON public.knowledge_chunks FOR ALL USING (true) WITH CHECK (true);

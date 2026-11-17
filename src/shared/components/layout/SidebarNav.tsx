@@ -39,6 +39,7 @@ import {
     Shuffle,
     FileSpreadsheet,
     Camera,
+    Radio,
     Crosshair,
     Hash,
     Bot,
@@ -110,6 +111,12 @@ export const NAVIGATION_GROUPS: NavGroup[] = [
                 name: 'Nhịp Doanh Thu',
                 path: '/nhip-doanh-thu',
                 icon: TrendingUp
+            },
+            {
+                name: 'Xuất Báo Cáo ST',
+                path: '/trung-tam-xuat-anh-bao-cao',
+                icon: Layers,
+                badge: '⚡ Hub'
             }
         ]
     },
@@ -296,6 +303,12 @@ export const NAVIGATION_GROUPS: NavGroup[] = [
                 path: '/tien-ich-quay-so',
                 icon: Sparkles,
                 badge: '🎲 Mới'
+            },
+            {
+                name: 'Phát Loa & Ghi Hình KM',
+                path: '/phat-loa-ghi-hinh-km',
+                icon: Radio,
+                badge: '📹 Mới'
             }
         ]
     },

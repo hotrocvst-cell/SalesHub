@@ -57,15 +57,16 @@ export default function EmployeeCampaignMatrixPage() {
 
         if (empRes.success) setEmployees(empRes.data);
 
-        // Chỉ lấy các NHÓM thi đua đang kích hoạt (is_active)
-        const activeCamps = (campRes.data || []).filter((c: any) => c.is_active);
         const existingTargetKeys = new Set<string>();
         if (targetRes.success && targetRes.data) {
             targetRes.data.forEach((row: any) => {
                 if (row.raw_key) existingTargetKeys.add(row.raw_key.trim());
             });
         }
-        setCampaigns(filterCampaignsByMonth(activeCamps, selectedMonth, existingTargetKeys));
+
+        // Giữ các campaign đang active HOẶC đã có target trong tháng được chọn (bảo toàn lịch sử tháng cũ)
+        const eligibleCamps = (campRes.data || []).filter((c: any) => c.is_active || existingTargetKeys.has(c.raw_key));
+        setCampaigns(filterCampaignsByMonth(eligibleCamps, selectedMonth, existingTargetKeys));
 
         // Xây dựng ma trận mục tiêu
         const matrix: Record<string, Record<string, number>> = {};

@@ -40,7 +40,7 @@ import {
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import ExcelJS from 'exceljs';
-import { calculate8KScale } from '../../shared/utils/exportImage';
+import { calculate8KScale, buildReportImageFileName } from '../../shared/utils/exportImage';
 import { GUEST_DEMO_STORE } from '../../core/lib/guestDemoStoreService';
 import { fetchCampaignOffsets, type CampaignOffsetItem } from '../campaign-offset/services/campaignOffsetService';
 import { fetchEmployeeBonuses, type EmployeeBonusItem } from '../../core/lib/employeeBonusService';
@@ -604,7 +604,11 @@ export default function CampaignSummaryPage() {
             const imgData = canvas.toDataURL('image/png', 1.0);
             const a = document.createElement('a');
             a.href = imgData;
-            a.download = `TongHop_ThiDua_${campaignData.date_display || (selectedMonth + '_' + selectedYear)}_8K.png`;
+            a.download = buildReportImageFileName(
+                'Tong_Hop_Thi_Dua',
+                selectedStore,
+                campaignData.date_display || `T${selectedMonth}_${selectedYear}`
+            );
             a.click();
             showToast('Đã tải file ảnh toàn bộ bảng thi đua chuẩn 8K thành công!');
         } catch (e: any) {

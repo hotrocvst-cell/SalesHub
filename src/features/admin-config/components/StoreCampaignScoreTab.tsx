@@ -3,6 +3,9 @@ import type { CampaignDictItem, StoreItem } from '../../../core/lib/storage';
 import {
     getStoreCampaignScoreConfig,
     saveStoreCampaignScoreConfig,
+    copyStoreCampaignScoreConfig,
+    extractCampaignMonthPrefix,
+    normalizeScoreToken,
     type StoreCampaignScoreConfig,
     type CampaignScoringMode
 } from '../../../core/lib/storeCampaignScoreService';
@@ -24,7 +27,8 @@ import {
     Copy,
     Building2,
     Coins,
-    Hash
+    Hash,
+    Calendar
 } from 'lucide-react';
 
 interface Props {
@@ -50,6 +54,10 @@ export default function StoreCampaignScoreTab({
     onSavedSuccess,
     saveTrigger
 }: Props) {
+    // 0. Bộ chọn Kỳ Tháng / Năm áp dụng
+    const [selectedMonth, setSelectedMonth] = useState<number>(() => new Date().getMonth() + 1);
+    const [selectedYear, setSelectedYear] = useState<number>(() => new Date().getFullYear());
+
     // 1. Danh sách ST khả dụng theo phân quyền của user hiện tại
     const allowedStores = useMemo(() => {
         if (isAdmin) return stores;
@@ -79,6 +87,7 @@ export default function StoreCampaignScoreTab({
     const [campaignScores, setCampaignScores] = useState<Record<string, number>>({});
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
     const [isSaving, setIsSaving] = useState<boolean>(false);
+    const [isCopying, setIsCopying] = useState<boolean>(false);
     const [applyToAllMyStores, setApplyToAllMyStores] = useState<boolean>(false);
 
     // Tìm kiếm & Lọc trong bảng cấu hình
@@ -90,29 +99,55 @@ export default function StoreCampaignScoreTab({
         onHasChangesChange?.(val);
     };
 
-    // Nạp cấu hình khi đổi ST
+    // Nạp cấu hình khi đổi ST hoặc đổi Tháng/Năm
     useEffect(() => {
-        const cfg = getStoreCampaignScoreConfig(selectedStore);
+        const cfg = getStoreCampaignScoreConfig(selectedStore, stores, selectedMonth, selectedYear);
         setScoringMode(cfg.scoring_mode || 'COUNT');
         setCampaignScores({ ...(cfg.campaign_scores || {}) });
         updateHasChanges(false);
         setApplyToAllMyStores(false);
-    }, [selectedStore]);
+    }, [selectedStore, selectedMonth, selectedYear, stores]);
 
-    // Lắng nghe trigger lưu từ bên ngoài (nếu người dùng bấm sync trên thanh trạng thái Cloud)
+    // Lắng nghe trigger lưu từ bên ngoài
     useEffect(() => {
         if (saveTrigger && saveTrigger > 0) {
             handleSave();
         }
     }, [saveTrigger]);
 
-    // Thay đổi số điểm của 1 chương trình
+    // Tháng trước để phục vụ tính năng Kế thừa
+    const prevMonth = selectedMonth === 1 ? 12 : selectedMonth - 1;
+    const prevYear = selectedMonth === 1 ? selectedYear - 1 : selectedYear;
+
+    // Lọc các chương trình thi đua phù hợp với tháng đang chọn (loại bỏ các chương trình của tháng khác)
+    const monthEligibleCampaigns = useMemo(() => {
+        return campaigns.filter(c => {
+            const p = extractCampaignMonthPrefix(c.raw_key) ?? extractCampaignMonthPrefix(c.display_name);
+            // Nếu có tiền tố tháng và không phải tháng đang chọn (ví dụ T10 khi đang xem T11) -> Ẩn
+            if (p !== null && p !== selectedMonth) {
+                return false;
+            }
+            return true;
+        });
+    }, [campaigns, selectedMonth]);
+
+    // Thay đổi số điểm của 1 chương trình (Tự động đồng bộ ngay cho các tên alias cùng token)
     const handleScoreChange = (key: string, val: number) => {
         const safeVal = Math.max(0.1, Number(val) || 1);
-        setCampaignScores(prev => ({
-            ...prev,
-            [key]: safeVal
-        }));
+        const tok = normalizeScoreToken(key);
+
+        setCampaignScores(prev => {
+            const next = { ...prev, [key]: safeVal };
+            if (tok) {
+                monthEligibleCampaigns.forEach(c => {
+                    const cTok = normalizeScoreToken(c.raw_key) || normalizeScoreToken(c.display_name);
+                    if (cTok === tok) {
+                        next[c.raw_key] = safeVal;
+                    }
+                });
+            }
+            return next;
+        });
         updateHasChanges(true);
     };
 
@@ -123,24 +158,60 @@ export default function StoreCampaignScoreTab({
         handleScoreChange(key, next);
     };
 
-    // Đặt nhanh tất cả điểm về 1 giá trị
+    // Đặt nhanh tất cả điểm về 1 giá trị (áp dụng cho các chương trình của tháng đang chọn)
     const handleSetAllPoints = (pts: number) => {
-        const updated: Record<string, number> = {};
-        campaigns.forEach(c => {
+        const updated: Record<string, number> = { ...campaignScores };
+        monthEligibleCampaigns.forEach(c => {
             updated[c.raw_key] = pts;
         });
         setCampaignScores(updated);
         updateHasChanges(true);
-        showToast(`⚡ Đã đặt tất cả chương trình về ${pts} điểm!`);
+        showToast(`⚡ Đã đặt ${monthEligibleCampaigns.length} chương trình của T${selectedMonth} về ${pts} điểm!`);
     };
 
     // Khôi phục về mặc định
     const handleResetToDefault = () => {
-        if (!window.confirm(`Bạn có chắc muốn khôi phục cấu hình điểm của ST "${selectedStore}" về mặc định (1 điểm mỗi mục)?`)) return;
+        const sLabel = selectedStore === 'DEFAULT' ? 'Mặc định chung' : selectedStore;
+        if (!window.confirm(`Bạn có chắc muốn khôi phục cấu hình điểm của ST "${sLabel}" cho Tháng ${selectedMonth}/${selectedYear} về mặc định (1 điểm mỗi mục)?`)) return;
         setCampaignScores({});
         setScoringMode('COUNT');
         updateHasChanges(true);
         showToast('🔄 Đã khôi phục cấu hình về mặc định!');
+    };
+
+    // Kế thừa / Sao chép từ tháng trước
+    const handleInheritFromPreviousMonth = async () => {
+        const sLabel = selectedStore === 'DEFAULT' ? 'Mẫu chung' : getShortStoreName(selectedStore);
+        if (!window.confirm(`Bạn có muốn kế thừa cấu hình điểm từ Tháng ${prevMonth}/${prevYear} sang Tháng ${selectedMonth}/${selectedYear} cho [${sLabel}] không?`)) {
+            return;
+        }
+
+        setIsCopying(true);
+        const targetStores = applyToAllMyStores ? allowedStores.map(s => s.name) : undefined;
+
+        const res = await copyStoreCampaignScoreConfig({
+            fromMonth: prevMonth,
+            fromYear: prevYear,
+            toMonth: selectedMonth,
+            toYear: selectedYear,
+            storeName: selectedStore,
+            applyToStoreNames: targetStores,
+            userName: currentUser?.full_name || currentUser?.email || 'Quản lý',
+            campaigns
+        });
+
+        setIsCopying(false);
+
+        if (res.success) {
+            const reloaded = getStoreCampaignScoreConfig(selectedStore, stores, selectedMonth, selectedYear);
+            setScoringMode(reloaded.scoring_mode || 'COUNT');
+            setCampaignScores({ ...(reloaded.campaign_scores || {}) });
+            updateHasChanges(false);
+            onSavedSuccess?.();
+            showToast(`✨ Đã kế thừa thành công cấu hình từ T${prevMonth}/${prevYear} sang T${selectedMonth}/${selectedYear}! (${res.copiedCount} mục)`);
+        } else {
+            showToast(`⚠️ ${res.error || 'Không thể kế thừa từ tháng trước'}`);
+        }
     };
 
     // Lưu cấu hình
@@ -148,6 +219,8 @@ export default function StoreCampaignScoreTab({
         setIsSaving(true);
         const configToSave: StoreCampaignScoreConfig = {
             store_name: selectedStore,
+            month: selectedMonth,
+            year: selectedYear,
             scoring_mode: scoringMode,
             campaign_scores: campaignScores
         };
@@ -157,6 +230,8 @@ export default function StoreCampaignScoreTab({
             : undefined;
 
         const res = await saveStoreCampaignScoreConfig(configToSave, {
+            month: selectedMonth,
+            year: selectedYear,
             applyToStoreNames: targetStores,
             userName: currentUser?.full_name || currentUser?.email || 'Quản lý'
         });
@@ -166,10 +241,10 @@ export default function StoreCampaignScoreTab({
             updateHasChanges(false);
             onSavedSuccess?.();
             if (applyToAllMyStores && allowedStores.length > 1) {
-                showToast(`💾 Đã lưu và áp dụng cấu hình điểm cho toàn bộ ${allowedStores.length} ST phụ trách!`);
+                showToast(`💾 Đã lưu cấu hình điểm T${selectedMonth}/${selectedYear} cho ${allowedStores.length} ST phụ trách!`);
             } else {
                 const sLabel = selectedStore === 'DEFAULT' ? 'Mặc định chung' : getShortStoreName(selectedStore);
-                showToast(`💾 Đã lưu thành công cấu hình điểm cho [${sLabel}]!`);
+                showToast(`💾 Đã lưu cấu hình điểm T${selectedMonth}/${selectedYear} cho [${sLabel}]!`);
             }
         } else {
             showToast(`⚠️ Lỗi khi lưu cấu hình: ${res.error || 'Vui lòng thử lại'}`);
@@ -178,7 +253,7 @@ export default function StoreCampaignScoreTab({
 
     // Lọc danh sách thi đua hiển thị
     const filteredCampaigns = useMemo(() => {
-        return campaigns.filter(item => {
+        return monthEligibleCampaigns.filter(item => {
             // Lọc tìm kiếm
             const q = searchQuery.toLowerCase().trim();
             const matchesQuery = (
@@ -199,15 +274,15 @@ export default function StoreCampaignScoreTab({
 
             return matchesQuery && matchesType;
         });
-    }, [campaigns, searchQuery, filterScoreType, campaignScores]);
+    }, [monthEligibleCampaigns, searchQuery, filterScoreType, campaignScores]);
 
-    // Thống kê điểm số
+    // Thống kê điểm số theo danh sách chương trình của tháng
     const stats = useMemo(() => {
         let totalMaxPoints = 0;
         let customCount = 0;
-        let activeCount = campaigns.length;
+        let activeCount = monthEligibleCampaigns.length;
 
-        campaigns.forEach(c => {
+        monthEligibleCampaigns.forEach(c => {
             const pts = campaignScores[c.raw_key] !== undefined ? campaignScores[c.raw_key] : 1;
             totalMaxPoints += pts;
             if (pts !== 1) customCount++;
@@ -218,23 +293,23 @@ export default function StoreCampaignScoreTab({
             totalMaxPoints: Number(totalMaxPoints.toFixed(1)),
             customCount
         };
-    }, [campaigns, campaignScores]);
+    }, [monthEligibleCampaigns, campaignScores]);
 
     return (
         <div className="space-y-5 animate-in fade-in duration-200">
-            {/* 1. KHU VỰC CHỌN ST & CẢNH BÁO */}
-            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+            {/* 1. KHU VỰC CHỌN ST, KỲ THÁNG/NĂM & CÁC THAO TÁC */}
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
                     <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-500 text-white flex items-center justify-center shadow-sm shrink-0">
                         <Store className="w-6 h-6" />
                     </div>
                     <div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md uppercase tracking-wider">
-                                ST áp dụng
+                                ST & Kỳ Áp Dụng
                             </span>
-                            <span className="text-xs text-slate-400 font-medium">
-                                (Tùy chọn cấu hình riêng cho từng ST)
+                            <span className="text-xs font-black text-indigo-700 bg-indigo-50 border border-indigo-200 px-2.5 py-0.5 rounded-md inline-flex items-center gap-1">
+                                <Calendar className="w-3.5 h-3.5 text-indigo-600" /> Tháng {selectedMonth}/{selectedYear}
                             </span>
                         </div>
                         <h3 className="text-base font-black text-slate-800 mt-0.5">
@@ -244,12 +319,41 @@ export default function StoreCampaignScoreTab({
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap">
-                    <div className="flex items-center gap-2 bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-700">
+                    {/* Chọn Tháng */}
+                    <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-300 rounded-xl px-2.5 py-2 text-xs font-bold text-slate-700">
+                        <Calendar className="w-4 h-4 text-indigo-600 shrink-0" />
+                        <select
+                            value={selectedMonth}
+                            onChange={(e) => setSelectedMonth(Number(e.target.value))}
+                            className="bg-transparent outline-none font-bold text-slate-800 cursor-pointer"
+                            title="Chọn tháng cấu hình"
+                        >
+                            {[...Array(12)].map((_, i) => (
+                                <option key={i + 1} value={i + 1}>
+                                    Tháng {i + 1}
+                                </option>
+                            ))}
+                        </select>
+                        <span>/</span>
+                        <select
+                            value={selectedYear}
+                            onChange={(e) => setSelectedYear(Number(e.target.value))}
+                            className="bg-transparent outline-none font-bold text-slate-800 cursor-pointer"
+                            title="Chọn năm cấu hình"
+                        >
+                            {[2025, 2026, 2027].map(y => (
+                                <option key={y} value={y}>{y}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {/* Chọn ST */}
+                    <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-700">
                         <Building2 className="w-4 h-4 text-slate-500 shrink-0" />
                         <select
                             value={selectedStore}
                             onChange={(e) => setSelectedStore(e.target.value)}
-                            className="bg-transparent outline-none font-bold text-slate-800 cursor-pointer max-w-[260px] truncate"
+                            className="bg-transparent outline-none font-bold text-slate-800 cursor-pointer max-w-[200px] truncate"
                         >
                             {isAdmin && (
                                 <option value="DEFAULT">🏢 CẤU HÌNH MẪU CHUNG (DEFAULT)</option>
@@ -262,6 +366,19 @@ export default function StoreCampaignScoreTab({
                         </select>
                     </div>
 
+                    {/* Nút Kế thừa từ tháng trước */}
+                    <button
+                        type="button"
+                        onClick={handleInheritFromPreviousMonth}
+                        disabled={isCopying || isSaving}
+                        className="px-3 py-2 rounded-xl text-xs font-bold bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50"
+                        title={`Kế thừa cấu hình từ Tháng ${prevMonth}/${prevYear}`}
+                    >
+                        <Copy className={`w-3.5 h-3.5 ${isCopying ? 'animate-spin' : ''}`} />
+                        <span>Kế thừa T{prevMonth}</span>
+                    </button>
+
+                    {/* Nút Lưu cấu hình */}
                     <button
                         type="button"
                         onClick={handleSave}
@@ -283,10 +400,10 @@ export default function StoreCampaignScoreTab({
                     <div>
                         <h4 className="text-sm font-black text-slate-800 flex items-center gap-2">
                             <SlidersHorizontal className="w-4 h-4 text-indigo-600" />
-                            CHẾ ĐỘ TÍNH HIỆU QUẢ THI ĐUA CỦA ST
+                            CHẾ ĐỘ TÍNH HIỆU QUẢ THI ĐUA CỦA ST (THÁNG {selectedMonth}/{selectedYear})
                         </h4>
                         <p className="text-xs text-slate-500 mt-0.5">
-                            Lựa chọn cách hiển thị và tính toán kết quả thi đua nhân viên trên các trang báo cáo hiệu quả
+                            Lựa chọn cách hiển thị và tính toán kết quả thi đua nhân viên trên các trang báo cáo hiệu quả cho kỳ này
                         </p>
                     </div>
                 </div>
@@ -400,11 +517,12 @@ export default function StoreCampaignScoreTab({
                     </div>
                     <div className="text-xs space-y-1">
                         <div className="font-black text-emerald-900 uppercase tracking-wide flex items-center gap-1.5">
-                            <span>Quy tắc tính điểm theo quy định hệ thống:</span>
+                            <span>Quy tắc tính điểm Tháng {selectedMonth}/{selectedYear}:</span>
                         </div>
                         <p className="text-emerald-800 leading-relaxed font-medium">
                             • Nhân viên có <strong>tỷ lệ dự kiến hoàn thành (%DKHT) từ 100% trở lên</strong> ➔ Nhận trọn vẹn <strong>số điểm quy định</strong> của chương trình đó.<br />
-                            • Nhân viên có <strong>tỷ lệ dự kiến hoàn thành dưới 100%</strong> ➔ <strong>0 điểm</strong> (không có điểm).
+                            • Nhân viên có <strong>tỷ lệ dự kiến hoàn thành dưới 100%</strong> ➔ <strong>0 điểm</strong> (không có điểm).<br />
+                            • Bảng dưới đây đã <strong>tự động lọc đúng các chương trình của Tháng {selectedMonth}</strong> và các ngành hàng xuyên suốt (ẩn các chương trình của tháng khác để không bị chồng chéo).
                         </p>
                     </div>
                 </div>
@@ -417,7 +535,7 @@ export default function StoreCampaignScoreTab({
                         <Layers className="w-5 h-5" />
                     </div>
                     <div>
-                        <p className="text-[11px] font-bold text-slate-500 uppercase">Tổng số chương trình</p>
+                        <p className="text-[11px] font-bold text-slate-500 uppercase">Chương trình T{selectedMonth}</p>
                         <p className="text-lg font-black text-slate-800">{stats.totalCampaigns} <span className="text-xs font-normal text-slate-400">mục</span></p>
                     </div>
                 </div>
@@ -427,7 +545,7 @@ export default function StoreCampaignScoreTab({
                         <Coins className="w-5 h-5" />
                     </div>
                     <div>
-                        <p className="text-[11px] font-bold text-slate-500 uppercase">Tổng điểm tối đa (100%)</p>
+                        <p className="text-[11px] font-bold text-slate-500 uppercase">Tổng điểm tối đa T{selectedMonth}</p>
                         <p className="text-lg font-black text-amber-600">
                             {stats.totalMaxPoints} <span className="text-xs font-normal text-slate-400">điểm</span>
                         </p>
@@ -455,7 +573,7 @@ export default function StoreCampaignScoreTab({
                         <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
                         <input
                             type="text"
-                            placeholder="Tìm kiếm chương trình thi đua..."
+                            placeholder={`Tìm chương trình thi đua Tháng ${selectedMonth}...`}
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-medium outline-none focus:ring-2 focus:ring-amber-500"
@@ -486,7 +604,7 @@ export default function StoreCampaignScoreTab({
                             type="button"
                             onClick={() => handleSetAllPoints(1)}
                             className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer"
-                            title="Đặt tất cả các mục về 1 điểm"
+                            title="Đặt tất cả các mục tháng này về 1 điểm"
                         >
                             Tất cả 1đ
                         </button>
@@ -495,7 +613,7 @@ export default function StoreCampaignScoreTab({
                             type="button"
                             onClick={() => handleSetAllPoints(2)}
                             className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-xl text-xs font-bold transition cursor-pointer"
-                            title="Đặt tất cả các mục về 2 điểm"
+                            title="Đặt tất cả các mục tháng này về 2 điểm"
                         >
                             Tất cả 2đ
                         </button>
@@ -518,7 +636,7 @@ export default function StoreCampaignScoreTab({
                         <thead>
                             <tr className="bg-slate-100/80 text-slate-700 font-extrabold border-b border-slate-200">
                                 <th className="py-2.5 px-3 w-12 text-center">STT</th>
-                                <th className="py-2.5 px-3 min-w-[220px]">Tên Chương Trình Thi Đua (Hiển thị)</th>
+                                <th className="py-2.5 px-3 min-w-[220px]">Tên Chương Trình Thi Đua (Tháng {selectedMonth})</th>
                                 <th className="py-2.5 px-3 min-w-[200px]">Mã Gốc (Raw Key Báo Cáo)</th>
                                 <th className="py-2.5 px-3 w-20 text-center">Đơn Vị</th>
                                 <th className="py-2.5 px-3 w-48 text-center bg-amber-50/80 text-amber-900 border-x border-amber-200 font-black">
@@ -531,7 +649,7 @@ export default function StoreCampaignScoreTab({
                             {filteredCampaigns.length === 0 ? (
                                 <tr>
                                     <td colSpan={6} className="py-10 text-center text-slate-400">
-                                        Không tìm thấy chương trình thi đua nào phù hợp!
+                                        Không tìm thấy chương trình thi đua nào phù hợp cho Tháng {selectedMonth}/{selectedYear}!
                                     </td>
                                 </tr>
                             ) : (
@@ -554,8 +672,24 @@ export default function StoreCampaignScoreTab({
                                             </td>
 
                                             <td className="py-2.5 px-3">
-                                                <div className="font-extrabold text-slate-800 text-[13px]">
-                                                    {camp.display_name || camp.raw_key}
+                                                <div className="font-extrabold text-slate-800 text-[13px] flex items-center gap-1.5 flex-wrap">
+                                                    <span>{camp.display_name || camp.raw_key}</span>
+                                                    {(() => {
+                                                        const tok = normalizeScoreToken(camp.raw_key) || normalizeScoreToken(camp.display_name);
+                                                        if (!tok) return null;
+                                                        const siblings = monthEligibleCampaigns
+                                                            .filter(o => o.raw_key !== camp.raw_key && (normalizeScoreToken(o.raw_key) === tok || normalizeScoreToken(o.display_name) === tok))
+                                                            .map(o => o.display_name || o.raw_key);
+                                                        if (siblings.length === 0) return null;
+                                                        return (
+                                                            <span
+                                                                title={`Tự động đồng bộ điểm với: ${siblings.join(', ')}`}
+                                                                className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.2 rounded-md inline-flex items-center gap-1 cursor-help"
+                                                            >
+                                                                🔗 Đồng bộ: {siblings[0]}
+                                                            </span>
+                                                        );
+                                                    })()}
                                                 </div>
                                             </td>
 
@@ -651,14 +785,14 @@ export default function StoreCampaignScoreTab({
                             className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 border-slate-300 cursor-pointer"
                         />
                         <span className="text-xs font-bold text-slate-700">
-                            Đồng thời áp dụng cấu hình này cho tất cả {allowedStores.length} ST tôi phụ trách
+                            Đồng thời áp dụng cấu hình Tháng {selectedMonth}/{selectedYear} này cho tất cả {allowedStores.length} ST tôi phụ trách
                         </span>
                     </label>
 
                     <div className="flex items-center gap-2">
                         {hasUnsavedChanges && (
                             <span className="text-xs text-amber-700 font-bold animate-pulse">
-                                Có thay đổi chưa lưu!
+                                Có thay đổi chưa lưu cho Tháng {selectedMonth}/{selectedYear}!
                             </span>
                         )}
                         <button
@@ -668,7 +802,7 @@ export default function StoreCampaignScoreTab({
                             className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl text-xs font-black flex items-center gap-1.5 shadow-md transition cursor-pointer disabled:opacity-50"
                         >
                             <Save className={`w-4 h-4 ${isSaving ? 'animate-spin' : ''}`} />
-                            <span>{isSaving ? 'ĐANG LƯU DỮ LIỆU...' : '💾 LƯU CẤU HÌNH NGAY'}</span>
+                            <span>{isSaving ? 'ĐANG LƯU DỮ LIỆU...' : `💾 LƯU CẤU HÌNH T${selectedMonth}/${selectedYear}`}</span>
                         </button>
                     </div>
                 </div>

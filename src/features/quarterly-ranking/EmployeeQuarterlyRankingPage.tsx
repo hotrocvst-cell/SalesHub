@@ -15,7 +15,7 @@ import { EMPLOYEE_DATA_SESSIONS_SQL } from '../employee-cumulative/utils/session
 import type { QuarterPreset, QuarterlyTab, FilterCategory, SortField } from './types';
 import { getShortStoreName } from '../../core/lib/formatters';
 import html2canvas from 'html2canvas';
-import { calculate8KScale } from '../../shared/utils/exportImage';
+import { calculate8KScale, buildReportImageFileName } from '../../shared/utils/exportImage';
 import { Trophy, Award, Calendar } from 'lucide-react';
 
 export default function EmployeeQuarterlyRankingPage() {
@@ -199,8 +199,11 @@ export default function EmployeeQuarterlyRankingPage() {
             });
 
             // Tải ảnh về
-            const storeLabel = getShortStoreName(selectedStore);
-            const fileName = `Xep_Hang_Quy_NV_${presetInfo.label.replace(/[\/\s()]/g, '_')}_${storeLabel}.png`;
+            const fileName = buildReportImageFileName(
+                tab === 'REVENUE' ? 'Xep_Hang_Quy_Doanh_Thu' : 'Xep_Hang_Quy_Thi_Dua',
+                selectedStore,
+                presetInfo.label
+            );
             const link = document.createElement('a');
             link.download = fileName;
             link.href = canvas.toDataURL('image/png', 0.95);

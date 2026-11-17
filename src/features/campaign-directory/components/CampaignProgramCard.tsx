@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import html2canvas from 'html2canvas';
-import { calculate8KScale } from '../../../shared/utils/exportImage';
+import { calculate8KScale, buildReportImageFileName } from '../../../shared/utils/exportImage';
 import {
     Sparkles,
     Check,
@@ -149,8 +149,11 @@ export default function CampaignProgramCard({
             });
 
             const link = document.createElement('a');
-            const cleanName = item.program_name.replace(/[^a-zA-Z0-9\u00C0-\u1EF9]/g, '_').slice(0, 35);
-            link.download = `ThiDua_${cleanName}_8K.png`;
+            link.download = buildReportImageFileName(
+                `Thi_Dua_${item.short_name || item.program_name}`,
+                'Toan_Cum',
+                item.target_period
+            );
             link.href = canvas.toDataURL('image/png');
             link.click();
             setCopySuccess(true);

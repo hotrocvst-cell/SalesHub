@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import html2canvas from 'html2canvas';
-import { calculate8KScale } from '../../shared/utils/exportImage';
+import { calculate8KScale, buildReportImageFileName } from '../../shared/utils/exportImage';
 import {
     fetchBusinessRecords,
     type BusinessDayRecord
@@ -724,7 +724,11 @@ export default function ClusterReportPage() {
 
     const downloadCanvas = (canvas: HTMLCanvasElement) => {
         const link = document.createElement('a');
-        link.download = `Bao_Cao_Cum_ST_${effectiveDate || `Thang_${selectedMonth}`}_8K.png`;
+        link.download = buildReportImageFileName(
+            'Bao_Cao_Cum_ST',
+            selectedStore,
+            effectiveDate || `T${selectedMonth}_${selectedYear}`
+        );
         link.href = canvas.toDataURL('image/png');
         link.click();
         showToast('Đã tải ảnh báo cáo 8K về thiết bị thành công.');

@@ -19,6 +19,7 @@ import {
     RefreshCw,
     UploadCloud,
     UserCheck,
+    UserX,
     X,
     Clock
 } from 'lucide-react';
@@ -51,6 +52,7 @@ interface Props {
     onRemapCampaign?: (oldName: string, newName: string) => void;
     onResetBatch?: () => void;
     hasSavedSession?: boolean;
+    onToast?: (msg: string) => void;
 }
 
 export default function EmployeeManualDataEntryModule({
@@ -73,7 +75,8 @@ export default function EmployeeManualDataEntryModule({
     campaignDict = [],
     onRemapCampaign,
     onResetBatch,
-    hasSavedSession = false
+    hasSavedSession = false,
+    onToast
 }: Props) {
     const [searchTerm, setSearchTerm] = useState('');
     const [expandedEmployeeId, setExpandedEmployeeId] = useState<string | null>(null);
@@ -102,6 +105,32 @@ export default function EmployeeManualDataEntryModule({
         const currentIds = new Set(employees.map(e => String(e.employeeId).trim().toLowerCase()));
         return storeEmployees.filter(e => !currentIds.has(String(e.employee_id || '').trim().toLowerCase()));
     }, [storeEmployees, employees]);
+
+    // Tập hợp Mã NV chính thức trong danh bạ ST đang chọn
+    const storeEmpIdSet = useMemo(() => {
+        if (!storeEmployees || storeEmployees.length === 0) return new Set<string>();
+        return new Set(
+            storeEmployees
+                .map(e => String(e.employee_id || '').trim().toLowerCase())
+                .filter(Boolean)
+        );
+    }, [storeEmployees]);
+
+    // Kiểm tra một nhân sự có thuộc danh bạ ST hay không
+    const isNonDirectoryEmp = (emp: EmployeeOcrParsedItem) => {
+        if (!storeEmployees || storeEmployees.length === 0) return false;
+        const rawId = String(emp.employeeId || '').trim().toLowerCase();
+        if (emp.isUnmappedName || rawId.startsWith('unmapped::') || !rawId) {
+            return true;
+        }
+        return !storeEmpIdSet.has(rawId);
+    };
+
+    // Danh sách nhân sự trong bảng hiện tại KHÔNG CÓ trong danh bạ ST
+    const nonDirectoryEmployees = useMemo(() => {
+        if (!storeEmployees || storeEmployees.length === 0) return [];
+        return employees.filter(isNonDirectoryEmp);
+    }, [employees, storeEmployees, storeEmpIdSet]);
 
     // Tính toán chiều rộng chuẩn badge theo Quy chuẩn 11 (loại trừ placeholder UNMAPPED::)
     const maxIdLength = useMemo(() => {
@@ -292,6 +321,20 @@ export default function EmployeeManualDataEntryModule({
         onChangeEmployees(employees.filter(e => e.employeeId !== empId));
     };
 
+    // Xóa nhanh toàn bộ nhân viên không có trong danh bạ ST
+    const handleRemoveAllNonDirectoryEmployees = () => {
+        const count = nonDirectoryEmployees.length;
+        if (count === 0) return;
+        const confirmMsg = `Bạn có chắc muốn xóa nhanh toàn bộ ${count} nhân sự không có trong danh bạ của ST [${storeName}]?\n\n(Hệ thống sẽ giữ lại ${employees.length - count} nhân sự chính thức có trong danh bạ ST)`;
+        if (!window.confirm(confirmMsg)) return;
+
+        const remaining = employees.filter(e => !isNonDirectoryEmp(e));
+        onChangeEmployees(remaining);
+        if (onToast) {
+            onToast(`🗑️ Đã xóa nhanh ${count} nhân sự không có trong danh bạ ST!`);
+        }
+    };
+
     // Thêm nhân viên từ danh bạ ST
     const handleAddSingleEmployeeFromDirectory = (empId: string) => {
         setAddError('');
@@ -376,9 +419,19 @@ export default function EmployeeManualDataEntryModule({
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                 <div className="bg-blue-50/70 border border-blue-200 rounded-xl p-3 shadow-xs">
                     <span className="text-[10px] font-bold text-blue-800 uppercase tracking-wider block">TỔNG NHÂN VIÊN</span>
-                    <span className="text-lg font-black text-slate-900 font-mono tabular-nums">
-                        {kpiSummary.totalEmployees}
-                    </span>
+                    <div className="flex items-baseline gap-1.5 flex-wrap">
+                        <span className="text-lg font-black text-slate-900 font-mono tabular-nums">
+                            {kpiSummary.totalEmployees}
+                        </span>
+                        {nonDirectoryEmployees.length > 0 && (
+                            <span
+                                className="text-[10px] font-bold text-rose-600 font-mono tabular-nums"
+                                title={`${nonDirectoryEmployees.length} nhân sự không có trong danh bạ ST`}
+                            >
+                                ({nonDirectoryEmployees.length} ngoài danh bạ)
+                            </span>
+                        )}
+                    </div>
                     <span className="text-[10px] text-slate-600 font-medium block mt-0.5">nhân sự có số liệu</span>
                 </div>
 
@@ -568,6 +621,18 @@ export default function EmployeeManualDataEntryModule({
                         <span>Thêm NV</span>
                     </button>
 
+                    {nonDirectoryEmployees.length > 0 && (
+                        <button
+                            type="button"
+                            onClick={handleRemoveAllNonDirectoryEmployees}
+                            className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-300 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition cursor-pointer shadow-2xs active:scale-95"
+                            title={`Xóa nhanh toàn bộ ${nonDirectoryEmployees.length} nhân sự không có trong danh bạ ST`}
+                        >
+                            <UserX className="w-3.5 h-3.5 text-rose-600" aria-hidden="true" />
+                            <span>Xóa ngoài danh bạ ({nonDirectoryEmployees.length})</span>
+                        </button>
+                    )}
+
                     {onResetBatch && (
                         <button
                             type="button"
@@ -638,32 +703,46 @@ export default function EmployeeManualDataEntryModule({
                 </div>
             )}
 
-            {/* CẢNH BÁO RÀ SOÁT MAPPING TÊN NHÂN VIÊN TỪ ẢNH KHÔNG CÓ MÃ NV */}
-            {(mappingReviewStats.unmappedCount > 0 || mappingReviewStats.nameMatchedCount > 0) && (
+            {/* CẢNH BÁO RÀ SOÁT & XÓA NHANH NHÂN SỰ NGOÀI DANH BẠ ST */}
+            {(nonDirectoryEmployees.length > 0 || mappingReviewStats.nameMatchedCount > 0) && (
                 <div
-                    className={`rounded-2xl p-3 border text-xs flex items-start gap-2.5 ${
-                        mappingReviewStats.unmappedCount > 0
+                    className={`rounded-2xl p-3 sm:p-3.5 border text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs ${
+                        nonDirectoryEmployees.length > 0
                             ? 'bg-rose-50 border-rose-200 text-rose-900'
                             : 'bg-amber-50 border-amber-200 text-amber-900'
                     }`}
                 >
-                    {mappingReviewStats.unmappedCount > 0 ? (
-                        <AlertTriangle className="w-4 h-4 text-rose-700 shrink-0 mt-0.5" aria-hidden="true" />
-                    ) : (
-                        <UserCheck className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" aria-hidden="true" />
-                    )}
-                    <div className="space-y-1 flex-1">
-                        {mappingReviewStats.unmappedCount > 0 && (
-                            <p className="font-bold leading-snug">
-                                Có <span className="font-black tabular-nums">{mappingReviewStats.unmappedCount}</span> dòng tên nhân viên trên ảnh chưa có Mã NV và chưa khớp được tự động. Vui lòng chọn đúng Mã NV trong danh bạ ST (hoặc xóa dòng thừa) trước khi lưu Cloud.
-                            </p>
+                    <div className="flex items-start gap-2.5 flex-1">
+                        {nonDirectoryEmployees.length > 0 ? (
+                            <AlertTriangle className="w-4 h-4 text-rose-700 shrink-0 mt-0.5" aria-hidden="true" />
+                        ) : (
+                            <UserCheck className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" aria-hidden="true" />
                         )}
-                        {mappingReviewStats.nameMatchedCount > 0 && (
-                            <p className="font-medium leading-snug">
-                                Có <span className="font-bold tabular-nums">{mappingReviewStats.nameMatchedCount}</span> nhân sự từ ảnh không có Mã NV đã được tự động đối chiếu theo tên — vui lòng kiểm tra lại và bấm &quot;Khớp tên · Đổi&quot; nếu cần sửa.
-                            </p>
-                        )}
+                        <div className="space-y-1">
+                            {nonDirectoryEmployees.length > 0 && (
+                                <p className="font-bold leading-snug">
+                                    Có <span className="font-black tabular-nums text-rose-700">{nonDirectoryEmployees.length}</span> nhân sự không có trong danh bạ của ST <strong>{storeName}</strong> ({mappingReviewStats.unmappedCount > 0 ? `${mappingReviewStats.unmappedCount} dòng chưa có Mã NV` : 'Mã NV không thuộc ST'}). Vui lòng chọn Mã NV chính thức hoặc bấm nút xóa nhanh bên cạnh trước khi lưu Cloud.
+                                </p>
+                            )}
+                            {mappingReviewStats.nameMatchedCount > 0 && (
+                                <p className="font-medium leading-snug text-slate-700">
+                                    Có <span className="font-bold tabular-nums">{mappingReviewStats.nameMatchedCount}</span> nhân sự từ ảnh không có Mã NV đã được tự động đối chiếu theo tên — vui lòng kiểm tra lại và bấm &quot;Khớp tên · Đổi&quot; nếu cần sửa.
+                                </p>
+                            )}
+                        </div>
                     </div>
+
+                    {nonDirectoryEmployees.length > 0 && (
+                        <button
+                            type="button"
+                            onClick={handleRemoveAllNonDirectoryEmployees}
+                            className="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition shadow-xs cursor-pointer active:scale-95 shrink-0 self-start sm:self-auto"
+                            title={`Xóa nhanh toàn bộ ${nonDirectoryEmployees.length} nhân sự không có trong danh bạ ST này`}
+                        >
+                            <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+                            <span>Xóa nhanh {nonDirectoryEmployees.length} NV ngoài danh bạ</span>
+                        </button>
+                    )}
                 </div>
             )}
 
@@ -694,6 +773,7 @@ export default function EmployeeManualDataEntryModule({
                             ) : (
                                 filteredEmployees.map((emp, index) => {
                                     const isUnmapped = Boolean(emp.isUnmappedName) || String(emp.employeeId || '').startsWith('UNMAPPED::');
+                                    const isNotInStore = !isUnmapped && storeEmployees.length > 0 && !storeEmpIdSet.has(String(emp.employeeId || '').trim().toLowerCase());
                                     const isNameMatched = !isUnmapped && (emp.mappingSource === 'NAME_EXACT' || emp.mappingSource === 'NAME_FUZZY');
                                     const isEditingMapping = editingMappingEmpId === emp.employeeId;
                                     const shortenedName = getShortenedEmployeeName(emp.fullName);
@@ -702,7 +782,7 @@ export default function EmployeeManualDataEntryModule({
 
                                     return (
                                         <React.Fragment key={emp.employeeId}>
-                                            <tr className={`transition ${isUnmapped ? 'bg-rose-50/70 hover:bg-rose-50' : 'hover:bg-blue-50/40'}`}>
+                                            <tr className={`transition ${isUnmapped || isNotInStore ? 'bg-rose-50/70 hover:bg-rose-50' : 'hover:bg-blue-50/40'}`}>
                                                 {/* STT */}
                                                 <td className="px-2 py-2 text-center text-slate-500 font-mono text-[11px] tabular-nums">
                                                     {index + 1}
@@ -752,7 +832,11 @@ export default function EmployeeManualDataEntryModule({
                                                                         minWidth: `${maxIdLength + 2.2}ch`,
                                                                         width: `${maxIdLength + 2.2}ch`
                                                                     }}
-                                                                    className="font-mono font-bold text-xs px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-800 border border-blue-200 inline-block text-center leading-normal shrink-0"
+                                                                    className={`font-mono font-bold text-xs px-1.5 py-0.5 rounded-md border inline-block text-center leading-normal shrink-0 ${
+                                                                        isNotInStore
+                                                                            ? 'bg-rose-100 text-rose-900 border-rose-300'
+                                                                            : 'bg-blue-50 text-blue-800 border-blue-200'
+                                                                    }`}
                                                                 >
                                                                     {emp.employeeId}
                                                                 </span>
@@ -764,6 +848,15 @@ export default function EmployeeManualDataEntryModule({
                                                                 >
                                                                     {shortenedName}
                                                                 </span>
+
+                                                                {isNotInStore && (
+                                                                    <span
+                                                                        title={`Mã NV [${emp.employeeId}] không có trong danh bạ ST ${storeName}`}
+                                                                        className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-rose-100 text-rose-900 border border-rose-300 shrink-0"
+                                                                    >
+                                                                        Ngoài danh bạ ST
+                                                                    </span>
+                                                                )}
 
                                                                 {isNameMatched && (
                                                                     <button

@@ -648,4 +648,11 @@ export function getShortenedEmployeeName(fullName: string): string {
     }
     return `${secondToLast} ${lastWord}`;
 }
+
+export {
+    buildReportImageFileName,
+    formatScopeOrStoreForFileName,
+    getReportTimestamp,
+    type BuildReportFileNameParams
+} from '../../shared/utils/exportImage';
 

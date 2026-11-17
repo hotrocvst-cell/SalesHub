@@ -123,6 +123,12 @@ ON public.store_voucher_campaign_statuses FOR ALL USING (true) WITH CHECK (true)
 `;
 
 /**
+ * Lệnh SQL bổ sung cột is_hidden cho bảng store_voucher_campaign_statuses
+ * Dành riêng cho Quản trị viên ADMIN chạy nâng cấp nếu database cũ chưa có cột này
+ */
+export const VOUCHER_MIGRATION_ADD_IS_HIDDEN_SQL = `ALTER TABLE public.store_voucher_campaign_statuses ADD COLUMN IF NOT EXISTS is_hidden BOOLEAN DEFAULT false;`;
+
+/**
  * Lấy cấu hình quy tắc phân phối voucher (100% Cloud-Direct Supabase)
  * Mặc định: FIFO (First In, First Out)
  */
@@ -349,33 +355,58 @@ export async function saveVoucherCampaignStatus(
     const key = getCampaignStatusKey(campaignName, denomination);
 
     try {
-        // Đọc cấu hình hiện có trên Cloud để bảo toàn trạng thái is_hidden
+        // Đọc cấu hình hiện có trên Cloud bằng select('*') để không bị lỗi PGRST204 nếu thiếu cột is_hidden
         const { data: existing } = await supabase
             .from('store_voucher_campaign_statuses')
-            .select('is_hidden')
+            .select('*')
             .eq('id', key)
             .maybeSingle();
 
-        const item: VoucherCampaignStatusConfig = {
+        const now = new Date().toISOString();
+        const item: any = {
             id: key,
             campaign_name: campaignName.trim(),
             denomination: denomination || 0,
             is_ended: isEnded,
-            is_hidden: existing?.is_hidden ?? false,
             updated_by: updatedBy,
-            updated_at: new Date().toISOString()
+            updated_at: now
         };
 
-        const { error } = await supabase
+        // Chỉ gán is_hidden nếu bản ghi cũ đã có trường is_hidden (chứng tỏ cột đã tồn tại trên DB)
+        if (existing && existing.is_hidden !== undefined) {
+            item.is_hidden = Boolean(existing.is_hidden);
+        }
+
+        let { error } = await supabase
             .from('store_voucher_campaign_statuses')
             .upsert([item], { onConflict: 'id' });
+
+        // Tự động nhận diện lỗi thiếu cột is_hidden trong schema cache (PGRST204) và retry không gửi is_hidden
+        if (error && (error.code === 'PGRST204' || error.message?.includes('is_hidden'))) {
+            delete item.is_hidden;
+            const retryRes = await supabase
+                .from('store_voucher_campaign_statuses')
+                .upsert([item], { onConflict: 'id' });
+            error = retryRes.error;
+        }
 
         if (error) {
             console.warn('Lỗi upsert Supabase store_voucher_campaign_statuses:', error.message);
             return { success: false, error: error.message };
         }
 
-        return { success: true, config: item };
+        return {
+            success: true,
+            config: {
+                id: key,
+                campaign_name: item.campaign_name,
+                denomination: item.denomination,
+                is_ended: item.is_ended,
+                is_hidden: Boolean(item.is_hidden),
+                updated_by: item.updated_by,
+                updated_at: item.updated_at
+            }
+        };
     } catch (e: any) {
         return { success: false, error: e.message || String(e) };
     }
@@ -397,12 +428,12 @@ export async function saveVoucherCampaignHiddenStatus(
     try {
         const { data: existing } = await supabase
             .from('store_voucher_campaign_statuses')
-            .select('is_ended, denomination')
+            .select('*')
             .eq('id', key)
             .maybeSingle();
 
         const now = new Date().toISOString();
-        const rootItem: VoucherCampaignStatusConfig = {
+        const rootItem: any = {
             id: key,
             campaign_name: cleanCamp,
             denomination: existing?.denomination || 0,
@@ -418,21 +449,42 @@ export async function saveVoucherCampaignHiddenStatus(
             .upsert([rootItem], { onConflict: 'id' });
 
         if (rootErr) {
+            if (rootErr.code === 'PGRST204' || rootErr.message?.includes('is_hidden')) {
+                return {
+                    success: false,
+                    error: `Bảng "store_voucher_campaign_statuses" trên Supabase chưa có cột "is_hidden". Vui lòng chạy lệnh SQL sau trong Supabase SQL Editor:\nALTER TABLE public.store_voucher_campaign_statuses ADD COLUMN IF NOT EXISTS is_hidden BOOLEAN DEFAULT false;`
+                };
+            }
             return { success: false, error: rootErr.message };
         }
 
         // 2. Cập nhật tất cả mệnh giá con của chương trình này
-        await supabase
-            .from('store_voucher_campaign_statuses')
-            .update({
-                is_hidden: isHidden,
-                is_ended: isHidden ? true : existing?.is_ended ?? false,
-                updated_by: updatedBy,
-                updated_at: now
-            })
-            .ilike('campaign_name', cleanCamp);
+        try {
+            await supabase
+                .from('store_voucher_campaign_statuses')
+                .update({
+                    is_hidden: isHidden,
+                    is_ended: isHidden ? true : existing?.is_ended ?? false,
+                    updated_by: updatedBy,
+                    updated_at: now
+                })
+                .ilike('campaign_name', cleanCamp);
+        } catch {
+            // Không làm gián đoạn nếu cập nhật mệnh giá con gặp lỗi
+        }
 
-        return { success: true, config: rootItem };
+        return {
+            success: true,
+            config: {
+                id: key,
+                campaign_name: rootItem.campaign_name,
+                denomination: rootItem.denomination,
+                is_ended: rootItem.is_ended,
+                is_hidden: Boolean(rootItem.is_hidden),
+                updated_by: rootItem.updated_by,
+                updated_at: rootItem.updated_at
+            }
+        };
     } catch (e: any) {
         return { success: false, error: e.message || String(e) };
     }
@@ -494,10 +546,12 @@ export interface SupabaseStorageStatus {
     totalCloudRecords: number;
     cloudCount?: number;
     error?: string;
+    hasCampaignStatusTable?: boolean;
+    hasIsHiddenColumn?: boolean;
 }
 
 /**
- * Kiểm tra trạng thái kết nối và sự tồn tại của bảng store_vouchers trên Supabase
+ * Kiểm tra trạng thái kết nối và sự tồn tại của bảng store_vouchers và store_voucher_campaign_statuses trên Supabase
  */
 export async function checkSupabaseVoucherTable(): Promise<SupabaseStorageStatus> {
     try {
@@ -522,10 +576,34 @@ export async function checkSupabaseVoucherTable(): Promise<SupabaseStorageStatus
             };
         }
 
+        // Kiểm tra sự tồn tại của bảng store_voucher_campaign_statuses và cột is_hidden
+        let hasCampaignStatusTable = true;
+        let hasIsHiddenColumn = true;
+        try {
+            const { error: colErr } = await supabase
+                .from('store_voucher_campaign_statuses')
+                .select('is_hidden')
+                .limit(1);
+
+            if (colErr) {
+                if (colErr.code === 'PGRST205' || colErr.message?.includes('schema cache') || colErr.message?.includes('store_voucher_campaign_statuses')) {
+                    hasCampaignStatusTable = false;
+                    hasIsHiddenColumn = false;
+                } else if (colErr.code === 'PGRST204' || colErr.message?.includes('is_hidden')) {
+                    hasCampaignStatusTable = true;
+                    hasIsHiddenColumn = false;
+                }
+            }
+        } catch {
+            // Không làm gián đoạn nếu kiểm tra phụ gặp lỗi mạng
+        }
+
         return {
             tableExists: true,
             totalCloudRecords: count || 0,
-            cloudCount: count || 0
+            cloudCount: count || 0,
+            hasCampaignStatusTable,
+            hasIsHiddenColumn
         };
     } catch (e: any) {
         return {
@@ -1415,10 +1493,17 @@ export async function renameVoucherCampaign(
                 .delete()
                 .ilike('campaign_name', cleanOld);
 
-            // Thêm trạng thái mới
-            await supabase
+            // Thêm trạng thái mới (có cơ chế fallback nếu schema cache thiếu cột is_hidden)
+            let { error: upsertErr } = await supabase
                 .from('store_voucher_campaign_statuses')
                 .upsert(migratedStatuses, { onConflict: 'id' });
+
+            if (upsertErr && (upsertErr.code === 'PGRST204' || upsertErr.message?.includes('is_hidden'))) {
+                const fallbackStatuses = migratedStatuses.map(({ is_hidden, ...rest }: any) => rest);
+                await supabase
+                    .from('store_voucher_campaign_statuses')
+                    .upsert(fallbackStatuses, { onConflict: 'id' });
+            }
         }
 
         return {
@@ -1512,23 +1597,29 @@ export async function updateVoucher(
         }
 
         // 3. Nếu thay đổi mã code: kiểm tra trùng lặp trên Cloud
-        let finalCode = target.code;
-        if (updates.code && updates.code.trim()) {
-            const cleanNewCode = updates.code.trim().toUpperCase();
-            if (cleanNewCode !== target.code.toUpperCase()) {
-                const { data: dupRows } = await supabase
-                    .from('store_vouchers')
-                    .select('id, campaign_name')
-                    .ilike('code', cleanNewCode);
+        if (updates.code !== undefined && !updates.code.trim()) {
+            return { success: false, error: 'Mã coupon / voucher không được để trống!' };
+        }
 
-                const duplicate = (dupRows || []).find((r: any) => r.id !== target.id);
-                if (duplicate) {
-                    return {
-                        success: false,
-                        error: `Mã coupon "${cleanNewCode}" đã tồn tại trong hệ thống (thuộc chương trình "${duplicate.campaign_name}")!`
-                    };
-                }
-                finalCode = cleanNewCode;
+        const cleanNewCode = updates.code && updates.code.trim() ? updates.code.trim().toUpperCase() : null;
+        let finalCode = cleanNewCode || (target.code ? target.code.trim().toUpperCase() : '');
+
+        if (!finalCode) {
+            return { success: false, error: 'Mã coupon / voucher không hợp lệ hoặc để trống!' };
+        }
+
+        if (cleanNewCode && target.code && cleanNewCode !== target.code.trim().toUpperCase()) {
+            const { data: dupRows } = await supabase
+                .from('store_vouchers')
+                .select('id, campaign_name')
+                .ilike('code', cleanNewCode);
+
+            const duplicate = (dupRows || []).find((r: any) => r.id !== target.id);
+            if (duplicate) {
+                return {
+                    success: false,
+                    error: `Mã coupon "${cleanNewCode}" đã tồn tại trong hệ thống (thuộc chương trình "${duplicate.campaign_name}")!`
+                };
             }
         }
 
@@ -1671,13 +1762,16 @@ export async function updateVouchersBatch(
 
             return {
                 id: t.id,
+                code: t.code, // BẮT BUỘC: Đảm bảo không vi phạm ràng buộc NOT NULL của cột "code" khi upsert
                 store_name: finalStoreName,
                 campaign_name: updates.campaign_name !== undefined ? updates.campaign_name.trim() : t.campaign_name,
                 denomination: updates.denomination !== undefined ? Number(updates.denomination) : t.denomination,
-                expires_at: updates.expires_at !== undefined ? updates.expires_at : t.expires_at,
+                expires_at: updates.expires_at !== undefined ? updates.expires_at : (t.expires_at || null),
                 status: updates.status !== undefined ? updates.status : t.status,
+                created_at: t.created_at || new Date().toISOString(),
+                created_by: t.created_by || null,
                 note: finalNote,
-                description: updates.description !== undefined ? (updates.description.trim() || null) : t.description,
+                description: updates.description !== undefined ? (updates.description.trim() || null) : (t.description || null),
                 claimed_at: willResetClaimed ? null : (t.claimed_at || null),
                 claimed_by_id: willResetClaimed ? null : (t.claimed_by_id || null),
                 claimed_by_name: willResetClaimed ? null : (t.claimed_by_name || null),
@@ -1842,7 +1936,14 @@ export async function cleanVouchers(params: {
             // Đánh dấu thành EXPIRED
             const toUpdate = targets.map(v => ({
                 id: v.id,
+                code: v.code, // BẮT BUỘC: Đầy đủ các trường NOT NULL khi upsert
+                store_name: v.store_name,
+                campaign_name: v.campaign_name,
+                denomination: v.denomination,
                 status: 'EXPIRED' as const,
+                expires_at: v.expires_at || null,
+                created_at: v.created_at || new Date().toISOString(),
+                created_by: v.created_by || null,
                 note: v.note ? `${v.note} | [Quá hạn lúc ${todayStr}]` : `[Quá hạn lúc ${todayStr}]`
             }));
 

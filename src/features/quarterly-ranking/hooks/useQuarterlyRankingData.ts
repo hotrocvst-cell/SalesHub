@@ -16,6 +16,7 @@ import {
     type EmployeeDataSession
 } from '../../employee-cumulative/utils/sessionStorage';
 import { getPresetMonths, aggregateQuarterlyRankingData } from '../utils/quarterlyAggregator';
+import { syncStoreCampaignScoresFromCloud } from '../../../core/lib/storeCampaignScoreService';
 
 interface UseQuarterlyRankingDataProps {
     selectedStore: string;
@@ -62,7 +63,8 @@ export function useQuarterlyRankingData({
             const [storesRes, empsRes, dictRes] = await Promise.all([
                 fetchStores(),
                 fetchEmployees(),
-                fetchCampaignDictionary()
+                fetchCampaignDictionary(),
+                syncStoreCampaignScoresFromCloud()
             ]);
 
             const currentStores = storesRes.success && storesRes.data ? storesRes.data : [];

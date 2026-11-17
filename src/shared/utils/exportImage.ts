@@ -196,14 +196,139 @@ export async function generateStandardReportCanvas(
 }
 
 /**
+ * Chuyển đổi chuỗi tiếng Việt có dấu thành không dấu
+ */
+export function removeVietnameseTones(str: string): string {
+    if (!str) return '';
+    return str
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/đ/g, 'd')
+        .replace(/Đ/g, 'D')
+        .trim();
+}
+
+/**
+ * Chuẩn hóa định danh Cụm hoặc ST cho tên file báo cáo:
+ * - 'all' / 'Tổng' / rỗng / 'toàn cụm' -> 'Toan_Cum'
+ * - 'Cụm 1' -> 'Cum_1'
+ * - '[10335] AAR...' hoặc '10335' hoặc '... (10335)' -> 'ST_10335'
+ * - Không có mã số -> 'ST_[Ten_Khong_Dau]'
+ */
+export function formatScopeOrStoreForFileName(rawStoreOrCluster?: string | null): string {
+    if (!rawStoreOrCluster) return 'Toan_Cum';
+    const trimmed = String(rawStoreOrCluster).trim();
+    if (!trimmed || /^(all|tổng|tong|toàn cụm|toan cum|tat ca|tất cả)$/i.test(trimmed)) {
+        return 'Toan_Cum';
+    }
+
+    if (/^cụm\s*/i.test(trimmed)) {
+        const rest = trimmed.replace(/^cụm\s*/i, '').trim();
+        const cleanRest = removeVietnameseTones(rest).replace(/[^a-zA-Z0-9]/g, '_').replace(/_+/g, '_');
+        return `Cum_${cleanRest || '1'}`;
+    }
+
+    // 1. Mã ở đầu [10335] hoặc 10335 - ...
+    const startMatch = trimmed.match(/^\[?(\d{3,8})\]?/);
+    if (startMatch) {
+        return `ST_${startMatch[1]}`;
+    }
+
+    // 2. Mã ở cuối trong ngoặc (10335)
+    const endMatch = trimmed.match(/\((\d{3,8})\)$/);
+    if (endMatch) {
+        return `ST_${endMatch[1]}`;
+    }
+
+    // 3. Mã thuần túy
+    if (/^\d{3,8}$/.test(trimmed)) {
+        return `ST_${trimmed}`;
+    }
+
+    // 4. Tên ST không có mã số
+    const clean = removeVietnameseTones(trimmed)
+        .replace(/[^a-zA-Z0-9]/g, '_')
+        .replace(/_+/g, '_')
+        .replace(/^_|_$/g, '');
+    return `ST_${clean.slice(0, 30) || 'Chung'}`;
+}
+
+/**
+ * Tạo dấu thời gian chuẩn YYYYMMDD_HHmmss cho tên file
+ */
+export function getReportTimestamp(date: Date = new Date()): string {
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const yyyy = date.getFullYear();
+    const mm = pad(date.getMonth() + 1);
+    const dd = pad(date.getDate());
+    const hh = pad(date.getHours());
+    const min = pad(date.getMinutes());
+    const ss = pad(date.getSeconds());
+    return `${yyyy}${mm}${dd}_${hh}${min}${ss}`;
+}
+
+export interface BuildReportFileNameParams {
+    reportName: string;                     // Tên báo cáo (VD: 'Bao_Cao_Ngay', 'Bao_Cao_Thang', 'Xep_Hang_Nhan_Vien'...)
+    storeOrCluster?: string | null;         // Tên hoặc mã ST/Cụm
+    period?: string | null;                 // (Tùy chọn) Kỳ/ngày số liệu (VD: '2026-11-14', 'T11_2026', 'Q4_2026'...)
+    timestamp?: Date;                       // (Tùy chọn) Thời điểm xuất, mặc định là new Date()
+    extension?: string;                     // (Tùy chọn) Mặc định 'png'
+}
+
+/**
+ * QUY CHUẨN ĐỒNG BỘ TÊN FILE XUẤT ẢNH BÁO CÁO TOÀN HỆ THỐNG SALESHUB:
+ * Cấu trúc chuẩn 3 thành phần: <Tên_Báo_Cáo>_<Tên_Mã_Cụm_ST>_[Kỳ_]<Dấu_Thời_Gian>.png
+ * Ví dụ:
+ * - Bao_Cao_Ngay_ST_10335_20261115_131520.png
+ * - Bao_Cao_Ngay_Toan_Cum_20261115_131520.png
+ * - Xep_Hang_Nhan_Vien_ST_10335_T11_2026_20261115_131520.png
+ * - Bao_Cao_Cum_ST_Toan_Cum_20261115_131520.png
+ */
+export function buildReportImageFileName(
+    paramsOrReportName: BuildReportFileNameParams | string,
+    storeOrCluster?: string | null,
+    period?: string | null
+): string {
+    const params: BuildReportFileNameParams =
+        typeof paramsOrReportName === 'string'
+            ? { reportName: paramsOrReportName, storeOrCluster, period }
+            : paramsOrReportName;
+
+    const cleanReportName = removeVietnameseTones(params.reportName.trim())
+        .replace(/[^a-zA-Z0-9]/g, '_')
+        .replace(/_+/g, '_')
+        .replace(/^_|_$/g, '');
+
+    const scopePart = formatScopeOrStoreForFileName(params.storeOrCluster);
+
+    let periodPart = '';
+    if (params.period) {
+        const cleanPeriod = removeVietnameseTones(params.period.trim())
+            .replace(/[-/]/g, '')
+            .replace(/[^a-zA-Z0-9]/g, '_')
+            .replace(/_+/g, '_')
+            .replace(/^_|_$/g, '');
+        if (cleanPeriod) {
+            periodPart = `_${cleanPeriod}`;
+        }
+    }
+
+    const tsPart = getReportTimestamp(params.timestamp || new Date());
+    const ext = (params.extension || 'png').replace(/^\./, '');
+
+    return `${cleanReportName}_${scopePart}${periodPart}_${tsPart}.${ext}`;
+}
+
+/**
  * Tải canvas thành file ảnh PNG về máy khách
  */
 export async function downloadReportCanvas(canvas: HTMLCanvasElement, fileName: string): Promise<boolean> {
+    const finalName = fileName.toLowerCase().endsWith('.png') ? fileName : `${fileName}.png`;
     const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
     if (!blob) return false;
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.download = fileName;
+    link.download = finalName;
     link.href = url;
     link.click();
     URL.revokeObjectURL(url);

@@ -1265,6 +1265,7 @@ export default function EmployeeExtractOcrPage() {
                     onRemapCampaign={handleRemapCampaign}
                     onResetBatch={handleManualResetBatch}
                     hasSavedSession={hasSavedCurrentBatch}
+                    onToast={showToast}
                 />
             )}
 

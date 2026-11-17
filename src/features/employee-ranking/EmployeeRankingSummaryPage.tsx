@@ -85,7 +85,7 @@ import {
 } from 'lucide-react';
 import ExcelJS from 'exceljs';
 import html2canvas from 'html2canvas';
-import { calculate8KScale } from '../../shared/utils/exportImage';
+import { calculate8KScale, buildReportImageFileName } from '../../shared/utils/exportImage';
 
 export default function EmployeeRankingSummaryPage() {
     const navigate = useNavigate();
@@ -192,7 +192,7 @@ export default function EmployeeRankingSummaryPage() {
                 ? GUEST_DEMO_STORE
                 : (selectedStore === 'all' ? undefined : selectedStore);
 
-            const [storesRes, empsRes, revTargetsRes, campTargetsRes, dictRes, allSessions, rescueCfg, offsetsRes, bonusesList] = await Promise.all([
+            const [storesRes, empsRes, revTargetsRes, campTargetsRes, dictRes, allSessions, rescueCfg, , offsetsRes, bonusesList] = await Promise.all([
                 fetchStores(),
                 fetchEmployees(targetStoreParam),
                 fetchEmployeeRevenueTargets(selectedMonth, selectedYear),
@@ -204,6 +204,7 @@ export default function EmployeeRankingSummaryPage() {
                     storeName: targetStoreParam
                 }),
                 fetchEmployeeRescueConfig(selectedStore, selectedMonth, selectedYear),
+                syncStoreCampaignScoresFromCloud(selectedMonth, selectedYear),
                 fetchCampaignOffsets(selectedStore, selectedMonth, selectedYear),
                 fetchEmployeeBonuses({ month: selectedMonth, year: selectedYear })
             ]);
@@ -398,8 +399,8 @@ export default function EmployeeRankingSummaryPage() {
             const forecastRevenueQd = (revenueQd / safePassed) * safeTotal;
             const forecastRate = revenueTarget > 0 ? (forecastRevenueQd / revenueTarget) * 100 : 0;
 
-            // Dữ liệu thi đua của nhân viên: Tự động tra cứu cấu hình theo đúng ST của NV
-            const scoreCfg = getStoreCampaignScoreConfig(empStore, stores);
+            // Dữ liệu thi đua của nhân viên: Tự động tra cứu cấu hình theo đúng ST của NV & Tháng/Năm
+            const scoreCfg = getStoreCampaignScoreConfig(empStore, stores, selectedMonth, selectedYear);
             const isPointsMode = scoreCfg.scoring_mode === 'POINTS';
 
             const empCampaignTargets = campaignTargets[empId] || {};
@@ -416,7 +417,7 @@ export default function EmployeeRankingSummaryPage() {
                 const tVal = Number(targetVal) || 0;
                 if (tVal > 0) {
                     totalCampaigns++;
-                    const resolved = resolveCanonicalCampaign(rawKey, campaignDict);
+                    const resolved = resolveCanonicalCampaign(rawKey, campaignDict, selectedMonth);
                     const cKey = resolved.canonicalKey;
 
                     // Lấy actual thô với khả năng đối chiếu thông minh (exact -> canonical -> normalized token)
@@ -428,7 +429,7 @@ export default function EmployeeRankingSummaryPage() {
                     } else {
                         // 1. Đối chiếu qua resolveCanonicalCampaign
                         for (const [sessKey, sessVal] of Object.entries(empCampaignActuals)) {
-                            const sessResolved = resolveCanonicalCampaign(sessKey, campaignDict);
+                            const sessResolved = resolveCanonicalCampaign(sessKey, campaignDict, selectedMonth);
                             if (sessResolved.canonicalKey === cKey || sessResolved.canonicalKey === rawKey) {
                                 actualVal = Number(sessVal) || 0;
                                 break;
@@ -455,8 +456,8 @@ export default function EmployeeRankingSummaryPage() {
                     empOffsets.forEach(o => {
                         const toKey = (o.to_campaign_key || '').trim();
                         const fromKey = (o.from_campaign_key || '').trim();
-                        const toCanonical = resolveCanonicalCampaign(toKey, campaignDict).canonicalKey;
-                        const fromCanonical = resolveCanonicalCampaign(fromKey, campaignDict).canonicalKey;
+                        const toCanonical = resolveCanonicalCampaign(toKey, campaignDict, selectedMonth).canonicalKey;
+                        const fromCanonical = resolveCanonicalCampaign(fromKey, campaignDict, selectedMonth).canonicalKey;
                         if (toKey === cKey || toKey === rawKey || toCanonical === cKey) {
                             offsetIn += Number(o.offset_quantity) || 0;
                         }
@@ -688,7 +689,7 @@ export default function EmployeeRankingSummaryPage() {
 
         let modeLabel = 'Tùy biến từng ST';
         if (selectedStore !== 'all') {
-            const curCfg = getStoreCampaignScoreConfig(selectedStore, stores);
+            const curCfg = getStoreCampaignScoreConfig(selectedStore, stores, selectedMonth, selectedYear);
             modeLabel = curCfg.scoring_mode === 'POINTS' ? 'Tính Điểm' : 'Tính Số NH';
         } else {
             const allPoints = rankingRows.every(r => r.scoring_mode === 'POINTS');
@@ -828,7 +829,11 @@ export default function EmployeeRankingSummaryPage() {
 
             if (mode === 'DOWNLOAD') {
                 const link = document.createElement('a');
-                link.download = `XepHangNhanVien_${selectedStore}_T${selectedMonth}_${selectedYear}_8K.png`;
+                link.download = buildReportImageFileName(
+                    'Xep_Hang_Nhan_Vien',
+                    selectedStore,
+                    `T${selectedMonth}_${selectedYear}`
+                );
                 link.href = canvas.toDataURL('image/png');
                 link.click();
                 showToast('✅ Đã tải xuống ảnh báo cáo 8K thành công!');
@@ -1216,6 +1221,24 @@ export default function EmployeeRankingSummaryPage() {
                                 </span>
                             </div>
                             <div className="flex items-center gap-2" data-html2canvas-ignore="true">
+                                <button
+                                    type="button"
+                                    onClick={async () => {
+                                        if (assessmentData?.comment) {
+                                            try {
+                                                await navigator.clipboard.writeText(assessmentData.comment);
+                                                showToast('📋 Đã sao chép nhận xét vào bộ nhớ tạm!');
+                                            } catch {
+                                                showToast('⚠️ Không thể sao chép nhận xét!');
+                                            }
+                                        }
+                                    }}
+                                    className="text-[10.5px] font-bold text-blue-800 hover:text-blue-950 flex items-center gap-1 cursor-pointer transition"
+                                    title="Sao chép nội dung nhận xét để dán vào Messaging App"
+                                >
+                                    <Copy className="w-3 h-3" aria-hidden="true" />
+                                    <span>Chép</span>
+                                </button>
                                 <button
                                     type="button"
                                     onClick={() => setIsAssessmentModalOpen(true)}

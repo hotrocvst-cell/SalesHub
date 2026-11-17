@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
     generateStandardReportCanvas,
     downloadReportCanvas,
-    copyReportCanvasToClipboard
+    copyReportCanvasToClipboard,
+    buildReportImageFileName
 } from "../../shared/utils/exportImage";
 import { useNavigate } from "react-router-dom";
 import {
@@ -600,8 +601,11 @@ export default function MonthlyReportPage() {
             const canvas = await generate8KCanvas();
             if (!canvas) throw new Error("Không thể khởi tạo canvas");
 
-            const cleanStore = (selectedStore === 'all' ? 'Toan_Cum' : selectedStore).replace(/[^a-zA-Z0-9_-]/g, '_');
-            const fileName = `Bao_Cao_8K_T${selectedMonth}_${selectedYear}_${cleanStore}.png`;
+            const fileName = buildReportImageFileName(
+                'Bao_Cao_Thang',
+                selectedStore,
+                `T${selectedMonth}_${selectedYear}`
+            );
             const success = await downloadReportCanvas(canvas, fileName);
             if (success) {
                 showToast('Đã tải file ảnh 8K thành công!');

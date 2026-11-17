@@ -23,7 +23,8 @@ import { useAuth } from '../../shared/contexts/AuthContext';
 import {
     generateStandardReportCanvas,
     downloadReportCanvas,
-    copyReportCanvasToClipboard
+    copyReportCanvasToClipboard,
+    buildReportImageFileName
 } from '../../shared/utils/exportImage';
 import {
     DENOMINATIONS,
@@ -306,8 +307,8 @@ export default function CashCounterPage() {
                 } else {
                     // Trình duyệt không hỗ trợ chép Blob image: tự động tải file ảnh về
                     showToast('Trình duyệt chưa hỗ trợ chép ảnh trực tiếp, đang tải file ảnh về máy...', 'info');
-                    const nowStr = new Date().toISOString().slice(0, 10);
-                    await downloadReportCanvas(canvas, `Phieu_Kiem_Quy_${nowStr}.png`);
+                    const fileName = buildReportImageFileName('Phieu_Kiem_Quy', selectedStore);
+                    await downloadReportCanvas(canvas, fileName);
                 }
             } else {
                 showToast('Không thể tạo ảnh phiếu kiểm, vui lòng thử lại!', 'error');
@@ -329,8 +330,8 @@ export default function CashCounterPage() {
                 targetWidth: 850
             });
             if (canvas) {
-                const nowStr = new Date().toISOString().slice(0, 10);
-                await downloadReportCanvas(canvas, `Phieu_Kiem_Quy_${nowStr}.png`);
+                const fileName = buildReportImageFileName('Phieu_Kiem_Quy', selectedStore);
+                await downloadReportCanvas(canvas, fileName);
                 showToast('Đã tải hình ảnh phiếu kiểm quỹ sắc nét về máy!', 'success');
             } else {
                 showToast('Không thể tạo ảnh, vui lòng thử lại!', 'error');

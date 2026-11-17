@@ -48,7 +48,7 @@ import { useUserStoreFilter } from '../../shared/hooks/useUserStoreFilter';
 import ExcelJS from 'exceljs';
 import html2canvas from 'html2canvas';
 import { useExcelExportPermission } from '../../shared/hooks/useExcelExportPermission';
-import { calculate8KScale } from '../../shared/utils/exportImage';
+import { calculate8KScale, buildReportImageFileName } from '../../shared/utils/exportImage';
 import { isGuestDemoStore, GUEST_DEMO_STORE } from '../../core/lib/guestDemoStoreService';
 
 export default function EmployeePerformanceReportPage() {
@@ -742,9 +742,14 @@ export default function EmployeePerformanceReportPage() {
                 return;
             }
             const imgData = canvas.toDataURL('image/png', 1.0);
+            const fileName = buildReportImageFileName(
+                'Hieu_Qua_Nhan_Vien',
+                selectedStore,
+                `T${selectedMonth}_${selectedYear}`
+            );
             const a = document.createElement('a');
             a.href = imgData;
-            a.download = `BaoCao_HieuQua_NV_${selectedMonth}_${selectedYear}.png`;
+            a.download = fileName;
             a.click();
             showToast('Đã tải file ảnh báo cáo thành công!');
         } catch (e: any) {
@@ -776,7 +781,11 @@ export default function EmployeePerformanceReportPage() {
                         const imgData = canvas.toDataURL('image/png', 1.0);
                         const a = document.createElement('a');
                         a.href = imgData;
-                        a.download = `BaoCao_HieuQua_NV_${selectedMonth}_${selectedYear}.png`;
+                        a.download = buildReportImageFileName(
+                            'Hieu_Qua_Nhan_Vien',
+                            selectedStore,
+                            `T${selectedMonth}_${selectedYear}`
+                        );
                         a.click();
                         showToast('Ảnh báo cáo đã tự động được tải về máy của bạn!');
                     }

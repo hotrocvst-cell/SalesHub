@@ -10,7 +10,7 @@ import {
 } from '../utils/retrievalScorer';
 import { getSignedImageUrlsBatch } from './knowledgeStorageService';
 import { getCachedFaqAnswer, saveFaqCacheEntry } from './faqCacheService';
-import { resolveImageAttachments, searchKnowledgeChunksForUser } from './knowledgeService';
+import { resolveImageAttachments, searchKnowledgeChunksForUser, recordDocumentAccess } from './knowledgeService';
 import { callCloudflareProxyIfAvailable, callGeminiDirectWithRotation } from './geminiChatClient';
 import {
     MAX_ATTACHMENT_IMAGES_PER_REPLY,
@@ -130,6 +130,9 @@ export async function askAiAssistant(params: {
         });
 
         if (cached.hit && cached.answerText) {
+            if (cached.sources && cached.sources.length > 0) {
+                recordDocumentAccess(cached.sources.map((s) => s.documentId));
+            }
             const urlMap = await getSignedImageUrlsBatch(cached.imagePaths || []);
             const images: ChatAttachmentImage[] = (cached.imagePaths || [])
                 .slice(0, MAX_ATTACHMENT_IMAGES_PER_REPLY)
@@ -192,6 +195,10 @@ export async function askAiAssistant(params: {
             resolveImageAttachments(chunks, MAX_ATTACHMENT_IMAGES_PER_REPLY, getSignedImageUrlsBatch),
             Promise.resolve(extractUniqueSources(chunks))
         ]);
+
+        if (sources.length > 0) {
+            recordDocumentAccess(sources.map((s) => s.documentId));
+        }
 
         if (disambiguation.needsDisambiguation && disambiguation.options.length >= 2) {
             const optionsList = disambiguation.options
@@ -311,6 +318,10 @@ NGUYÊN TẮC BẮT BUỘC:
             resolveImageAttachments(selectedChunks, MAX_ATTACHMENT_IMAGES_PER_REPLY, getSignedImageUrlsBatch),
             Promise.resolve(extractUniqueSources(selectedChunks))
         ]);
+
+        if (sources.length > 0) {
+            recordDocumentAccess(sources.map((s) => s.documentId));
+        }
 
         if (!isFollowUp && cleanText) {
             saveFaqCacheEntry({

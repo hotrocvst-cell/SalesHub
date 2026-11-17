@@ -32,3 +32,15 @@ trigger: always_on
    - Khung hình ảnh xuất báo cáo (`export-container`) phải ưu tiên bố cục theo chiều dọc (Portrait mode), độ rộng tối ưu khoảng **800px - 1000px**.
    - Mục đích: Khi gửi ảnh vào Messaging App và người dùng mở xem trên điện thoại, toàn bộ ảnh hiển thị vừa khít màn hình dọc smartphone, chữ và số to rõ, dễ đọc, không bị thu nhỏ li ti như ảnh dàn quá rộng theo chiều ngang.
 
+6. **Quy chuẩn thống nhất đặt tên file ảnh báo cáo (Standardized Report Image File Naming)**:
+   - Tất cả các trang báo cáo khi tải ảnh về máy (`link.download`) bắt buộc áp dụng cấu trúc 3 thành phần thống nhất:
+     `<Tên_Báo_Cáo>_<Tên_Mã_Cụm_ST>_[Kỳ_Báo_Cáo_]<Dấu_Thời_Gian>.png`
+     1. **Tên báo cáo**: Viết hoa không dấu chuẩn hóa (`Bao_Cao_Ngay`, `Bao_Cao_Thang`, `Bao_Cao_Cum_ST`, `Xep_Hang_Nhan_Vien`, `Hieu_Qua_Nhan_Vien`, `Thi_Dua_Trong_Tam`, `Xep_Hang_Quy_NV`, `Chi_Tiet_NV`, `Nhip_Doanh_Thu`, v.v.).
+     2. **Tên / Mã của Cụm hoặc ST**:
+        - Xem theo ST cụ thể: `ST_[Mã_ST]` (ví dụ: `ST_10335`). Nếu ST không có mã số thì dùng `ST_[Tên_ST_Không_Dấu]`.
+        - Xem theo Cụm hoặc Toàn Cụm: `Toan_Cum` hoặc `Cum_[Tên_Cụm]`.
+     3. **Dấu thời gian (Timestamp)**:
+        - Định dạng chuẩn timestamp: `YYYYMMDD_HHmmss` (ví dụ `20261115_131520`), có thể kèm theo kỳ ngày `YYYYMMDD` hoặc `Tháng_Năm` nếu có.
+        - Đảm bảo tên file mang tính định danh duy nhất, không bị trùng đè khi xuất nhiều lần, thuận tiện cho việc lưu trữ, tìm kiếm và quản lý trên điện thoại/máy tính của Quản lý và Nhân viên.
+   - Sử dụng hàm dùng chung `buildReportImageFileName(...)` trong `src/shared/utils/exportImage.ts` (hoặc `src/core/lib/formatters.ts`).
+

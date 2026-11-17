@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import html2canvas from 'html2canvas';
-import { calculate8KScale } from '../../shared/utils/exportImage';
+import { calculate8KScale, buildReportImageFileName } from '../../shared/utils/exportImage';
 import {
     fetchCampaignPrograms,
     saveCampaignProgram,
@@ -436,8 +436,11 @@ export default function CampaignDirectoryPage() {
             if (!canvas) throw new Error('Không thể tạo canvas');
 
             const link = document.createElement('a');
-            const nowStr = new Date().toISOString().slice(0, 10);
-            link.download = `Tong_Hop_Thi_Dua_${nowStr}_8K.png`;
+            link.download = buildReportImageFileName(
+                'Tong_Hop_Chuong_Trinh_Thi_Dua',
+                selectedStore,
+                reportMonthDisplay
+            );
             link.href = canvas.toDataURL('image/png');
             link.click();
             showToast('🎉 Đã tải file ảnh 8K báo cáo thành công!');

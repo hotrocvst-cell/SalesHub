@@ -11,6 +11,7 @@ import type { EmployeeDataSession } from '../../employee-cumulative/utils/sessio
 import type { EmployeeItem, CampaignDictItem, StoreItem } from '../../../core/lib/storage';
 import { isStoreMatch, cleanEmployeeName, getShortenedEmployeeName } from '../../../core/lib/formatters';
 import { isGuestDemoStore } from '../../../core/lib/guestDemoStoreService';
+import { getStoreCampaignScoreConfig, getCampaignPoints } from '../../../core/lib/storeCampaignScoreService';
 
 export function getPresetMonths(
     preset: QuarterPreset,
@@ -70,6 +71,7 @@ export function aggregateQuarterlyRankingData(params: AggregateParams): {
 } {
     const {
         months,
+        year,
         monthlySessions,
         monthlyRevTargets,
         monthlyCampTargets,
@@ -209,21 +211,24 @@ export function aggregateQuarterlyRankingData(params: AggregateParams): {
                 isAchieved
             });
 
-            // Thi đua trong tháng m: tính tổng đã đạt / tổng mục tiêu
+            // Thi đua trong tháng m: tính theo cấu hình điểm hoặc số mục của ST trong tháng đó
             const monthCampTargets = monthlyCampTargets[m]?.[empId] || {};
             const monthCampActuals = rec?.campaigns || {};
+            const scoreCfg = getStoreCampaignScoreConfig(storeName, storesList, m, year);
+            const isPointsMode = scoreCfg.scoring_mode === 'POINTS';
 
             let monthAchieved = 0;
             let monthTarget = 0;
 
-            // Đếm các mục tiêu giao có giá trị > 0
+            // Tính điểm / số lượng các mục tiêu giao có giá trị > 0
             Object.entries(monthCampTargets).forEach(([rawKey, targetVal]) => {
                 const tVal = Number(targetVal) || 0;
                 if (tVal > 0) {
-                    monthTarget++;
+                    const itemPoints = isPointsMode ? getCampaignPoints(rawKey, scoreCfg) : 1;
+                    monthTarget += itemPoints;
                     const actVal = Number(monthCampActuals[rawKey]) || 0;
                     if (actVal >= tVal) {
-                        monthAchieved++;
+                        monthAchieved += itemPoints;
                     }
                 }
             });
@@ -232,10 +237,16 @@ export function aggregateQuarterlyRankingData(params: AggregateParams): {
             if (monthTarget === 0) {
                 const actKeys = Object.keys(monthCampActuals).filter(k => (Number(monthCampActuals[k]) || 0) > 0);
                 if (actKeys.length > 0) {
-                    monthTarget = actKeys.length;
-                    monthAchieved = actKeys.length;
+                    actKeys.forEach(k => {
+                        const itemPoints = isPointsMode ? getCampaignPoints(k, scoreCfg) : 1;
+                        monthTarget += itemPoints;
+                        monthAchieved += itemPoints;
+                    });
                 }
             }
+
+            monthAchieved = Number(monthAchieved.toFixed(1));
+            monthTarget = Number(monthTarget.toFixed(1));
 
             const monthEmuRate = monthTarget > 0
                 ? Math.round((monthAchieved / monthTarget) * 1000) / 10

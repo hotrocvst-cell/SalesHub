@@ -7,10 +7,12 @@ import {
     Image as ImageIcon,
     FileText,
     Loader2,
-    Trash2
+    Trash2,
+    Calendar
 } from 'lucide-react';
 import {
     KNOWLEDGE_CATEGORIES,
+    DEFAULT_DOCUMENT_VALID_UNTIL,
     type KnowledgeDocument,
     type KnowledgeSourceType
 } from '../types/aiAssistantTypes';
@@ -48,6 +50,9 @@ export default function KnowledgeDocEditor({
     const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
     const [allowedRoles, setAllowedRoles] = useState<string[]>(editingDoc?.allowed_roles || ['ALL']);
     const [allowedStores, setAllowedStores] = useState<string[]>(editingDoc?.allowed_stores || ['ALL']);
+    const [validUntil, setValidUntil] = useState<string>(
+        editingDoc?.valid_until || DEFAULT_DOCUMENT_VALID_UNTIL
+    );
     const [isParsingFile, setIsParsingFile] = useState(false);
     const [isUploadingImg, setIsUploadingImg] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
@@ -112,6 +117,21 @@ export default function KnowledgeDocEditor({
         setIsUploadingImg(false);
     };
 
+    const setDatePreset = (preset: '1M' | '3M' | 'YEAR_END' | 'DEFAULT') => {
+        const now = new Date();
+        if (preset === '1M') {
+            now.setMonth(now.getMonth() + 1);
+            setValidUntil(now.toISOString().slice(0, 10));
+        } else if (preset === '3M') {
+            now.setMonth(now.getMonth() + 3);
+            setValidUntil(now.toISOString().slice(0, 10));
+        } else if (preset === 'YEAR_END') {
+            setValidUntil(`${now.getFullYear()}-12-31`);
+        } else {
+            setValidUntil(DEFAULT_DOCUMENT_VALID_UNTIL);
+        }
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!title.trim() || !rawContent.trim()) {
@@ -128,6 +148,7 @@ export default function KnowledgeDocEditor({
             image_paths: imagePaths,
             allowed_roles: allowedRoles,
             allowed_stores: allowedStores,
+            valid_until: validUntil,
             is_active: editingDoc?.is_active ?? true,
             created_by: currentUserName
         });
@@ -233,6 +254,63 @@ export default function KnowledgeDocEditor({
                 onChangeRoles={setAllowedRoles}
                 onChangeStores={setAllowedStores}
             />
+
+            {/* Cấu hình Thời Hạn Áp Dụng (valid_until) */}
+            <div className="p-3 bg-amber-50/70 border border-amber-200/90 rounded-2xl space-y-2">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <label htmlFor="doc-valid-until" className="text-[11px] font-bold text-amber-950 flex items-center gap-1.5">
+                        <Calendar className="w-3.5 h-3.5 text-amber-700 shrink-0" aria-hidden="true" />
+                        <span>Thời hạn áp dụng (HSD tài liệu):</span>
+                        <span className="text-[10px] font-normal text-amber-800/80">(Tự động loại bỏ khỏi AI khi hết hạn)</span>
+                    </label>
+                    <div className="flex items-center gap-1 flex-wrap">
+                        <button
+                            type="button"
+                            onClick={() => setDatePreset('1M')}
+                            className="px-2 py-0.5 rounded-md bg-white border border-amber-300 text-[10px] font-bold text-amber-900 hover:bg-amber-100 transition cursor-pointer"
+                        >
+                            +1 Tháng
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setDatePreset('3M')}
+                            className="px-2 py-0.5 rounded-md bg-white border border-amber-300 text-[10px] font-bold text-amber-900 hover:bg-amber-100 transition cursor-pointer"
+                        >
+                            +3 Tháng
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setDatePreset('YEAR_END')}
+                            className="px-2 py-0.5 rounded-md bg-white border border-amber-300 text-[10px] font-bold text-amber-900 hover:bg-amber-100 transition cursor-pointer"
+                        >
+                            Hết năm nay
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setDatePreset('DEFAULT')}
+                            className="px-2 py-0.5 rounded-md bg-amber-700 text-white text-[10px] font-bold hover:bg-amber-800 transition cursor-pointer"
+                        >
+                            Mặc định 2030
+                        </button>
+                    </div>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                    <input
+                        id="doc-valid-until"
+                        type="date"
+                        value={validUntil}
+                        onChange={(e) => setValidUntil(e.target.value)}
+                        className="h-8 px-2.5 bg-white border border-amber-300 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                    <span className="text-[10.5px] text-amber-950 font-medium">
+                        {validUntil < new Date().toISOString().slice(0, 10) ? (
+                            <span className="text-rose-600 font-bold">⚠️ Ngày đã chọn đã qua (tài liệu sẽ bị ẩn khỏi AI ngay)</span>
+                        ) : (
+                            <span>Còn hiệu lực đến hết ngày: <b>{validUntil.split('-').reverse().join('/')}</b></span>
+                        )}
+                    </span>
+                </div>
+            </div>
 
             {/* Xem trước ảnh đính kèm nếu có */}
             {imagePaths.length > 0 && (

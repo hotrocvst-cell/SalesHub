@@ -15,7 +15,8 @@ export async function exportUnifiedTargetTemplate(
     revenueTargets: Record<string, number>,
     campaignTargets: Record<string, Record<string, number>>,
     month: number,
-    year: number
+    year: number,
+    storeName?: string
 ) {
     const workbook = new ExcelJS.Workbook();
     workbook.creator = 'SalesHub';
@@ -121,7 +122,22 @@ export async function exportUnifiedTargetTemplate(
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `Mau_Chi_Tieu_Nhan_Vien_Thang_${month}_${year}.xlsx`;
+
+    // Chuẩn hóa tên file theo Quy chuẩn Rule 2 GEMINI.md
+    if (storeName && storeName !== 'all') {
+        const cleanStore = storeName
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/đ/g, 'd')
+            .replace(/Đ/g, 'D')
+            .replace(/[^a-zA-Z0-9]/g, '_')
+            .replace(/_+/g, '_')
+            .replace(/^_|_$/g, '');
+        link.download = `Mau_Chi_Tieu_ST_${cleanStore}_T${month}_${year}.xlsx`;
+    } else {
+        link.download = `Mau_Chi_Tieu_Toan_Cum_T${month}_${year}.xlsx`;
+    }
+
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

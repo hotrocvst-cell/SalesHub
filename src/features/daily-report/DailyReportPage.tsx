@@ -4,7 +4,8 @@ import { useAuth } from '../../shared/contexts/AuthContext';
 import {
     generateStandardReportCanvas,
     downloadReportCanvas,
-    copyReportCanvasToClipboard
+    copyReportCanvasToClipboard,
+    buildReportImageFileName
 } from '../../shared/utils/exportImage';
 import {
     formatValue,
@@ -394,9 +395,8 @@ export default function DailyReportPage() {
             });
 
             if (!canvas) throw new Error('Không thể khởi tạo canvas');
-            const cleanStore = (selectedStore === 'Tổng' ? 'Tong_Cum' : selectedStore).replace(/[^a-zA-Z0-9_-]/g, '_');
-            const prefix = activeTab === 'remaining' ? 'BC_Realtime_ConLai' : 'BaoCao_Realtime';
-            const fileName = `${prefix}_${cleanStore}_8K.png`;
+            const reportName = activeTab === 'remaining' ? 'Bao_Cao_Realtime_Con_Lai' : 'Bao_Cao_Realtime';
+            const fileName = buildReportImageFileName(reportName, selectedStore);
 
             if (mode === 'save') {
                 const success = await downloadReportCanvas(canvas, fileName);

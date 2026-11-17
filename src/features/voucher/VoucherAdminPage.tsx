@@ -25,7 +25,8 @@ import {
     Eye,
     EyeOff,
     Edit3,
-    Hash
+    Hash,
+    Copy
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../shared/contexts/AuthContext';
@@ -49,6 +50,7 @@ import {
     cleanupLegacyLocalStorageVouchers,
     type SupabaseStorageStatus,
     STORE_VOUCHERS_SQL,
+    VOUCHER_MIGRATION_ADD_IS_HIDDEN_SQL,
     getVoucherDistributionConfig,
     fetchVoucherCampaignStatuses,
     saveVoucherCampaignStatus,
@@ -692,6 +694,29 @@ export default function VoucherAdminPage() {
                     customMessage="Kho voucher vận hành 100% thời gian thực trên Supabase Cloud - Mọi thao tác Nạp mã, Cấp phát, Reset, Đổi tên và Xóa mã đều tự động đồng bộ tức thời trên toàn bộ thiết bị (smartphone & desktop), không sử dụng bộ nhớ đệm LocalStorage."
                 />
             </div>
+
+            {/* CẢNH BÁO THIẾU CỘT IS_HIDDEN CHO ADMIN (RULE 12 GEMINI.MD) */}
+            {isAdmin && cloudStatus?.hasIsHiddenColumn === false && (
+                <div data-html2canvas-ignore="true" data-export-ignore="true" className="bg-amber-50 border border-amber-200 rounded-2xl p-3 flex items-center justify-between gap-3 text-xs shadow-2xs">
+                    <div className="flex items-center gap-2 text-amber-900">
+                        <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" aria-hidden="true" />
+                        <span>
+                            <strong>Lưu ý Cloud:</strong> Bảng <code>store_voucher_campaign_statuses</code> đang thiếu cột <code>is_hidden</code>. Tính năng Kết thúc sớm đã được cấu hình tự động thích ứng an toàn. Bạn có thể sao chép lệnh SQL để bổ sung cột phục vụ tính năng Ẩn chương trình.
+                        </span>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            navigator.clipboard.writeText(VOUCHER_MIGRATION_ADD_IS_HIDDEN_SQL);
+                            showToast('📋 Đã copy lệnh SQL bổ sung cột is_hidden!');
+                        }}
+                        className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold shrink-0 flex items-center gap-1.5 transition cursor-pointer shadow-xs"
+                    >
+                        <Copy className="w-3.5 h-3.5" aria-hidden="true" />
+                        <span>Sao Chép SQL</span>
+                    </button>
+                </div>
+            )}
 
             {/* 2. CHỌN ST & PHẠM VI DỮ LIỆU */}
             <div className="bg-white rounded-2xl p-3 border border-slate-200 shadow-sm flex items-center justify-between gap-3 text-xs flex-wrap">

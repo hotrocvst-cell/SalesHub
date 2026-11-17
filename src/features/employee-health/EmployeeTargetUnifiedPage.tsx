@@ -18,6 +18,8 @@ import { exportUnifiedTargetTemplate, type ParsedTargetRow } from './utils/excel
 import { filterCampaignsByMonth } from './utils/campaignMonthHelper';
 import UnifiedTargetTable from './components/UnifiedTargetTable';
 import ImportTargetModal from './components/ImportTargetModal';
+import ExportTargetTemplateModal from './components/ExportTargetTemplateModal';
+import { detectStoreTargetCampaignKeys } from './utils/storeTargetCampaignHelper';
 import SupabaseSyncStatusBar, { type SyncStatusType } from './components/SupabaseSyncStatusBar';
 import {
     Target,
@@ -53,6 +55,9 @@ export default function EmployeeTargetUnifiedPage() {
     const [lastSavedTime, setLastSavedTime] = useState<string | null>(null);
     const [lastSyncError, setLastSyncError] = useState<string | null>(null);
     const [isImportModalOpen, setIsImportModalOpen] = useState<boolean>(false);
+    const [isExportModalOpen, setIsExportModalOpen] = useState<boolean>(false);
+    const [storeEligibleKeys, setStoreEligibleKeys] = useState<Set<string>>(new Set());
+    const [isLoadingStoreKeys, setIsLoadingStoreKeys] = useState<boolean>(false);
     const [toastMessage, setToastMessage] = useState<string>('');
 
     const showToast = (msg: string) => {
@@ -82,9 +87,9 @@ export default function EmployeeTargetUnifiedPage() {
                 });
             }
 
-            // Lọc các NHÓM thi đua đang active VÀ thuộc đúng tháng được chọn
-            const activeCamps = (campRes.data || []).filter(c => c.is_active);
-            const monthCamps = filterCampaignsByMonth(activeCamps, selectedMonth, existingTargetKeys);
+            // Lọc các NHÓM thi đua: đang active HOẶC đã có target trong tháng này (bảo toàn cột mục tiêu của tháng cũ kể cả khi bị tạm ẩn)
+            const eligibleCamps = (campRes.data || []).filter(c => c.is_active || existingTargetKeys.has(c.raw_key));
+            const monthCamps = filterCampaignsByMonth(eligibleCamps, selectedMonth, existingTargetKeys);
             setCampaigns(monthCamps);
 
             // Map Target Doanh Thu
@@ -246,21 +251,62 @@ export default function EmployeeTargetUnifiedPage() {
         setSyncStatus('unsaved');
     };
 
-    // Xuất file Excel mẫu
-    const handleExportExcelTemplate = async () => {
+    // Tự động nhận diện danh sách các chương trình thi đua mà ST đang chọn có chỉ tiêu trong tháng
+    useEffect(() => {
+        if (selectedStore === 'all') {
+            setStoreEligibleKeys(new Set(campaigns.map(c => c.raw_key)));
+            return;
+        }
+        let isCancelled = false;
+        setIsLoadingStoreKeys(true);
+        detectStoreTargetCampaignKeys({
+            storeName: selectedStore,
+            month: selectedMonth,
+            year: selectedYear,
+            campaigns,
+            campaignTargets,
+            scopeEmployees
+        }).then(keys => {
+            if (!isCancelled) {
+                setStoreEligibleKeys(keys);
+                setIsLoadingStoreKeys(false);
+            }
+        }).catch(err => {
+            console.error('Lỗi detectStoreTargetCampaignKeys:', err);
+            if (!isCancelled) {
+                setIsLoadingStoreKeys(false);
+            }
+        });
+
+        return () => {
+            isCancelled = true;
+        };
+    }, [selectedStore, selectedMonth, selectedYear, campaigns, campaignTargets, scopeEmployees]);
+
+    // Mở modal cài đặt & xuất file Excel mẫu
+    const handleExportExcelTemplate = () => {
+        setIsExportModalOpen(true);
+    };
+
+    // Thực hiện xuất file Excel mẫu khi người dùng xác nhận trong Modal
+    const handleConfirmExportTemplate = async (chosenCampaigns: CampaignDictItem[]) => {
         try {
+            const targetEmployees = filteredEmployees.length > 0 ? filteredEmployees : (scopeEmployees.length > 0 ? scopeEmployees : employees);
             await exportUnifiedTargetTemplate(
-                filteredEmployees.length > 0 ? filteredEmployees : employees,
-                campaigns,
+                targetEmployees,
+                chosenCampaigns,
                 revenueTargets,
                 campaignTargets,
                 selectedMonth,
-                selectedYear
+                selectedYear,
+                selectedStore
             );
-            showToast('📥 Tải file Excel mẫu thành công!');
+            const storeLabel = selectedStore === 'all' ? 'Toàn Cụm ST' : getShortStoreName(selectedStore);
+            showToast(`📥 Đã tải file mẫu ${storeLabel} (${chosenCampaigns.length} thi đua) cho ${targetEmployees.length} nhân sự!`);
         } catch (err: any) {
-            console.error(err);
-            showToast('⚠️ Không thể xuất file Excel: ' + err.message);
+            console.error('Lỗi xuất file Excel mẫu:', err);
+            showToast('⚠️ Không thể xuất file Excel: ' + (err?.message || 'Đã có lỗi xảy ra'));
+            throw err;
         }
     };
 
@@ -529,6 +575,20 @@ export default function EmployeeTargetUnifiedPage() {
                 campaigns={campaigns}
                 onApplyTargets={handleApplyImportedTargets}
                 onDownloadTemplate={handleExportExcelTemplate}
+            />
+
+            {/* MODAL CÀI ĐẶT & XUẤT FILE EXCEL MẪU THEO ST */}
+            <ExportTargetTemplateModal
+                isOpen={isExportModalOpen}
+                onClose={() => setIsExportModalOpen(false)}
+                selectedStore={selectedStore}
+                selectedMonth={selectedMonth}
+                selectedYear={selectedYear}
+                campaigns={campaigns}
+                storeEligibleKeys={storeEligibleKeys}
+                isLoadingStoreKeys={isLoadingStoreKeys}
+                employeesCount={filteredEmployees.length > 0 ? filteredEmployees.length : (scopeEmployees.length > 0 ? scopeEmployees.length : employees.length)}
+                onConfirmExport={handleConfirmExportTemplate}
             />
         </div>
     );

@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Printer, X, Copy, Check, CopyCheck } from 'lucide-react';
 import html2canvas from 'html2canvas';
+import { buildReportImageFileName } from '../../../shared/utils/exportImage';
 import { DENOMINATIONS } from '../types';
 
 interface CashReceiptPrintModalProps {
@@ -231,7 +232,7 @@ export const CashReceiptPrintModal: React.FC<CashReceiptPrintModalProps> = ({
             } else if (canvas) {
                 const url = canvas.toDataURL('image/png');
                 const a = document.createElement('a');
-                a.download = `Phieu_Kiem_Quy_80mm_${Date.now()}.png`;
+                a.download = buildReportImageFileName('Phieu_Kiem_Quy_80mm', storeName);
                 a.href = url;
                 a.click();
                 setCopiedBill(true);

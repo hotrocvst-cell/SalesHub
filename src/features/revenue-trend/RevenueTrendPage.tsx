@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import html2canvas from 'html2canvas';
-import { calculate8KScale } from '../../shared/utils/exportImage';
+import { calculate8KScale, buildReportImageFileName } from '../../shared/utils/exportImage';
 import {
     fetchMonthlyRecordsForChart,
     type BusinessDayRecord
@@ -300,7 +300,11 @@ export default function RevenueTrendPage() {
             });
             const a = document.createElement('a');
             a.href = canvas.toDataURL('image/png', 1.0);
-            a.download = `Nhip_Doanh_Thu_8K_T${selectedMonth}_${selectedYear}_${selectedStore}.png`;
+            a.download = buildReportImageFileName(
+                'Nhip_Doanh_Thu',
+                selectedStore,
+                `T${selectedMonth}_${selectedYear}`
+            );
             a.click();
         } catch (err) {
             console.error('Lỗi chụp ảnh:', err);

@@ -15,12 +15,29 @@ export const MAX_ATTACHMENT_IMAGES_PER_REPLY = 3;
 
 export const KNOWLEDGE_CATEGORIES = [
     'Quy trình vận hành ST',
+    'Kiến thức sản phẩm & Kịch bản tư vấn',
     'Chính sách thi đua & Thưởng',
     'Hướng dẫn sử dụng SalesHub',
     'Nghiệp vụ bán hàng & Voucher',
     'Nhân sự & Nội quy',
     'Tài liệu khác'
 ] as const;
+
+export const DEFAULT_DOCUMENT_VALID_UNTIL = '2030-12-31';
+
+export type KnowledgeTimeframe = 'WEEK' | 'MONTH' | 'ALL_TIME';
+
+export interface TopHotDocumentItem {
+    document_id: string;
+    title: string;
+    category: string;
+    source_type?: KnowledgeSourceType;
+    view_count: number;
+    last_viewed_at?: string | null;
+    valid_until?: string;
+    is_active: boolean;
+    rank: number;
+}
 
 export const ROLE_SCOPE_OPTIONS: Array<{
     value: KnowledgeRoleToken;
@@ -45,6 +62,9 @@ export interface KnowledgeDocument {
     image_paths: string[];
     allowed_roles: string[];
     allowed_stores: string[];
+    valid_until?: string;               // YYYY-MM-DD (Mặc định '2030-12-31')
+    view_count?: number;                // Số lần tra cứu tích lũy
+    last_viewed_at?: string | null;     // Thời điểm tra cứu gần nhất
     is_active: boolean;
     created_by: string;
     created_at?: string;

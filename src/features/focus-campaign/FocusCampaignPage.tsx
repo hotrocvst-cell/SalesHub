@@ -76,9 +76,12 @@ export default function FocusCampaignPage() {
         if (!reportRef.current) return;
         setIsExporting(true);
         try {
-            const storeLabel = selectedStore === 'all' ? 'Toan_Cum' : selectedStore.replace(/\s+/g, '_');
-            const prefix = `Thi_Dua_Trong_Tam_${storeLabel}_T${selectedMonth}_${selectedYear}`;
-            const success = await exportFocusCampaignImage(reportRef.current, prefix);
+            const success = await exportFocusCampaignImage(
+                reportRef.current,
+                'Thi_Dua_Trong_Tam',
+                selectedStore,
+                `T${selectedMonth}_${selectedYear}`
+            );
             if (success) {
                 showToast('Đã tải file ảnh toàn bộ bảng thi đua trọng tâm thành công!');
             } else {
@@ -93,7 +96,11 @@ export default function FocusCampaignPage() {
         if (!reportRef.current) return;
         setIsCopying(true);
         try {
-            const success = await copyFocusCampaignImage(reportRef.current);
+            const success = await copyFocusCampaignImage(
+                reportRef.current,
+                selectedStore,
+                `T${selectedMonth}_${selectedYear}`
+            );
             if (success) {
                 showToast('Đã sao chép toàn bộ bảng thi đua trọng tâm vào Clipboard! Nhấn Ctrl + V để dán ngay.');
             } else {

@@ -312,13 +312,18 @@ LƯU Ý NGHIỆP VỤ BẮT BUỘC:
 }
 
 /**
- * 3. TRÍCH XUẤT 1 ẢNH THI ĐUA LŨY KẾ (BẢNG DARK MODE)
+ * 3. TRÍCH XUẤT 1 ẢNH THI ĐUA CẢ CỤM (BẢNG MA TRẬN THEO ST HOẶC BẢNG DỌC DARK MODE)
+ * Hỗ trợ nhận diện thông minh 2 định dạng phổ biến từ ứng dụng BI:
+ * - Định dạng 1: Bảng Ma Trận theo Siêu Thị (Hàng: Chương trình thi đua, Cột: Tên từng ST với Thực hiện & Target)
+ * - Định dạng 2: Bảng Xếp Dọc Dark Mode (Mỗi bảng là 1 chương trình, các dòng dưới là các ST)
  */
 export async function extractSingleEmulationImage(
     apiKey: string,
     file: File,
     keySource: GeminiKeySource = 'ADMIN'
 ): Promise<{
+    reportDate?: string;
+    reportTime?: string;
     programs: Array<{
         programName: string;
         unit: string;
@@ -331,35 +336,82 @@ export async function extractSingleEmulationImage(
     }>;
 }> {
     const prepared = await prepareImageForOcr(file);
-    const prompt = `Bạn là chuyên gia trích xuất dữ liệu bảng thi đua lũy kế từ ảnh giao diện Dark Mode ứng dụng BI.
-Ảnh này chứa một hoặc nhiều BẢNG THI ĐUA LŨY KẾ xếp dọc.
+    const prompt = `Bạn là chuyên gia phân tích dữ liệu thi đua bán lẻ từ ảnh chụp màn hình ứng dụng BI.
+Nhiệm vụ: Trích xuất ĐẦY ĐỦ các chương trình thi đua và số liệu kinh doanh của các ST trong cụm.
 
-LƯU Ý NGHIỆP VỤ BẮT BUỘC:
-1. BỎ QUA HOÀN TOÀN watermark chữ mờ ("26479 - Đào Bá Linh",...).
-2. BỎ QUA HOÀN TOÀN dòng "TỔNG" trong từng bảng.
-3. Mỗi bảng có:
-   - TIÊU ĐỀ BẢNG ở góc trên bên trái (Ví dụ: "T09 - T10 IPHONE 18 series, iPhone Duo", "T10 - NẠP - RÚT TIỀN TÀI KHOẢN NGÂN HÀNG", "T10 - Bảo Hiểm Tổng", "T10 - BẢO HIỂM THỢ ĐMX_ICT",...).
-   - CỘT 2: Tiêu đề cột có thể là "DOANH THU" hoặc "SỐ LƯỢNG".
-   - CỘT 3: Luôn là "TARGET".
-   - CỘT 4: "% HT THÁNG".
-4. DƯỚI DÒNG TỔNG là CÁC DÒNG ST:
-   - Tên ST chữ màu xanh dương (ví dụ: "AAR_BRV_VTA - 290 Trương Công Định", "TGD_BRV_VTA - 290 Trương Công Định").
-   - Giá trị Cột 2 (DOANH THU hoặc SỐ LƯỢNG thực tế).
-   - Giá trị Cột 3 (TARGET).
-   - Giá trị Cột 4 (% HT nếu đọc được, nếu bị cắt như "142...." thì tính lại = actual / target * 100).
+Ảnh này là DỮ LIỆU THI ĐUA CỦA CẢ CỤM (nhiều ST), có thể hiển thị dưới 1 trong 2 định dạng sau:
 
-Định dạng JSON trả về:
+======================================================================
+ĐỊNH DẠNG 1: BẢNG MA TRẬN THEO SIÊU THỊ / CỤM (ẢNH MA TRẬN NHIỀU ST - PHỔ BIẾN NHẤT)
+======================================================================
+Dấu hiệu nhận diện:
+- Tiêu đề ảnh/bảng có chữ: "BC Thi đua · Tháng ...", "Ma trận theo Siêu thị · ... chương trình", hoặc bảng rộng nhiều cột.
+- Bố cục cột:
+  + CỘT 1: "STT" (1, 2, 3...)
+  + CỘT 2: "CHƯƠNG TRÌNH THI ĐUA" (Chứa tên chương trình và badge đơn vị "DT" hoặc "SL").
+  + CỘT 3 & 4 (Nhóm cột "TỔNG"): Chứa THỰC HIỆN và TARGET tổng toàn công ty -> BỎ QUA HOÀN TOÀN CỘT NÀY, TUYỆT ĐỐI KHÔNG GÁN VÀO BẤT KỲ ST NÀO.
+  + CÁC CỘT TIẾP THEO: TÊN TỪNG SIÊU THỊ / ST Ở TIÊU ĐỀ CỘT CẤP 1 (Ví dụ: "TGD_BRV_VTA - 290 Trương Công Định", "AAR_BRV_VTA - 290 Trương Công Định",...).
+    Dưới mỗi tên ST chia thành 2 cột con: "THỰC HIỆN" và "TARGET".
+- Hàng dữ liệu:
+  + DÒNG ĐẦU TIÊN CỦA THÂN BẢNG: "SỐ CHƯƠNG TRÌNH ĐẠT" (Ví dụ: "15/24", "11/23", "12/14") -> BỎ QUA HOÀN TOÀN DÒNG NÀY (ĐÂY LÀ DÒNG TỔNG KẾT, KHÔNG PHẢI CHƯƠNG TRÌNH THI ĐUA).
+  + CÁC HÀNG TIẾP THEO (STT 1 ĐẾN HẾT): Mỗi hàng là MỘT CHƯƠNG TRÌNH THI ĐUA.
+    - programName: Tên chương trình thi đua (Ví dụ: "T11 - Laptop", "T11 - Điện thoại Realme", "T11 - Bảo hiểm Tổng", "T11 - ĐIỆN THOẠI & TABLET ANDROID", "T11 - Topzone", "T11 - Quạt gió",...). Bỏ qua badge "DT" hoặc "SL" khỏi chuỗi tên chương trình.
+    - unit: "DT" (Doanh thu) nếu có badge/chữ DT, hoặc "SL" (Số lượng) nếu có badge/chữ SL.
+    - Với mỗi ST trong bảng:
+      * Đọc giá trị tại 2 cột con "THỰC HIỆN" và "TARGET" của ST đó.
+      * Dấu gạch ngang "-", "—", "–" hoặc ô trống nghĩa là không có số liệu / bằng 0.
+      * Nếu CẢ 2 Ô "THỰC HIỆN" VÀ "TARGET" CỦA ST ĐÓ ĐỀU LÀ DẤU GẠCH HOẶC 0: ST đó không tham gia chương trình này -> BỎ QUA ST ĐÓ KHỎI DANH SÁCH stores CỦA CHƯƠNG TRÌNH NÀY.
+      * Nếu ST có "THỰC HIỆN" khác 0 HOẶC có "TARGET" khác 0:
+        - storeRawName: Tên chính xác của ST ở tiêu đề cột (Ví dụ: "TGD_BRV_VTA - 290 Trương Công Định"). Nếu tên ST bị ngắt dòng thì ghép liền lại.
+        - actual: Số ở cột THỰC HIỆN (loại bỏ dấu phẩy phân cách hàng nghìn, giữ nguyên số thập phân, ví dụ "2,159.83" -> 2159.83, "115" -> 115, nếu là "-" -> 0).
+        - target: Số ở cột TARGET (loại bỏ dấu phẩy phân cách hàng nghìn, ví dụ "5,640.06" -> 5640.06, "274" -> 274, nếu là "-" -> 0).
+        - completionRate: Nếu target > 0 thì = (actual / target) * 100 (làm tròn 2 chữ số thập phân, ví dụ 27.41). Nếu target = 0 thì = 0.
+
+======================================================================
+ĐỊNH DẠNG 2: CÁC BẢNG XẾP DỌC TRUYỀN THỐNG (BẢNG DARK MODE)
+======================================================================
+- Mỗi bảng là 1 chương trình thi đua, tiêu đề bảng ở góc trên bên trái (Ví dụ: "T10 - IPHONE 18 series...", "T10 - Bảo Hiểm Tổng",...).
+- Cột 2 là "DOANH THU" hoặc "SỐ LƯỢNG".
+- Cột 3 là "TARGET".
+- Cột 4 là "% HT THÁNG".
+- Dòng "TỔNG" trong từng bảng: BỎ QUA HOÀN TOÀN.
+- Các dòng ST bên dưới: Tên ST ở cột 1, Cột 2 (actual), Cột 3 (target), Cột 4 (completionRate).
+
+======================================================================
+THÔNG TIN NGÀY GIỜ & QUY TẮC BẮT BUỘC:
+======================================================================
+1. Ở góc trên bên phải hoặc tiêu đề ảnh, tìm dòng ghi thời gian:
+   Ví dụ: "Chụp lúc 08:27 16/11/2026" hoặc "Cập nhật lúc: 08:27:00 16/11/2026"
+   -> Trích xuất: reportDate = "2026-11-16" (YYYY-MM-DD), reportTime = "08:27" (HH:mm). Nếu không có, để null.
+2. BỎ QUA HOÀN TOÀN các watermark chữ mờ in chéo trên ảnh (Ví dụ: "26479 - Đào Bá Linh",...).
+3. Tuyệt đối không tự ý nhân thêm một triệu (1,000,000). Giữ nguyên giá trị thập phân đã hiển thị.
+
+Định dạng JSON trả về duy nhất (không kèm markdown giải thích):
 {
+  "reportDate": "YYYY-MM-DD",
+  "reportTime": "HH:mm",
   "programs": [
     {
-      "programName": "T09 - T10 IPHONE 18 series, iPhone Duo",
-      "unit": "DOANH THU",
+      "programName": "T11 - Laptop",
+      "unit": "DT",
+      "stores": [
+        {
+          "storeRawName": "TGD_BRV_VTA - 290 Trương Công Định",
+          "actual": 254.45,
+          "target": 928.27,
+          "completionRate": 27.41
+        }
+      ]
+    },
+    {
+      "programName": "T11 - Topzone",
+      "unit": "DT",
       "stores": [
         {
           "storeRawName": "AAR_BRV_VTA - 290 Trương Công Định",
-          "actual": 14352.92,
-          "target": 10097.16,
-          "completionRate": 142.15
+          "actual": 7494.92,
+          "target": 10887.00,
+          "completionRate": 68.84
         }
       ]
     }
@@ -368,7 +420,9 @@ LƯU Ý NGHIỆP VỤ BẮT BUỘC:
 
     const parsed = await callGeminiVision(apiKey, prepared.data, prepared.mimeType, prompt, keySource);
     return {
-        programs: parsed.programs || []
+        reportDate: parsed?.reportDate || undefined,
+        reportTime: parsed?.reportTime || undefined,
+        programs: Array.isArray(parsed?.programs) ? parsed.programs : []
     };
 }
 
@@ -558,7 +612,7 @@ export async function extractSingleStoreEmulationImage(
     const prompt = `Bạn là chuyên gia phân tích dữ liệu kinh doanh bán lẻ từ ảnh chụp màn hình ứng dụng (Mobile App hoặc BI Dashboard).
 Nhiệm vụ: Trích xuất ĐẦY ĐỦ các chương trình thi đua và số liệu kinh doanh dành riêng cho ST: "${targetStoreName}".
 
-Ảnh có thể thuộc 1 trong 2 định dạng sau:
+Ảnh có thể thuộc 1 trong 3 định dạng sau:
 ĐỊNH DẠNG 1: THẺ THI ĐUA MOBILE 2 CỘT (Lưới thẻ chữ nhật trên điện thoại):
 - Tiêu đề thẻ ở góc trên: Tên chương trình thi đua (ví dụ: "T11 - Trả chậm Homecredit", "T11 - VAS", "T11 - Cáp sạc", "T11 - Bảo hiểm Tổng", "T11 - Phụ kiện", "T11 - Ví trả sau"...).
 - Badge góc trên bên phải: Chữ "DT" (DOANH THU) hoặc "SL" (SỐ LƯỢNG).
@@ -574,6 +628,14 @@ Nhiệm vụ: Trích xuất ĐẦY ĐỦ các chương trình thi đua và số 
 - Cột 3: "TARGET".
 - Cột 4: "% HT THÁNG".
 - Tìm dòng của ST "${targetStoreName}" (hoặc dòng dữ liệu nếu bảng chỉ có 1 ST) và lấy số liệu. Bỏ qua dòng TỔNG.
+
+ĐỊNH DẠNG 3: BẢNG MA TRẬN THEO SIÊU THỊ / CỤM (Hàng là Chương trình thi đua, Cột là các ST):
+- Hàng: Các chương trình thi đua (STT 1, 2, 3...). BỎ QUA dòng tổng kết "SỐ CHƯƠNG TRÌNH ĐẠT" ở đầu bảng.
+- Cột: Tìm cột tương ứng của ST "${targetStoreName}" (tiêu đề cột chứa tên ST này). BỎ QUA cột "TỔNG".
+- Đọc giá trị tại 2 cột con "THỰC HIỆN" và "TARGET" của ST này:
+  + Dấu gạch "-" nghĩa là 0. Bỏ qua các chương trình mà cả Thực hiện và Target của ST này đều là "-".
+  + Đơn vị "DT" hoặc "SL" lấy theo badge ở cột Chương trình thi đua.
+  + completionRate = target > 0 ? (actual / target) * 100 : 0.
 
 LƯU Ý NGHIỆP VỤ BẮT BUỘC:
 1. BỎ QUA HOÀN TOÀN hình mờ watermark ("26479 - Đào Bá Linh",...).
@@ -861,17 +923,25 @@ export async function extractAndMergeAllImages(
 
         emuResults.forEach(emuRes => {
             if (!emuRes) return;
+            if (!detectedReportDate && emuRes.reportDate) detectedReportDate = emuRes.reportDate;
+            if (!detectedReportTime && emuRes.reportTime) detectedReportTime = emuRes.reportTime;
+
             (emuRes.programs || []).forEach(prog => {
                 const pName = prog.programName.trim();
-                const pUnit = prog.unit || 'DOANH THU';
+                const pUnit = (prog.unit || '').toUpperCase().includes('SL') ? 'SỐ LƯỢNG' : 'DOANH THU';
 
                 (prog.stores || []).forEach(stRow => {
                     if (!stRow.storeRawName) return;
-                    const store = getOrCreateStore(stRow.storeRawName);
 
                     const act = cleanBiNumber(stRow.actual);
                     const tg = cleanBiNumber(stRow.target);
-                    const pct = tg > 0 ? Number(((act / tg) * 100).toFixed(1)) : 0;
+                    // Bỏ qua nếu ST không có target và không có số liệu thực hiện phát sinh (cả 2 đều = 0 hoặc "-")
+                    if (act === 0 && tg === 0) return;
+
+                    const store = getOrCreateStore(stRow.storeRawName);
+                    const pct = (stRow.completionRate !== undefined && stRow.completionRate !== null && !isNaN(Number(stRow.completionRate)))
+                        ? cleanBiNumber(stRow.completionRate)
+                        : (tg > 0 ? Number(((act / tg) * 100).toFixed(1)) : 0);
 
                     store.emulations[pName] = {
                         programName: pName,

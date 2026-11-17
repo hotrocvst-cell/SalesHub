@@ -1,9 +1,72 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { MessageSquare, X, Check, Wand2, Lightbulb, Trophy, AlertTriangle, Sparkles, RefreshCw, Smartphone, Flame, Target } from 'lucide-react';
+import { MessageSquare, X, Check, Copy, Lightbulb, Trophy, Sparkles, RefreshCw, Smartphone, Flame } from 'lucide-react';
 import type { EmployeeRankingRow, EmployeeRankingSummary } from '../types';
 import { saveEmployeeRankingAssessment, type EmployeeRankingAssessmentData } from '../services/employeeRankingAssessmentService';
 import { getShortStoreName } from '../../../core/lib/formatters';
+
+export type EmployeeBotCategory = 'BOT_DT' | 'BOT_EMU' | 'BOT_KEP' | null;
+
+/**
+ * Phân loại nhân sự thuộc nhóm BOT cảnh báo theo cột "Đánh giá sức khỏe"
+ * Trả về:
+ * - 'BOT_DT': Bot Doanh thu (không thỏa điều kiện cứu)
+ * - 'BOT_EMU': Bot Thi đua (không thỏa điều kiện cứu)
+ * - 'BOT_KEP': Bot Kép cả DT & Thi đua (không thỏa điều kiện cứu)
+ * - null: An toàn, Thai sản hoặc Đã được cứu (RESCUED)
+ */
+export function getEmployeeHealthBotCategory(row: EmployeeRankingRow): EmployeeBotCategory {
+    // 1. Nếu có đánh giá sức khỏe và thuộc diện An toàn, Thai sản hoặc Đã Cứu -> KHÔNG thuộc nhóm Bot cảnh báo
+    if (
+        row.rescue_status === 'SAFE' ||
+        row.rescue_status === 'RESCUED' ||
+        row.badge_variant === 'safe' ||
+        row.badge_variant === 'rescued_rev' ||
+        row.badge_variant === 'rescued_emu' ||
+        row.badge_variant === 'thai_san'
+    ) {
+        return null;
+    }
+
+    // 2. Nếu được đánh giá là BOT_WARNING hoặc badge_variant là warning
+    if (row.rescue_status === 'BOT_WARNING' || row.badge_variant === 'warning') {
+        const label = (row.rescue_label || '').toLowerCase();
+        if (label.includes('kép') || label.includes('kep')) {
+            return 'BOT_KEP';
+        }
+        if (label.includes('dt') || label.includes('doanh thu')) {
+            return 'BOT_DT';
+        }
+        if (label.includes('thi đua') || label.includes('tđ') || label.includes('td')) {
+            return 'BOT_EMU';
+        }
+
+        // Fallback dựa trên cờ TOP/BOT
+        if (row.revenue_top_bot_status === 'BOT' && row.emulation_top_bot_status === 'BOT') {
+            return 'BOT_KEP';
+        }
+        if (row.revenue_top_bot_status === 'BOT') {
+            return 'BOT_DT';
+        }
+        if (row.emulation_top_bot_status === 'BOT') {
+            return 'BOT_EMU';
+        }
+        return 'BOT_DT';
+    }
+
+    // 3. Fallback khi chưa có trường rescue (chỉ dựa trên trạng thái BOT)
+    if (row.revenue_top_bot_status === 'BOT' && row.emulation_top_bot_status === 'BOT') {
+        return 'BOT_KEP';
+    }
+    if (row.revenue_top_bot_status === 'BOT') {
+        return 'BOT_DT';
+    }
+    if (row.emulation_top_bot_status === 'BOT') {
+        return 'BOT_EMU';
+    }
+
+    return null;
+}
 
 interface Props {
     isOpen: boolean;
@@ -35,6 +98,7 @@ export default function EmployeeRankingAssessmentModal({
     const [comment, setComment] = useState<string>('');
     const [localShowOnReport, setLocalShowOnReport] = useState<boolean>(showAssessment);
     const [isSaving, setIsSaving] = useState<boolean>(false);
+    const [isCopied, setIsCopied] = useState<boolean>(false);
     const [activeTemplateIdx, setActiveTemplateIdx] = useState<number | null>(null);
 
     const displayName = storeName === 'all' ? 'Toàn Cụm' : getShortStoreName(storeName);
@@ -44,6 +108,7 @@ export default function EmployeeRankingAssessmentModal({
         setComment(initialData?.comment || '');
         setLocalShowOnReport(showAssessment);
         setActiveTemplateIdx(null);
+        setIsCopied(false);
     }, [isOpen, initialData, showAssessment]);
 
     useEffect(() => {
@@ -64,30 +129,43 @@ export default function EmployeeRankingAssessmentModal({
     // Tìm Top 1 & Top 2 Thi đua
     const topEmu1 = [...rows].sort((a, b) => a.emulation_rank - b.emulation_rank)[0];
 
-    // Tìm nhóm Bot Doanh thu và Bot Thi đua
-    const botRevs = rows.filter(r => r.revenue_top_bot_status === 'BOT');
-    const botEmus = rows.filter(r => r.emulation_top_bot_status === 'BOT');
-
     // 1. MẪU 1: TOÀN DIỆN & VINH DANH (Comprehensive & Recognition)
     const generateTemplate1 = () => {
         const lines: string[] = [];
-        lines.push(`🌟 BÁO CÁO XẾP HẠNG NHÂN SỰ T${month}/${year} \n🏠 ${displayName.toUpperCase()}:`);
-        lines.push(`• Tổng quan: ${summary.totalEmployees} nhân sự \n• DTQĐ: ${(summary.totalRevenueQd).toLocaleString('vi-VN')} tr \n• %DKHT TB: ${summary.avgForecastRate.toFixed(1)}% \n• Thi đua TB: ${summary.avgEmulationRate.toFixed(1)}%.`);
+        lines.push(`🌟 BÁO CÁO XẾP HẠNG NHÂN SỰ T${month}/${year}\n🏠 ${displayName.toUpperCase()}:`);
+        lines.push(`• Tổng quan: ${summary.totalEmployees} nhân sự\n• DTQĐ: ${(summary.totalRevenueQd).toLocaleString('vi-VN')} tr\n• %DKHT TB: ${summary.avgForecastRate.toFixed(1)}%\n• Thi đua TB: ${summary.avgEmulationRate.toFixed(1)}%.`);
 
         if (topRev1) {
-            lines.push(`\n🥇 TOP Doanh thu: \n• ${topRev1.short_name} (Top #1 DTQĐ ${topRev1.revenue_qd.toLocaleString('vi-VN')}tr - DKHT ${topRev1.forecast_completion_rate.toFixed(1)}%)${topRev2 ? ` \n• ${topRev2.short_name} (Top #2)` : ''}.`);
+            lines.push(`\n🥇 TOP Doanh thu:\n• ${topRev1.short_name} (Top #1 DTQĐ ${topRev1.revenue_qd.toLocaleString('vi-VN')}tr - DKHT ${topRev1.forecast_completion_rate.toFixed(1)}%)${topRev2 ? `\n• ${topRev2.short_name} (Top #2)` : ''}.`);
         }
 
         if (topEmu1) {
             lines.push(`\n⭐ TOP Thi đua: ${topEmu1.short_name} (Top #1 - Đạt ${topEmu1.emulation_display} ~ ${topEmu1.emulation_rate.toFixed(0)}%).`);
         }
 
-        if (botRevs.length > 0 || botEmus.length > 0) {
-            const botNames = Array.from(new Set([...botRevs, ...botEmus].map(r => r.short_name))).slice(0, 4).join(', ');
-            lines.push(` \n🚨 Bottom: ${botNames} `);
+        // Lấy danh sách nhân viên Bottom theo dữ liệu cột "Đánh giá sức khỏe nhân viên"
+        const botDtList = rows.filter(r => getEmployeeHealthBotCategory(r) === 'BOT_DT');
+        const botEmuList = rows.filter(r => getEmployeeHealthBotCategory(r) === 'BOT_EMU');
+        const botKepList = rows.filter(r => getEmployeeHealthBotCategory(r) === 'BOT_KEP');
+
+        const botLines: string[] = [];
+        if (botDtList.length > 0) {
+            botLines.push(`• Bot DT: ${botDtList.map(r => r.short_name).join(', ')}`);
+        }
+        if (botEmuList.length > 0) {
+            botLines.push(`• Bot thi đua: ${botEmuList.map(r => r.short_name).join(', ')}`);
+        }
+        if (botKepList.length > 0) {
+            botLines.push(`• Bot kép: ${botKepList.map(r => r.short_name).join(', ')}`);
         }
 
-        lines.push(`🎯 Hướng dẫn: Toàn đội giữ vững nhịp ca cao điểm, dồn sức hoàn thành 100% mục tiêu tháng!`);
+        if (botLines.length > 0) {
+            lines.push(`\n🚨 Bottom (Đánh giá sức khỏe):\n${botLines.join('\n')}`);
+        } else {
+            lines.push(`\n🎉 Bottom: 100% nhân sự đạt chuẩn an toàn, không có Bot cảnh báo.`);
+        }
+
+        lines.push(`\n🎯 Hướng dẫn: Toàn đội giữ vững nhịp ca cao điểm, dồn sức hoàn thành 100% mục tiêu tháng!`);
         return lines.join('\n');
     };
 
@@ -105,8 +183,9 @@ export default function EmployeeRankingAssessmentModal({
         lines.push(`   • Đẩy mạnh đơn hàng trả góp/trả chậm để gia tăng DTQĐ.`);
         lines.push(`   • Tập trung nhóm thi đua trọng điểm chưa đạt để lấy trọn vẹn điểm thưởng.`);
 
-        if (botRevs.length > 0) {
-            const needPaceNames = botRevs.slice(0, 3).map(r => r.short_name).join(', ');
+        const warningEmps = rows.filter(r => getEmployeeHealthBotCategory(r) !== null);
+        if (warningEmps.length > 0) {
+            const needPaceNames = warningEmps.slice(0, 4).map(r => r.short_name).join(', ');
             lines.push(`4. Kèm cặp sát sao: Quản lý/Trưởng ca kèm riêng nhóm (${needPaceNames}) trong ca chiều/tối để về đích an toàn.`);
         }
         return lines.join('\n');
@@ -119,6 +198,12 @@ export default function EmployeeRankingAssessmentModal({
         lines.push(`📊 Toàn ST: ${summary.totalEmployees} NV • DTQĐ: ${(summary.totalRevenueQd).toLocaleString('vi-VN')} tr (%DKHT TB: ${summary.avgForecastRate.toFixed(1)}%) • Thi đua TB: ${summary.avgEmulationRate.toFixed(1)}%`);
         if (topRev1) lines.push(`🏆 Top 1 DT: ${topRev1.short_name} (${topRev1.revenue_qd.toLocaleString('vi-VN')} tr - ${topRev1.forecast_completion_rate.toFixed(1)}%)`);
         if (topEmu1) lines.push(`⭐ Top 1 Thi đua: ${topEmu1.short_name} (${topEmu1.emulation_display})`);
+
+        const warningEmps = rows.filter(r => getEmployeeHealthBotCategory(r) !== null);
+        if (warningEmps.length > 0) {
+            lines.push(`⚠️ Cần tăng tốc: ${warningEmps.map(r => r.short_name).join(', ')}`);
+        }
+
         lines.push(`💪 Toàn đội đồng lòng giữ vững phong độ và tăng tốc ca tối!`);
         return lines.join('\n');
     };
@@ -128,6 +213,17 @@ export default function EmployeeRankingAssessmentModal({
         if (idx === 1) setComment(generateTemplate1());
         else if (idx === 2) setComment(generateTemplate2());
         else if (idx === 3) setComment(generateTemplate3());
+    };
+
+    const handleCopyComment = async () => {
+        if (!comment.trim()) return;
+        try {
+            await navigator.clipboard.writeText(comment.trim());
+            setIsCopied(true);
+            setTimeout(() => setIsCopied(false), 2000);
+        } catch (err) {
+            console.error('Lỗi sao chép:', err);
+        }
     };
 
     const handleSave = async () => {
@@ -224,7 +320,7 @@ export default function EmployeeRankingAssessmentModal({
                                     <span>Mẫu 1: Toàn diện</span>
                                 </div>
                                 <div className="text-[10px] text-slate-600 font-medium leading-tight line-clamp-2">
-                                    Vinh danh Top 1, Top 2 DT & Thi đua, nhắc nhở nhóm Bot tăng tốc.
+                                    Vinh danh Top 1, Top 2 DT &amp; Thi đua, phân loại Bot DT, Bot thi đua, Bot kép.
                                 </div>
                             </button>
 
@@ -260,7 +356,7 @@ export default function EmployeeRankingAssessmentModal({
                                     <span>Mẫu 3: Zalo ngắn</span>
                                 </div>
                                 <div className="text-[10px] text-slate-600 font-medium leading-tight line-clamp-2">
-                                    Siêu ngắn gọn 4 dòng, tối ưu đọc lướt trên điện thoại & nhóm chat.
+                                    Siêu ngắn gọn 4 dòng, tối ưu đọc lướt trên điện thoại &amp; nhóm chat.
                                 </div>
                             </button>
                         </div>
@@ -272,9 +368,22 @@ export default function EmployeeRankingAssessmentModal({
                             <label htmlFor="ranking-assessment-textarea" className="text-xs font-bold text-slate-700">
                                 Nội dung nhận xét:
                             </label>
-                            <span className="text-[10.5px] text-slate-500 font-medium">
-                                Có thể chỉnh sửa trực tiếp bên dưới
-                            </span>
+                            <div className="flex items-center gap-2">
+                                {comment.trim() && (
+                                    <button
+                                        type="button"
+                                        onClick={handleCopyComment}
+                                        className="text-[11px] font-bold text-blue-700 hover:text-blue-900 flex items-center gap-1 cursor-pointer transition px-2 py-0.5 rounded-lg hover:bg-blue-50"
+                                        title="Sao chép toàn bộ nội dung nhận xét vào bộ nhớ tạm"
+                                    >
+                                        {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                                        <span>{isCopied ? 'Đã sao chép!' : 'Sao chép'}</span>
+                                    </button>
+                                )}
+                                <span className="text-[10.5px] text-slate-500 font-medium hidden sm:inline">
+                                    Có thể chỉnh sửa trực tiếp bên dưới
+                                </span>
+                            </div>
                         </div>
                         <textarea
                             id="ranking-assessment-textarea"

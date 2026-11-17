@@ -51,6 +51,7 @@ import {
     RotateCcw
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
+import { buildReportImageFileName } from '../../shared/utils/exportImage';
 
 export default function CampaignOffsetPage() {
     const today = new Date();
@@ -345,7 +346,11 @@ export default function CampaignOffsetPage() {
                 });
             } else {
                 const link = document.createElement('a');
-                link.download = `Can_Tru_Thi_Dua_${selectedStore}_Thang_${selectedMonth}_${selectedYear}.png`;
+                link.download = buildReportImageFileName(
+                    'Can_Tru_Thi_Dua',
+                    selectedStore,
+                    `T${selectedMonth}_${selectedYear}`
+                );
                 link.href = canvas.toDataURL('image/png');
                 link.click();
                 showToast('💾 Đã tải ảnh cấn trừ thành công!');

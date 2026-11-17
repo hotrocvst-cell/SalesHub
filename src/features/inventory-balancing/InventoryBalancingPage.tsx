@@ -19,7 +19,7 @@ import { useExcelExportPermission } from '../../shared/hooks/useExcelExportPermi
 import { useAuth } from '../../shared/contexts/AuthContext';
 import { isStoreMatch } from '../../core/lib/formatters';
 import { fetchStores } from '../../core/lib/storage';
-import { generateStandardReportCanvas } from '../../shared/utils/exportImage';
+import { generateStandardReportCanvas, buildReportImageFileName } from '../../shared/utils/exportImage';
 import type {
     InventoryRawRecord,
     ShortageProductItem,
@@ -1021,8 +1021,10 @@ export default function InventoryBalancingPage() {
             if (!canvas) throw new Error('Không thể tạo canvas');
 
             const link = document.createElement('a');
-            const cleanStore = targetStore.split('-')[0].trim() || 'ST';
-            link.download = `Can_Ton_Kho_${cleanStore}_${new Date().toISOString().slice(0, 10)}.png`;
+            link.download = buildReportImageFileName(
+                'Can_Ton_Kho',
+                targetStore
+            );
             link.href = canvas.toDataURL('image/png');
             document.body.appendChild(link);
             link.click();

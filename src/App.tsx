@@ -53,6 +53,8 @@ const PrintPopupPage = lazy(() => import('./features/print-hub/PrintPopupPage'))
 const PrintSalesPage = lazy(() => import('./features/print-hub/PrintSalesPage'));
 const PrintWorkPage = lazy(() => import('./features/print-hub/PrintWorkPage'));
 const PrintDecorPage = lazy(() => import('./features/print-hub/PrintDecorPage'));
+const BatchReportExportPage = lazy(() => import('./features/batch-report-export/BatchReportExportPage'));
+const StorePromoMediaPage = lazy(() => import('./features/store-media/StorePromoMediaPage'));
 
 // Các trang Định danh, Đăng ký & Onboarding
 const LoginPage = lazy(() => import('./features/auth/LoginPage'));
@@ -276,6 +278,11 @@ export default function App() {
                                         <LuckyDrawHubPage />
                                     </ProtectedRoute>
                                 } />
+                                <Route path="/phat-loa-ghi-hinh-km" element={
+                                    <ProtectedRoute path="/phat-loa-ghi-hinh-km">
+                                        <StorePromoMediaPage />
+                                    </ProtectedRoute>
+                                } />
                                 <Route path="/tien-ich-in-an" element={<Navigate to="/in-an/sticker" replace />} />
                                 <Route path="/in-an/sticker" element={
                                     <ProtectedRoute path="/in-an/sticker">
@@ -335,6 +342,13 @@ export default function App() {
                                 <Route path="/nhip-doanh-thu" element={
                                     <ProtectedRoute path="/nhip-doanh-thu">
                                         <RevenueTrendPage />
+                                    </ProtectedRoute>
+                                } />
+
+                                {/* Trung Tâm Xuất Báo Cáo ST */}
+                                <Route path="/trung-tam-xuat-anh-bao-cao" element={
+                                    <ProtectedRoute path="/trung-tam-xuat-anh-bao-cao">
+                                        <BatchReportExportPage />
                                     </ProtectedRoute>
                                 } />
 

@@ -1,6 +1,6 @@
 import React, { useRef, useState, useMemo } from 'react';
 import html2canvas from 'html2canvas';
-import { calculate8KScale } from '../../../shared/utils/exportImage';
+import { calculate8KScale, buildReportImageFileName } from '../../../shared/utils/exportImage';
 import { Zap, Camera, Copy, CheckCircle2, Sparkles } from 'lucide-react';
 import type { CampaignProgressItem } from '../types';
 import { formatRemainingTarget, cleanEmployeeName, getShortenedEmployeeName } from '../../../core/lib/formatters';
@@ -82,8 +82,11 @@ export default function CampaignProgressCard({ item, reportDateDisplay, storeNam
                 } catch (clipErr) {
                     console.warn('Clipboard write image failed, falling back to download:', clipErr);
                     const link = document.createElement('a');
-                    const cleanName = item.displayName.replace(/[^a-zA-Z0-9\u00C0-\u1EF9]/g, '_').slice(0, 35);
-                    link.download = `Tien_Do_${cleanName}_${reportDateDisplay}_8K.png`;
+                    link.download = buildReportImageFileName(
+                        `Tien_Do_${item.displayName}`,
+                        storeName,
+                        reportDateDisplay
+                    );
                     link.href = canvas.toDataURL('image/png');
                     link.click();
                     setCopySuccess(true);
@@ -124,8 +127,11 @@ export default function CampaignProgressCard({ item, reportDateDisplay, storeNam
             });
 
             const link = document.createElement('a');
-            const cleanName = item.displayName.replace(/[^a-zA-Z0-9\u00C0-\u1EF9]/g, '_').slice(0, 35);
-            link.download = `Tien_Do_${cleanName}_${reportDateDisplay}_8K.png`;
+            link.download = buildReportImageFileName(
+                `Tien_Do_${item.displayName}`,
+                storeName,
+                reportDateDisplay
+            );
             link.href = canvas.toDataURL('image/png');
             link.click();
         } catch (err) {

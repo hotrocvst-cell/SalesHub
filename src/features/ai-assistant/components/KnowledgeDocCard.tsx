@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { ROLE_SCOPE_OPTIONS, type KnowledgeDocument } from '../types/aiAssistantTypes';
 import { formatDate } from '../../../core/lib/formatters';
+import { isDocumentExpired } from '../services/knowledgeService';
 
 interface Props {
     doc: KnowledgeDocument;
@@ -64,6 +65,28 @@ export default function KnowledgeDocCard({
                 <p className="text-[11px] text-slate-600 line-clamp-2 leading-relaxed">
                     {doc.summary || doc.raw_content.slice(0, 140)}
                 </p>
+
+                {/* HSD và Lượt tra cứu */}
+                <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                    {doc.valid_until && (
+                        isDocumentExpired(doc.valid_until) ? (
+                            <span className="px-1.5 py-0.5 rounded-md bg-rose-50 text-rose-700 border border-rose-200 text-[9.5px] font-bold" title="Tài liệu đã hết hạn và đang bị ẩn khỏi AI">
+                                🚨 Hết hạn: {doc.valid_until.split('-').reverse().join('/')}
+                            </span>
+                        ) : (
+                            <span className="px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200 text-[9.5px] font-bold" title="Thời hạn áp dụng của tài liệu">
+                                📅 HSD: {doc.valid_until.split('-').reverse().join('/')}
+                            </span>
+                        )
+                    )}
+
+                    <span
+                        className="px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200 text-[9.5px] font-bold tabular-nums"
+                        title={doc.last_viewed_at ? `Lần tra cứu gần nhất: ${formatDate(doc.last_viewed_at)}` : 'Chưa có lượt tra cứu nào'}
+                    >
+                        👁️ {doc.view_count || 0} lượt {doc.last_viewed_at ? `(${formatDate(doc.last_viewed_at)})` : ''}
+                    </span>
+                </div>
             </div>
 
             <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2 flex-wrap">

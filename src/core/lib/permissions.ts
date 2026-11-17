@@ -558,6 +558,22 @@ const RAW_DEFAULT_PAGE_PERMISSIONS: SystemPagePermission[] = [
         allow_excel_export: false,
         allowed_excel_roles: ['ADMIN']
     },
+    {
+        page_key: 'phat_loa_ghi_hinh_km',
+        page_name: 'Phát Loa KM & Ghi Hình',
+        path: '/phat-loa-ghi-hinh-km',
+        group_title: 'TIỆN ÍCH BÁN HÀNG',
+        description: 'Phát audio chương trình khuyến mãi ra loa Bluetooth và quay video xác thực công việc tại ST kèm Watermark GPS, Timestamp',
+        is_enabled: true,
+        allowed_roles: ['ADMIN'], // Theo Rule 4 GEMINI.MD: Mặc định chỉ duy nhất ADMIN
+        order_index: 14.6,
+        badge_enabled: true,
+        badge_icon: '📹',
+        badge_text: 'Mới',
+        badge_color: 'purple',
+        allow_excel_export: false,
+        allowed_excel_roles: ['ADMIN']
+    },
     // IN ẤN
     {
         page_key: 'in_sticker',

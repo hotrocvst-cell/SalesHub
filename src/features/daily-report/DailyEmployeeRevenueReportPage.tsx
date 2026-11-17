@@ -9,7 +9,8 @@ import {
     getShortStoreName,
     formatStoreDisplayName,
     cleanEmployeeName,
-    getShortenedEmployeeName
+    getShortenedEmployeeName,
+    buildReportImageFileName
 } from '../../core/lib/formatters';
 import {
     fetchStores,
@@ -649,9 +650,8 @@ export default function DailyEmployeeRevenueReportPage() {
 
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
-            const cleanStore = displayStoreTitle.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 30);
             const scopeTag = exportScope === 'TABLE_ONLY' ? 'Bang' : exportScope === 'SUMMARY_ONLY' ? 'TomTat' : 'DayDu';
-            link.download = `BaoCao_DoanhThu_Ngay_${cleanStore}_${reportDate}_${scopeTag}_8K.png`;
+            link.download = buildReportImageFileName(`BaoCao_DoanhThu_Ngay_${scopeTag}`, selectedStore, reportDate);
             link.href = url;
             link.click();
             URL.revokeObjectURL(url);

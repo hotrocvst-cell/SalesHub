@@ -85,7 +85,7 @@ import {
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import ReportActionButtons, { type AssessmentTemplate } from '../../shared/components/report/ReportActionButtons';
-import { calculate8KScale } from '../../shared/utils/exportImage';
+import { calculate8KScale, buildReportImageFileName } from '../../shared/utils/exportImage';
 
 interface CampaignDetailRow {
     stt: number;
@@ -106,19 +106,25 @@ interface CampaignDetailRow {
 }
 
 // 2. HELPER MÀU SẮC ĐIỂM THI ĐUA THEO PHÂN CẤP ĐIỂM
+// Nổi bật rõ nét nếu điểm > 1 (ngành hàng trọng tâm / điểm cao), giữ trung tính nhẹ nhàng nếu điểm <= 1
 export const getPointBadgeStyle = (points: number): string => {
-    if (points >= 20) {
-        return 'bg-purple-100 text-purple-900 border-purple-300 ring-1 ring-purple-400/40 font-black shadow-sm';
-    } else if (points >= 15) {
-        return 'bg-indigo-100 text-indigo-900 border-indigo-300 ring-1 ring-indigo-400/40 font-black shadow-sm';
-    } else if (points >= 10) {
-        return 'bg-blue-100 text-blue-900 border-blue-300 ring-1 ring-blue-400/40 font-black shadow-sm';
-    } else if (points >= 5) {
-        return 'bg-amber-100 text-amber-900 border-amber-300 ring-1 ring-amber-400/40 font-black shadow-sm';
-    } else if (points >= 1) {
-        return 'bg-teal-100 text-teal-900 border-teal-300 ring-1 ring-teal-400/40 font-bold shadow-sm';
+    if (points > 1) {
+        if (points >= 20) {
+            return 'bg-purple-600 text-white border-purple-700 ring-1 ring-purple-300 font-black shadow-sm';
+        } else if (points >= 10) {
+            return 'bg-indigo-600 text-white border-indigo-700 ring-1 ring-indigo-300 font-black shadow-sm';
+        } else if (points >= 5) {
+            return 'bg-amber-500 text-slate-950 border-amber-600 ring-1 ring-amber-300 font-black shadow-sm';
+        } else if (points >= 3) {
+            return 'bg-amber-200 text-amber-950 border-amber-400 ring-1 ring-amber-500/60 font-black shadow-sm';
+        } else if (points >= 2) {
+            return 'bg-amber-100 text-amber-950 border-amber-400 ring-1 ring-amber-400/60 font-black shadow-sm';
+        }
+        // Điểm lẻ > 1 (ví dụ 1.2 đ, 1.5 đ)
+        return 'bg-amber-50 text-amber-950 border-amber-300 ring-1 ring-amber-300/60 font-black shadow-sm';
     }
-    return 'bg-slate-100 text-slate-600 border-slate-200 font-medium';
+    // Điểm chuẩn cơ bản <= 1 (1 đ, 0.5 đ, 0 đ): giữ màu trung tính nhẹ nhàng, không gây rối mắt
+    return 'bg-slate-50 text-slate-500 border-slate-200 font-semibold';
 };
 
 export const getEarnedPointBadgeStyle = (points: number, isAchieved: boolean): string => {
@@ -279,7 +285,7 @@ export default function EmployeeDetailReportPage() {
                 fetchEmployeeRevenueTargets(selectedMonth, selectedYear),
                 fetchEmployeeCampaignTargets(selectedMonth, selectedYear),
                 syncAndFetchEmployeeDataSessions({ month: selectedMonth, year: selectedYear }),
-                syncStoreCampaignScoresFromCloud(),
+                syncStoreCampaignScoresFromCloud(selectedMonth, selectedYear),
                 fetchCampaignOffsets(selectedStore, selectedMonth, selectedYear),
                 fetchEmployeeBonuses({ month: selectedMonth, year: selectedYear })
             ]);
@@ -440,8 +446,8 @@ export default function EmployeeDetailReportPage() {
     }, [currentEmployee, selectedStore]);
 
     const scoreConfig = useMemo(() => {
-        return getStoreCampaignScoreConfig(effectiveStoreName);
-    }, [effectiveStoreName]);
+        return getStoreCampaignScoreConfig(effectiveStoreName, stores, selectedMonth, selectedYear);
+    }, [effectiveStoreName, stores, selectedMonth, selectedYear]);
 
     const isPointsMode = scoreConfig.scoring_mode === 'POINTS';
 
@@ -701,7 +707,7 @@ export default function EmployeeDetailReportPage() {
         }>();
 
         allKeys.forEach(rawKey => {
-            const resolved = resolveCanonicalCampaign(rawKey, campaignDict);
+            const resolved = resolveCanonicalCampaign(rawKey, campaignDict, selectedMonth);
             const cKey = resolved.canonicalKey;
             const token = normalizeCampaignToken(cKey) || normalizeCampaignToken(rawKey);
 
@@ -793,7 +799,7 @@ export default function EmployeeDetailReportPage() {
 
             if (actualVal === 0) {
                 for (const [sessKey, sessVal] of Object.entries(empCampaigns)) {
-                    const sessResolved = resolveCanonicalCampaign(sessKey, campaignDict);
+                    const sessResolved = resolveCanonicalCampaign(sessKey, campaignDict, selectedMonth);
                     if (sessResolved.canonicalKey === cKey || aliasKeys.includes(sessResolved.canonicalKey)) {
                         actualVal = Number(sessVal) || 0;
                         break;
@@ -1119,7 +1125,11 @@ export default function EmployeeDetailReportPage() {
             }
             const link = document.createElement('a');
             const empNameClean = cleanEmployeeName(currentEmployee?.full_name || 'NhanVien');
-            link.download = `ChiTietNV_${empNameClean}_${selectedEmployeeId}_T${selectedMonth}_${selectedYear}_8K.png`;
+            link.download = buildReportImageFileName(
+                `Chi_Tiet_NV_${empNameClean}_${selectedEmployeeId}`,
+                selectedStore,
+                `T${selectedMonth}_${selectedYear}`
+            );
             link.href = canvas.toDataURL('image/png', 1.0);
             link.click();
             showToast('Đã tải file ảnh 8K thành công!');
@@ -1152,7 +1162,11 @@ export default function EmployeeDetailReportPage() {
                     showToast('Đã copy ảnh 8K vào bộ nhớ tạm! Bạn có thể dán (Ctrl + V) ngay vào Messaging App.');
                 } catch (clipErr) {
                     const link = document.createElement('a');
-                    link.download = `ChiTietNV_${selectedEmployeeId}.png`;
+                    link.download = buildReportImageFileName(
+                        `Chi_Tiet_NV_${selectedEmployeeId}`,
+                        selectedStore,
+                        `T${selectedMonth}_${selectedYear}`
+                    );
                     link.href = canvas.toDataURL('image/png');
                     link.click();
                     showToast('Trình duyệt chặn copy trực tiếp, đã tự động tải file ảnh về máy!');
@@ -1221,7 +1235,12 @@ export default function EmployeeDetailReportPage() {
                 if (canvas) {
                     const link = document.createElement('a');
                     const sttPrefix = String(i + 1).padStart(2, '0');
-                    link.download = `${sttPrefix}_ChiTietNV_${empNameClean}_${emp.employee_id}_T${selectedMonth}_${selectedYear}_8K.png`;
+                    const baseFileName = buildReportImageFileName(
+                        `Chi_Tiet_NV_${empNameClean}_${emp.employee_id}`,
+                        selectedStore,
+                        `T${selectedMonth}_${selectedYear}`
+                    );
+                    link.download = `${sttPrefix}_${baseFileName}`;
                     link.href = canvas.toDataURL('image/png', 1.0);
                     link.click();
                     successCount++;
@@ -2166,7 +2185,10 @@ export default function EmployeeDetailReportPage() {
                                                         {/* 3. Điểm */}
                                                         {isPointsMode && (
                                                             <td className="py-2.5 px-0.5 text-center border-r border-slate-100">
-                                                                <span className={`inline-block px-1.5 py-0.5 rounded text-[10.5px] font-mono tabular-nums border ${getPointBadgeStyle(row.pointsWeight)}`}>
+                                                                <span
+                                                                    className={`inline-block px-1.5 py-0.5 rounded text-[10.5px] font-mono tabular-nums border ${getPointBadgeStyle(row.pointsWeight)}`}
+                                                                    title={row.pointsWeight > 1 ? `Ngành hàng trọng tâm (${row.pointsWeight} điểm)` : `Điểm chuẩn: ${row.pointsWeight} điểm`}
+                                                                >
                                                                     {row.pointsWeight} đ
                                                                 </span>
                                                             </td>

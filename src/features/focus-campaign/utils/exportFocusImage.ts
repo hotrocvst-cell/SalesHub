@@ -1,5 +1,5 @@
 import html2canvas from 'html2canvas';
-import { calculate8KScale } from '../../../shared/utils/exportImage';
+import { calculate8KScale, buildReportImageFileName } from '../../../shared/utils/exportImage';
 
 /**
  * Tạo canvas báo cáo thi đua trọng tâm chuẩn hóa:
@@ -138,14 +138,20 @@ export async function generateFocusCampaignCanvas(reportElement: HTMLElement): P
  */
 export async function exportFocusCampaignImage(
     reportElement: HTMLElement,
-    fileNamePrefix: string
+    fileNameOrPrefix: string,
+    storeOrCluster?: string,
+    period?: string
 ): Promise<boolean> {
     try {
         const canvas = await generateFocusCampaignCanvas(reportElement);
         if (!canvas) return false;
 
+        const fileName = storeOrCluster !== undefined
+            ? buildReportImageFileName('Thi_Dua_Trong_Tam', storeOrCluster, period)
+            : (fileNameOrPrefix.toLowerCase().endsWith('.png') ? fileNameOrPrefix : `${fileNameOrPrefix}.png`);
+
         const link = document.createElement('a');
-        link.download = `${fileNamePrefix}_${new Date().toISOString().slice(0, 10)}.png`;
+        link.download = fileName;
         link.href = canvas.toDataURL('image/png', 1.0);
         link.click();
         return true;
@@ -159,7 +165,9 @@ export async function exportFocusCampaignImage(
  * Sao chép ảnh báo cáo thi đua trọng tâm vào Clipboard để dán trực tiếp vào Messaging App
  */
 export async function copyFocusCampaignImage(
-    reportElement: HTMLElement
+    reportElement: HTMLElement,
+    storeOrCluster?: string,
+    period?: string
 ): Promise<boolean> {
     try {
         const canvas = await generateFocusCampaignCanvas(reportElement);
@@ -176,7 +184,7 @@ export async function copyFocusCampaignImage(
         } else {
             // Fallback tự động tải file ảnh về nếu trình duyệt không hỗ trợ ClipboardItem
             const link = document.createElement('a');
-            link.download = `Thi_Dua_Trong_Tam_${new Date().toISOString().slice(0, 10)}.png`;
+            link.download = buildReportImageFileName('Thi_Dua_Trong_Tam', storeOrCluster || 'Toan_Cum', period);
             link.href = URL.createObjectURL(blob);
             link.click();
             URL.revokeObjectURL(link.href);

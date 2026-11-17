@@ -3,7 +3,7 @@ import type { EmployeeDataSession } from '../../employee-cumulative/utils/sessio
 import { getCampaignLabel, formatDate, isStoreMatch } from '../../../core/lib/formatters';
 import { getShortenedEmployeeName } from '../../employee-performance/utils/performanceConfig';
 import type { CampaignDictItem, EmployeeItem } from '../../../core/lib/storage';
-import { getStoreCampaignScoreConfig, getCampaignPoints } from '../../../core/lib/storeCampaignScoreService';
+import { getStoreCampaignScoreConfig, getCampaignPoints, extractCampaignMonthPrefix } from '../../../core/lib/storeCampaignScoreService';
 import type { CampaignOffsetItem } from '../../campaign-offset/services/campaignOffsetService';
 import type { EmployeeBonusItem } from '../../../core/lib/employeeBonusService';
 
@@ -53,7 +53,8 @@ export function normalizeCampaignToken(str: string): string {
  */
 export function resolveCanonicalCampaign(
     rawKey: string,
-    campaignDict: CampaignDictItem[] = []
+    campaignDict: CampaignDictItem[] = [],
+    contextMonth?: number
 ): { canonicalKey: string; dictItem?: CampaignDictItem } {
     if (!rawKey) return { canonicalKey: '' };
     const trimmed = rawKey.trim();
@@ -64,13 +65,32 @@ export function resolveCanonicalCampaign(
     const upper = trimmed.toUpperCase();
     const token = normalizeCampaignToken(trimmed);
 
-    // Sắp xếp active items: ưu tiên mục có tiền tố tháng (T11 -, T10 -) và order_index nhỏ hơn
+    // Xác định tháng mục tiêu: ưu tiên từ contextMonth, nếu không có thì trích xuất từ rawKey (ví dụ "T12 - Laptop" -> 12)
+    const rawKeyMonth = extractCampaignMonthPrefix(trimmed);
+    const targetMonth = contextMonth ?? rawKeyMonth;
+
+    // Tính độ ưu tiên của item theo bối cảnh tháng:
+    // 3: Có tiền tố đúng tháng mục tiêu (ví dụ "T12 - Laptop" khi xét Tháng 12)
+    // 2: Không gắn tiền tố tháng (ví dụ "Laptop", trung tính dùng cho mọi tháng)
+    // 1: Có tiền tố của tháng khác (ví dụ "T11 - Laptop" khi đang xét Tháng 12)
+    const getMonthPriority = (item: CampaignDictItem): number => {
+        const p = extractCampaignMonthPrefix(item.raw_key) ?? extractCampaignMonthPrefix(item.display_name);
+        if (targetMonth) {
+            if (p === targetMonth) return 3;
+            if (p === null) return 2;
+            return 1;
+        }
+        if (p === null) return 2;
+        return 1;
+    };
+
+    // Sắp xếp active items: ưu tiên mục đúng tháng -> mục trung tính không tiền tố -> mục tháng khác
     const activeItems = campaignDict
         .filter(d => d.is_active)
         .sort((a, b) => {
-            const aHasPrefix = /^t\d{1,2}\s*-/i.test(a.raw_key) ? 1 : 0;
-            const bHasPrefix = /^t\d{1,2}\s*-/i.test(b.raw_key) ? 1 : 0;
-            if (aHasPrefix !== bHasPrefix) return bHasPrefix - aHasPrefix;
+            const prioA = getMonthPriority(a);
+            const prioB = getMonthPriority(b);
+            if (prioA !== prioB) return prioB - prioA;
             return (a.order_index ?? 999) - (b.order_index ?? 999);
         });
 
@@ -238,7 +258,7 @@ export function buildCampaignSummaryFromSession(
         Object.entries(empTargets).forEach(([rawKey, val]) => {
             if (Number(val) > 0 && rawKey && rawKey.trim()) {
                 const trimmedKey = rawKey.trim();
-                const resolved = resolveCanonicalCampaign(trimmedKey, campaignDict);
+                const resolved = resolveCanonicalCampaign(trimmedKey, campaignDict, session.month);
                 const cKey = resolved.canonicalKey;
 
                 if (!canonicalCategoriesMap.has(cKey)) {
@@ -273,7 +293,7 @@ export function buildCampaignSummaryFromSession(
         ? (session.store_name || 'Toàn Cụm ST')
         : selectedStore;
 
-    const baseScoreConfig = getStoreCampaignScoreConfig(effectiveStoreName);
+    const baseScoreConfig = getStoreCampaignScoreConfig(effectiveStoreName, options?.storesList, session.month, session.year);
     const isPointsMode = baseScoreConfig.scoring_mode === 'POINTS';
 
     const rows: CampaignSummaryRow[] = filteredRecords.map(r => {
@@ -284,7 +304,7 @@ export function buildCampaignSummaryFromSession(
 
         const empStore = empStoreMap[empId] || session.store_name || effectiveStoreName;
         const currentScoreConfig = (selectedStore === 'all' && empStore)
-            ? getStoreCampaignScoreConfig(empStore)
+            ? getStoreCampaignScoreConfig(empStore, options?.storesList, session.month, session.year)
             : baseScoreConfig;
 
         const empOffsets = allOffsets.filter(o => o.employee_id === empId && o.is_approved !== false);
@@ -330,7 +350,7 @@ export function buildCampaignSummaryFromSession(
 
                 if (actualVal === 0) {
                     for (const [sessKey, sessVal] of Object.entries(r.campaigns)) {
-                        const sessResolved = resolveCanonicalCampaign(sessKey, campaignDict);
+                        const sessResolved = resolveCanonicalCampaign(sessKey, campaignDict, session.month);
                         if (sessResolved.canonicalKey === cat) {
                             actualVal = Number(sessVal) || 0;
                             break;
@@ -343,8 +363,8 @@ export function buildCampaignSummaryFromSession(
             let netOffset = 0;
             if (applyOffsets && empOffsets.length > 0) {
                 empOffsets.forEach(o => {
-                    const fromCanonical = resolveCanonicalCampaign(o.from_campaign_key, campaignDict).canonicalKey;
-                    const toCanonical = resolveCanonicalCampaign(o.to_campaign_key, campaignDict).canonicalKey;
+                    const fromCanonical = resolveCanonicalCampaign(o.from_campaign_key, campaignDict, session.month).canonicalKey;
+                    const toCanonical = resolveCanonicalCampaign(o.to_campaign_key, campaignDict, session.month).canonicalKey;
                     const qty = Number(o.offset_quantity) || 0;
                     if (toCanonical === cat) {
                         netOffset += qty;
