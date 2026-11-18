@@ -132,7 +132,7 @@ export default function EmployeeRankingAssessmentModal({
     // 1. MẪU 1: TOÀN DIỆN & VINH DANH (Comprehensive & Recognition)
     const generateTemplate1 = () => {
         const lines: string[] = [];
-        lines.push(`🌟 BÁO CÁO XẾP HẠNG NHÂN SỰ T${month}/${year}\n🏠 ${displayName.toUpperCase()}:`);
+        lines.push(`🌟 XẾP HẠNG NHÂN VIÊN T${month}/${year}\n🏠 ${displayName.toUpperCase()}:`);
         lines.push(`• Tổng quan: ${summary.totalEmployees} nhân sự\n• DTQĐ: ${(summary.totalRevenueQd).toLocaleString('vi-VN')} tr\n• %DKHT TB: ${summary.avgForecastRate.toFixed(1)}%\n• Thi đua TB: ${summary.avgEmulationRate.toFixed(1)}%.`);
 
         if (topRev1) {
@@ -140,7 +140,7 @@ export default function EmployeeRankingAssessmentModal({
         }
 
         if (topEmu1) {
-            lines.push(`\n⭐ TOP Thi đua: ${topEmu1.short_name} (Top #1 - Đạt ${topEmu1.emulation_display} ~ ${topEmu1.emulation_rate.toFixed(0)}%).`);
+            lines.push(`\n⭐ TOP Thi đua:\n• ${topEmu1.short_name} (Top #1 - Đạt ${topEmu1.emulation_display} ~ ${topEmu1.emulation_rate.toFixed(0)}%).`);
         }
 
         // Lấy danh sách nhân viên Bottom theo dữ liệu cột "Đánh giá sức khỏe nhân viên"
@@ -160,7 +160,7 @@ export default function EmployeeRankingAssessmentModal({
         }
 
         if (botLines.length > 0) {
-            lines.push(`\n🚨 Bottom (Đánh giá sức khỏe):\n${botLines.join('\n')}`);
+            lines.push(`\n🚨 Bottom:\n${botLines.join('\n')}`);
         } else {
             lines.push(`\n🎉 Bottom: 100% nhân sự đạt chuẩn an toàn, không có Bot cảnh báo.`);
         }

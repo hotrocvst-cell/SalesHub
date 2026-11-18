@@ -15,6 +15,9 @@ export interface CameraHardwareCaps {
     minFocusDistance: number | null;
     zoomMin: number | null;
     zoomMax: number | null;
+    currentZoom: number | null;
+    streamWidth: number | null;
+    streamHeight: number | null;
     maxWidth: number | null;
 }
 
@@ -125,14 +128,35 @@ export function getRankedRearCameras(devices: MediaDeviceInfo[]): RearCameraCand
     return candidates.sort((a, b) => b.labelScore - a.labelScore);
 }
 
+function getIdealFullSensorVideoSize(): Pick<MediaTrackConstraints, 'width' | 'height' | 'aspectRatio'> {
+    const isPortrait = typeof window !== 'undefined' && window.innerHeight >= window.innerWidth;
+    if (isPortrait) {
+        // Smartphone cầm dọc: dùng tỷ lệ gốc cảm biến 3:4 để lấy trọn góc nhìn 1x, không bị crop 16:9 gây zoom ~2x
+        return {
+            width: { ideal: 960 },
+            height: { ideal: 1280 },
+            aspectRatio: { ideal: 3 / 4 }
+        };
+    }
+    return {
+        width: { ideal: 1280 },
+        height: { ideal: 960 },
+        aspectRatio: { ideal: 4 / 3 }
+    };
+}
+
 function readTrackHardwareCaps(track: MediaStreamTrack | undefined): CameraHardwareCaps {
     const caps = (track?.getCapabilities?.() as ExtendedTrackCapabilities | undefined) || {};
+    const settings = (track?.getSettings?.() as (MediaTrackSettings & { zoom?: number }) | undefined) || {};
     return {
         hasTorch: Boolean(caps.torch),
         hasContinuousFocus: Array.isArray(caps.focusMode) && caps.focusMode.includes('continuous'),
         minFocusDistance: typeof caps.focusDistance?.min === 'number' ? caps.focusDistance.min : null,
         zoomMin: typeof caps.zoom?.min === 'number' ? caps.zoom.min : null,
         zoomMax: typeof caps.zoom?.max === 'number' ? caps.zoom.max : null,
+        currentZoom: typeof settings.zoom === 'number' ? Number(settings.zoom.toFixed(2)) : null,
+        streamWidth: typeof settings.width === 'number' ? settings.width : null,
+        streamHeight: typeof settings.height === 'number' ? settings.height : null,
         maxWidth: typeof caps.width?.max === 'number' ? caps.width.max : null
     };
 }
@@ -157,26 +181,27 @@ async function applyPrimaryLensSafeguards(track: MediaStreamTrack | undefined): 
     const hwCaps = readTrackHardwareCaps(track);
     if (!track) return hwCaps;
 
-    const advanced: ExtendedConstraintSet = {};
-    let hasConstraint = false;
-
+    // Áp dụng khóa zoom 1x và focusMode tách biệt nhau để lỗi focusMode không làm hỏng việc reset zoom về 1x
     if (hwCaps.zoomMin !== null && hwCaps.zoomMax !== null) {
-        advanced.zoom = Math.min(hwCaps.zoomMax, Math.max(hwCaps.zoomMin, 1));
-        hasConstraint = true;
-    }
-    if (hwCaps.hasContinuousFocus) {
-        advanced.focusMode = 'continuous';
-        hasConstraint = true;
-    }
-
-    if (hasConstraint) {
+        const targetZoom = Math.min(hwCaps.zoomMax, Math.max(hwCaps.zoomMin, 1));
         try {
-            await track.applyConstraints({ advanced: [advanced as MediaTrackConstraintSet] });
+            const zoomSet: ExtendedConstraintSet = { zoom: targetZoom };
+            await track.applyConstraints({ advanced: [zoomSet as MediaTrackConstraintSet] });
         } catch {
-            // Bỏ qua an toàn nếu trình duyệt từ chối applyConstraints
+            // Bỏ qua an toàn nếu trình duyệt không hỗ trợ applyConstraints zoom
         }
     }
-    return hwCaps;
+
+    if (hwCaps.hasContinuousFocus) {
+        try {
+            const focusSet: ExtendedConstraintSet = { focusMode: 'continuous' };
+            await track.applyConstraints({ advanced: [focusSet as MediaTrackConstraintSet] });
+        } catch {
+            // Bỏ qua an toàn nếu trình duyệt không hỗ trợ focusMode
+        }
+    }
+
+    return readTrackHardwareCaps(track);
 }
 
 async function stopStreamAndReleaseHal(stream: MediaStream | null): Promise<void> {
@@ -186,10 +211,11 @@ async function stopStreamAndReleaseHal(stream: MediaStream | null): Promise<void
 }
 
 async function openStreamByDeviceId(deviceId: string): Promise<MediaStream> {
+    const idealSize = getIdealFullSensorVideoSize();
     const tryOpen = (withSize: boolean) =>
         navigator.mediaDevices.getUserMedia({
             video: withSize
-                ? { deviceId: { exact: deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } }
+                ? { deviceId: { exact: deviceId }, ...idealSize }
                 : { deviceId: { exact: deviceId } },
             audio: false
         });
@@ -253,8 +279,7 @@ export async function openPrimaryRearCameraStream(preferredDeviceId?: string): P
 
     const baseConstraints: MediaTrackConstraints = {
         facingMode: { ideal: 'environment' },
-        width: { ideal: 1280 },
-        height: { ideal: 720 }
+        ...getIdealFullSensorVideoSize()
     };
 
     // Bước 1: Kiểm tra enumerateDevices() trước — nếu trình duyệt đã có quyền, mở thẳng camera chính ngay lần đầu

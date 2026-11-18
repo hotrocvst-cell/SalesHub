@@ -131,14 +131,25 @@ export default function StoreCampaignScoreTab({
         });
     }, [campaigns, selectedMonth]);
 
-    // Thay đổi số điểm của 1 chương trình (Tự động đồng bộ ngay cho các tên alias cùng token)
+    // Thay đổi số điểm của 1 chương trình (Đồng bộ mọi alias cùng token và dọn key rác của tháng khác)
     const handleScoreChange = (key: string, val: number) => {
         const safeVal = Math.max(0.1, Number(val) || 1);
         const tok = normalizeScoreToken(key);
 
         setCampaignScores(prev => {
-            const next = { ...prev, [key]: safeVal };
+            const next: Record<string, number> = { ...prev, [key]: safeVal };
             if (tok) {
+                // Đồng bộ toàn bộ key đã có trong state cùng token (xóa key tháng khác tránh xung đột)
+                Object.keys(next).forEach(existingKey => {
+                    if (normalizeScoreToken(existingKey) === tok) {
+                        const keyMonth = extractCampaignMonthPrefix(existingKey);
+                        if (keyMonth !== null && keyMonth !== selectedMonth) {
+                            delete next[existingKey];
+                        } else {
+                            next[existingKey] = safeVal;
+                        }
+                    }
+                });
                 monthEligibleCampaigns.forEach(c => {
                     const cTok = normalizeScoreToken(c.raw_key) || normalizeScoreToken(c.display_name);
                     if (cTok === tok) {
@@ -214,15 +225,22 @@ export default function StoreCampaignScoreTab({
         }
     };
 
-    // Lưu cấu hình
+    // Lưu cấu hình (lọc bỏ các key gắn tiền tố tháng khác để tránh rò rỉ điểm cũ sang tháng đang lưu)
     const handleSave = async () => {
         setIsSaving(true);
+        const cleanedCampaignScores: Record<string, number> = {};
+        Object.entries(campaignScores).forEach(([k, v]) => {
+            const p = extractCampaignMonthPrefix(k);
+            if (p !== null && p !== selectedMonth) return;
+            cleanedCampaignScores[k] = v;
+        });
+
         const configToSave: StoreCampaignScoreConfig = {
             store_name: selectedStore,
             month: selectedMonth,
             year: selectedYear,
             scoring_mode: scoringMode,
-            campaign_scores: campaignScores
+            campaign_scores: cleanedCampaignScores
         };
 
         const targetStores = applyToAllMyStores
@@ -238,6 +256,7 @@ export default function StoreCampaignScoreTab({
 
         setIsSaving(false);
         if (res.success) {
+            setCampaignScores(cleanedCampaignScores);
             updateHasChanges(false);
             onSavedSuccess?.();
             if (applyToAllMyStores && allowedStores.length > 1) {

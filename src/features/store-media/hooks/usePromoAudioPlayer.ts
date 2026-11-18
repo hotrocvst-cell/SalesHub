@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { PromoAudioItem } from '../types';
+import type { PromoAudioGraph } from '../utils/recordingAudioMixer';
 import {
     getCachedAudioBlob,
     cacheAudioBlobLocally,
@@ -10,7 +11,6 @@ import {
 export function usePromoAudioPlayer(playlist: PromoAudioItem[] = []) {
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const audioCtxRef = useRef<AudioContext | null>(null);
-    const streamDestRef = useRef<MediaStreamAudioDestinationNode | null>(null);
     const sourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null);
     const activeObjectUrlRef = useRef<string | null>(null);
     const selectReqIdRef = useRef<number>(0);
@@ -23,7 +23,6 @@ export function usePromoAudioPlayer(playlist: PromoAudioItem[] = []) {
     const [volume, setVolume] = useState<number>(1);
     const [isLoadingAudio, setIsLoadingAudio] = useState<boolean>(false);
     const [audioError, setAudioError] = useState<string | null>(null);
-    const [audioStream, setAudioStream] = useState<MediaStream | null>(null);
 
     const playlistRef = useRef<PromoAudioItem[]>(playlist);
     playlistRef.current = playlist;
@@ -107,32 +106,42 @@ export function usePromoAudioPlayer(playlist: PromoAudioItem[] = []) {
         };
     }, [revokeActiveObjectUrl]);
 
-    const initWebAudioRouting = useCallback(() => {
-        if (!audioRef.current) return;
+    const initWebAudioRouting = useCallback((): PromoAudioGraph | null => {
+        if (!audioRef.current) return null;
         try {
             if (!audioCtxRef.current) {
                 const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext;
-                if (!AudioCtxClass) return;
+                if (!AudioCtxClass) return null;
                 const ctx = new AudioCtxClass();
                 audioCtxRef.current = ctx;
 
-                const dest = ctx.createMediaStreamDestination();
-                streamDestRef.current = dest;
-                setAudioStream(dest.stream);
-
                 const src = ctx.createMediaElementSource(audioRef.current);
                 sourceNodeRef.current = src;
-
                 src.connect(ctx.destination);
-                src.connect(dest);
             }
             if (audioCtxRef.current.state === 'suspended') {
                 audioCtxRef.current.resume().catch(() => {});
             }
+            if (audioCtxRef.current && sourceNodeRef.current) {
+                return {
+                    audioContext: audioCtxRef.current,
+                    sourceNode: sourceNodeRef.current
+                };
+            }
         } catch (err) {
             console.warn('Web Audio Routing init warning:', err);
         }
+        return null;
     }, []);
+
+    const ensureAudioGraph = useCallback(async (): Promise<PromoAudioGraph | null> => {
+        const graph = initWebAudioRouting();
+        if (!graph) return null;
+        if (graph.audioContext.state === 'suspended') {
+            await graph.audioContext.resume().catch(() => {});
+        }
+        return graph;
+    }, [initWebAudioRouting]);
 
     const selectAudio = useCallback(async (item: PromoAudioItem, autoPlay: boolean = false) => {
         const audio = audioRef.current;
@@ -255,7 +264,7 @@ export function usePromoAudioPlayer(playlist: PromoAudioItem[] = []) {
         volume,
         isLoadingAudio,
         audioError,
-        audioStream,
+        ensureAudioGraph,
         selectAudio,
         clearCurrentAudio,
         togglePlay,

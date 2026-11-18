@@ -211,6 +211,7 @@ export default function EmployeeDetailReportPage() {
     const [sessions, setSessions] = useState<EmployeeDataSession[]>([]);
     const [campaignOffsets, setCampaignOffsets] = useState<CampaignOffsetItem[]>([]);
     const [bonuses, setBonuses] = useState<EmployeeBonusItem[]>([]);
+    const [scoreConfigVersion, setScoreConfigVersion] = useState<number>(0);
 
     const [loading, setLoading] = useState<boolean>(true);
     const [loadError, setLoadError] = useState<string>('');
@@ -295,6 +296,7 @@ export default function EmployeeDetailReportPage() {
             if (dictRes.success && dictRes.data) setCampaignDict(dictRes.data);
             if (offsetsRes && offsetsRes.success && offsetsRes.data) setCampaignOffsets(offsetsRes.data);
             setBonuses(bonusList || []);
+            setScoreConfigVersion(v => v + 1);
 
             // Parse Revenue Targets
             const revMap: Record<string, number> = {};
@@ -447,7 +449,7 @@ export default function EmployeeDetailReportPage() {
 
     const scoreConfig = useMemo(() => {
         return getStoreCampaignScoreConfig(effectiveStoreName, stores, selectedMonth, selectedYear);
-    }, [effectiveStoreName, stores, selectedMonth, selectedYear]);
+    }, [effectiveStoreName, stores, selectedMonth, selectedYear, scoreConfigVersion]);
 
     const isPointsMode = scoreConfig.scoring_mode === 'POINTS';
 

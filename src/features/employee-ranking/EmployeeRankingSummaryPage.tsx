@@ -467,11 +467,10 @@ export default function EmployeeRankingSummaryPage() {
                     });
                     const effectiveActual = Math.max(0, actualVal + offsetIn - offsetOut);
 
-                    // Điểm số quy định cho nhóm thi đua này (đối chiếu cả cKey và rawKey)
-                    const pts = Math.max(
-                        getCampaignPoints(cKey, scoreCfg),
-                        getCampaignPoints(rawKey, scoreCfg)
-                    );
+                    // Điểm số quy định cho nhóm thi đua này (ưu tiên khóa chuẩn cKey của kỳ tháng đang xem)
+                    const pts = scoreCfg.campaign_scores?.[cKey] !== undefined
+                        ? getCampaignPoints(cKey, scoreCfg)
+                        : getCampaignPoints(cKey || rawKey, scoreCfg);
                     totalPoints += pts;
 
                     // Tính %DKHT nhóm thi đua với số lượng thực tế sau cấn trừ

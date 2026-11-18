@@ -1,24 +1,30 @@
 import React, { useState } from 'react';
 import {
+    Camera,
+    CameraOff,
     Circle,
     Square,
+    Loader2,
     Mic,
     Radio,
     Sliders,
     Download,
     X,
     CheckCircle,
-    Share2,
     Film
 } from 'lucide-react';
 import type { VideoAudioRecordingMode, RecordedVideoResult } from '../types';
 
 interface Props {
+    isCameraActive: boolean;
+    isStartingCamera: boolean;
     isRecording: boolean;
     recordingSeconds: number;
     recordingMode: VideoAudioRecordingMode;
     lastRecordedVideo: RecordedVideoResult | null;
     storeCode: string;
+    onOpenCamera: () => void;
+    onCloseCamera: () => void;
     onStartRecording: () => void;
     onStopRecording: () => void;
     onChangeRecordingMode: (mode: VideoAudioRecordingMode) => void;
@@ -32,11 +38,15 @@ function formatTimer(sec: number): string {
 }
 
 export default function VideoRecorderActions({
+    isCameraActive,
+    isStartingCamera,
     isRecording,
     recordingSeconds,
     recordingMode,
     lastRecordedVideo,
     storeCode,
+    onOpenCamera,
+    onCloseCamera,
     onStartRecording,
     onStopRecording,
     onChangeRecordingMode,
@@ -116,35 +126,70 @@ export default function VideoRecorderActions({
                 </div>
             </div>
 
-            {/* Nút bấm Bắt đầu / Dừng quay */}
+            {/* Nút bấm theo chu trình 3 bước: Bấm lần 1 mở Camera -> Bấm lần 2 quay -> Kết thúc tự tắt Camera */}
             <div className="flex items-center justify-center gap-4 py-2">
                 {isRecording ? (
                     <div className="flex flex-col items-center gap-2">
                         <button
                             type="button"
                             onClick={onStopRecording}
+                            aria-label="Kết thúc quay và tắt camera"
                             className="w-16 h-16 rounded-full bg-rose-600 hover:bg-rose-500 border-4 border-rose-300/40 text-white flex items-center justify-center transition cursor-pointer shadow-lg animate-pulse"
-                            title="Dừng quay video"
+                            title="Kết thúc quay và tắt camera"
                         >
-                            <Square className="w-6 h-6 fill-current" />
+                            <Square className="w-6 h-6 fill-current" aria-hidden="true" />
                         </button>
                         <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-950/80 border border-rose-800 text-rose-300 font-mono text-xs font-bold">
                             <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
                             <span>ĐANG QUAY: {formatTimer(recordingSeconds)}</span>
                         </div>
+                        <span className="text-[11px] font-medium text-slate-400">
+                            Bấm để Kết thúc &amp; tự tắt Camera
+                        </span>
+                    </div>
+                ) : isCameraActive ? (
+                    <div className="flex flex-col items-center gap-2">
+                        <div className="flex items-center gap-4">
+                            <button
+                                type="button"
+                                onClick={onStartRecording}
+                                aria-label="Bắt đầu quay video"
+                                className="w-16 h-16 rounded-full bg-rose-600 hover:bg-rose-500 border-4 border-white/25 hover:border-white/50 text-white flex items-center justify-center transition cursor-pointer shadow-xl hover:scale-105 active:scale-95"
+                                title="Bắt đầu quay video có watermark"
+                            >
+                                <Circle className="w-7 h-7 fill-current" aria-hidden="true" />
+                            </button>
+                        </div>
+                        <span className="text-xs font-bold text-emerald-300">
+                            Camera đã bật · Bấm lần nữa để Bắt đầu Quay
+                        </span>
+                        <button
+                            type="button"
+                            onClick={onCloseCamera}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-[11px] font-bold border border-slate-700 transition cursor-pointer"
+                        >
+                            <CameraOff className="w-3 h-3" aria-hidden="true" />
+                            <span>Tắt camera</span>
+                        </button>
                     </div>
                 ) : (
                     <div className="flex flex-col items-center gap-2">
                         <button
                             type="button"
-                            onClick={onStartRecording}
-                            className="w-16 h-16 rounded-full bg-rose-600 hover:bg-rose-500 border-4 border-white/20 hover:border-white/40 text-white flex items-center justify-center transition cursor-pointer shadow-xl hover:scale-105 active:scale-95"
-                            title="Bắt đầu quay video có watermark"
+                            onClick={onOpenCamera}
+                            disabled={isStartingCamera}
+                            aria-label="Mở camera chính"
+                            className="w-16 h-16 rounded-full bg-sky-600 hover:bg-sky-500 disabled:bg-slate-700 border-4 border-sky-300/30 hover:border-sky-200/60 text-white flex items-center justify-center transition cursor-pointer disabled:cursor-wait shadow-xl hover:scale-105 active:scale-95"
+                            title="Bấm lần 1 để mở Camera chính"
                         >
-                            <Circle className="w-7 h-7 fill-current" />
+                            {isStartingCamera ? (
+                                <Loader2 className="w-7 h-7 animate-spin" aria-hidden="true" />
+                            ) : (
+                                <Camera className="w-7 h-7" aria-hidden="true" />
+                            )}
                         </button>
-                        <span className="text-xs font-bold text-slate-300">
-                            Bấm để Bắt đầu Quay Video
+                        <span className="text-xs font-bold text-slate-200">
+                            {isStartingCamera ? 'Đang mở Camera chính...' : 'Bấm để Mở Camera'}
                         </span>
                     </div>
                 )}

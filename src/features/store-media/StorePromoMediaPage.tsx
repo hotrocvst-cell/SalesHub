@@ -141,7 +141,7 @@ export default function StorePromoMediaPage() {
     // 6. Hook Ghi hình Video có Watermark 3 lớp
     const recorder = useWatermarkVideoRecorder({
         geoInfo,
-        promoAudioStream: audioPlayer.audioStream,
+        ensurePromoAudioGraph: audioPlayer.ensureAudioGraph,
         storeName: currentStore?.name || selectedStoreName,
         storeCode: currentStoreCode,
         employeeName: currentUser?.full_name || '',
@@ -278,6 +278,8 @@ export default function StorePromoMediaPage() {
                 videoRef={recorder.videoRef}
                 canvasRef={recorder.canvasRef}
                 isCameraActive={recorder.isCameraActive}
+                isStartingCamera={recorder.isStartingCamera}
+                videoAspectRatio={recorder.videoAspectRatio}
                 activeCameraLabel={recorder.activeCameraLabel}
                 activeDeviceId={recorder.activeDeviceId}
                 activeHardwareCaps={recorder.activeHardwareCaps}
@@ -289,7 +291,7 @@ export default function StorePromoMediaPage() {
                 geoInfo={geoInfo}
                 storeName={currentStore?.name || selectedStoreName}
                 storeCode={currentStoreCode}
-                onRetryCamera={recorder.retryCamera}
+                onOpenCamera={recorder.openCamera}
                 onPinRearCamera={recorder.pinPrimaryRearCamera}
                 onResetAutoCamera={recorder.resetAutoPrimaryCamera}
                 onToggleTorch={recorder.toggleTorch}
@@ -297,11 +299,15 @@ export default function StorePromoMediaPage() {
 
             {/* Khối 3: Bảng điều khiển Quay Video & Nguồn âm thanh */}
             <VideoRecorderActions
+                isCameraActive={recorder.isCameraActive}
+                isStartingCamera={recorder.isStartingCamera}
                 isRecording={recorder.isRecording}
                 recordingSeconds={recorder.recordingSeconds}
                 recordingMode={recorder.recordingMode}
                 lastRecordedVideo={recorder.lastRecordedVideo}
                 storeCode={currentStoreCode}
+                onOpenCamera={recorder.openCamera}
+                onCloseCamera={recorder.stopCamera}
                 onStartRecording={recorder.startRecording}
                 onStopRecording={recorder.stopRecording}
                 onChangeRecordingMode={recorder.setRecordingMode}

@@ -7,10 +7,11 @@ import {
     type CameraHardwareCaps,
     type RearCameraCandidate
 } from '../utils/cameraSelector';
+import { createRecordingAudioMix, type PromoAudioGraph } from '../utils/recordingAudioMixer';
 
 interface RecorderProps {
     geoInfo: GeoLocationInfo;
-    promoAudioStream: MediaStream | null;
+    ensurePromoAudioGraph: () => Promise<PromoAudioGraph | null>;
     storeName: string;
     storeCode: string;
     employeeName: string;
@@ -19,7 +20,7 @@ interface RecorderProps {
 
 export function useWatermarkVideoRecorder({
     geoInfo,
-    promoAudioStream,
+    ensurePromoAudioGraph,
     storeName,
     storeCode,
     employeeName,
@@ -32,12 +33,15 @@ export function useWatermarkVideoRecorder({
     const animFrameRef = useRef<number | null>(null);
     const isMountedRef = useRef<boolean>(true);
     const startSeqRef = useRef<number>(0);
+    const recordingStartedAtRef = useRef<number>(0);
 
     const [isCameraActive, setIsCameraActive] = useState<boolean>(false);
+    const [isStartingCamera, setIsStartingCamera] = useState<boolean>(false);
     const [activeCameraLabel, setActiveCameraLabel] = useState<string>('Camera chính');
     const [activeDeviceId, setActiveDeviceId] = useState<string>('');
     const [activeHardwareCaps, setActiveHardwareCaps] = useState<CameraHardwareCaps | null>(null);
     const [rearCameras, setRearCameras] = useState<RearCameraCandidate[]>([]);
+    const [videoAspectRatio, setVideoAspectRatio] = useState<number>(3 / 4);
     const [isTorchOn, setIsTorchOn] = useState<boolean>(false);
     const [hasTorch, setHasTorch] = useState<boolean>(false);
     const [cameraError, setCameraError] = useState<string | null>(null);
@@ -49,11 +53,31 @@ export function useWatermarkVideoRecorder({
 
     const [lastRecordedVideo, setLastRecordedVideo] = useState<RecordedVideoResult | null>(null);
 
+    // Tắt hẳn camera, giải phóng phần cứng và xóa khung hình cũ trên canvas
+    const stopCamera = useCallback(() => {
+        startSeqRef.current += 1;
+        if (videoRef.current?.srcObject) {
+            const stream = videoRef.current.srcObject as MediaStream;
+            stream.getTracks().forEach(t => t.stop());
+            videoRef.current.srcObject = null;
+        }
+        if (canvasRef.current) {
+            const ctx = canvasRef.current.getContext('2d');
+            ctx?.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+        }
+        setIsStartingCamera(false);
+        setIsCameraActive(false);
+        setHasTorch(false);
+        setIsTorchOn(false);
+        setCameraError(null);
+    }, []);
+
     // Khởi động duy nhất Camera sau chính (1x), loại trừ camera tele/tiềm vọng/macro/ultra-wide/trước
     const startCamera = useCallback(async (preferredDeviceId?: string) => {
         const requestSeq = ++startSeqRef.current;
         setCameraError(null);
         setIsTorchOn(false);
+        setIsStartingCamera(true);
         try {
             if (videoRef.current?.srcObject) {
                 const oldStream = videoRef.current.srcObject as MediaStream;
@@ -90,6 +114,10 @@ export function useWatermarkVideoRecorder({
             );
             setIsCameraActive(false);
             setHasTorch(false);
+        } finally {
+            if (isMountedRef.current && requestSeq === startSeqRef.current) {
+                setIsStartingCamera(false);
+            }
         }
     }, []);
 
@@ -107,12 +135,15 @@ export function useWatermarkVideoRecorder({
         await startCamera();
     }, [startCamera]);
 
-    // Bật camera khi hook mount
+    // Mặc định KHÔNG tự bật camera khi mới vào trang; chỉ dọn dẹp tài nguyên khi rời trang
     useEffect(() => {
         isMountedRef.current = true;
-        startCamera();
         return () => {
             isMountedRef.current = false;
+            if (timerRef.current !== null) {
+                clearInterval(timerRef.current);
+                timerRef.current = null;
+            }
             if (videoRef.current?.srcObject) {
                 const stream = videoRef.current.srcObject as MediaStream;
                 stream.getTracks().forEach(t => t.stop());
@@ -122,7 +153,7 @@ export function useWatermarkVideoRecorder({
                 cancelAnimationFrame(animFrameRef.current);
             }
         };
-    }, [startCamera]);
+    }, []);
 
     // Bật / Tắt đèn Flash
     const toggleTorch = useCallback(async () => {
@@ -140,8 +171,9 @@ export function useWatermarkVideoRecorder({
         }
     }, [isTorchOn]);
 
-    // Vòng lặp vẽ Canvas + Watermark thời gian thực
+    // Vòng lặp vẽ Canvas + Watermark thời gian thực (chỉ chạy khi camera đang bật để tiết kiệm pin)
     useEffect(() => {
+        if (!isCameraActive) return;
         const canvas = canvasRef.current;
         const video = videoRef.current;
         if (!canvas || !video) return;
@@ -155,12 +187,16 @@ export function useWatermarkVideoRecorder({
             if (!active) return;
 
             if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-                const w = video.videoWidth || 720;
+                const w = video.videoWidth || 960;
                 const h = video.videoHeight || 1280;
 
                 if (canvas.width !== w || canvas.height !== h) {
                     canvas.width = w;
                     canvas.height = h;
+                    if (w > 0 && h > 0) {
+                        const nextRatio = w / h;
+                        setVideoAspectRatio(prev => (Math.abs(prev - nextRatio) > 0.02 ? nextRatio : prev));
+                    }
                 }
 
                 // 1. Vẽ khung hình camera gốc
@@ -221,44 +257,43 @@ export function useWatermarkVideoRecorder({
             active = false;
             if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
         };
-    }, [geoInfo, storeName, storeCode, employeeName, employeeId]);
+    }, [isCameraActive, geoInfo, storeName, storeCode, employeeName, employeeId]);
 
-    // Bắt đầu quay video
+    // Bắt đầu quay video (yêu cầu camera đã được mở ở lần bấm 1)
     const startRecording = useCallback(async () => {
-        if (!canvasRef.current) return;
+        if (!canvasRef.current || !isCameraActive || !videoRef.current?.srcObject) return;
         chunksRef.current = [];
         setRecordingSeconds(0);
+        recordingStartedAtRef.current = Date.now();
+
+        let audioMixCleanup: (() => void) | null = null;
+        let canvasStream: MediaStream | null = null;
 
         try {
-            const canvasStream = canvasRef.current.captureStream(30);
-            const combinedAudioStream = new MediaStream();
+            canvasStream = canvasRef.current.captureStream(30);
 
-            // Xử lý nguồn âm thanh theo chế độ
-            if (recordingMode === 'microphone' || recordingMode === 'both') {
-                const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                micStream.getAudioTracks().forEach(track => combinedAudioStream.addTrack(track));
-            }
+            // Trộn nguồn âm thanh (Mic / Audio KM / Cả 2) thành 1 track duy nhất qua Web Audio API
+            const mixedAudio = await createRecordingAudioMix(recordingMode, ensurePromoAudioGraph);
+            audioMixCleanup = mixedAudio.cleanup;
 
-            if ((recordingMode === 'digital_mix' || recordingMode === 'both') && promoAudioStream) {
-                promoAudioStream.getAudioTracks().forEach(track => combinedAudioStream.addTrack(track));
-            }
-
-            // Gộp luồng video từ canvas và luồng âm thanh
             const tracks = [
                 ...canvasStream.getVideoTracks(),
-                ...combinedAudioStream.getAudioTracks()
+                ...mixedAudio.audioTracks
             ];
             const finalStream = new MediaStream(tracks);
 
-            // Ưu tiên mp4 nếu thiết bị hỗ trợ, nếu không dùng webm
-            let mimeType = 'video/webm;codecs=vp8,opus';
-            if (MediaRecorder.isTypeSupported('video/mp4')) {
-                mimeType = 'video/mp4';
-            } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9')) {
-                mimeType = 'video/webm;codecs=vp9';
-            }
+            // Ưu tiên định dạng có khai báo rõ audio codec (AAC/Opus) để đảm bảo ghi đủ tiếng
+            const preferredMimeTypes = [
+                'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+                'video/mp4',
+                'video/webm;codecs=vp9,opus',
+                'video/webm;codecs=vp8,opus',
+                'video/webm'
+            ];
+            const supportedMimeType =
+                preferredMimeTypes.find(type => MediaRecorder.isTypeSupported(type)) || 'video/webm';
 
-            const recorder = new MediaRecorder(finalStream, { mimeType });
+            const recorder = new MediaRecorder(finalStream, { mimeType: supportedMimeType });
             mediaRecorderRef.current = recorder;
 
             recorder.ondataavailable = e => {
@@ -266,14 +301,19 @@ export function useWatermarkVideoRecorder({
             };
 
             recorder.onstop = () => {
-                const finalBlob = new Blob(chunksRef.current, { type: mimeType });
+                const actualMimeType = recorder.mimeType || supportedMimeType;
+                const finalBlob = new Blob(chunksRef.current, { type: actualMimeType });
                 const videoUrl = URL.createObjectURL(finalBlob);
+                const elapsedSeconds = Math.max(
+                    1,
+                    Math.round((Date.now() - recordingStartedAtRef.current) / 1000)
+                );
 
                 setLastRecordedVideo({
                     blob: finalBlob,
                     url: videoUrl,
-                    mimeType,
-                    durationSeconds: recordingSeconds,
+                    mimeType: actualMimeType,
+                    durationSeconds: elapsedSeconds,
                     recordedAt: new Date(),
                     storeName,
                     storeCode,
@@ -281,8 +321,11 @@ export function useWatermarkVideoRecorder({
                     employeeId
                 });
 
-                // Tắt các track mic nếu có
-                combinedAudioStream.getTracks().forEach(t => t.stop());
+                // Dọn dẹp nhánh trộn âm thanh & mic (giữ nguyên loa Audio KM), sau đó tắt camera hoàn toàn
+                audioMixCleanup?.();
+                audioMixCleanup = null;
+                canvasStream?.getTracks().forEach(t => t.stop());
+                stopCamera();
             };
 
             recorder.start(1000); // Lưu mỗi 1 giây
@@ -292,12 +335,14 @@ export function useWatermarkVideoRecorder({
                 setRecordingSeconds(s => s + 1);
             }, 1000);
         } catch (err: any) {
+            audioMixCleanup?.();
+            canvasStream?.getTracks().forEach(t => t.stop());
             console.error('Lỗi khi bắt đầu quay video:', err);
             setCameraError(err?.message || 'Không thể bắt đầu ghi hình');
         }
-    }, [recordingMode, promoAudioStream, recordingSeconds, storeName, storeCode, employeeName, employeeId]);
+    }, [isCameraActive, recordingMode, ensurePromoAudioGraph, storeName, storeCode, employeeName, employeeId, stopCamera]);
 
-    // Dừng quay video
+    // Dừng quay video (camera sẽ tự tắt ngay khi MediaRecorder chốt xong tệp video)
     const stopRecording = useCallback(() => {
         if (mediaRecorderRef.current && isRecording) {
             mediaRecorderRef.current.stop();
@@ -309,7 +354,7 @@ export function useWatermarkVideoRecorder({
         }
     }, [isRecording]);
 
-    const retryCamera = useCallback(() => {
+    const openCamera = useCallback(() => {
         void startCamera();
     }, [startCamera]);
 
@@ -317,6 +362,8 @@ export function useWatermarkVideoRecorder({
         videoRef,
         canvasRef,
         isCameraActive,
+        isStartingCamera,
+        videoAspectRatio,
         activeCameraLabel,
         activeDeviceId,
         activeHardwareCaps,
@@ -330,7 +377,8 @@ export function useWatermarkVideoRecorder({
         recordingSeconds,
         lastRecordedVideo,
         setLastRecordedVideo,
-        retryCamera,
+        openCamera,
+        stopCamera,
         pinPrimaryRearCamera,
         resetAutoPrimaryCamera,
         toggleTorch,

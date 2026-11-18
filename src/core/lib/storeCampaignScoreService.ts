@@ -248,9 +248,13 @@ export function normalizeScoreToken(str: string): string {
 }
 
 /**
- * Lấy số điểm quy định của một chương trình thi đua cụ thể theo cấu hình ST
- * Tự động loại bỏ tiền tố tháng (T11 -, T10 -) khi đối chiếu
- * Mặc định trả về 1 điểm nếu chưa gán điểm hoặc điểm <= 0
+ * Lấy số điểm quy định của một chương trình thi đua cụ thể theo cấu hình ST.
+ * Thứ tự ưu tiên chuẩn xác & tách biệt theo tháng:
+ * 1. Khớp chính xác key (kể cả khi người dùng cấu hình về 1đ hoặc 0.5đ).
+ * 2. Khớp không phân biệt hoa thường.
+ * 3. Khớp token chuẩn hóa trong CÙNG tháng áp dụng (hoặc key chung không gắn tiền tố tháng).
+ *    Tuyệt đối không để key cũ của tháng khác (ví dụ "T10 - ...") ghi đè lên tháng đang xem (T11).
+ * 4. Mặc định trả về 1 điểm nếu chưa gán điểm hoặc điểm <= 0.
  */
 export function getCampaignPoints(
     campaignKey: string,
@@ -258,46 +262,57 @@ export function getCampaignPoints(
 ): number {
     if (!config || !config.campaign_scores) return 1;
 
-    // 1. Tìm theo exact key nếu có điểm tùy biến > 1
-    if (config.campaign_scores[campaignKey] !== undefined) {
-        const pts = Number(config.campaign_scores[campaignKey]);
-        if (pts > 1) return pts;
+    const scores = config.campaign_scores;
+
+    // 1. Khớp chính xác key (tôn trọng tuyệt đối giá trị đã cấu hình, kể cả 1đ hoặc 0.5đ)
+    if (scores[campaignKey] !== undefined) {
+        const pts = Number(scores[campaignKey]);
+        if (!Number.isNaN(pts) && pts > 0) return pts;
     }
 
-    // 2. Tìm qua token chuẩn hóa: Ưu tiên trả về điểm tùy biến (> 1) của bất kỳ alias nào có cùng token
-    // Ví dụ: User chỉ chỉnh "T11 - Laptop" = 2đ (hoặc chỉ chỉnh "Laptop" = 2đ) -> Cả 2 đều nhận 2đ!
-    const tok = normalizeScoreToken(campaignKey);
-    if (tok) {
-        for (const [k, v] of Object.entries(config.campaign_scores)) {
-            if (normalizeScoreToken(k) === tok) {
-                const pts = Number(v);
-                if (pts > 1) return pts;
-            }
-        }
-    }
-
-    // 3. Tìm theo exact key với điểm chuẩn (kể cả 1 hoặc điểm hợp lệ > 0)
-    if (config.campaign_scores[campaignKey] !== undefined) {
-        const pts = Number(config.campaign_scores[campaignKey]);
-        return pts > 0 ? pts : 1;
-    }
-
-    // 4. Tìm không phân biệt hoa thường hoặc loại bỏ khoảng trắng
+    // 2. Khớp không phân biệt hoa thường / khoảng trắng thừa
     const cleanKey = campaignKey.trim().toLowerCase();
-    for (const [k, v] of Object.entries(config.campaign_scores)) {
+    for (const [k, v] of Object.entries(scores)) {
         if (k.trim().toLowerCase() === cleanKey) {
             const pts = Number(v);
-            return pts > 0 ? pts : 1;
+            if (!Number.isNaN(pts) && pts > 0) return pts;
         }
     }
 
-    // 5. Tìm qua token chuẩn hóa với điểm bất kỳ > 0
+    // 3. Khớp qua token chuẩn hóa có phân tách chặt theo kỳ tháng
+    const tok = normalizeScoreToken(campaignKey);
     if (tok) {
-        for (const [k, v] of Object.entries(config.campaign_scores)) {
-            if (normalizeScoreToken(k) === tok) {
-                const pts = Number(v);
-                return pts > 0 ? pts : 1;
+        const activeMonth = extractCampaignMonthPrefix(campaignKey) ?? config.month ?? null;
+        const sameMonthPts: number[] = [];
+        const unprefixedPts: number[] = [];
+        const anyMonthPts: number[] = [];
+
+        for (const [k, v] of Object.entries(scores)) {
+            if (normalizeScoreToken(k) !== tok) continue;
+            const pts = Number(v);
+            if (Number.isNaN(pts) || pts <= 0) continue;
+
+            const keyMonth = extractCampaignMonthPrefix(k);
+            if (activeMonth !== null) {
+                if (keyMonth === activeMonth) {
+                    sameMonthPts.push(pts);
+                } else if (keyMonth === null) {
+                    unprefixedPts.push(pts);
+                }
+                // Bỏ qua key gắn tiền tố tháng khác (ví dụ key T10 khi đang xem T11)
+            } else {
+                anyMonthPts.push(pts);
             }
+        }
+
+        if (sameMonthPts.length > 0) {
+            return sameMonthPts[0];
+        }
+        if (unprefixedPts.length > 0) {
+            return unprefixedPts[0];
+        }
+        if (anyMonthPts.length > 0) {
+            return anyMonthPts[0];
         }
     }
 
@@ -455,6 +470,11 @@ export async function copyStoreCampaignScoreConfig(params: {
         });
 
         Object.entries(sourceConfig.campaign_scores).forEach(([srcKey, points]) => {
+            const srcPrefixMonth = extractCampaignMonthPrefix(srcKey);
+            // Bỏ qua key rác từ các tháng cũ hơn tháng nguồn
+            if (srcPrefixMonth !== null && srcPrefixMonth !== fromMonth) {
+                return;
+            }
             const srcToken = normalizeScoreToken(srcKey);
 
             // Tìm chương trình tương ứng của tháng đích
@@ -463,8 +483,11 @@ export async function copyStoreCampaignScoreConfig(params: {
                 newScores[matchedDest.raw_key] = points;
                 count++;
             } else {
-                // Giữ lại key chuẩn hóa
-                newScores[srcKey] = points;
+                // Chuyển đổi tiền tố tháng nguồn sang tháng đích (ví dụ "T10 - ..." -> "T11 - ...") để không lưu rác tháng cũ
+                const rewrittenKey = srcPrefixMonth !== null
+                    ? srcKey.replace(/^t\d{1,2}\s*-\s*/i, `T${toMonth} - `)
+                    : srcKey;
+                newScores[rewrittenKey] = points;
                 count++;
             }
         });

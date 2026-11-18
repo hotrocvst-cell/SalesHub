@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import {
     Camera,
+    CameraOff,
+    Loader2,
     RotateCcw,
     Zap,
     ZapOff,
@@ -17,6 +19,8 @@ interface Props {
     videoRef: React.RefObject<HTMLVideoElement>;
     canvasRef: React.RefObject<HTMLCanvasElement>;
     isCameraActive: boolean;
+    isStartingCamera: boolean;
+    videoAspectRatio: number;
     activeCameraLabel: string;
     activeDeviceId: string;
     activeHardwareCaps: CameraHardwareCaps | null;
@@ -28,7 +32,7 @@ interface Props {
     geoInfo: GeoLocationInfo;
     storeName: string;
     storeCode: string;
-    onRetryCamera: () => void;
+    onOpenCamera: () => void;
     onPinRearCamera: (deviceId: string) => void;
     onResetAutoCamera: () => void;
     onToggleTorch: () => void;
@@ -37,6 +41,9 @@ interface Props {
 export default function LiveCameraWatermarkViewport({
     videoRef,
     canvasRef,
+    isCameraActive,
+    isStartingCamera,
+    videoAspectRatio,
     activeCameraLabel,
     activeDeviceId,
     activeHardwareCaps,
@@ -46,15 +53,21 @@ export default function LiveCameraWatermarkViewport({
     isTorchOn,
     cameraError,
     geoInfo,
-    onRetryCamera,
+    onOpenCamera,
     onPinRearCamera,
     onResetAutoCamera,
     onToggleTorch
 }: Props) {
     const [showDiagnostics, setShowDiagnostics] = useState(false);
+    const safeRatio = Math.min(16 / 9, Math.max(9 / 16, videoAspectRatio || 3 / 4));
 
     return (
-        <div className="relative w-full aspect-[9/14] sm:aspect-[9/13] max-h-[580px] bg-slate-950 rounded-3xl overflow-hidden border-2 border-slate-800 shadow-xl flex flex-col justify-between">
+        <div
+            style={isCameraActive ? { aspectRatio: `${safeRatio}` } : undefined}
+            className={`relative w-full mx-auto bg-slate-950 rounded-3xl overflow-hidden border-2 border-slate-800 shadow-xl flex items-center justify-center transition-all ${
+                isCameraActive ? 'max-h-[72vh] sm:max-h-[580px]' : 'min-h-[210px] sm:min-h-[230px]'
+            }`}
+        >
             {/* Video ngầm để feed hình ảnh vào canvas */}
             <video
                 ref={videoRef}
@@ -63,11 +76,32 @@ export default function LiveCameraWatermarkViewport({
                 className="hidden"
             />
 
-            {/* Canvas vẽ camera + Watermark thời gian thực */}
+            {/* Canvas vẽ camera + Watermark thời gian thực (object-contain tránh crop zoom giả trên mobile) */}
             <canvas
                 ref={canvasRef}
-                className="w-full h-full object-cover"
+                className={`w-full h-full object-contain ${isCameraActive ? 'block' : 'hidden'}`}
             />
+
+            {/* Màn hình chờ khi camera đang tắt (tiết kiệm pin & chỉ bật khi người dùng bấm mở) */}
+            {!isCameraActive && !cameraError && (
+                <div className="flex flex-col items-center justify-center p-6 pt-12 text-center text-white space-y-2.5 z-10">
+                    <div className="w-12 h-12 rounded-2xl bg-slate-800/90 text-sky-400 flex items-center justify-center border border-slate-700">
+                        {isStartingCamera ? (
+                            <Loader2 className="w-6 h-6 animate-spin" aria-hidden="true" />
+                        ) : (
+                            <CameraOff className="w-6 h-6 text-slate-400" aria-hidden="true" />
+                        )}
+                    </div>
+                    <p className="text-xs sm:text-sm font-black text-slate-200">
+                        {isStartingCamera ? 'Đang mở Camera chính (1x)...' : 'Camera đang tắt'}
+                    </p>
+                    <p className="text-[11px] text-slate-400 max-w-xs leading-relaxed">
+                        {isStartingCamera
+                            ? 'Hệ thống đang khóa đúng cảm biến sau chính 1x'
+                            : 'Bấm nút Camera bên dưới lần 1 để bật khung ngắm, bấm lần 2 để quay video. Camera sẽ tự tắt khi kết thúc.'}
+                    </p>
+                </div>
+            )}
 
             {/* Thông báo lỗi nếu camera bị chặn */}
             {cameraError && (
@@ -78,7 +112,7 @@ export default function LiveCameraWatermarkViewport({
                     <p className="text-xs text-rose-200 font-bold max-w-xs">{cameraError}</p>
                     <button
                         type="button"
-                        onClick={onRetryCamera}
+                        onClick={onOpenCamera}
                         className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold border border-slate-600 transition cursor-pointer"
                     >
                         <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" />
@@ -113,27 +147,34 @@ export default function LiveCameraWatermarkViewport({
 
                 {/* Chỉ báo Camera chính 1x & nút đèn Flash */}
                 <div className="flex items-center gap-1.5">
-                    {isAdmin ? (
-                        <button
-                            type="button"
-                            onClick={() => setShowDiagnostics(prev => !prev)}
-                            className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-900/80 hover:bg-slate-800 backdrop-blur-md border border-slate-700/60 text-sky-300 text-[10.5px] font-bold shadow-md cursor-pointer transition"
-                            title={activeCameraLabel ? `Đang cố định camera chính: ${activeCameraLabel} (Chạm để xem chi tiết Admin)` : 'Camera chính (1x)'}
-                        >
-                            <Camera className="w-3.5 h-3.5 text-sky-400 shrink-0" aria-hidden="true" />
-                            <span>Camera chính</span>
-                        </button>
+                    {isCameraActive ? (
+                        isAdmin ? (
+                            <button
+                                type="button"
+                                onClick={() => setShowDiagnostics(prev => !prev)}
+                                className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-900/80 hover:bg-slate-800 backdrop-blur-md border border-slate-700/60 text-sky-300 text-[10.5px] font-bold shadow-md cursor-pointer transition"
+                                title={activeCameraLabel ? `Đang cố định camera chính: ${activeCameraLabel} (Chạm để xem chi tiết Admin)` : 'Camera chính (1x)'}
+                            >
+                                <Camera className="w-3.5 h-3.5 text-sky-400 shrink-0" aria-hidden="true" />
+                                <span>Camera chính</span>
+                            </button>
+                        ) : (
+                            <div
+                                className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-900/80 backdrop-blur-md border border-slate-700/60 text-sky-300 text-[10.5px] font-bold shadow-md select-none"
+                                title={activeCameraLabel ? `Đang cố định camera chính: ${activeCameraLabel}` : 'Mặc định duy nhất camera chính (1x)'}
+                            >
+                                <Camera className="w-3.5 h-3.5 text-sky-400 shrink-0" aria-hidden="true" />
+                                <span>Camera chính</span>
+                            </div>
+                        )
                     ) : (
-                        <div
-                            className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-900/80 backdrop-blur-md border border-slate-700/60 text-sky-300 text-[10.5px] font-bold shadow-md select-none"
-                            title={activeCameraLabel ? `Đang cố định camera chính: ${activeCameraLabel}` : 'Mặc định duy nhất camera chính (1x)'}
-                        >
-                            <Camera className="w-3.5 h-3.5 text-sky-400 shrink-0" aria-hidden="true" />
-                            <span>Camera chính</span>
+                        <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-900/80 border border-slate-700/60 text-slate-400 text-[10.5px] font-bold select-none">
+                            <CameraOff className="w-3.5 h-3.5 text-slate-500 shrink-0" aria-hidden="true" />
+                            <span>Chờ bật</span>
                         </div>
                     )}
 
-                    {hasTorch && (
+                    {isCameraActive && hasTorch && (
                         <button
                             type="button"
                             onClick={onToggleTorch}
@@ -151,8 +192,8 @@ export default function LiveCameraWatermarkViewport({
                 </div>
             </div>
 
-            {/* Bảng chẩn đoán & hiệu chỉnh ống kính sau 1x (CHỈ dành cho Admin khi kiểm tra thiết bị nhiều camera) */}
-            {isAdmin && showDiagnostics && (
+            {/* Bảng chẩn đoán & hiệu chỉnh ống kính sau 1x (CHỈ dành cho Admin khi camera đang bật) */}
+            {isAdmin && isCameraActive && showDiagnostics && (
                 <div className="absolute top-12 right-3 left-3 sm:left-auto sm:w-80 bg-slate-950/95 backdrop-blur-md border border-slate-700 rounded-2xl p-3 text-white shadow-2xl z-30 space-y-2">
                     <div className="flex items-center justify-between gap-2">
                         <span className="text-[11px] font-black text-sky-300 uppercase tracking-wide">
@@ -173,13 +214,20 @@ export default function LiveCameraWatermarkViewport({
                             Đang mở: <span className="text-emerald-400">{activeCameraLabel}</span>
                         </p>
                         {activeHardwareCaps && (
-                            <p className="text-slate-400 text-[10px]">
-                                Flash: <strong className="text-slate-200">{activeHardwareCaps.hasTorch ? 'Có' : 'Không'}</strong>
-                                {' · '}AF: <strong className="text-slate-200">{activeHardwareCaps.hasContinuousFocus ? 'Liên tục' : 'Cơ bản'}</strong>
-                                {activeHardwareCaps.zoomMin !== null && activeHardwareCaps.zoomMax !== null && (
-                                    <> · Zoom: <strong className="text-slate-200">{activeHardwareCaps.zoomMin}–{activeHardwareCaps.zoomMax}x</strong></>
+                            <div className="text-slate-400 text-[10px] space-y-0.5">
+                                <p>
+                                    Flash: <strong className="text-slate-200">{activeHardwareCaps.hasTorch ? 'Có' : 'Không'}</strong>
+                                    {' · '}AF: <strong className="text-slate-200">{activeHardwareCaps.hasContinuousFocus ? 'Liên tục' : 'Cơ bản'}</strong>
+                                    {activeHardwareCaps.zoomMin !== null && activeHardwareCaps.zoomMax !== null && (
+                                        <> · Zoom: <strong className="text-slate-200">{activeHardwareCaps.currentZoom ?? 1}x ({activeHardwareCaps.zoomMin}–{activeHardwareCaps.zoomMax}x)</strong></>
+                                    )}
+                                </p>
+                                {activeHardwareCaps.streamWidth && activeHardwareCaps.streamHeight && (
+                                    <p>
+                                        Khung hình gốc: <strong className="text-slate-200">{activeHardwareCaps.streamWidth}×{activeHardwareCaps.streamHeight}</strong>
+                                    </p>
                                 )}
-                            </p>
+                            </div>
                         )}
                     </div>
 
@@ -227,10 +275,12 @@ export default function LiveCameraWatermarkViewport({
                 </div>
             )}
 
-            {/* Thông báo watermark sống ở đáy canvas */}
-            <div className="absolute bottom-2 left-3 text-[10px] text-slate-400 font-bold bg-slate-950/60 px-2 py-0.5 rounded backdrop-blur-xs pointer-events-none">
-                Watermark thời gian thực được khắc trực tiếp vào video
-            </div>
+            {/* Thông báo watermark sống ở đáy canvas khi camera đang bật */}
+            {isCameraActive && (
+                <div className="absolute bottom-2 left-3 text-[10px] text-slate-400 font-bold bg-slate-950/60 px-2 py-0.5 rounded backdrop-blur-xs pointer-events-none">
+                    Watermark thời gian thực được khắc trực tiếp vào video
+                </div>
+            )}
         </div>
     );
 }
