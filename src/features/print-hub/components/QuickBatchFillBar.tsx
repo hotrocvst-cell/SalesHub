@@ -64,7 +64,11 @@ export const QuickBatchFillBar: React.FC<QuickBatchFillBarProps> = ({
           </button>
         </div>
 
-        <div className="mt-2.5 grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
+        <p className="mt-2 text-[11px] font-medium text-slate-500">
+          Mẹo ngắt dòng tên túi: nhấn <kbd className="rounded border border-slate-300 bg-slate-100 px-1 py-0.5 font-mono text-[10px] text-slate-700">Enter</kbd> hoặc dùng dấu <kbd className="rounded border border-slate-300 bg-slate-100 px-1 py-0.5 font-mono text-[10px] text-slate-700">|</kbd> (ví dụ: <span className="font-mono font-bold text-slate-700">ĐỒ | TRUNG</span>).
+        </p>
+
+        <div className="mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
           {bagRows.map((row, idx) => (
             <div key={idx} className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1.5">
               <input
@@ -78,16 +82,16 @@ export const QuickBatchFillBar: React.FC<QuickBatchFillBarProps> = ({
                 placeholder="Mã SKU"
                 className="w-28 rounded border border-slate-300 bg-white px-2 py-1 font-mono text-xs text-slate-900"
               />
-              <input
-                type="text"
+              <textarea
+                rows={row.name.includes('\n') ? 2 : 1}
                 value={row.name}
                 onChange={(e) => {
                   const next = [...bagRows];
                   next[idx] = { ...next[idx], name: e.target.value };
                   onBagRowsChange(next);
                 }}
-                placeholder="Tên túi"
-                className="min-w-0 flex-1 rounded border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-900"
+                placeholder="Tên túi (Enter hoặc | để xuống dòng)"
+                className="min-w-0 flex-1 resize-none rounded border border-slate-300 bg-white px-2 py-1 text-xs font-semibold leading-snug text-slate-900"
               />
               <button
                 type="button"
