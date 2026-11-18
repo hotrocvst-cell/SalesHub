@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { GeoLocationInfo, VideoAudioRecordingMode, RecordedVideoResult } from '../types';
+import { openPrimaryRearCameraStream } from '../utils/cameraSelector';
 
 interface RecorderProps {
     geoInfo: GeoLocationInfo;
@@ -23,9 +24,10 @@ export function useWatermarkVideoRecorder({
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const chunksRef = useRef<Blob[]>([]);
     const animFrameRef = useRef<number | null>(null);
+    const isMountedRef = useRef<boolean>(true);
 
     const [isCameraActive, setIsCameraActive] = useState<boolean>(false);
-    const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
+    const [activeCameraLabel, setActiveCameraLabel] = useState<string>('Camera chính');
     const [isTorchOn, setIsTorchOn] = useState<boolean>(false);
     const [hasTorch, setHasTorch] = useState<boolean>(false);
     const [cameraError, setCameraError] = useState<string | null>(null);
@@ -37,58 +39,62 @@ export function useWatermarkVideoRecorder({
 
     const [lastRecordedVideo, setLastRecordedVideo] = useState<RecordedVideoResult | null>(null);
 
-    // Khởi động Camera
+    // Khởi động duy nhất Camera sau chính (1x), loại trừ camera tele/macro/ultra-wide/trước
     const startCamera = useCallback(async () => {
         setCameraError(null);
+        setIsTorchOn(false);
         try {
             if (videoRef.current?.srcObject) {
                 const oldStream = videoRef.current.srcObject as MediaStream;
                 oldStream.getTracks().forEach(t => t.stop());
+                videoRef.current.srcObject = null;
             }
 
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: {
-                    facingMode: { ideal: facingMode },
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 }
-                },
-                audio: false // Video preview không lấy mic để tránh feedback
-            });
+            const { stream, activeCameraLabel: lensLabel, hasTorch: supportsTorch } =
+                await openPrimaryRearCameraStream();
+
+            if (!isMountedRef.current) {
+                stream.getTracks().forEach(t => t.stop());
+                return;
+            }
 
             if (videoRef.current) {
                 videoRef.current.srcObject = stream;
                 await videoRef.current.play();
                 setIsCameraActive(true);
-
-                // Kiểm tra hỗ trợ đèn Flash/Torch
-                const videoTrack = stream.getVideoTracks()[0];
-                const caps = (videoTrack.getCapabilities?.() as any) || {};
-                setHasTorch(Boolean(caps.torch));
+                setActiveCameraLabel(lensLabel);
+                setHasTorch(supportsTorch);
+            } else {
+                stream.getTracks().forEach(t => t.stop());
             }
         } catch (err: any) {
-            setCameraError('Không thể mở camera. Vui lòng cấp quyền camera trong cài đặt trình duyệt.');
+            if (!isMountedRef.current) return;
+            setCameraError(
+                err?.message && err.message.includes('HTTPS')
+                    ? err.message
+                    : 'Không thể mở camera chính. Vui lòng cấp quyền camera trong cài đặt trình duyệt.'
+            );
             setIsCameraActive(false);
+            setHasTorch(false);
         }
-    }, [facingMode]);
+    }, []);
 
     // Bật camera khi hook mount
     useEffect(() => {
+        isMountedRef.current = true;
         startCamera();
         return () => {
+            isMountedRef.current = false;
             if (videoRef.current?.srcObject) {
                 const stream = videoRef.current.srcObject as MediaStream;
                 stream.getTracks().forEach(t => t.stop());
+                videoRef.current.srcObject = null;
             }
             if (animFrameRef.current) {
                 cancelAnimationFrame(animFrameRef.current);
             }
         };
     }, [startCamera]);
-
-    // Đổi camera Trước / Sau
-    const toggleCameraFacing = useCallback(() => {
-        setFacingMode(prev => (prev === 'environment' ? 'user' : 'environment'));
-    }, []);
 
     // Bật / Tắt đèn Flash
     const toggleTorch = useCallback(async () => {
@@ -279,7 +285,7 @@ export function useWatermarkVideoRecorder({
         videoRef,
         canvasRef,
         isCameraActive,
-        facingMode,
+        activeCameraLabel,
         hasTorch,
         isTorchOn,
         cameraError,
@@ -289,7 +295,7 @@ export function useWatermarkVideoRecorder({
         recordingSeconds,
         lastRecordedVideo,
         setLastRecordedVideo,
-        toggleCameraFacing,
+        retryCamera: startCamera,
         toggleTorch,
         startRecording,
         stopRecording

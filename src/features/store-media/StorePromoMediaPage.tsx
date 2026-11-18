@@ -278,14 +278,14 @@ export default function StorePromoMediaPage() {
                 videoRef={recorder.videoRef}
                 canvasRef={recorder.canvasRef}
                 isCameraActive={recorder.isCameraActive}
-                facingMode={recorder.facingMode}
+                activeCameraLabel={recorder.activeCameraLabel}
                 hasTorch={recorder.hasTorch}
                 isTorchOn={recorder.isTorchOn}
                 cameraError={recorder.cameraError}
                 geoInfo={geoInfo}
                 storeName={currentStore?.name || selectedStoreName}
                 storeCode={currentStoreCode}
-                onToggleCameraFacing={recorder.toggleCameraFacing}
+                onRetryCamera={recorder.retryCamera}
                 onToggleTorch={recorder.toggleTorch}
             />
 
