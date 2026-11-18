@@ -94,7 +94,7 @@ export function calculateDataStatus(input: StatusCalculationInput): {
             : latestStoreRevenueDate
                 ? `Phiên mới nhất đang dừng ở ngày ${latestStoreRevenueDate}. Chưa có dữ liệu chốt ca ngày ${expectedDate} (n-1).`
                 : `Chưa có bản ghi doanh thu nào trong tháng ${selectedMonth}/${selectedYear}.`,
-        actionUrl: '/cap-nhat',
+        actionUrl: '/cap-nhat-ocr',
         actionLabel: 'Cập nhật số liệu LK'
     };
 
@@ -132,7 +132,7 @@ export function calculateDataStatus(input: StatusCalculationInput): {
             : latestEmulationDate
                 ? `Số liệu thi đua mới nhất ngày ${latestEmulationDate}. Chưa nạp thi đua ngày ${expectedDate} (n-1).`
                 : `Chưa có số liệu thi đua ngành hàng của ST trong tháng ${selectedMonth}/${selectedYear}.`,
-        actionUrl: '/cap-nhat',
+        actionUrl: '/cap-nhat-ocr',
         actionLabel: 'Nạp thi đua ST'
     };
 

@@ -835,7 +835,7 @@ export default function MonthlyReportPage() {
                     <div className="pt-2">
                         <button
                             type="button"
-                            onClick={() => navigate('/cap-nhat')}
+                            onClick={() => navigate('/cap-nhat-ocr')}
                             className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl text-xs font-black uppercase tracking-wider inline-flex items-center gap-2 shadow-sm transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                         >
                             <span>Đi Đến Màn Hình Cập Nhật</span>
@@ -861,7 +861,7 @@ export default function MonthlyReportPage() {
                             lastUpdatedAt={currentRecord?.updatedAt}
                             lastUpdatedBy={currentRecord?.updatedBy}
                             storeName={currentRecord?.storeName}
-                            actionUrl="/cap-nhat"
+                            actionUrl="/cap-nhat-ocr"
                             actionLabel="Cập nhật số liệu LK"
                             canUpdate={!currentUser?.is_guest && (isAdmin || ['ADMIN', 'QUAN_LY', 'TRUONG_CA'].includes(currentUser?.role || ''))}
                         />

@@ -2,9 +2,8 @@ export interface PromoAudioItem {
     id: string;
     title: string;
     description?: string;
-    sourceType: 'google_drive' | 'local_file';
-    driveFileId?: string;
-    driveUrl?: string;
+    sourceType: 'cloud_audio' | 'local_file';
+    audioDataUrl?: string;
     storeCodes: string[]; // ['10335'] hoặc [] (toàn cụm)
     durationSec?: number;
     validUntil?: string; // YYYY-MM-DD

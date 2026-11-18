@@ -34,11 +34,9 @@ export const GUEST_RESTRICTED_CONFIG_PATHS = [
     '/cau-hinh-thi-dua',
     '/muc-tieu-nhan-vien',
     '/quan-ly-voucher',
-    '/cap-nhat',
     '/cap-nhat-ocr',
     '/cap-nhat-nhan-vien-ocr',
     '/quan-ly-du-lieu',
-    '/cap-nhat-luy-ke-nhan-vien',
     '/quan-ly-phien-nhan-vien',
     '/du-lieu-mau',
     '/quan-ly-tai-khoan',
@@ -334,20 +332,6 @@ const RAW_DEFAULT_PAGE_PERMISSIONS: SystemPagePermission[] = [
         badge_color: 'emerald'
     },
     {
-        page_key: 'cap_nhat_so_lieu',
-        page_name: 'Cập nhật số liệu',
-        path: '/cap-nhat',
-        group_title: 'DỮ LIỆU & PHIÊN LÀM VIỆC',
-        description: 'Nạp dữ liệu báo cáo kinh doanh từ Excel hoặc dán nhanh',
-        is_enabled: true,
-        allowed_roles: ['ADMIN', 'QUAN_LY', 'TRUONG_CA'],
-        order_index: 7,
-        badge_enabled: false,
-        badge_icon: '',
-        badge_text: '',
-        badge_color: 'emerald'
-    },
-    {
         page_key: 'cap_nhat_ocr',
         page_name: 'Cập nhật qua OCR',
         path: '/cap-nhat-ocr',
@@ -360,20 +344,6 @@ const RAW_DEFAULT_PAGE_PERMISSIONS: SystemPagePermission[] = [
         badge_icon: '✨',
         badge_text: 'AI',
         badge_color: 'indigo'
-    },
-    {
-        page_key: 'cap_nhat_luy_ke_nv',
-        page_name: 'Cập nhật số liệu NV',
-        path: '/cap-nhat-luy-ke-nhan-vien',
-        group_title: 'DỮ LIỆU & PHIÊN LÀM VIỆC',
-        description: 'Nạp dữ liệu lũy kế cá nhân nhân viên theo ca/ngày',
-        is_enabled: true,
-        allowed_roles: ['ADMIN', 'QUAN_LY', 'TRUONG_CA'],
-        order_index: 7,
-        badge_enabled: true,
-        badge_icon: '⚡',
-        badge_text: 'Mới',
-        badge_color: 'emerald'
     },
     {
         page_key: 'cap_nhat_nhan_vien_ocr',
@@ -419,10 +389,10 @@ const RAW_DEFAULT_PAGE_PERMISSIONS: SystemPagePermission[] = [
     },
     {
         page_key: 'du_lieu_mau',
-        page_name: 'Dữ liệu mẫu',
+        page_name: 'Hình ảnh mẫu OCR',
         path: '/du-lieu-mau',
         group_title: 'DỮ LIỆU & PHIÊN LÀM VIỆC',
-        description: 'Kho lưu trữ dữ liệu mẫu tham chiếu phục vụ kiểm thử và cập nhật tính năng',
+        description: 'Kho hình ảnh chụp màn hình BI mẫu theo từng công cụ nhập liệu OCR (Lũy kế ST, Lũy kế NV, Realtime ST, Realtime NV)',
         is_enabled: true,
         allowed_roles: ['ADMIN'], // MẶC ĐỊNH CHỈ DUY NHẤT ADMIN
         order_index: 10,
@@ -812,12 +782,16 @@ export function auditRouteCoverage(currentPermissions: SystemPagePermission[]): 
 
 export const DEPRECATED_SYSTEM_PATHS = new Set<string>([
     '/bc-realtime-con-lai',
-    '/tien-ich-in-an'
+    '/tien-ich-in-an',
+    '/cap-nhat',
+    '/cap-nhat-luy-ke-nhan-vien'
 ]);
 
 export const DEPRECATED_SYSTEM_PAGE_KEYS = new Set<string>([
     'bc_realtime_con_lai',
-    'tien_ich_in_an'
+    'tien_ich_in_an',
+    'cap_nhat_so_lieu',
+    'cap_nhat_luy_ke_nv'
 ]);
 
 /**
@@ -908,7 +882,7 @@ export async function fetchSystemPagePermissions(): Promise<{ success: boolean; 
                 supabase
                     .from('system_page_permissions')
                     .delete()
-                    .or('path.eq./bc-realtime-con-lai,page_key.eq.bc_realtime_con_lai,path.eq./tien-ich-in-an,page_key.eq.tien_ich_in_an')
+                    .or('path.eq./bc-realtime-con-lai,page_key.eq.bc_realtime_con_lai,path.eq./tien-ich-in-an,page_key.eq.tien_ich_in_an,path.eq./cap-nhat,page_key.eq.cap_nhat_so_lieu,path.eq./cap-nhat-luy-ke-nhan-vien,page_key.eq.cap_nhat_luy_ke_nv')
                     .then(() => {
                         console.log('Đã dọn dẹp các route cũ deprecated khỏi Supabase');
                     });

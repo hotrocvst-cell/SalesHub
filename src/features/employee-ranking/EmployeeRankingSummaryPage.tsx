@@ -1159,7 +1159,7 @@ export default function EmployeeRankingSummaryPage() {
                     lastUpdatedBy={latestSession?.created_by}
                     sessionTitle={latestSession?.session_title}
                     storeName={selectedStore === 'all' ? 'Toàn Cụm' : selectedStore}
-                    actionUrl="/cap-nhat-luy-ke-nhan-vien"
+                    actionUrl="/cap-nhat-nhan-vien-ocr"
                 />
             </div>
 

@@ -1095,7 +1095,7 @@ export default function ClusterReportPage() {
                     lastUpdatedAt={latestRecordMeta.updatedAt}
                     lastUpdatedBy={latestRecordMeta.updatedBy}
                     storeName={selectedStore === 'all' ? 'Toàn cụm ST phụ trách' : selectedStore}
-                    actionUrl="/cap-nhat"
+                    actionUrl="/cap-nhat-ocr"
                     actionLabel="Cập nhật số liệu LK"
                     canUpdate={canConfigureTarget}
                     compact={true}
@@ -1159,7 +1159,7 @@ export default function ClusterReportPage() {
                         {canConfigureTarget && (
                             <button
                                 type="button"
-                                onClick={() => navigate('/cap-nhat')}
+                                onClick={() => navigate('/cap-nhat-ocr')}
                                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition cursor-pointer shadow-2xs"
                             >
                                 <span>Đi tới Cập nhật số liệu LK</span>

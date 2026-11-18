@@ -876,7 +876,7 @@ export default function EmployeePerformanceReportPage() {
                     {canManage && (
                         <button
                             type="button"
-                            onClick={() => navigate('/cap-nhat-luy-ke-nhan-vien')}
+                            onClick={() => navigate('/cap-nhat-nhan-vien-ocr')}
                             className="px-3.5 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700 focus-visible:ring-offset-1"
                         >
                             <span>Cập Nhật Số Liệu</span>
@@ -1194,7 +1194,7 @@ export default function EmployeePerformanceReportPage() {
                         lastUpdatedAt={latestSession?.created_at}
                         lastUpdatedBy={latestSession?.created_by}
                         storeName={selectedStore}
-                        actionUrl="/cap-nhat-luy-ke-nhan-vien"
+                        actionUrl="/cap-nhat-nhan-vien-ocr"
                         actionLabel="Cập nhật số liệu NV"
                         canUpdate={canManage}
                     />

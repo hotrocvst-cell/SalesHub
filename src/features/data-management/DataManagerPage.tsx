@@ -256,7 +256,7 @@ export default function DataManagementPage() {
                     <div className="flex items-center gap-2 self-stretch md:self-auto shrink-0 flex-wrap">
                         <button
                             type="button"
-                            onClick={() => navigate('/cap-nhat')}
+                            onClick={() => navigate('/cap-nhat-ocr')}
                             className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
                         >
                             <CloudUpload className="w-4 h-4" />

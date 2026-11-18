@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../shared/contexts/AuthContext';
 import { useUserStoreFilter } from '../../shared/hooks/useUserStoreFilter';
 import {
@@ -75,7 +75,12 @@ import {
 
 export default function EmployeeExtractOcrPage() {
     const navigate = useNavigate();
+    const location = useLocation();
     const { isAdmin, currentUser } = useAuth();
+    const pendingRestoreSessionRef = useRef<EmployeeDataSession | null>(
+        ((location.state as { restoreSession?: EmployeeDataSession } | null)?.restoreSession) || null
+    );
+    const skipNextStoreResetRef = useRef<boolean>(false);
 
     // 1. Cấu hình Ngày chốt phiên & Kỳ tháng/năm
     const [reportDate, setReportDate] = useState<string>(() => getYesterdayDateString());
@@ -102,9 +107,9 @@ export default function EmployeeExtractOcrPage() {
         setSelectedStore
     );
 
-    // Tự động khởi tạo ST đầu tiên được phân quyền nếu chưa chọn
+    // Tự động khởi tạo ST đầu tiên được phân quyền nếu chưa chọn (trừ khi đang chờ nạp phiên từ Quản lý phiên)
     useEffect(() => {
-        if (!selectedStore && allowedStores.length > 0) {
+        if (!selectedStore && !pendingRestoreSessionRef.current && allowedStores.length > 0) {
             setSelectedStore(allowedStores[0].name);
         }
     }, [allowedStores, selectedStore]);
@@ -288,6 +293,11 @@ export default function EmployeeExtractOcrPage() {
     // Tự động xóa trắng dữ liệu cũ khi chuyển sang ST khác
     useEffect(() => {
         if (!selectedStore) return;
+        if (skipNextStoreResetRef.current) {
+            skipNextStoreResetRef.current = false;
+            prevStoreRef.current = selectedStore;
+            return;
+        }
         const prevStore = prevStoreRef.current;
         if (prevStore && prevStore !== selectedStore) {
             const hadData = hasWorkingDataRef.current;
@@ -298,6 +308,70 @@ export default function EmployeeExtractOcrPage() {
         }
         prevStoreRef.current = selectedStore;
     }, [selectedStore]);
+
+    // Nhận phiên dữ liệu cũ từ trang Quản Lý Phiên (/quan-ly-phien-nhan-vien) để nạp thẳng vào bảng chỉnh sửa
+    useEffect(() => {
+        const state = location.state as { restoreSession?: EmployeeDataSession } | null;
+        if (state?.restoreSession) {
+            pendingRestoreSessionRef.current = state.restoreSession;
+            navigate(location.pathname, { replace: true, state: null });
+        }
+    }, [location.state, location.pathname, navigate]);
+
+    useEffect(() => {
+        const sess = pendingRestoreSessionRef.current;
+        if (!sess) return;
+        if (stores.length === 0) return;
+
+        pendingRestoreSessionRef.current = null;
+
+        const matchedStore =
+            allowedStores.find(s => isStoreMatch(s.name, sess.store_name, stores)) ||
+            stores.find(s => isStoreMatch(s.name, sess.store_name, stores));
+        const targetStoreName = matchedStore ? matchedStore.name : sess.store_name;
+
+        skipNextStoreResetRef.current = true;
+        prevStoreRef.current = targetStoreName;
+        if (targetStoreName) {
+            setSelectedStore(targetStoreName);
+        }
+
+        if (sess.report_date) {
+            setReportDate(sess.report_date);
+            const [yStr, mStr] = sess.report_date.split('-');
+            const y = parseInt(yStr, 10);
+            const m = parseInt(mStr, 10);
+            if (y && m) {
+                setSelectedMonth(m);
+                setSelectedYear(y);
+            }
+        } else if (sess.month && sess.year) {
+            setSelectedMonth(sess.month);
+            setSelectedYear(sess.year);
+        }
+
+        const items = convertSessionRecordsToOcrItems(sess.records || []);
+        const normalizedItems = items.map(emp => {
+            const campaigns = { ...emp.campaigns };
+            const details = (emp.campaignDetails || []).map(d => {
+                const isQty = isQuantityCampaign(d.unit, d.campaignName, knownStoreCampaigns, campaignDict);
+                const val = isQty ? Math.round(d.value) : d.value;
+                if (isQty) campaigns[d.campaignName] = val;
+                return { ...d, value: val, unit: isQty ? 'SL' : d.unit };
+            });
+            Object.entries(campaigns).forEach(([cName, cVal]) => {
+                if (isQuantityCampaign(undefined, cName, knownStoreCampaigns, campaignDict)) {
+                    campaigns[cName] = Math.round(cVal);
+                }
+            });
+            return { ...emp, campaigns, campaignDetails: details };
+        });
+
+        setEmployeesData(normalizedItems);
+        setHasSavedCurrentBatch(true);
+        setActiveTab('manual');
+        showToast(`📂 Đã nạp phiên "${sess.session_title}" (${normalizedItems.length} NV) vào bảng rà soát để chỉnh sửa!`);
+    }, [stores, allowedStores, knownStoreCampaigns, campaignDict]);
 
     // Nút xóa trắng dữ liệu thủ công cho đợt nạp mới
     const handleManualResetBatch = () => {

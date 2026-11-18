@@ -7,13 +7,11 @@ const ClusterReportPage = lazy(() => import('./features/cluster-report/ClusterRe
 const MonthlyReportPage = lazy(() => import('./features/monthly-report/MonthlyReportPage'));
 const DailyReportPage = lazy(() => import('./features/daily-report/DailyReportPage'));
 const DailyEmployeeRevenueReportPage = lazy(() => import('./features/daily-report/DailyEmployeeRevenueReportPage'));
-const DataUpdatePage = lazy(() => import('./features/data-update/DataUpdatePage'));
 const DataManagerPage = lazy(() => import('./features/data-management/DataManagerPage'));
 const RevenueTrendPage = lazy(() => import('./features/revenue-trend/RevenueTrendPage'));
 const EmployeeTargetUnifiedPage = lazy(() => import('./features/employee-health/EmployeeTargetUnifiedPage'));
 const CampaignConfigPage = lazy(() => import('./features/admin-config/CampaignConfigPage'));
 const StoreEmployeeConfigPage = lazy(() => import('./features/store-management/StoreEmployeeConfigPage'));
-const EmployeeCumulativePage = lazy(() => import('./features/employee-cumulative/EmployeeCumulativePage'));
 const EmployeeRankingSummaryPage = lazy(() => import('./features/employee-ranking/EmployeeRankingSummaryPage'));
 const EmployeePerformanceReportPage = lazy(() => import('./features/employee-performance/EmployeePerformanceReportPage'));
 const EmployeeDetailReportPage = lazy(() => import('./features/employee-detail/EmployeeDetailReportPage'));
@@ -75,9 +73,9 @@ export function AppRoutes() {
                     <Route path="/tra-cuu-thi-dua" element={<CampaignDirectoryPage />} />
                     <Route path="/can-tru-thi-dua" element={<CampaignOffsetPage />} />
 
-                    {/* Phân hệ Cập nhật Dữ liệu */}
-                    <Route path="/cap-nhat" element={<DataUpdatePage />} />
-                    <Route path="/cap-nhat-luy-ke-nhan-vien" element={<EmployeeCumulativePage />} />
+                    {/* Phân hệ Cập nhật Dữ liệu (Chuyển hướng sang phiên bản OCR & Nhập tay mới) */}
+                    <Route path="/cap-nhat" element={<Navigate to="/cap-nhat-ocr" replace />} />
+                    <Route path="/cap-nhat-luy-ke-nhan-vien" element={<Navigate to="/cap-nhat-nhan-vien-ocr" replace />} />
 
                     {/* Tuyến đường Quản Lý Dữ Liệu & Phiên */}
                     <Route path="/trang-thai-du-lieu" element={<DataStatusPage />} />

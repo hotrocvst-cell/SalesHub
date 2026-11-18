@@ -7,7 +7,6 @@ import {
     Zap,
     CalendarDays,
     TrendingUp,
-    UploadCloud,
     Database,
     BookOpenCheck,
     Target,
@@ -37,7 +36,7 @@ import {
     Banknote,
     Coins,
     Shuffle,
-    FileSpreadsheet,
+    Images,
     Camera,
     Radio,
     Crosshair,
@@ -216,21 +215,10 @@ export const NAVIGATION_GROUPS: NavGroup[] = [
                 badge: '✨ Mới'
             },
             {
-                name: 'Cập nhật số liệu LK',
-                path: '/cap-nhat',
-                icon: UploadCloud
-            },
-            {
                 name: 'Cập nhật qua OCR',
                 path: '/cap-nhat-ocr',
                 icon: Camera,
                 badge: '✨ AI'
-            },
-            {
-                name: 'Cập nhật số liệu NV',
-                path: '/cap-nhat-luy-ke-nhan-vien',
-                icon: UserCheck,
-                badge: '⚡ Mới'
             },
             {
                 name: 'Cập nhật NV qua OCR',
@@ -249,9 +237,9 @@ export const NAVIGATION_GROUPS: NavGroup[] = [
                 icon: Database
             },
             {
-                name: 'Dữ liệu mẫu',
+                name: 'Hình ảnh mẫu OCR',
                 path: '/du-lieu-mau',
-                icon: FileSpreadsheet,
+                icon: Images,
                 badge: '⚡ Admin'
             }
         ]
@@ -539,7 +527,13 @@ export default function SidebarNav({ isCollapsed, onToggleCollapse, onItemClick 
 
         allPaths.forEach(path => {
             // Loại bỏ hoàn toàn các trang đã cũ, chuyển hướng hoặc không hiển thị trên sidebar
-            if (path === '/bc-realtime-con-lai') return;
+            if (
+                path === '/bc-realtime-con-lai' ||
+                path === '/cap-nhat' ||
+                path === '/cap-nhat-luy-ke-nhan-vien'
+            ) {
+                return;
+            }
 
             // Kiểm tra quyền truy cập
             if (!canAccessPage(path).allowed) return;

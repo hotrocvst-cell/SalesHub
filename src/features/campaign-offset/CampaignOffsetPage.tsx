@@ -379,7 +379,7 @@ export default function CampaignOffsetPage() {
                     lastUpdatedAt={latestSession?.created_at}
                     lastUpdatedBy={latestSession?.created_by}
                     storeName={selectedStore}
-                    actionUrl="/cap-nhat-luy-ke-nhan-vien"
+                    actionUrl="/cap-nhat-nhan-vien-ocr"
                     actionLabel="Cập nhật số liệu"
                 />
             </div>

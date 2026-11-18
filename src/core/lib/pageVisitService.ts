@@ -17,7 +17,7 @@ export const DEFAULT_PAGE_VISITS: Record<string, number> = {
     '/bao-cao-hieu-qua-nhan-vien': 15,
     '/chi-tiet-nhan-vien': 12,
     '/nhip-doanh-thu': 10,
-    '/cap-nhat': 8,
+    '/cap-nhat-ocr': 8,
     '/trang-thai-du-lieu': 7,
     '/quan-tri-he-thong': 6,
     '/cap-ma-voucher': 5

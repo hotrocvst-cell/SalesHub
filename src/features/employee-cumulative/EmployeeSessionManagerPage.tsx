@@ -9,7 +9,6 @@ import {
     pullCloudSessionsToLocal,
     type EmployeeDataSession
 } from './utils/sessionStorage';
-import type { ParsedCampaignBlock } from './utils/employeeParsers';
 import SessionDetailModal from './components/SessionDetailModal';
 import {
     Calendar,
@@ -122,89 +121,11 @@ export default function EmployeeSessionManagerPage() {
         setTimeout(() => setMessage(''), 3000);
     };
 
-    // Nạp lại phiên dữ liệu vào trang Cập nhật số liệu để xem và chỉnh sửa tiếp
+    // Nạp lại phiên dữ liệu vào trang Cập nhật NV qua OCR (tab bảng rà soát thủ công) để xem và chỉnh sửa tiếp
     const handleRestoreToCumulativePage = (sess: EmployeeDataSession) => {
-        try {
-            const restoredRev = sess.session_type === 'REVENUE_CAMPAIGN'
-                ? sess.records.map(r => ({
-                    employee_id: r.employee_id,
-                    full_name: r.full_name,
-                    quantity: r.quantity || 0,
-                    revenue_qd: r.revenue_qd || 0,
-                    revenue_actual: r.revenue_actual || 0,
-                    installment_revenue: r.installment_revenue || 0,
-                    installment_rate: r.installment_rate || 0
-                }))
-                : [];
-
-            const campaignMatrix: Record<string, Record<string, number>> = {};
-            const campaignBlocksMap: Record<string, Record<string, number>> = {};
-            sess.records.forEach(r => {
-                if (r.campaigns) {
-                    campaignMatrix[r.employee_id] = r.campaigns;
-                    Object.entries(r.campaigns).forEach(([cName, val]) => {
-                        if (!campaignBlocksMap[cName]) campaignBlocksMap[cName] = {};
-                        campaignBlocksMap[cName][r.employee_id] = val;
-                    });
-                }
-            });
-
-            const reconstructedCampaignBlocks: ParsedCampaignBlock[] = Object.entries(campaignBlocksMap).map(([name, empVals]) => ({
-                campaign_name: name,
-                unit_type: 'DOANH THU',
-                employee_values: empVals
-            }));
-
-            const restoredHours: Record<string, number> = {};
-            sess.records.forEach(r => {
-                if (r.work_hours !== undefined) {
-                    restoredHours[r.employee_id] = r.work_hours;
-                }
-            });
-
-            const activeTab = sess.session_type === 'WORK_HOURS' ? 'hours' : 'revenue';
-
-            const restorePayload = {
-                editingSession: {
-                    id: sess.id,
-                    session_title: sess.session_title,
-                    session_type: sess.session_type,
-                    store_name: sess.store_name,
-                    month: sess.month,
-                    year: sess.year,
-                    report_date: sess.report_date
-                },
-                month: sess.month,
-                year: sess.year,
-                store: sess.store_name,
-                report_date: sess.report_date,
-                revenueData: restoredRev,
-                campaignBlocks: reconstructedCampaignBlocks,
-                campaignMatrix,
-                workHoursMap: restoredHours,
-                activeTab
-            };
-
-            // Lưu vào key chuyển tiếp
-            localStorage.setItem('saleshub_emp_cum_active_restore', JSON.stringify(restorePayload));
-
-            // Đồng thời lưu vào draft của tháng đó
-            const draftKey = `saleshub_emp_cum_draft_${sess.month}_${sess.year}`;
-            localStorage.setItem(draftKey, JSON.stringify({
-                selectedStore: sess.store_name,
-                reportDate: sess.report_date,
-                revenueData: restoredRev,
-                campaignBlocks: reconstructedCampaignBlocks,
-                campaignMatrix,
-                workHoursMap: restoredHours,
-                updatedAt: new Date().toISOString(),
-                isSavedSession: false
-            }));
-
-            navigate('/cap-nhat-luy-ke-nhan-vien', { state: restorePayload });
-        } catch (e) {
-            console.warn('Lỗi nạp lại phiên:', e);
-        }
+        navigate('/cap-nhat-nhan-vien-ocr', {
+            state: { restoreSession: sess }
+        });
     };
 
     const totalSessions = sessions.length;
@@ -230,7 +151,7 @@ export default function EmployeeSessionManagerPage() {
                 <div className="flex items-center gap-2 flex-wrap">
                     <button
                         type="button"
-                        onClick={() => navigate('/cap-nhat-luy-ke-nhan-vien')}
+                        onClick={() => navigate('/cap-nhat-nhan-vien-ocr')}
                         className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs"
                     >
                         <span>Cập Nhật Số Liệu Mới</span>

@@ -218,7 +218,7 @@ export default function CampaignProgressPage() {
                     lastUpdatedAt={activeSession?.created_at}
                     lastUpdatedBy={activeSession?.created_by}
                     storeName={selectedStore}
-                    actionUrl="/cap-nhat-luy-ke-nhan-vien"
+                    actionUrl="/cap-nhat-nhan-vien-ocr"
                     actionLabel="Cập nhật số liệu NV"
                     canUpdate={canExportAllTables}
                 />

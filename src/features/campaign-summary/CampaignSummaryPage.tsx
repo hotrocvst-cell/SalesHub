@@ -849,7 +849,7 @@ export default function CampaignSummaryPage() {
                         {/* Nút Điều Hướng Sang Trang Cập Nhật Số Liệu NV */}
                         <button
                             type="button"
-                            onClick={() => navigate('/cap-nhat-luy-ke-nhan-vien')}
+                            onClick={() => navigate('/cap-nhat-nhan-vien-ocr')}
                             className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-sm"
                             title="Đi đến phân hệ Cập nhật số liệu NV để lưu phiên mới"
                         >
@@ -988,7 +988,7 @@ export default function CampaignSummaryPage() {
                     <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
                         <button
                             type="button"
-                            onClick={() => navigate('/cap-nhat-luy-ke-nhan-vien')}
+                            onClick={() => navigate('/cap-nhat-nhan-vien-ocr')}
                             className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black transition cursor-pointer inline-flex items-center gap-2 shadow-sm"
                         >
                             <span>Cập Nhật Số Liệu NV</span>
@@ -1015,7 +1015,7 @@ export default function CampaignSummaryPage() {
                         lastUpdatedAt={activeSession?.created_at || availableSessions[0]?.created_at}
                         lastUpdatedBy={activeSession?.created_by || availableSessions[0]?.created_by}
                         storeName={selectedStore}
-                        actionUrl="/cap-nhat-luy-ke-nhan-vien"
+                        actionUrl="/cap-nhat-nhan-vien-ocr"
                         actionLabel="Cập nhật số liệu NV"
                         canUpdate={canManage}
                     />

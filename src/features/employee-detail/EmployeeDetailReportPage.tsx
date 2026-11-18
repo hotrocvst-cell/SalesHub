@@ -1791,7 +1791,7 @@ export default function EmployeeDetailReportPage() {
                             lastUpdatedAt={employeeLatestSessionRecord?.session?.created_at}
                             lastUpdatedBy={employeeLatestSessionRecord?.session?.created_by}
                             storeName={selectedStore}
-                            actionUrl="/cap-nhat-luy-ke-nhan-vien"
+                            actionUrl="/cap-nhat-nhan-vien-ocr"
                             actionLabel="Cập nhật số liệu NV"
                             canUpdate={canConfigure || isAdmin}
                         />

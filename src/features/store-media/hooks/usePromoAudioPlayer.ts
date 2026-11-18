@@ -1,12 +1,19 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { PromoAudioItem } from '../types';
-import { getDriveStreamUrl, getCachedAudioBlob, cacheAudioBlobLocally } from '../services/promoAudioStorageService';
+import {
+    getCachedAudioBlob,
+    cacheAudioBlobLocally,
+    fetchCloudAudioPayloadById,
+    dataUrlToBlob
+} from '../services/promoAudioStorageService';
 
-export function usePromoAudioPlayer() {
+export function usePromoAudioPlayer(playlist: PromoAudioItem[] = []) {
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const audioCtxRef = useRef<AudioContext | null>(null);
     const streamDestRef = useRef<MediaStreamAudioDestinationNode | null>(null);
     const sourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null);
+    const activeObjectUrlRef = useRef<string | null>(null);
+    const selectReqIdRef = useRef<number>(0);
 
     const [currentAudio, setCurrentAudio] = useState<PromoAudioItem | null>(null);
     const [isPlaying, setIsPlaying] = useState<boolean>(false);
@@ -18,11 +25,25 @@ export function usePromoAudioPlayer() {
     const [audioError, setAudioError] = useState<string | null>(null);
     const [audioStream, setAudioStream] = useState<MediaStream | null>(null);
 
-    // Khởi tạo HTMLAudioElement một lần duy nhất
+    const playlistRef = useRef<PromoAudioItem[]>(playlist);
+    playlistRef.current = playlist;
+    const currentAudioRef = useRef<PromoAudioItem | null>(currentAudio);
+    currentAudioRef.current = currentAudio;
+    const isLoopingRef = useRef<boolean>(isLooping);
+    isLoopingRef.current = isLooping;
+    const selectAudioRef = useRef<(item: PromoAudioItem, autoPlay?: boolean) => Promise<void>>(async () => {});
+
+    const revokeActiveObjectUrl = useCallback(() => {
+        if (activeObjectUrlRef.current) {
+            URL.revokeObjectURL(activeObjectUrlRef.current);
+            activeObjectUrlRef.current = null;
+        }
+    }, []);
+
     useEffect(() => {
         const audio = new Audio();
         audio.crossOrigin = 'anonymous';
-        audio.loop = true;
+        audio.loop = false;
         audio.preload = 'auto';
         audioRef.current = audio;
 
@@ -30,35 +51,62 @@ export function usePromoAudioPlayer() {
         const onLoadedMetadata = () => {
             setDuration(audio.duration || 0);
             setIsLoadingAudio(false);
+            setAudioError(null);
+        };
+        const onCanPlay = () => {
+            setIsLoadingAudio(false);
+            setAudioError(null);
         };
         const onPlay = () => setIsPlaying(true);
         const onPause = () => setIsPlaying(false);
+        const onEnded = () => {
+            if (!isLoopingRef.current) {
+                setIsPlaying(false);
+                return;
+            }
+            const list = playlistRef.current;
+            const cur = currentAudioRef.current;
+            if (list.length > 1 && cur) {
+                const idx = list.findIndex(p => p.id === cur.id);
+                const nextItem = list[(idx + 1) % list.length];
+                if (nextItem) {
+                    selectAudioRef.current(nextItem, true);
+                    return;
+                }
+            }
+            audio.currentTime = 0;
+            audio.play().catch(() => setIsPlaying(false));
+        };
         const onError = () => {
             setIsLoadingAudio(false);
-            setAudioError('Không thể phát file âm thanh này');
+            setAudioError('Không thể phát tệp âm thanh này. Hãy kiểm tra lại định dạng (.mp3, .m4a, .wav).');
             setIsPlaying(false);
         };
 
         audio.addEventListener('timeupdate', onTimeUpdate);
         audio.addEventListener('loadedmetadata', onLoadedMetadata);
+        audio.addEventListener('canplay', onCanPlay);
         audio.addEventListener('play', onPlay);
         audio.addEventListener('pause', onPause);
+        audio.addEventListener('ended', onEnded);
         audio.addEventListener('error', onError);
 
         return () => {
             audio.pause();
             audio.removeEventListener('timeupdate', onTimeUpdate);
             audio.removeEventListener('loadedmetadata', onLoadedMetadata);
+            audio.removeEventListener('canplay', onCanPlay);
             audio.removeEventListener('play', onPlay);
             audio.removeEventListener('pause', onPause);
+            audio.removeEventListener('ended', onEnded);
             audio.removeEventListener('error', onError);
+            revokeActiveObjectUrl();
             if (audioCtxRef.current && audioCtxRef.current.state !== 'closed') {
                 audioCtxRef.current.close().catch(() => {});
             }
         };
-    }, []);
+    }, [revokeActiveObjectUrl]);
 
-    // Khởi tạo Web Audio routing để hỗ trợ Digital Mix vào Video
     const initWebAudioRouting = useCallback(() => {
         if (!audioRef.current) return;
         try {
@@ -75,23 +123,26 @@ export function usePromoAudioPlayer() {
                 const src = ctx.createMediaElementSource(audioRef.current);
                 sourceNodeRef.current = src;
 
-                // Xuất âm thanh ra 2 hướng đồng thời:
-                // 1) Ra loa ngoài / Loa Bluetooth (ctx.destination)
-                // 2) Ra luồng ghi âm MediaStream cho video (dest)
                 src.connect(ctx.destination);
                 src.connect(dest);
             }
             if (audioCtxRef.current.state === 'suspended') {
-                audioCtxRef.current.resume();
+                audioCtxRef.current.resume().catch(() => {});
             }
         } catch (err) {
             console.warn('Web Audio Routing init warning:', err);
         }
     }, []);
 
-    // Chọn và nạp bài phát thanh
-    const selectAudio = useCallback(async (item: PromoAudioItem) => {
-        if (!audioRef.current) return;
+    const selectAudio = useCallback(async (item: PromoAudioItem, autoPlay: boolean = false) => {
+        const audio = audioRef.current;
+        if (!audio) return;
+
+        const reqId = ++selectReqIdRef.current;
+        audio.pause();
+        setIsPlaying(false);
+        setCurrentTime(0);
+        setDuration(0);
         setAudioError(null);
         setIsLoadingAudio(true);
         setCurrentAudio(item);
@@ -99,31 +150,70 @@ export function usePromoAudioPlayer() {
         try {
             let finalUrl = item.blobUrl || '';
 
-            // Nếu là bài Google Drive, kiểm tra xem đã cache trong IndexedDB chưa
-            if (!finalUrl && item.driveFileId) {
+            // Nếu là bài Cloud Audio: ưu tiên IndexedDB (0 KB băng thông), chỉ tải lười 1 lần duy nhất
+            if (!finalUrl && item.sourceType === 'cloud_audio') {
                 const cachedBlob = await getCachedAudioBlob(item.id);
-                if (cachedBlob) {
+                if (reqId !== selectReqIdRef.current) return;
+
+                if (cachedBlob && cachedBlob.size > 1000 && !cachedBlob.type.includes('text/html')) {
+                    revokeActiveObjectUrl();
                     finalUrl = URL.createObjectURL(cachedBlob);
+                    activeObjectUrlRef.current = finalUrl;
                 } else {
-                    finalUrl = getDriveStreamUrl(item.driveFileId);
-                    // Tự động tải ngầm và lưu vào IndexedDB
-                    fetch(finalUrl)
-                        .then(r => r.blob())
-                        .then(b => cacheAudioBlobLocally(item.id, b, item.title))
-                        .catch(() => {});
+                    const rawPayload = item.audioDataUrl || (await fetchCloudAudioPayloadById(item.id));
+                    if (reqId !== selectReqIdRef.current) return;
+
+                    if (rawPayload && rawPayload.startsWith('data:audio/')) {
+                        const blob = dataUrlToBlob(rawPayload);
+                        await cacheAudioBlobLocally(item.id, blob, item.title);
+                        if (reqId !== selectReqIdRef.current) return;
+                        revokeActiveObjectUrl();
+                        finalUrl = URL.createObjectURL(blob);
+                        activeObjectUrlRef.current = finalUrl;
+                    } else if (rawPayload) {
+                        finalUrl = rawPayload;
+                    }
                 }
             }
 
-            audioRef.current.src = finalUrl;
-            audioRef.current.load();
+            if (reqId !== selectReqIdRef.current) return;
+
+            if (!finalUrl) {
+                setIsLoadingAudio(false);
+                setAudioError('Không tìm thấy dữ liệu âm thanh cho bài phát thanh này.');
+                return;
+            }
+
+            audio.crossOrigin = 'anonymous';
+            audio.src = finalUrl;
+            audio.load();
             initWebAudioRouting();
+            if (autoPlay) {
+                audio.play().catch(() => {});
+            }
         } catch (err: any) {
+            if (reqId !== selectReqIdRef.current) return;
             setIsLoadingAudio(false);
             setAudioError(err?.message || 'Lỗi nạp bài phát thanh');
         }
-    }, [initWebAudioRouting]);
+    }, [initWebAudioRouting, revokeActiveObjectUrl]);
 
-    // Bật / Dừng phát
+    selectAudioRef.current = selectAudio;
+
+    const clearCurrentAudio = useCallback(() => {
+        if (audioRef.current) {
+            audioRef.current.pause();
+            audioRef.current.removeAttribute('src');
+            audioRef.current.load();
+        }
+        revokeActiveObjectUrl();
+        setCurrentAudio(null);
+        setIsPlaying(false);
+        setCurrentTime(0);
+        setDuration(0);
+        setAudioError(null);
+    }, [revokeActiveObjectUrl]);
+
     const togglePlay = useCallback(async () => {
         if (!audioRef.current) return;
         initWebAudioRouting();
@@ -132,21 +222,17 @@ export function usePromoAudioPlayer() {
         } else {
             try {
                 await audioRef.current.play();
-            } catch (err: any) {
-                setAudioError('Nhấn để cho phép trình duyệt phát âm thanh');
+                setAudioError(null);
+            } catch {
+                setAudioError('Trình duyệt chặn tự phát âm thanh. Hãy bấm lại nút Phát để nghe.');
             }
         }
     }, [isPlaying, initWebAudioRouting]);
 
-    // Bật / Tắt Lặp lại
     const toggleLoop = useCallback(() => {
-        if (!audioRef.current) return;
-        const next = !isLooping;
-        audioRef.current.loop = next;
-        setIsLooping(next);
-    }, [isLooping]);
+        setIsLooping(prev => !prev);
+    }, []);
 
-    // Thay đổi âm lượng
     const changeVolume = useCallback((val: number) => {
         if (!audioRef.current) return;
         const v = Math.max(0, Math.min(1, val));
@@ -154,7 +240,6 @@ export function usePromoAudioPlayer() {
         setVolume(v);
     }, []);
 
-    // Tua bài
     const seek = useCallback((seconds: number) => {
         if (!audioRef.current) return;
         audioRef.current.currentTime = seconds;
@@ -172,6 +257,7 @@ export function usePromoAudioPlayer() {
         audioError,
         audioStream,
         selectAudio,
+        clearCurrentAudio,
         togglePlay,
         toggleLoop,
         changeVolume,
