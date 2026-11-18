@@ -34,7 +34,21 @@ export function useDataStatus() {
         return `${y}-${m}-${d}`;
     }, [today]);
 
-    const [expectedDate, setExpectedDate] = useState<string>(() => getYesterdayDateString());
+    const [expectedDate, setExpectedDateState] = useState<string>(() => getYesterdayDateString());
+
+    // Khi người dùng đổi ngày phiên kiểm tra sang tháng/năm khác, tự đồng bộ selectedMonth & selectedYear
+    const setExpectedDate = useCallback((newDate: string) => {
+        setExpectedDateState(newDate);
+        if (newDate && /^\d{4}-\d{2}-\d{2}$/.test(newDate)) {
+            const [yStr, mStr] = newDate.split('-');
+            const y = parseInt(yStr, 10);
+            const m = parseInt(mStr, 10);
+            if (y && m) {
+                setSelectedYear(y);
+                setSelectedMonth(m);
+            }
+        }
+    }, []);
 
     const [records, setRecords] = useState<BusinessDayRecord[]>([]);
     const [sessions, setSessions] = useState<EmployeeDataSession[]>([]);

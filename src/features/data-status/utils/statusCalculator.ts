@@ -1,6 +1,6 @@
 import type { BusinessDayRecord, StoreItem, EmployeeItem } from '../../../core/lib/storage';
 import type { EmployeeDataSession } from '../../employee-cumulative/utils/sessionStorage';
-import { isStoreMatch, getShortStoreName } from '../../../core/lib/formatters';
+import { isStoreMatch } from '../../../core/lib/formatters';
 import type { DataStreamStatus, StoreMatrixRow, OverallReadinessSummary } from '../types';
 
 interface StatusCalculationInput {
@@ -15,6 +15,18 @@ interface StatusCalculationInput {
     todayDate: string;    // Ngày n
     selectedMonth: number;
     selectedYear: number;
+}
+
+/**
+ * Xác định ngày hiển thị phù hợp nhất với phiên đang kiểm tra (expectedDate):
+ * - Nếu đã có đúng phiên expectedDate -> trả về chính expectedDate
+ * - Nếu chưa có -> trả về ngày gần nhất trước expectedDate (<= expectedDate); nếu không có ngày nào trước đó -> null (Thiếu)
+ */
+function resolveDateForExpectedSession(sortedDates: string[], expectedDate: string): string | null {
+    if (sortedDates.length === 0) return null;
+    if (sortedDates.includes(expectedDate)) return expectedDate;
+    const upToExpected = sortedDates.filter(d => d <= expectedDate);
+    return upToExpected.length > 0 ? upToExpected[upToExpected.length - 1] : null;
 }
 
 export function calculateDataStatus(input: StatusCalculationInput): {
@@ -56,22 +68,24 @@ export function calculateDataStatus(input: StatusCalculationInput): {
         return r.month === selectedMonth && r.year === selectedYear;
     });
 
-    const storeDates = Array.from(new Set(storeRecords.map(r => r.reportDate))).sort();
-    const latestStoreRevenueDate = storeDates.length > 0 ? storeDates[storeDates.length - 1] : null;
+    const validRevStoreRecords = storeRecords.filter(r => (r.revenueActual || 0) > 0 || (r.revenueTarget || 0) > 0);
+    const storeDates = Array.from(new Set(validRevStoreRecords.map(r => r.reportDate))).filter(Boolean).sort();
+    const displayStoreRevenueDate = resolveDateForExpectedSession(storeDates, expectedDate);
 
-    // Lọc bản ghi đúng ngày n-1
-    const n1StoreRecords = storeRecords.filter(r => r.reportDate === expectedDate && (r.revenueActual > 0 || r.revenueTarget > 0));
-    const storeRevenueStoresCovered = new Set(
-        n1StoreRecords.map(r => getShortStoreName(r.storeName))
-    ).size;
+    // Lọc bản ghi đúng phiên đang chọn (expectedDate)
+    const n1StoreRecords = validRevStoreRecords.filter(r => r.reportDate === expectedDate);
+    const storeRevenueStoresCovered = applicableStores.filter(store =>
+        n1StoreRecords.some(r => isStoreMatch(r.storeName, store.name, stores))
+    ).length;
 
-    const isStoreRevenueOk = targetStore === 'all'
-        ? (storeRevenueStoresCovered >= totalStoreCount && storeRevenueStoresCovered > 0)
-        : (latestStoreRevenueDate === expectedDate);
+    const isStoreRevenueOk = storeRevenueStoresCovered >= totalStoreCount && storeRevenueStoresCovered > 0;
 
-    // Thời gian cập nhật gần nhất
-    const latestStoreRecord = storeRecords.slice().sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''))[0];
-    const storeRevenueUpdatedAt = latestStoreRecord?.updatedAt || null;
+    // Thời gian cập nhật ưu tiên theo phiên đang chọn, fallback về bản ghi gần nhất <= expectedDate
+    const upToStoreRecords = validRevStoreRecords.filter(r => r.reportDate <= expectedDate);
+    const refStoreRecord = (n1StoreRecords.length > 0 ? n1StoreRecords : upToStoreRecords)
+        .slice()
+        .sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''))[0];
+    const storeRevenueUpdatedAt = refStoreRecord?.updatedAt || null;
 
     const storeRevenueStream: DataStreamStatus = {
         id: 'store_revenue',
@@ -79,38 +93,36 @@ export function calculateDataStatus(input: StatusCalculationInput): {
         shortTitle: 'DT ST LK',
         category: 'store',
         isOk: isStoreRevenueOk,
-        statusText: isStoreRevenueOk ? 'OK' : (latestStoreRevenueDate ? 'CHẬM PHIÊN' : 'CHƯA CÓ DỮ LIỆU'),
+        statusText: isStoreRevenueOk ? 'OK' : (displayStoreRevenueDate ? 'CHẬM PHIÊN' : 'CHƯA CÓ DỮ LIỆU'),
         expectedDate,
-        latestDataDate: latestStoreRevenueDate,
+        latestDataDate: displayStoreRevenueDate,
         lastUpdatedAt: storeRevenueUpdatedAt,
-        lastUpdatedBy: latestStoreRecord?.updatedBy || null,
-        recordCount: storeRecords.length,
+        lastUpdatedBy: refStoreRecord?.updatedBy || null,
+        recordCount: n1StoreRecords.length > 0 ? n1StoreRecords.length : validRevStoreRecords.length,
         storeCoveredCount: storeRevenueStoresCovered,
         totalStoreCount,
         coveragePercent: Math.round((storeRevenueStoresCovered / totalStoreCount) * 100),
         description: 'Dữ liệu doanh thu lũy kế của ST',
         warningMessage: isStoreRevenueOk
             ? undefined
-            : latestStoreRevenueDate
-                ? `Phiên mới nhất đang dừng ở ngày ${latestStoreRevenueDate}. Chưa có dữ liệu chốt ca ngày ${expectedDate} (n-1).`
-                : `Chưa có bản ghi doanh thu nào trong tháng ${selectedMonth}/${selectedYear}.`,
+            : displayStoreRevenueDate
+                ? `Phiên gần nhất trước mốc kiểm tra dừng ở ngày ${displayStoreRevenueDate}. Chưa đủ dữ liệu phiên ngày ${expectedDate}.`
+                : `Chưa có bản ghi doanh thu nào cho phiên ngày ${expectedDate}.`,
         actionUrl: '/cap-nhat-ocr',
         actionLabel: 'Cập nhật số liệu LK'
     };
 
     // 2. TIẾN ĐỘ THI ĐUA NGÀNH HÀNG ST
     const emulationRecords = storeRecords.filter(r => r.emulationSummary && Object.keys(r.emulationSummary).length > 0);
-    const emulationDates = Array.from(new Set(emulationRecords.map(r => r.reportDate))).sort();
-    const latestEmulationDate = emulationDates.length > 0 ? emulationDates[emulationDates.length - 1] : null;
+    const emulationDates = Array.from(new Set(emulationRecords.map(r => r.reportDate))).filter(Boolean).sort();
+    const displayEmulationDate = resolveDateForExpectedSession(emulationDates, expectedDate);
 
     const n1EmulationRecords = emulationRecords.filter(r => r.reportDate === expectedDate);
-    const emulationStoresCovered = new Set(
-        n1EmulationRecords.map(r => getShortStoreName(r.storeName))
-    ).size;
+    const emulationStoresCovered = applicableStores.filter(store =>
+        n1EmulationRecords.some(r => isStoreMatch(r.storeName, store.name, stores))
+    ).length;
 
-    const isStoreEmulationOk = targetStore === 'all'
-        ? (emulationStoresCovered >= totalStoreCount && emulationStoresCovered > 0)
-        : (latestEmulationDate === expectedDate);
+    const isStoreEmulationOk = emulationStoresCovered >= totalStoreCount && emulationStoresCovered > 0;
 
     const storeEmulationStream: DataStreamStatus = {
         id: 'store_emulation',
@@ -118,20 +130,20 @@ export function calculateDataStatus(input: StatusCalculationInput): {
         shortTitle: 'Thi đua ST LK',
         category: 'store',
         isOk: isStoreEmulationOk,
-        statusText: isStoreEmulationOk ? 'OK' : (latestEmulationDate ? 'CHẬM PHIÊN' : 'CHƯA CÓ DỮ LIỆU'),
+        statusText: isStoreEmulationOk ? 'OK' : (displayEmulationDate ? 'CHẬM PHIÊN' : 'CHƯA CÓ DỮ LIỆU'),
         expectedDate,
-        latestDataDate: latestEmulationDate,
+        latestDataDate: displayEmulationDate,
         lastUpdatedAt: storeRevenueUpdatedAt,
-        recordCount: emulationRecords.length,
+        recordCount: n1EmulationRecords.length > 0 ? n1EmulationRecords.length : emulationRecords.length,
         storeCoveredCount: emulationStoresCovered,
         totalStoreCount,
         coveragePercent: Math.round((emulationStoresCovered / totalStoreCount) * 100),
         description: 'Dữ liệu lũy kế thi đua các ngành hàng của ST',
         warningMessage: isStoreEmulationOk
             ? undefined
-            : latestEmulationDate
-                ? `Số liệu thi đua mới nhất ngày ${latestEmulationDate}. Chưa nạp thi đua ngày ${expectedDate} (n-1).`
-                : `Chưa có số liệu thi đua ngành hàng của ST trong tháng ${selectedMonth}/${selectedYear}.`,
+            : displayEmulationDate
+                ? `Số liệu thi đua gần nhất ngày ${displayEmulationDate}. Chưa đủ thi đua phiên ngày ${expectedDate}.`
+                : `Chưa có số liệu thi đua ngành hàng ST cho phiên ngày ${expectedDate}.`,
         actionUrl: '/cap-nhat-ocr',
         actionLabel: 'Nạp thi đua ST'
     };
@@ -153,18 +165,19 @@ export function calculateDataStatus(input: StatusCalculationInput): {
     );
 
     const revSessionDates = Array.from(new Set(revSessions.map(s => s.report_date))).filter(Boolean).sort();
-    const latestEmpRevDate = revSessionDates.length > 0 ? revSessionDates[revSessionDates.length - 1] : null;
+    const displayEmpRevDate = resolveDateForExpectedSession(revSessionDates, expectedDate);
 
     const n1RevSessions = revSessions.filter(s => s.report_date === expectedDate);
-    const empRevStoresCovered = new Set(
-        n1RevSessions.map(s => getShortStoreName(s.store_name))
-    ).size;
+    const empRevStoresCovered = applicableStores.filter(store =>
+        n1RevSessions.some(s => isStoreMatch(s.store_name, store.name, stores))
+    ).length;
 
-    const isEmpRevOk = targetStore === 'all'
-        ? (empRevStoresCovered >= totalStoreCount && empRevStoresCovered > 0)
-        : (latestEmpRevDate === expectedDate);
+    const isEmpRevOk = empRevStoresCovered >= totalStoreCount && empRevStoresCovered > 0;
 
-    const latestRevSession = revSessions.slice().sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''))[0];
+    const upToRevSessions = revSessions.filter(s => (s.report_date || '') <= expectedDate);
+    const refRevSession = (n1RevSessions.length > 0 ? n1RevSessions : upToRevSessions)
+        .slice()
+        .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''))[0];
 
     const empRevenueStream: DataStreamStatus = {
         id: 'employee_revenue',
@@ -172,21 +185,24 @@ export function calculateDataStatus(input: StatusCalculationInput): {
         shortTitle: 'DT Nhân viên LK',
         category: 'employee',
         isOk: isEmpRevOk,
-        statusText: isEmpRevOk ? 'OK' : (latestEmpRevDate ? 'CHẬM PHIÊN' : 'CHƯA CÓ DỮ LIỆU'),
+        statusText: isEmpRevOk ? 'OK' : (displayEmpRevDate ? 'CHẬM PHIÊN' : 'CHƯA CÓ DỮ LIỆU'),
         expectedDate,
-        latestDataDate: latestEmpRevDate,
-        lastUpdatedAt: latestRevSession?.created_at || null,
-        lastUpdatedBy: latestRevSession?.created_by || null,
-        recordCount: revSessions.reduce((acc, s) => acc + (s.employee_count || s.records?.length || 0), 0),
+        latestDataDate: displayEmpRevDate,
+        lastUpdatedAt: refRevSession?.created_at || null,
+        lastUpdatedBy: refRevSession?.created_by || null,
+        recordCount: (n1RevSessions.length > 0 ? n1RevSessions : revSessions).reduce(
+            (acc, s) => acc + (s.employee_count || s.records?.length || 0),
+            0
+        ),
         storeCoveredCount: empRevStoresCovered,
         totalStoreCount,
         coveragePercent: Math.round((empRevStoresCovered / totalStoreCount) * 100),
         description: 'Dữ liệu doanh thu lũy kế theo từng nhân viên',
         warningMessage: isEmpRevOk
             ? undefined
-            : latestEmpRevDate
-                ? `Phiên doanh thu nhân sự gần nhất ngày ${latestEmpRevDate}. Cần nạp phiên ngày ${expectedDate} (n-1).`
-                : `Chưa có phiên doanh thu nhân sự nào được lưu cho tháng ${selectedMonth}/${selectedYear}.`,
+            : displayEmpRevDate
+                ? `Phiên doanh thu nhân sự gần nhất ngày ${displayEmpRevDate}. Chưa đủ phiên ngày ${expectedDate}.`
+                : `Chưa có phiên doanh thu nhân sự nào cho phiên ngày ${expectedDate}.`,
         actionUrl: '/cap-nhat-nhan-vien-ocr',
         actionLabel: 'Cập nhật số liệu NV'
     };
@@ -198,18 +214,19 @@ export function calculateDataStatus(input: StatusCalculationInput): {
     );
 
     const campSessionDates = Array.from(new Set(campSessions.map(s => s.report_date))).filter(Boolean).sort();
-    const latestEmpCampDate = campSessionDates.length > 0 ? campSessionDates[campSessionDates.length - 1] : null;
+    const displayEmpCampDate = resolveDateForExpectedSession(campSessionDates, expectedDate);
 
     const n1CampSessions = campSessions.filter(s => s.report_date === expectedDate);
-    const empCampStoresCovered = new Set(
-        n1CampSessions.map(s => getShortStoreName(s.store_name))
-    ).size;
+    const empCampStoresCovered = applicableStores.filter(store =>
+        n1CampSessions.some(s => isStoreMatch(s.store_name, store.name, stores))
+    ).length;
 
-    const isEmpCampOk = targetStore === 'all'
-        ? (empCampStoresCovered >= totalStoreCount && empCampStoresCovered > 0)
-        : (latestEmpCampDate === expectedDate);
+    const isEmpCampOk = empCampStoresCovered >= totalStoreCount && empCampStoresCovered > 0;
 
-    const latestCampSession = campSessions.slice().sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''))[0];
+    const upToCampSessions = campSessions.filter(s => (s.report_date || '') <= expectedDate);
+    const refCampSession = (n1CampSessions.length > 0 ? n1CampSessions : upToCampSessions)
+        .slice()
+        .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''))[0];
 
     const empEmulationStream: DataStreamStatus = {
         id: 'employee_emulation',
@@ -217,21 +234,24 @@ export function calculateDataStatus(input: StatusCalculationInput): {
         shortTitle: 'Thi đua Nhân viên LK',
         category: 'employee',
         isOk: isEmpCampOk,
-        statusText: isEmpCampOk ? 'OK' : (latestEmpCampDate ? 'CHẬM PHIÊN' : 'CHƯA CÓ DỮ LIỆU'),
+        statusText: isEmpCampOk ? 'OK' : (displayEmpCampDate ? 'CHẬM PHIÊN' : 'CHƯA CÓ DỮ LIỆU'),
         expectedDate,
-        latestDataDate: latestEmpCampDate,
-        lastUpdatedAt: latestCampSession?.created_at || null,
-        lastUpdatedBy: latestCampSession?.created_by || null,
-        recordCount: campSessions.reduce((acc, s) => acc + (s.employee_count || s.records?.length || 0), 0),
+        latestDataDate: displayEmpCampDate,
+        lastUpdatedAt: refCampSession?.created_at || null,
+        lastUpdatedBy: refCampSession?.created_by || null,
+        recordCount: (n1CampSessions.length > 0 ? n1CampSessions : campSessions).reduce(
+            (acc, s) => acc + (s.employee_count || s.records?.length || 0),
+            0
+        ),
         storeCoveredCount: empCampStoresCovered,
         totalStoreCount,
         coveragePercent: Math.round((empCampStoresCovered / totalStoreCount) * 100),
         description: 'Dữ liệu lũy kế thi đua của từng nhân viên',
         warningMessage: isEmpCampOk
             ? undefined
-            : latestEmpCampDate
-                ? `Phiên thi đua nhân viên gần nhất ngày ${latestEmpCampDate}. Cần nạp phiên ngày ${expectedDate} (n-1).`
-                : `Chưa có phiên thi đua nhân viên nào được bóc tách cho tháng ${selectedMonth}/${selectedYear}.`,
+            : displayEmpCampDate
+                ? `Phiên thi đua nhân viên gần nhất ngày ${displayEmpCampDate}. Chưa đủ phiên ngày ${expectedDate}.`
+                : `Chưa có phiên thi đua nhân viên nào cho phiên ngày ${expectedDate}.`,
         actionUrl: '/cap-nhat-nhan-vien-ocr',
         actionLabel: 'Nạp thi đua NV'
     };
@@ -325,9 +345,9 @@ export function calculateDataStatus(input: StatusCalculationInput): {
         });
 
     const hoursSessionDates = Array.from(new Set(relevantHoursSessions.map(s => s.report_date))).filter(Boolean).sort();
-    const latestHoursDate = hoursSessionDates.length > 0 ? hoursSessionDates[hoursSessionDates.length - 1] : null;
+    const displayHoursDate = resolveDateForExpectedSession(hoursSessionDates, expectedDate);
 
-    // Kiểm tra ST nào trong applicableStores đã có dữ liệu giờ công ngày n-1 (expectedDate)
+    // Kiểm tra ST nào trong applicableStores đã có dữ liệu giờ công đúng phiên (expectedDate)
     const n1HoursSessions = monthHoursSessions.filter(s => s.report_date === expectedDate);
     const storesWithHours = applicableStores.filter(store => {
         const storeEmps = employees.filter(e => isStoreMatch(e.store_name, store.name, stores) && e.is_active !== false);
@@ -336,11 +356,12 @@ export function calculateDataStatus(input: StatusCalculationInput): {
     });
 
     const hoursStoresCovered = storesWithHours.length;
-    const isHoursOk = targetStore === 'all'
-        ? (hoursStoresCovered >= totalStoreCount && hoursStoresCovered > 0)
-        : (latestHoursDate === expectedDate || hoursSessionDates.includes(expectedDate));
+    const isHoursOk = hoursStoresCovered >= totalStoreCount && hoursStoresCovered > 0;
 
-    const latestHoursSession = relevantHoursSessions.slice().sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''))[0];
+    const upToHoursSessions = relevantHoursSessions.filter(s => (s.report_date || '') <= expectedDate);
+    const refHoursSession = (n1HoursSessions.length > 0 ? n1HoursSessions : upToHoursSessions)
+        .slice()
+        .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''))[0];
 
     const workHoursStream: DataStreamStatus = {
         id: 'employee_work_hours',
@@ -348,12 +369,15 @@ export function calculateDataStatus(input: StatusCalculationInput): {
         shortTitle: 'Giờ công NV LK',
         category: 'employee',
         isOk: isHoursOk,
-        statusText: isHoursOk ? 'OK' : (latestHoursDate ? 'CHẬM PHIÊN' : 'CHƯA CÓ DỮ LIỆU'),
+        statusText: isHoursOk ? 'OK' : (displayHoursDate ? 'CHẬM PHIÊN' : 'CHƯA CÓ DỮ LIỆU'),
         expectedDate,
-        latestDataDate: latestHoursDate,
-        lastUpdatedAt: latestHoursSession?.created_at || null,
-        lastUpdatedBy: latestHoursSession?.created_by || null,
-        recordCount: relevantHoursSessions.reduce((acc, s) => acc + (s.employee_count || s.records?.length || 0), 0),
+        latestDataDate: displayHoursDate,
+        lastUpdatedAt: refHoursSession?.created_at || null,
+        lastUpdatedBy: refHoursSession?.created_by || null,
+        recordCount: (n1HoursSessions.length > 0 ? n1HoursSessions : relevantHoursSessions).reduce(
+            (acc, s) => acc + (s.employee_count || s.records?.length || 0),
+            0
+        ),
         storeCoveredCount: hoursStoresCovered,
         totalStoreCount,
         coveragePercent: totalStoreCount > 0
@@ -362,9 +386,9 @@ export function calculateDataStatus(input: StatusCalculationInput): {
         description: 'Dữ liệu lũy kế giờ công của từng nhân viên',
         warningMessage: isHoursOk
             ? undefined
-            : latestHoursDate
-                ? `Phiên giờ công gần nhất ngày ${latestHoursDate}. Cần nạp phiên ngày ${expectedDate} (n-1).`
-                : `Chưa có phiên giờ công nào cho ${targetStore !== 'all' ? targetStore : 'các ST'} trong tháng ${selectedMonth}/${selectedYear}.`,
+            : displayHoursDate
+                ? `Phiên giờ công gần nhất ngày ${displayHoursDate}. Chưa đủ phiên ngày ${expectedDate}.`
+                : `Chưa có phiên giờ công nào cho phiên ngày ${expectedDate}.`,
         actionUrl: '/cap-nhat-nhan-vien-ocr',
         actionLabel: 'Nạp giờ công'
     };
@@ -378,30 +402,35 @@ export function calculateDataStatus(input: StatusCalculationInput): {
         workHoursStream
     ];
 
-    // TÍNH BẢNG MA TRẬN THEO TỪNG ST
+    // TÍNH BẢNG MA TRẬN THEO TỪNG ST (đối chiếu chính xác theo phiên expectedDate đã chọn)
     const matrix: StoreMatrixRow[] = applicableStores.map(store => {
         const storeName = store.name;
 
         // 1. DT ST
-        const sRevRecords = records.filter(r => isStoreMatch(r.storeName, storeName, stores) && r.month === selectedMonth && r.year === selectedYear);
-        const sRevDates = Array.from(new Set(sRevRecords.map(r => r.reportDate))).sort();
-        const sRevLatestDate = sRevDates[sRevDates.length - 1] || null;
-        const storeRevenueOk = sRevLatestDate === expectedDate;
+        const sAllRecords = records.filter(
+            r => isStoreMatch(r.storeName, storeName, stores) && r.month === selectedMonth && r.year === selectedYear
+        );
+        const sRevRecords = sAllRecords.filter(r => (r.revenueActual || 0) > 0 || (r.revenueTarget || 0) > 0);
+        const sRevDates = Array.from(new Set(sRevRecords.map(r => r.reportDate))).filter(Boolean).sort();
+        const storeRevenueOk = sRevDates.includes(expectedDate);
+        const storeRevenueDate = resolveDateForExpectedSession(sRevDates, expectedDate);
 
         // 2. Thi đua ST
-        const sEmuRecords = sRevRecords.filter(r => r.emulationSummary && Object.keys(r.emulationSummary).length > 0);
-        const sEmuDates = Array.from(new Set(sEmuRecords.map(r => r.reportDate))).sort();
+        const sEmuRecords = sAllRecords.filter(r => r.emulationSummary && Object.keys(r.emulationSummary).length > 0);
+        const sEmuDates = Array.from(new Set(sEmuRecords.map(r => r.reportDate))).filter(Boolean).sort();
         const storeEmulationOk = sEmuDates.includes(expectedDate);
 
         // 3. DT Nhân viên
-        const sSessions = sessions.filter(s => isStoreMatch(s.store_name, storeName, stores) && s.month === selectedMonth && s.year === selectedYear);
+        const sSessions = sessions.filter(
+            s => isStoreMatch(s.store_name, storeName, stores) && s.month === selectedMonth && s.year === selectedYear
+        );
         const sEmpRev = sSessions.filter(s =>
             (s.session_type === 'REVENUE_CAMPAIGN' || s.session_type === 'FULL_SYNC') &&
             s.records && s.records.some(r => (r.revenue_actual || 0) > 0 || (r.revenue_qd || 0) > 0)
         );
         const sEmpRevDates = Array.from(new Set(sEmpRev.map(s => s.report_date))).filter(Boolean).sort();
-        const sEmpRevLatestDate = sEmpRevDates[sEmpRevDates.length - 1] || null;
-        const employeeRevenueOk = sEmpRevLatestDate === expectedDate;
+        const employeeRevenueOk = sEmpRevDates.includes(expectedDate);
+        const employeeRevenueDate = resolveDateForExpectedSession(sEmpRevDates, expectedDate);
 
         // 4. Thi đua Nhân viên
         const sEmpCamp = sSessions.filter(s =>
@@ -417,11 +446,11 @@ export function calculateDataStatus(input: StatusCalculationInput): {
         const sTargetsCount = empRevenueTargets.filter(t => storeEmpIds.has(t.employee_id)).length;
         const employeeTargetsOk = storeEmps.length > 0 ? sTargetsCount >= Math.min(storeEmps.length, 1) : sTargetsCount > 0;
 
-        // 6. Giờ công Nhân viên (Kỳ vọng theo ngày n-1 giống Doanh thu & Thi đua)
+        // 6. Giờ công Nhân viên (Đối chiếu chính xác theo phiên expectedDate)
         const sHoursSessions = monthHoursSessions.filter(s => sessionHasStoreWorkHours(s, storeName, storeEmpIds));
         const sHoursDates = Array.from(new Set(sHoursSessions.map(s => s.report_date))).filter(Boolean).sort();
-        const sHoursLatestDate = sHoursDates.length > 0 ? sHoursDates[sHoursDates.length - 1] : null;
-        const storeHoursOk = sHoursDates.includes(expectedDate) || sHoursLatestDate === expectedDate;
+        const storeHoursOk = sHoursDates.includes(expectedDate);
+        const workHoursDate = resolveDateForExpectedSession(sHoursDates, expectedDate);
 
         // Điểm sẵn sàng (6 chỉ số cốt lõi)
         const checkItems = [
@@ -440,17 +469,17 @@ export function calculateDataStatus(input: StatusCalculationInput): {
             storeName,
             storeCode: store.code,
             storeRevenueOk,
-            storeRevenueDate: sRevLatestDate,
+            storeRevenueDate,
             storeEmulationOk,
             storeEmulationCount: sEmuRecords.length,
             employeeRevenueOk,
-            employeeRevenueDate: sEmpRevLatestDate,
+            employeeRevenueDate,
             employeeEmulationOk,
             employeeEmulationCount: sEmpCamp.length,
             employeeTargetsOk,
             employeeTargetsCount: sTargetsCount,
             workHoursOk: storeHoursOk,
-            workHoursDate: sHoursLatestDate,
+            workHoursDate,
             readinessScore,
             allOk
         };

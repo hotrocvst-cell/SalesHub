@@ -88,7 +88,7 @@ export default function StoreStatusMatrixTable({ matrix, expectedDate }: StoreSt
                             </span>
                         </div>
                         <p className="text-[11px] text-slate-300 font-medium">
-                            Rà soát dữ liệu theo từng ST
+                            Rà soát dữ liệu theo từng ST · Phiên <strong className="text-white font-bold">{formatDate(expectedDate)}</strong>
                         </p>
                     </div>
                 </div>
