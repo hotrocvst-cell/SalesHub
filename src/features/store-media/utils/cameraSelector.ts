@@ -1,14 +1,43 @@
 /**
- * Bộ chọn Camera Chính (Primary Rear 1x Camera) dành riêng cho Smartphone nhiều ống kính.
- * Mục tiêu:
- * - Luôn chọn duy nhất camera sau chính (1x Wide / camera2 0 / Back Camera).
- * - Loại trừ tuyệt đối camera trước (selfie), tele/telephoto, macro, ultra-wide (0.5x), depth/mono.
- * - Khóa mức zoom về 1x và lấy nét tự động chuẩn (continuous) nếu trình duyệt hỗ trợ.
+ * Bộ chọn Camera Sau Chính (Primary Rear 1x Camera) cho Smartphone nhiều ống kính
+ * (OPPO Find X Ultra, Samsung S Ultra, Xiaomi Ultra, iPhone Pro...).
+ *
+ * Cơ chế 4 lớp chống chọn nhầm camera tiềm vọng (periscope 3x/6x/10x), tele, macro, góc siêu rộng:
+ * 1. Kiểm tra `enumerateDevices()` TRƯỚC `getUserMedia()` nếu đã có quyền -> mở thẳng `deviceId` camera chính, tránh bug Chrome mở nhầm camera cuối (tiềm vọng 10x).
+ * 2. Chờ giải phóng phần cứng Android Camera2 HAL (220ms) + retry chống `NotReadableError` trước khi chuyển ống kính, không vội fallback về `facingMode: 'environment'`.
+ * 3. Lọc bằng cả `InputDeviceInfo.getCapabilities().facingMode` lẫn nhãn thiết bị (loại trừ tuyệt đối front, tele, periscope/tiềm vọng, macro, ultra-wide, depth).
+ * 4. Xác minh năng lực phần cứng thực tế (`torch` đèn flash, `focusMode: continuous`, `focusDistance`, `zoom`) giữa các ống kính sau để tìm đúng cảm biến chính 1x, sau đó lưu nhớ `deviceId` trên thiết bị.
  */
+
+export interface CameraHardwareCaps {
+    hasTorch: boolean;
+    hasContinuousFocus: boolean;
+    minFocusDistance: number | null;
+    zoomMin: number | null;
+    zoomMax: number | null;
+    maxWidth: number | null;
+}
+
+export interface RearCameraCandidate {
+    deviceId: string;
+    label: string;
+    labelScore: number;
+    hardwareCaps?: CameraHardwareCaps;
+}
+
+export interface PrimaryCameraResult {
+    stream: MediaStream;
+    activeCameraLabel: string;
+    activeDeviceId: string;
+    hasTorch: boolean;
+    hardwareCaps: CameraHardwareCaps;
+    rearCameras: RearCameraCandidate[];
+}
 
 interface ExtendedTrackCapabilities extends MediaTrackCapabilities {
     zoom?: { min: number; max: number; step?: number };
     focusMode?: string[];
+    focusDistance?: { min: number; max: number; step?: number };
     torch?: boolean;
 }
 
@@ -17,208 +46,348 @@ interface ExtendedConstraintSet extends MediaTrackConstraintSet {
     focusMode?: string;
 }
 
-export interface PrimaryCameraResult {
-    stream: MediaStream;
-    activeCameraLabel: string;
-    hasTorch: boolean;
+interface InputDeviceWithCaps extends MediaDeviceInfo {
+    getCapabilities?: () => { facingMode?: string[] };
 }
 
+const STORAGE_KEY_VERIFIED_CAMERA = 'saleshub_primary_rear_camera_v2';
+const HAL_RELEASE_DELAY_MS = 220;
+const HAL_RETRY_DELAY_MS = 350;
+const MAX_PROBE_CANDIDATES = 4;
+
 const FRONT_CAMERA_PATTERN = /(\b(front|user|selfie|facetime|truedepth|truoc)\b|trước)/i;
-
 const AUX_LENS_PATTERN =
-    /(\b(tele|telephoto|macro|micro|ultra[\s_-]?wide|ultrawide|super[\s_-]?wide|0\.[56]x?|2x|3x|5x|10x|periscope|depth|tof|lidar|mono|monochrome|ir|infrared|bokeh|portrait|aux|auxiliary|secondary|sub)\b|siêu\s*rộng|sieu\s*rong|cận\s*cảnh|can\s*canh)/i;
-
+    /(\b(tele|telephoto|periscope|macro|micro|ultra[\s_-]?wide|ultrawide|super[\s_-]?wide|0\.[56]x?|2x|3x|5x|6x|10x|depth|tof|lidar|mono|monochrome|ir|infrared|bokeh|portrait|aux|auxiliary|secondary|sub)\b|tiềm\s*vọng|tiem\s*vong|siêu\s*rộng|sieu\s*rong|cận\s*cảnh|can\s*canh)/i;
 const REAR_CAMERA_PATTERN = /\b(back|rear|environment|sau|world|main|primary)\b/i;
-
 const PRIMARY_MAIN_PATTERN = /(\b(main|primary|chinh)\b|chính)/i;
-
 const LOGICAL_MULTI_LENS_PATTERN = /\b(triple|dual)\b/i;
 
-/**
- * Kiểm tra xem nhãn camera có phải ống kính phụ (tele/macro/ultra-wide/depth) hoặc camera trước không.
- */
+const sleep = (ms: number) => new Promise(resolve => window.setTimeout(resolve, ms));
+
 export function isExcludedAuxiliaryOrFrontCamera(label: string): boolean {
     const normalized = label.trim().toLowerCase();
     if (!normalized) return false;
     return FRONT_CAMERA_PATTERN.test(normalized) || AUX_LENS_PATTERN.test(normalized);
 }
 
-/**
- * Chấm điểm mức độ ưu tiên để xác định đúng camera sau chính (1x).
- * Điểm càng cao càng ưu tiên; trả về -1 nếu bị loại trừ.
- */
-function scoreRearCamera(device: MediaDeviceInfo, index: number): number {
+function getDeviceFacingModes(device: MediaDeviceInfo): string[] {
+    try {
+        const caps = (device as InputDeviceWithCaps).getCapabilities?.();
+        return Array.isArray(caps?.facingMode) ? caps.facingMode : [];
+    } catch {
+        return [];
+    }
+}
+
+function scoreRearCameraLabel(device: MediaDeviceInfo, index: number): number {
     const label = (device.label || '').trim().toLowerCase();
-    if (!label) return -1;
+    const facingModes = getDeviceFacingModes(device);
 
-    // Loại trừ tuyệt đối camera trước và toàn bộ ống kính phụ (tele, macro, ultra-wide, depth...)
-    if (isExcludedAuxiliaryOrFrontCamera(label)) {
-        return -1;
-    }
+    if (facingModes.includes('user') && !facingModes.includes('environment')) return -1;
+    if (label && isExcludedAuxiliaryOrFrontCamera(label)) return -1;
 
-    // Chỉ xét camera sau
-    if (!REAR_CAMERA_PATTERN.test(label)) {
-        return -1;
-    }
+    const isRearByCaps = facingModes.includes('environment');
+    const isRearByLabel = Boolean(label) && REAR_CAMERA_PATTERN.test(label);
+    if (!isRearByCaps && !isRearByLabel) return -1;
 
     let score = 100;
 
-    // Android Camera2 API: "camera2 0, facing back" hoặc "camera 0, facing back" luôn là cảm biến chính 1x
     const camIdMatch = label.match(/\b(?:camera2?|cam|id)\s*(\d+)\b/i) || label.match(/^(\d+)\s*,/i);
     if (camIdMatch) {
         const camIndex = Number(camIdMatch[1]);
-        if (camIndex === 0) {
-            score += 60;
-        } else {
-            // Các ID >= 2 trên Android đa số là ống kính phụ (ultra-wide, macro, tele, depth)
-            score -= Math.min(40, camIndex * 10);
-        }
+        if (camIndex === 0) score += 60;
+        else score -= Math.min(45, camIndex * 10);
     }
 
-    // Nhãn tường minh của camera chính (iOS: "Back Camera" / "Back Wide Angle Camera", Android: "Back Main Camera")
-    if (label === 'back camera' || label === 'rear camera' || label === 'camera sau') {
-        score += 55;
-    }
-    if (PRIMARY_MAIN_PATTERN.test(label)) {
-        score += 45;
-    }
-    // "Wide" không đi kèm "Ultra" (ultra-wide đã bị loại ở trên) là tiêu cự chính 1x trên iOS/Android
-    if (/\bwide\b/i.test(label)) {
-        score += 25;
-    }
+    if (label === 'back camera' || label === 'rear camera' || label === 'camera sau') score += 55;
+    if (PRIMARY_MAIN_PATTERN.test(label)) score += 45;
+    if (/\bwide\b/i.test(label)) score += 25;
+    if (LOGICAL_MULTI_LENS_PATTERN.test(label)) score -= 15;
 
-    // Trên iPhone Pro, camera logic Triple/Dual có thể tự nhảy sang macro khi đưa sát vật thể;
-    // vẫn chấp nhận làm dự phòng nhưng xếp sau ống kính vật lý "Back Camera" / "Back Wide Angle Camera"
-    if (LOGICAL_MULTI_LENS_PATTERN.test(label)) {
-        score -= 15;
-    }
-
-    // Ưu tiên nhẹ thiết bị xuất hiện sớm hơn trong danh sách nếu điểm bằng nhau
-    score -= index * 0.1;
-
-    return score;
+    return score - index * 0.1;
 }
 
-/**
- * Chọn ra duy nhất 1 camera sau chính từ danh sách thiết bị videoinput.
- * Trả về null nếu thiết bị không có camera sau (ví dụ PC/Laptop chỉ có webcam).
- */
-export function selectPrimaryRearCamera(devices: MediaDeviceInfo[]): MediaDeviceInfo | null {
+export function getRankedRearCameras(devices: MediaDeviceInfo[]): RearCameraCandidate[] {
     const videoInputs = devices.filter(d => d.kind === 'videoinput' && Boolean(d.deviceId));
-    if (videoInputs.length === 0) return null;
-
-    let bestDevice: MediaDeviceInfo | null = null;
-    let bestScore = -1;
+    const candidates: RearCameraCandidate[] = [];
 
     videoInputs.forEach((device, idx) => {
-        const score = scoreRearCamera(device, idx);
-        if (score > bestScore) {
-            bestScore = score;
-            bestDevice = device;
+        const labelScore = scoreRearCameraLabel(device, idx);
+        if (labelScore >= 0) {
+            candidates.push({
+                deviceId: device.deviceId,
+                label: device.label || `Camera sau #${idx + 1}`,
+                labelScore
+            });
         }
     });
 
-    return bestDevice;
+    return candidates.sort((a, b) => b.labelScore - a.labelScore);
 }
 
-/**
- * Khóa cấu hình tiêu cự về mức chuẩn 1x và lấy nét tự động liên tục (nếu phần cứng hỗ trợ)
- * để tránh trình duyệt tự chuyển sang zoom tele hoặc chế độ macro.
- */
-async function applyPrimaryLensSafeguards(track: MediaStreamTrack): Promise<boolean> {
-    const caps = (track.getCapabilities?.() as ExtendedTrackCapabilities | undefined) || {};
+function readTrackHardwareCaps(track: MediaStreamTrack | undefined): CameraHardwareCaps {
+    const caps = (track?.getCapabilities?.() as ExtendedTrackCapabilities | undefined) || {};
+    return {
+        hasTorch: Boolean(caps.torch),
+        hasContinuousFocus: Array.isArray(caps.focusMode) && caps.focusMode.includes('continuous'),
+        minFocusDistance: typeof caps.focusDistance?.min === 'number' ? caps.focusDistance.min : null,
+        zoomMin: typeof caps.zoom?.min === 'number' ? caps.zoom.min : null,
+        zoomMax: typeof caps.zoom?.max === 'number' ? caps.zoom.max : null,
+        maxWidth: typeof caps.width?.max === 'number' ? caps.width.max : null
+    };
+}
+
+function scoreHardwareCaps(caps: CameraHardwareCaps, labelScore: number): number {
+    let total = labelScore;
+    // Đèn Flash (torch) trên Android Camera2 hầu như luôn gắn vật lý với cảm biến chính 1x
+    if (caps.hasTorch) total += 120;
+    if (caps.hasContinuousFocus) total += 35;
+    if (caps.minFocusDistance !== null) {
+        if (caps.minFocusDistance > 0 && caps.minFocusDistance <= 0.25) total += 25;
+        else if (caps.minFocusDistance >= 0.45) total -= 55; // Ống kính tele/tiềm vọng có khoảng lấy nét gần rất xa
+    }
+    if (caps.zoomMin !== null && caps.zoomMax !== null && caps.zoomMin <= 1 && caps.zoomMax >= 4) {
+        total += 20;
+    }
+    if (caps.maxWidth !== null && caps.maxWidth >= 3000) total += 10;
+    return total;
+}
+
+async function applyPrimaryLensSafeguards(track: MediaStreamTrack | undefined): Promise<CameraHardwareCaps> {
+    const hwCaps = readTrackHardwareCaps(track);
+    if (!track) return hwCaps;
+
     const advanced: ExtendedConstraintSet = {};
-    let hasConstraintToApply = false;
+    let hasConstraint = false;
 
-    if (caps.zoom && typeof caps.zoom.min === 'number' && typeof caps.zoom.max === 'number') {
-        const targetZoom = Math.min(caps.zoom.max, Math.max(caps.zoom.min, 1));
-        advanced.zoom = targetZoom;
-        hasConstraintToApply = true;
+    if (hwCaps.zoomMin !== null && hwCaps.zoomMax !== null) {
+        advanced.zoom = Math.min(hwCaps.zoomMax, Math.max(hwCaps.zoomMin, 1));
+        hasConstraint = true;
     }
-
-    if (Array.isArray(caps.focusMode) && caps.focusMode.includes('continuous')) {
+    if (hwCaps.hasContinuousFocus) {
         advanced.focusMode = 'continuous';
-        hasConstraintToApply = true;
+        hasConstraint = true;
     }
 
-    if (hasConstraintToApply) {
+    if (hasConstraint) {
         try {
-            await track.applyConstraints({
-                advanced: [advanced as MediaTrackConstraintSet]
-            });
+            await track.applyConstraints({ advanced: [advanced as MediaTrackConstraintSet] });
         } catch {
-            // Một số trình duyệt di động không hỗ trợ applyConstraints cho zoom/focusMode -> bỏ qua an toàn
+            // Bỏ qua an toàn nếu trình duyệt từ chối applyConstraints
         }
     }
-
-    return Boolean(caps.torch);
+    return hwCaps;
 }
 
-/**
- * Mở duy nhất luồng camera sau chính (1x) cho smartphone nhiều camera.
- */
-export async function openPrimaryRearCameraStream(): Promise<PrimaryCameraResult> {
+async function stopStreamAndReleaseHal(stream: MediaStream | null): Promise<void> {
+    if (!stream) return;
+    stream.getTracks().forEach(t => t.stop());
+    await sleep(HAL_RELEASE_DELAY_MS);
+}
+
+async function openStreamByDeviceId(deviceId: string): Promise<MediaStream> {
+    const tryOpen = (withSize: boolean) =>
+        navigator.mediaDevices.getUserMedia({
+            video: withSize
+                ? { deviceId: { exact: deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } }
+                : { deviceId: { exact: deviceId } },
+            audio: false
+        });
+
+    try {
+        return await tryOpen(true);
+    } catch (err: any) {
+        if (err?.name === 'OverconstrainedError') {
+            return await tryOpen(false);
+        }
+        // Chờ thêm 350ms nếu Android Camera2 HAL chưa nhả tài nguyên kịp (NotReadableError / AbortError)
+        await sleep(HAL_RETRY_DELAY_MS);
+        try {
+            return await tryOpen(true);
+        } catch {
+            return await tryOpen(false);
+        }
+    }
+}
+
+function buildRearSignature(rearCameras: RearCameraCandidate[]): string {
+    return rearCameras.map(c => c.deviceId).sort().join('|');
+}
+
+function loadCachedRearDeviceId(rearCameras: RearCameraCandidate[]): string | null {
+    try {
+        const raw = localStorage.getItem(STORAGE_KEY_VERIFIED_CAMERA);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw) as { deviceId?: string; signature?: string };
+        if (!parsed.deviceId) return null;
+        if (parsed.signature && parsed.signature !== buildRearSignature(rearCameras)) return null;
+        return rearCameras.some(c => c.deviceId === parsed.deviceId) ? parsed.deviceId : null;
+    } catch {
+        return null;
+    }
+}
+
+export function saveVerifiedPrimaryCamera(deviceId: string, rearCameras: RearCameraCandidate[]): void {
+    try {
+        localStorage.setItem(
+            STORAGE_KEY_VERIFIED_CAMERA,
+            JSON.stringify({ deviceId, signature: buildRearSignature(rearCameras) })
+        );
+    } catch {
+        // Bỏ qua nếu trình duyệt chặn localStorage
+    }
+}
+
+export function clearVerifiedPrimaryCamera(): void {
+    try {
+        localStorage.removeItem(STORAGE_KEY_VERIFIED_CAMERA);
+    } catch {
+        // Bỏ qua
+    }
+}
+
+export async function openPrimaryRearCameraStream(preferredDeviceId?: string): Promise<PrimaryCameraResult> {
     if (!navigator.mediaDevices?.getUserMedia) {
         throw new Error('Trình duyệt không hỗ trợ truy cập camera. Vui lòng mở bằng Chrome/Safari trên HTTPS.');
     }
 
-    const baseVideoConstraints: MediaTrackConstraints = {
+    const baseConstraints: MediaTrackConstraints = {
         facingMode: { ideal: 'environment' },
         width: { ideal: 1280 },
         height: { ideal: 720 }
     };
 
-    // Bước 1: Xin quyền và mở luồng ban đầu với ưu tiên camera sau để trình duyệt cung cấp đầy đủ nhãn thiết bị
-    let activeStream = await navigator.mediaDevices.getUserMedia({
-        video: baseVideoConstraints,
-        audio: false
-    });
-
-    let activeTrack = activeStream.getVideoTracks()[0];
-    const currentDeviceId = activeTrack?.getSettings?.().deviceId || '';
-    const currentLabel = activeTrack?.label || '';
-
-    // Bước 2: Liệt kê toàn bộ ống kính camera trên thiết bị và xác định đúng camera sau chính (1x)
+    // Bước 1: Kiểm tra enumerateDevices() trước — nếu trình duyệt đã có quyền, mở thẳng camera chính ngay lần đầu
+    let devices: MediaDeviceInfo[] = [];
     if (navigator.mediaDevices.enumerateDevices) {
         try {
-            const devices = await navigator.mediaDevices.enumerateDevices();
-            const primaryRear = selectPrimaryRearCamera(devices);
-
-            if (primaryRear && primaryRear.deviceId && primaryRear.deviceId !== currentDeviceId) {
-                // Giải phóng luồng cũ trước khi mở luồng camera chính (tránh lỗi NotReadableError trên Android HAL)
-                activeStream.getTracks().forEach(t => t.stop());
-
-                try {
-                    activeStream = await navigator.mediaDevices.getUserMedia({
-                        video: {
-                            deviceId: { exact: primaryRear.deviceId },
-                            width: { ideal: 1280 },
-                            height: { ideal: 720 }
-                        },
-                        audio: false
-                    });
-                    activeTrack = activeStream.getVideoTracks()[0];
-                } catch {
-                    // Dự phòng an toàn nếu trình duyệt từ chối exact deviceId
-                    activeStream = await navigator.mediaDevices.getUserMedia({
-                        video: baseVideoConstraints,
-                        audio: false
-                    });
-                    activeTrack = activeStream.getVideoTracks()[0];
-                }
-            }
+            devices = await navigator.mediaDevices.enumerateDevices();
         } catch {
-            // Giữ nguyên luồng ban đầu nếu enumerateDevices bị hạn chế
+            devices = [];
         }
     }
 
-    // Bước 3: Áp dụng khóa zoom 1x và lấy nét liên tục, đồng thời kiểm tra đèn Flash/Torch
-    const hasTorch = activeTrack ? await applyPrimaryLensSafeguards(activeTrack) : false;
-    const finalLabel = activeTrack?.label || currentLabel || 'Camera chính';
+    const hasReadableLabels = devices.some(d => d.kind === 'videoinput' && Boolean(d.label));
+    let activeStream: MediaStream | null = null;
+
+    if (!hasReadableLabels) {
+        activeStream = await navigator.mediaDevices.getUserMedia({ video: baseConstraints, audio: false });
+        if (navigator.mediaDevices.enumerateDevices) {
+            try {
+                devices = await navigator.mediaDevices.enumerateDevices();
+            } catch {
+                // Giữ luồng hiện tại
+            }
+        }
+    }
+
+    const rearCameras = getRankedRearCameras(devices);
+
+    // PC / Laptop hoặc thiết bị không có camera sau
+    if (rearCameras.length === 0) {
+        const fallbackStream =
+            activeStream || (await navigator.mediaDevices.getUserMedia({ video: baseConstraints, audio: false }));
+        const track = fallbackStream.getVideoTracks()[0];
+        const hwCaps = await applyPrimaryLensSafeguards(track);
+        return {
+            stream: fallbackStream,
+            activeCameraLabel: track?.label || 'Camera chính',
+            activeDeviceId: track?.getSettings?.().deviceId || '',
+            hasTorch: hwCaps.hasTorch,
+            hardwareCaps: hwCaps,
+            rearCameras: []
+        };
+    }
+
+    // Xác định ứng viên ưu tiên (chỉ định thủ công -> đã lưu trên thiết bị -> điểm nhãn cao nhất)
+    const cachedId = preferredDeviceId || loadCachedRearDeviceId(rearCameras);
+    const targetCandidate =
+        (cachedId ? rearCameras.find(c => c.deviceId === cachedId) : null) || rearCameras[0];
+
+    const currentTrackId = activeStream?.getVideoTracks()[0]?.getSettings?.().deviceId || '';
+    if (!activeStream || currentTrackId !== targetCandidate.deviceId) {
+        await stopStreamAndReleaseHal(activeStream);
+        try {
+            activeStream = await openStreamByDeviceId(targetCandidate.deviceId);
+        } catch {
+            activeStream = await navigator.mediaDevices.getUserMedia({ video: baseConstraints, audio: false });
+        }
+    }
+
+    let activeTrack = activeStream.getVideoTracks()[0];
+    let activeDeviceId = activeTrack?.getSettings?.().deviceId || targetCandidate.deviceId;
+    let activeHwCaps = readTrackHardwareCaps(activeTrack);
+
+    // Bước 2: Nếu máy có nhiều camera sau & chưa cố định thủ công, kiểm tra phần cứng nếu ống kính đầu thiếu Flash hoặc là tiềm vọng
+    const isSuspiciousLens =
+        !activeHwCaps.hasTorch ||
+        (activeHwCaps.minFocusDistance !== null && activeHwCaps.minFocusDistance >= 0.45);
+
+    if (!cachedId && rearCameras.length > 1 && isSuspiciousLens) {
+        let bestId = activeDeviceId;
+        let bestScore = scoreHardwareCaps(activeHwCaps, targetCandidate.labelScore);
+        targetCandidate.hardwareCaps = activeHwCaps;
+
+        const othersToProbe = rearCameras
+            .filter(c => c.deviceId !== activeDeviceId)
+            .slice(0, MAX_PROBE_CANDIDATES - 1);
+
+        for (const candidate of othersToProbe) {
+            await stopStreamAndReleaseHal(activeStream);
+            activeStream = null;
+            try {
+                const probeStream = await openStreamByDeviceId(candidate.deviceId);
+                const probeTrack = probeStream.getVideoTracks()[0];
+                const probeCaps = readTrackHardwareCaps(probeTrack);
+                candidate.hardwareCaps = probeCaps;
+                const probeScore = scoreHardwareCaps(probeCaps, candidate.labelScore);
+
+                activeStream = probeStream;
+                activeTrack = probeTrack;
+                activeDeviceId = probeTrack?.getSettings?.().deviceId || candidate.deviceId;
+                activeHwCaps = probeCaps;
+
+                if (probeScore > bestScore) {
+                    bestScore = probeScore;
+                    bestId = candidate.deviceId;
+                    // Nếu tìm thấy ống kính có Flash + lấy nét liên tục + khoảng lấy nét gần chuẩn -> chốt ngay
+                    if (
+                        probeCaps.hasTorch &&
+                        probeCaps.hasContinuousFocus &&
+                        (probeCaps.minFocusDistance === null || probeCaps.minFocusDistance < 0.45)
+                    ) {
+                        break;
+                    }
+                }
+            } catch {
+                // Bỏ qua ống kính lỗi khi dò
+            }
+        }
+
+        if (!activeStream || activeDeviceId !== bestId) {
+            await stopStreamAndReleaseHal(activeStream);
+            try {
+                activeStream = await openStreamByDeviceId(bestId);
+            } catch {
+                activeStream = await navigator.mediaDevices.getUserMedia({ video: baseConstraints, audio: false });
+            }
+            activeTrack = activeStream.getVideoTracks()[0];
+            activeDeviceId = activeTrack?.getSettings?.().deviceId || bestId;
+        }
+    }
+
+    // Bước 3: Khóa zoom về 1x & continuous AF, lưu cache cho lần mở sau
+    activeHwCaps = await applyPrimaryLensSafeguards(activeTrack);
+    const matched = rearCameras.find(c => c.deviceId === activeDeviceId);
+    if (matched) matched.hardwareCaps = activeHwCaps;
+    if (activeDeviceId) saveVerifiedPrimaryCamera(activeDeviceId, rearCameras);
 
     return {
         stream: activeStream,
-        activeCameraLabel: finalLabel,
-        hasTorch
+        activeCameraLabel: activeTrack?.label || matched?.label || 'Camera chính',
+        activeDeviceId,
+        hasTorch: activeHwCaps.hasTorch,
+        hardwareCaps: activeHwCaps,
+        rearCameras
     };
 }

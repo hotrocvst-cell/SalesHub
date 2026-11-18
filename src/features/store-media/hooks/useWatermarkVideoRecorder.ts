@@ -1,6 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { GeoLocationInfo, VideoAudioRecordingMode, RecordedVideoResult } from '../types';
-import { openPrimaryRearCameraStream } from '../utils/cameraSelector';
+import {
+    openPrimaryRearCameraStream,
+    saveVerifiedPrimaryCamera,
+    clearVerifiedPrimaryCamera,
+    type CameraHardwareCaps,
+    type RearCameraCandidate
+} from '../utils/cameraSelector';
 
 interface RecorderProps {
     geoInfo: GeoLocationInfo;
@@ -25,9 +31,13 @@ export function useWatermarkVideoRecorder({
     const chunksRef = useRef<Blob[]>([]);
     const animFrameRef = useRef<number | null>(null);
     const isMountedRef = useRef<boolean>(true);
+    const startSeqRef = useRef<number>(0);
 
     const [isCameraActive, setIsCameraActive] = useState<boolean>(false);
     const [activeCameraLabel, setActiveCameraLabel] = useState<string>('Camera chính');
+    const [activeDeviceId, setActiveDeviceId] = useState<string>('');
+    const [activeHardwareCaps, setActiveHardwareCaps] = useState<CameraHardwareCaps | null>(null);
+    const [rearCameras, setRearCameras] = useState<RearCameraCandidate[]>([]);
     const [isTorchOn, setIsTorchOn] = useState<boolean>(false);
     const [hasTorch, setHasTorch] = useState<boolean>(false);
     const [cameraError, setCameraError] = useState<string | null>(null);
@@ -39,8 +49,9 @@ export function useWatermarkVideoRecorder({
 
     const [lastRecordedVideo, setLastRecordedVideo] = useState<RecordedVideoResult | null>(null);
 
-    // Khởi động duy nhất Camera sau chính (1x), loại trừ camera tele/macro/ultra-wide/trước
-    const startCamera = useCallback(async () => {
+    // Khởi động duy nhất Camera sau chính (1x), loại trừ camera tele/tiềm vọng/macro/ultra-wide/trước
+    const startCamera = useCallback(async (preferredDeviceId?: string) => {
+        const requestSeq = ++startSeqRef.current;
         setCameraError(null);
         setIsTorchOn(false);
         try {
@@ -48,27 +59,30 @@ export function useWatermarkVideoRecorder({
                 const oldStream = videoRef.current.srcObject as MediaStream;
                 oldStream.getTracks().forEach(t => t.stop());
                 videoRef.current.srcObject = null;
+                await new Promise(resolve => window.setTimeout(resolve, 220));
             }
 
-            const { stream, activeCameraLabel: lensLabel, hasTorch: supportsTorch } =
-                await openPrimaryRearCameraStream();
+            const result = await openPrimaryRearCameraStream(preferredDeviceId);
 
-            if (!isMountedRef.current) {
-                stream.getTracks().forEach(t => t.stop());
+            if (!isMountedRef.current || requestSeq !== startSeqRef.current) {
+                result.stream.getTracks().forEach(t => t.stop());
                 return;
             }
 
             if (videoRef.current) {
-                videoRef.current.srcObject = stream;
+                videoRef.current.srcObject = result.stream;
                 await videoRef.current.play();
                 setIsCameraActive(true);
-                setActiveCameraLabel(lensLabel);
-                setHasTorch(supportsTorch);
+                setActiveCameraLabel(result.activeCameraLabel);
+                setActiveDeviceId(result.activeDeviceId);
+                setActiveHardwareCaps(result.hardwareCaps);
+                setRearCameras(result.rearCameras);
+                setHasTorch(result.hasTorch);
             } else {
-                stream.getTracks().forEach(t => t.stop());
+                result.stream.getTracks().forEach(t => t.stop());
             }
         } catch (err: any) {
-            if (!isMountedRef.current) return;
+            if (!isMountedRef.current || requestSeq !== startSeqRef.current) return;
             setCameraError(
                 err?.message && err.message.includes('HTTPS')
                     ? err.message
@@ -78,6 +92,20 @@ export function useWatermarkVideoRecorder({
             setHasTorch(false);
         }
     }, []);
+
+    // Cố định ống kính sau chính trên máy có nhiều camera (dành cho Admin hiệu chỉnh nếu OEM đảo ID)
+    const pinPrimaryRearCamera = useCallback(
+        async (deviceId: string) => {
+            saveVerifiedPrimaryCamera(deviceId, rearCameras);
+            await startCamera(deviceId);
+        },
+        [rearCameras, startCamera]
+    );
+
+    const resetAutoPrimaryCamera = useCallback(async () => {
+        clearVerifiedPrimaryCamera();
+        await startCamera();
+    }, [startCamera]);
 
     // Bật camera khi hook mount
     useEffect(() => {
@@ -281,11 +309,18 @@ export function useWatermarkVideoRecorder({
         }
     }, [isRecording]);
 
+    const retryCamera = useCallback(() => {
+        void startCamera();
+    }, [startCamera]);
+
     return {
         videoRef,
         canvasRef,
         isCameraActive,
         activeCameraLabel,
+        activeDeviceId,
+        activeHardwareCaps,
+        rearCameras,
         hasTorch,
         isTorchOn,
         cameraError,
@@ -295,7 +330,9 @@ export function useWatermarkVideoRecorder({
         recordingSeconds,
         lastRecordedVideo,
         setLastRecordedVideo,
-        retryCamera: startCamera,
+        retryCamera,
+        pinPrimaryRearCamera,
+        resetAutoPrimaryCamera,
         toggleTorch,
         startRecording,
         stopRecording

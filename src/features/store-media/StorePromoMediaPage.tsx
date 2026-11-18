@@ -279,6 +279,10 @@ export default function StorePromoMediaPage() {
                 canvasRef={recorder.canvasRef}
                 isCameraActive={recorder.isCameraActive}
                 activeCameraLabel={recorder.activeCameraLabel}
+                activeDeviceId={recorder.activeDeviceId}
+                activeHardwareCaps={recorder.activeHardwareCaps}
+                rearCameras={recorder.rearCameras}
+                isAdmin={isAdmin}
                 hasTorch={recorder.hasTorch}
                 isTorchOn={recorder.isTorchOn}
                 cameraError={recorder.cameraError}
@@ -286,6 +290,8 @@ export default function StorePromoMediaPage() {
                 storeName={currentStore?.name || selectedStoreName}
                 storeCode={currentStoreCode}
                 onRetryCamera={recorder.retryCamera}
+                onPinRearCamera={recorder.pinPrimaryRearCamera}
+                onResetAutoCamera={recorder.resetAutoPrimaryCamera}
                 onToggleTorch={recorder.toggleTorch}
             />
 
