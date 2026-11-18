@@ -128,6 +128,8 @@ export default function EmployeeRankingAssessmentModal({
 
     // Tìm Top 1 & Top 2 Thi đua
     const topEmu1 = [...rows].sort((a, b) => a.emulation_rank - b.emulation_rank)[0];
+    const topEmu2 = [...rows].sort((a, b) => a.emulation_rank - b.emulation_rank)[1];
+
 
     // 1. MẪU 1: TOÀN DIỆN & VINH DANH (Comprehensive & Recognition)
     const generateTemplate1 = () => {
@@ -136,11 +138,11 @@ export default function EmployeeRankingAssessmentModal({
         lines.push(`• Tổng quan: ${summary.totalEmployees} nhân sự\n• DTQĐ: ${(summary.totalRevenueQd).toLocaleString('vi-VN')} tr\n• %DKHT TB: ${summary.avgForecastRate.toFixed(1)}%\n• Thi đua TB: ${summary.avgEmulationRate.toFixed(1)}%.`);
 
         if (topRev1) {
-            lines.push(`\n🥇 TOP Doanh thu:\n• ${topRev1.short_name} (Top #1 DTQĐ ${topRev1.revenue_qd.toLocaleString('vi-VN')}tr - DKHT ${topRev1.forecast_completion_rate.toFixed(1)}%)${topRev2 ? `\n• ${topRev2.short_name} (Top #2)` : ''}.`);
+            lines.push(`\n🥇 TOP Doanh thu:\n• ${topRev1.short_name} (Top #1 DTQĐ ${topRev1.revenue_qd.toLocaleString('vi-VN')}tr - DKHT ${topRev1.forecast_completion_rate.toFixed(1)}%)${topRev2 ? `\n• ${topRev2.short_name} (Top #2 DTQĐ ${topRev2.revenue_qd.toLocaleString('vi-VN')}tr - DKHT ${topRev2.forecast_completion_rate.toFixed(1)}%)` : ''}`);
         }
 
         if (topEmu1) {
-            lines.push(`\n⭐ TOP Thi đua:\n• ${topEmu1.short_name} (Top #1 - Đạt ${topEmu1.emulation_display} ~ ${topEmu1.emulation_rate.toFixed(0)}%).`);
+            lines.push(`\n⭐ TOP Thi đua:\n• ${topEmu1.short_name} (Top #1 - Đạt ${topEmu1.emulation_display} ~ ${topEmu1.emulation_rate.toFixed(0)}%)${topEmu2 ? `\n• ${topEmu2.short_name} (Top #2 - Đạt ${topEmu2.emulation_display} ~ ${topEmu2.emulation_rate.toFixed(0)}%)` : ''}`);
         }
 
         // Lấy danh sách nhân viên Bottom theo dữ liệu cột "Đánh giá sức khỏe nhân viên"
@@ -150,13 +152,13 @@ export default function EmployeeRankingAssessmentModal({
 
         const botLines: string[] = [];
         if (botDtList.length > 0) {
-            botLines.push(`• Bot DT: ${botDtList.map(r => r.short_name).join(', ')}`);
+            botLines.push(`• Bot DTQĐ: ${botDtList.map(r => r.short_name).join(', ')}`);
         }
         if (botEmuList.length > 0) {
-            botLines.push(`• Bot thi đua: ${botEmuList.map(r => r.short_name).join(', ')}`);
+            botLines.push(`• Bot Thi Đua: ${botEmuList.map(r => r.short_name).join(', ')}`);
         }
         if (botKepList.length > 0) {
-            botLines.push(`• Bot kép: ${botKepList.map(r => r.short_name).join(', ')}`);
+            botLines.push(`• Bot Kép: ${botKepList.map(r => r.short_name).join(', ')}`);
         }
 
         if (botLines.length > 0) {
@@ -164,8 +166,6 @@ export default function EmployeeRankingAssessmentModal({
         } else {
             lines.push(`\n🎉 Bottom: 100% nhân sự đạt chuẩn an toàn, không có Bot cảnh báo.`);
         }
-
-        lines.push(`\n🎯 Hướng dẫn: Toàn đội giữ vững nhịp ca cao điểm, dồn sức hoàn thành 100% mục tiêu tháng!`);
         return lines.join('\n');
     };
 
