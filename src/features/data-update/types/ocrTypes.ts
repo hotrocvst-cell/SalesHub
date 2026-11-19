@@ -14,6 +14,8 @@ export interface EmulationOcrItem {
     target: number;
     completionRate?: number;
     forecastRate?: number;
+    targetType?: 'DAILY' | 'MONTHLY';
+    isRealtime?: boolean;
 }
 
 export interface StoreMobileEmulationCardItem {
@@ -52,6 +54,8 @@ export interface OcrExtractionResult {
     success: boolean;
     reportDate?: string;
     reportTime?: string;
+    isRealtime?: boolean;
+    emulationTargetType?: 'DAILY' | 'MONTHLY';
     stores: StoreReportingData[];
     errors?: string[];
     rawLogs?: string;

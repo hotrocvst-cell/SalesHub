@@ -39,6 +39,7 @@ Là lớp điều hành và tác nghiệp nhanh dành cho ST: cho phép nạp tr
 - **Quy chuẩn số liệu & nghiệp vụ**:
   - Mọi doanh thu và chỉ tiêu thống nhất lưu trữ/hiển thị theo đơn vị **triệu đồng** (chuẩn hóa `>= 100,000` chia `1,000,000`).
   - Chu kỳ tuần luôn tính **Thứ Hai là ngày đầu tuần**.
+  - Bố cục phần đầu trang báo cáo thống nhất 4 tầng: (1) Trạng thái Cloud -> (2) Chi tiết phiên/độ mới dữ liệu -> (3) Tiêu đề & Sub-tabs -> (4) Bộ lọc 2 dòng (Dòng 1 ST/Cụm, Dòng 2 Thời gian & Công cụ xuất).
   - Hiển thị tên nhân viên theo quy chuẩn 1 cột gộp Mã NV + Tên rút gọn.
   - Chức năng xuất Excel mặc định khóa và ẩn trên toàn hệ thống, chỉ mở theo cấu hình quyền trang và vai trò; nút/modal xem SQL Supabase chỉ hiển thị cho `ADMIN`.
   - Xuất ảnh báo cáo (`html2canvas`) theo khung dọc tương thích smartphone, mở rộng đủ 100% chiều dài báo cáo và tuyệt đối không chèn footer watermark.

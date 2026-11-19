@@ -433,18 +433,26 @@ export default function ClusterReportPage() {
             const targetRate = cfg?.targetRate && cfg.targetRate > 0
                 ? cfg.targetRate
                 : globalPaceRate;
-            let targetOver = cfg?.targetOver && cfg.targetOver > 0
-                ? cfg.targetOver
+
+            const isMillionScale = baseTarget > 100;
+            const computedTargetOver = isMillionScale
+                ? Math.round((baseTarget * targetRate) / 100)
                 : Number(((baseTarget * targetRate) / 100).toFixed(3));
 
-            // Tự động kiểm tra và đồng bộ lại targetOver nếu targetOver cũ bị tính theo targetReal (lỗi cũ)
-            if (cfg?.targetOver && cfg?.targetRate && targetReal > 0) {
-                const impliedBase = (cfg.targetOver / cfg.targetRate) * 100;
-                if (Math.abs(impliedBase - targetReal) < 0.1 && Math.abs(impliedBase - baseTarget) > 0.5) {
-                    targetOver = Number(((baseTarget * targetRate) / 100).toFixed(3));
+            // Tự động kiểm tra và đồng bộ lại targetOver theo Target Gốc (baseTarget) và nhịp % (targetRate):
+            // 1. Nếu chưa có cfg.targetOver -> tính chuẩn theo baseTarget * targetRate%
+            // 2. Nếu targetOver cũ bị tính theo targetReal (lỗi cũ) -> tính lại theo baseTarget DTQĐ
+            // 3. Tối ưu tự động: Nếu Target Gốc thực tế (baseTarget) từ dữ liệu mới cập nhật đã thay đổi khác với
+            //    mốc tính cũ của cfg.targetOver -> tự động tính lại theo Target Gốc mới để đảm bảo tỷ lệ nhịp % luôn chính xác
+            let targetOver = computedTargetOver;
+            if (cfg?.targetOver && cfg.targetOver > 0 && targetRate > 0) {
+                const impliedBase = (cfg.targetOver / targetRate) * 100;
+                const isBaseTargetChanged = Math.abs(impliedBase - baseTarget) > (isMillionScale ? 5 : 0.05);
+                const isCalculatedFromReal = targetReal > 0 && Math.abs(impliedBase - targetReal) < (isMillionScale ? 5 : 0.1) && Math.abs(impliedBase - baseTarget) > (isMillionScale ? 5 : 0.5);
+
+                if (!isBaseTargetChanged && !isCalculatedFromReal) {
+                    targetOver = cfg.targetOver;
                 }
-            } else if (targetReal > 0 && Math.abs(targetOver - targetReal) < 0.05 && baseTarget !== targetReal) {
-                targetOver = Number(((baseTarget * targetRate) / 100).toFixed(3));
             }
 
             const pctHtOver = targetOver > 0 ? (revQd / targetOver) * 100 : 0;
@@ -827,7 +835,7 @@ export default function ClusterReportPage() {
                         <p className="text-xs text-slate-500 font-medium mt-1 flex items-center gap-1.5 flex-wrap">
                             <span>Dữ liệu đồng bộ từ:</span>
                             <code className="text-indigo-600 font-bold bg-indigo-50/80 px-1.5 py-0.5 rounded font-mono text-[11px]">
-                                Cập nhật &gt; Báo cáo Tổng hợp &gt; Luỹ kế DT
+                                BC - Luỹ kế
                             </code>
                         </p>
                     </div>
@@ -1082,11 +1090,7 @@ export default function ClusterReportPage() {
                 tableName="daily_business_records & system_performance_configs"
                 lastSyncTime={lastLoadedAt}
                 onSyncNow={loadAllData}
-                customMessage={
-                    loadError
-                        ? loadError
-                        : 'Số liệu kinh doanh & cấu hình Target Cụm đồng bộ trực tiếp từ Supabase Cloud.'
-                }
+                customMessage={loadError || undefined}
             />
 
             {!loading && !loadError && availableDates.length > 0 && (

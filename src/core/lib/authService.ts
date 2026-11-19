@@ -1,5 +1,7 @@
 import { supabase } from './supabase';
 import { formatCapitalizeWords } from './formatters';
+import type { UserActiveSessions } from './deviceSessionService';
+export { SQL_ADD_ACTIVE_SESSIONS_COLUMN } from './deviceSessionService';
 
 export type UserRole = 'ADMIN' | 'QUAN_LY' | 'TRUONG_CA' | 'NHAN_VIEN';
 export type UserAccountStatus = 'PENDING_ONBOARDING' | 'PENDING_APPROVAL' | 'ACTIVE' | 'REJECTED';
@@ -21,6 +23,7 @@ export interface UserProfile {
     rejection_reason?: string;
     is_guest?: boolean;
     guest_expires_at?: string;
+    active_sessions?: UserActiveSessions;
     created_at: string;
     updated_at: string;
 }
@@ -95,6 +98,7 @@ ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS accessible_stores JSON
 ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS department TEXT;
 ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS is_guest BOOLEAN DEFAULT false;
 ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS guest_expires_at TIMESTAMPTZ;
+ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS active_sessions JSONB DEFAULT '{}'::jsonb;
 ALTER TABLE public.user_approval_requests ADD COLUMN IF NOT EXISTS department TEXT;
 ALTER TABLE public.employees ADD COLUMN IF NOT EXISTS department TEXT;
 
@@ -217,6 +221,20 @@ export function parseRawUserProfile(item: any): UserProfile {
         cleanRejection = undefined;
     }
 
+    // 4. Giải mã active_sessions nếu có
+    let activeSessions: UserActiveSessions | undefined = undefined;
+    if (item.active_sessions) {
+        if (typeof item.active_sessions === 'object') {
+            activeSessions = item.active_sessions;
+        } else if (typeof item.active_sessions === 'string' && item.active_sessions.trim()) {
+            try {
+                activeSessions = JSON.parse(item.active_sessions);
+            } catch {
+                activeSessions = undefined;
+            }
+        }
+    }
+
     return {
         id: item.id,
         auth_user_id: item.auth_user_id,
@@ -232,6 +250,9 @@ export function parseRawUserProfile(item: any): UserProfile {
         status: item.status as UserAccountStatus,
         password: item.password,
         rejection_reason: cleanRejection,
+        is_guest: item.is_guest,
+        guest_expires_at: item.guest_expires_at,
+        active_sessions: activeSessions,
         created_at: item.created_at || new Date().toISOString(),
         updated_at: item.updated_at || new Date().toISOString()
     };

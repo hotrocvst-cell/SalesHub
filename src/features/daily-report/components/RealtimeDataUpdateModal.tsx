@@ -24,7 +24,7 @@ import {
 } from '../../data-update/services/geminiApiKeyService';
 import type { StoreReportingData, EmulationUploadMode, SingleStoreEmulationEntry } from '../../data-update/types/ocrTypes';
 import type { StoreItem, CampaignDictItem } from '../../../core/lib/storage';
-import { formatDate, formatStoreDisplayName, getShortStoreName } from '../../../core/lib/formatters';
+import { formatDate, formatStoreDisplayName, getShortStoreName, isStoreMatch } from '../../../core/lib/formatters';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import {
     convertStoreReportingDataToSessions,
@@ -246,7 +246,33 @@ export default function RealtimeDataUpdateModal({
                 setScreenshotTimestamp(`${new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} ${formatDate(new Date())}`);
             }
 
-            setStoresData(result.stores);
+            // Nếu đợt nạp này chỉ có ảnh thi đua (không có ảnh Doanh thu QĐ), tự động bảo lưu doanh thu từ phiên cũ
+            const mergedStores = result.stores.map(st => {
+                if (st.revenueQd === 0 && st.targetQd === 0) {
+                    const existingSess = (existingSessions || []).find(
+                        sess => sess.store_name === st.storeRawName ||
+                                getShortStoreName(sess.store_name) === getShortStoreName(st.storeRawName) ||
+                                isStoreMatch(sess.store_name, st.storeRawName, availableStores)
+                    );
+                    if (existingSess?.revenue_data && (Number(existingSess.revenue_data.rev || 0) > 0 || Number(existingSess.revenue_data.target || 0) > 0)) {
+                        const rev = existingSess.revenue_data;
+                        const ocr = (existingSess.raw_ocr_info || {}) as any;
+                        return {
+                            ...st,
+                            revenueQd: Number(rev.rev || 0),
+                            targetQd: Number(rev.target || 0),
+                            installmentQd: Number(rev.dtTraGop || ocr.installmentQd || 0),
+                            installmentRate: Number(rev.pctTraGop || ocr.installmentRate || 0),
+                            avg3Months: Number(ocr.avg3Months || 0),
+                            pctGrowth: Number(ocr.pctGrowth || 0),
+                            completionRateQd: Number(rev.pct || 0)
+                        };
+                    }
+                }
+                return st;
+            });
+
+            setStoresData(mergedStores);
             setIsQuotaExceeded(false);
             setProgressPercent(100);
             setProgressText('Trích xuất hoàn tất! Đang chuyển sang bảng rà soát...');
@@ -282,7 +308,8 @@ export default function RealtimeDataUpdateModal({
                 storesData,
                 screenshotTimestamp || `${new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} ${formatDate(new Date())}`,
                 campaignDict,
-                currentUserName
+                currentUserName,
+                existingSessions
             );
 
             // Kiểm tra phân quyền nạp và lưu dữ liệu ST

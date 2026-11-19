@@ -566,10 +566,10 @@ export default function ManualDataEntryModule({
                                         <th className="p-2 border-r border-slate-800 w-10 text-center">STT</th>
                                         <th className="p-2 border-r border-slate-800 min-w-[200px]">Tên Chương Trình Thi Đua</th>
                                         <th className="p-2 border-r border-slate-800 w-28 text-center">Cách Tính</th>
-                                        <th className="p-2 border-r border-slate-800 w-28 text-right">Chỉ Tiêu (Target)</th>
+                                        <th className="p-2 border-r border-slate-800 w-28 text-right">{isRealtime ? 'Target Ngày' : 'Chỉ Tiêu (Target)'}</th>
                                         <th className="p-2 border-r border-slate-800 w-28 text-right">Thực Đạt</th>
-                                        <th className="p-2 border-r border-slate-800 w-24 text-right">% Hoàn Thành</th>
-                                        <th className="p-2 border-r border-slate-800 w-24 text-right">% Dự Kiến</th>
+                                        <th className="p-2 border-r border-slate-800 w-24 text-right">{isRealtime ? '% HT Ngày' : '% Hoàn Thành'}</th>
+                                        <th className="p-2 border-r border-slate-800 w-24 text-right">{isRealtime ? '% Dự Kiến' : '% Dự Kiến'}</th>
                                         <th className="p-2 w-12 text-center">Xóa</th>
                                     </tr>
                                 </thead>

@@ -526,16 +526,16 @@ export default function DailyReportPage() {
 
             {/* THANH ĐIỀU KHIỂN & BỘ LỌC (QUY CHUẨN 10: ST NẰM HÀNG ĐẦU TIÊN) */}
             <div className="bg-slate-50/90 border border-slate-200/90 rounded-2xl p-3.5 sm:p-4 space-y-3">
-                {/* Dòng 1: Chọn ST & Nút Hành Động */}
+                {/* Dòng 1: Chọn ST & Nút Hành Động Theo ST */}
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
                     <div className="flex-1">
                         <div className="flex items-center justify-between mb-1.5 flex-wrap gap-1.5">
                             <label
                                 htmlFor="daily-report-store-select"
-                                className="text-[11px] font-bold text-slate-700 uppercase flex items-center gap-1"
+                                className="text-[11px] font-bold text-slate-700 uppercase flex items-center gap-1.5"
                             >
                                 <Store className="w-3.5 h-3.5 text-blue-600" aria-hidden="true" />
-                                <span>Cụm / ST</span>
+                                <span>ST / Cụm</span>
                             </label>
                             <div className="flex items-center gap-1.5 flex-wrap">
                                 {realtimeSessions.length > 0 && (
@@ -584,8 +584,46 @@ export default function DailyReportPage() {
                             ))}
                         </select>
                     </div>
+                </div>
 
-                    <div className="self-end sm:self-center pt-1 sm:pt-5">
+                {/* Dòng 2: Tùy chọn riêng theo từng Tab & Công cụ xuất ảnh */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2.5 border-t border-slate-200/80 text-xs">
+                    <div className="flex items-center gap-3 flex-wrap">
+                        {activeTab === 'realtime' ? (
+                            <label
+                                htmlFor="daily-toggle-points"
+                                className="inline-flex items-center gap-2 min-h-[32px] cursor-pointer select-none text-slate-700 font-medium"
+                            >
+                                <input
+                                    id="daily-toggle-points"
+                                    name="showPoints"
+                                    type="checkbox"
+                                    checked={isPointsEnabled}
+                                    onChange={(e) => setIsPointsEnabled(e.target.checked)}
+                                    className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
+                                />
+                                <span>Hiện cột điểm thi đua</span>
+                            </label>
+                        ) : (
+                            <div className="flex flex-wrap items-center gap-3">
+                                <div className="flex items-center gap-1.5 text-slate-700 font-bold">
+                                    <Calendar className="w-3.5 h-3.5 text-amber-700" aria-hidden="true" />
+                                    <span>Kỳ Tháng {remainingData.selectedMonth}/{remainingData.selectedYear}</span>
+                                </div>
+                                <div className="text-[11px] font-semibold text-slate-700 bg-white px-2.5 py-1 rounded-lg border border-slate-200 shadow-sm tabular-nums">
+                                    Số ngày còn lại: <span className="font-black text-amber-800">{remainingData.remainingDays} ngày</span>
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="text-[11px] text-slate-600 font-medium tabular-nums hidden sm:inline">
+                            {isLoadingSessions && allData.length === 0
+                                ? 'Đang tải dữ liệu Cloud...'
+                                : (allData.length > 0 ? `Đã nạp ${allData.length} mục thi đua` : 'Chưa có dữ liệu')}
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 self-end sm:self-auto">
                         <ReportActionButtons
                             onExportImage={() => handleCaptureImage('save')}
                             onCopyImage={() => handleCaptureImage('copy')}
@@ -605,44 +643,6 @@ export default function DailyReportPage() {
                             }}
                             reportTitle={currentReportTitle}
                         />
-                    </div>
-                </div>
-
-                {/* Dòng 2: Tùy chọn riêng theo từng Tab */}
-                <div className="flex flex-wrap items-center justify-between gap-3 pt-2.5 border-t border-slate-200/80 text-xs">
-                    {activeTab === 'realtime' ? (
-                        <div className="flex items-center gap-4">
-                            <label
-                                htmlFor="daily-toggle-points"
-                                className="inline-flex items-center gap-2 min-h-[32px] cursor-pointer select-none text-slate-700 font-medium"
-                            >
-                                <input
-                                    id="daily-toggle-points"
-                                    name="showPoints"
-                                    type="checkbox"
-                                    checked={isPointsEnabled}
-                                    onChange={(e) => setIsPointsEnabled(e.target.checked)}
-                                    className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
-                                />
-                                <span>Hiện cột điểm thi đua</span>
-                            </label>
-                        </div>
-                    ) : (
-                        <div className="flex flex-wrap items-center gap-3">
-                            <div className="flex items-center gap-1.5 text-slate-700 font-bold">
-                                <Calendar className="w-3.5 h-3.5 text-amber-700" aria-hidden="true" />
-                                <span>Kỳ Tháng {remainingData.selectedMonth}/{remainingData.selectedYear}</span>
-                            </div>
-                            <div className="text-[11px] font-semibold text-slate-700 bg-white px-2.5 py-1 rounded-lg border border-slate-200 shadow-sm tabular-nums">
-                                Số ngày còn lại: <span className="font-black text-amber-800">{remainingData.remainingDays} ngày</span>
-                            </div>
-                        </div>
-                    )}
-
-                    <div className="text-[11px] text-slate-600 font-medium tabular-nums">
-                        {isLoadingSessions && allData.length === 0
-                            ? 'Đang tải dữ liệu Cloud...'
-                            : (allData.length > 0 ? `Đã nạp ${allData.length} mục thi đua` : 'Chưa có dữ liệu')}
                     </div>
                 </div>
             </div>

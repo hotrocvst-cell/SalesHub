@@ -324,6 +324,8 @@ export async function extractSingleEmulationImage(
 ): Promise<{
     reportDate?: string;
     reportTime?: string;
+    isRealtime?: boolean;
+    targetType?: 'DAILY' | 'MONTHLY';
     programs: Array<{
         programName: string;
         unit: string;
@@ -339,57 +341,61 @@ export async function extractSingleEmulationImage(
     const prompt = `Bạn là chuyên gia phân tích dữ liệu thi đua bán lẻ từ ảnh chụp màn hình ứng dụng BI.
 Nhiệm vụ: Trích xuất ĐẦY ĐỦ các chương trình thi đua và số liệu kinh doanh của các ST trong cụm.
 
-Ảnh này là DỮ LIỆU THI ĐUA CỦA CẢ CỤM (nhiều ST), có thể hiển thị dưới 1 trong 2 định dạng sau:
+Ảnh này là DỮ LIỆU THI ĐUA CỦA CẢ CỤM (nhiều ST), có thể hiển thị dưới 1 trong các định dạng sau:
 
 ======================================================================
 ĐỊNH DẠNG 1: BẢNG MA TRẬN THEO SIÊU THỊ / CỤM (ẢNH MA TRẬN NHIỀU ST - PHỔ BIẾN NHẤT)
 ======================================================================
 Dấu hiệu nhận diện:
-- Tiêu đề ảnh/bảng có chữ: "BC Thi đua · Tháng ...", "Ma trận theo Siêu thị · ... chương trình", hoặc bảng rộng nhiều cột.
+- Tiêu đề ảnh/bảng có: "BC Thi đua • Tháng ... • Realtime" HOẶC "BC Thi đua · Tháng ...", kèm "Ma trận theo Siêu thị · ... chương trình", hoặc bảng rộng nhiều cột.
 - Bố cục cột:
   + CỘT 1: "STT" (1, 2, 3...)
   + CỘT 2: "CHƯƠNG TRÌNH THI ĐUA" (Chứa tên chương trình và badge đơn vị "DT" hoặc "SL").
-  + CỘT 3 & 4 (Nhóm cột "TỔNG"): Chứa THỰC HIỆN và TARGET tổng toàn công ty -> BỎ QUA HOÀN TOÀN CỘT NÀY, TUYỆT ĐỐI KHÔNG GÁN VÀO BẤT KỲ ST NÀO.
+  + CỘT 3 & 4 (Nhóm cột "TỔNG"): Chứa THỰC HIỆN và TARGET NGÀY (hoặc TARGET) tổng toàn công ty -> BỎ QUA HOÀN TOÀN CỘT NÀY, TUYỆT ĐỐI KHÔNG GÁN VÀO BẤT KỲ ST NÀO.
   + CÁC CỘT TIẾP THEO: TÊN TỪNG SIÊU THỊ / ST Ở TIÊU ĐỀ CỘT CẤP 1 (Ví dụ: "TGD_BRV_VTA - 290 Trương Công Định", "AAR_BRV_VTA - 290 Trương Công Định",...).
-    Dưới mỗi tên ST chia thành 2 cột con: "THỰC HIỆN" và "TARGET".
+    Dưới mỗi tên ST chia thành 2 cột con: "THỰC HIỆN" và "TARGET NGÀY" (đối với Realtime) HOẶC "THỰC HIỆN" và "TARGET" / "TARGET THÁNG" (đối với Lũy kế).
 - Hàng dữ liệu:
-  + DÒNG ĐẦU TIÊN CỦA THÂN BẢNG: "SỐ CHƯƠNG TRÌNH ĐẠT" (Ví dụ: "15/24", "11/23", "12/14") -> BỎ QUA HOÀN TOÀN DÒNG NÀY (ĐÂY LÀ DÒNG TỔNG KẾT, KHÔNG PHẢI CHƯƠNG TRÌNH THI ĐUA).
+  + DÒNG ĐẦU TIÊN CỦA THÂN BẢNG: "SỐ CHƯƠNG TRÌNH ĐẠT" (Ví dụ: "6/24", "5/23", "2/14") -> BỎ QUA HOÀN TOÀN DÒNG NÀY (ĐÂY LÀ DÒNG TỔNG KẾT, KHÔNG PHẢI CHƯƠNG TRÌNH THI ĐUA).
   + CÁC HÀNG TIẾP THEO (STT 1 ĐẾN HẾT): Mỗi hàng là MỘT CHƯƠNG TRÌNH THI ĐUA.
     - programName: Tên chương trình thi đua (Ví dụ: "T11 - Laptop", "T11 - Điện thoại Realme", "T11 - Bảo hiểm Tổng", "T11 - ĐIỆN THOẠI & TABLET ANDROID", "T11 - Topzone", "T11 - Quạt gió",...). Bỏ qua badge "DT" hoặc "SL" khỏi chuỗi tên chương trình.
     - unit: "DT" (Doanh thu) nếu có badge/chữ DT, hoặc "SL" (Số lượng) nếu có badge/chữ SL.
     - Với mỗi ST trong bảng:
-      * Đọc giá trị tại 2 cột con "THỰC HIỆN" và "TARGET" của ST đó.
-      * Dấu gạch ngang "-", "—", "–" hoặc ô trống nghĩa là không có số liệu / bằng 0.
-      * Nếu CẢ 2 Ô "THỰC HIỆN" VÀ "TARGET" CỦA ST ĐÓ ĐỀU LÀ DẤU GẠCH HOẶC 0: ST đó không tham gia chương trình này -> BỎ QUA ST ĐÓ KHỎI DANH SÁCH stores CỦA CHƯƠNG TRÌNH NÀY.
-      * Nếu ST có "THỰC HIỆN" khác 0 HOẶC có "TARGET" khác 0:
-        - storeRawName: Tên chính xác của ST ở tiêu đề cột (Ví dụ: "TGD_BRV_VTA - 290 Trương Công Định"). Nếu tên ST bị ngắt dòng thì ghép liền lại.
-        - actual: Số ở cột THỰC HIỆN (loại bỏ dấu phẩy phân cách hàng nghìn, giữ nguyên số thập phân, ví dụ "2,159.83" -> 2159.83, "115" -> 115, nếu là "-" -> 0).
-        - target: Số ở cột TARGET (loại bỏ dấu phẩy phân cách hàng nghìn, ví dụ "5,640.06" -> 5640.06, "274" -> 274, nếu là "-" -> 0).
-        - completionRate: Nếu target > 0 thì = (actual / target) * 100 (làm tròn 2 chữ số thập phân, ví dụ 27.41). Nếu target = 0 thì = 0.
+      * Đọc giá trị tại 2 cột con "THỰC HIỆN" và "TARGET NGÀY" (hoặc "TARGET") của ST đó.
+      * Dấu gạch ngang "-", "—", "–" hoặc ô trống nghĩa là ST KHÔNG tham gia / KHÔNG áp dụng chương trình này -> BỎ QUA ST ĐÓ KHỎI DANH SÁCH stores CỦA CHƯƠNG TRÌNH NÀY.
+      * Nếu ST có hiển thị số (kể cả số 0 hoặc 0.00):
+        - storeRawName: Tên chính xác của ST ở tiêu đề cột (Ví dụ: "TGD_BRV_VTA - 290 Trương Công Định"). Nếu tên ST bị ngắt dòng trên 2 dòng thì ghép liền lại.
+        - actual: Số ở cột THỰC HIỆN (loại bỏ dấu phẩy phân cách hàng nghìn, giữ nguyên số thập phân, ví dụ "53.80" -> 53.8, "0.00" -> 0, "115" -> 115).
+        - target: Số ở cột TARGET NGÀY hoặc TARGET (loại bỏ dấu phẩy phân cách hàng nghìn, giữ nguyên số thập phân, ví dụ "188.00" -> 188, "11.47" -> 11.47, "0" -> 0).
+        - completionRate: Nếu target > 0 thì = (actual / target) * 100 (làm tròn 2 chữ số thập phân). Nếu target = 0 thì = 0.
 
 ======================================================================
 ĐỊNH DẠNG 2: CÁC BẢNG XẾP DỌC TRUYỀN THỐNG (BẢNG DARK MODE)
 ======================================================================
 - Mỗi bảng là 1 chương trình thi đua, tiêu đề bảng ở góc trên bên trái (Ví dụ: "T10 - IPHONE 18 series...", "T10 - Bảo Hiểm Tổng",...).
 - Cột 2 là "DOANH THU" hoặc "SỐ LƯỢNG".
-- Cột 3 là "TARGET".
-- Cột 4 là "% HT THÁNG".
+- Cột 3 là "TARGET" hoặc "TARGET NGÀY".
+- Cột 4 là "% HT THÁNG" hoặc "% HT NGÀY".
 - Dòng "TỔNG" trong từng bảng: BỎ QUA HOÀN TOÀN.
 - Các dòng ST bên dưới: Tên ST ở cột 1, Cột 2 (actual), Cột 3 (target), Cột 4 (completionRate).
 
 ======================================================================
-THÔNG TIN NGÀY GIỜ & QUY TẮC BẮT BUỘC:
+THÔNG TIN NGÀY GIỜ & NHẬN DIỆN LOẠI BÁO CÁO:
 ======================================================================
 1. Ở góc trên bên phải hoặc tiêu đề ảnh, tìm dòng ghi thời gian:
-   Ví dụ: "Chụp lúc 08:27 16/11/2026" hoặc "Cập nhật lúc: 08:27:00 16/11/2026"
-   -> Trích xuất: reportDate = "2026-11-16" (YYYY-MM-DD), reportTime = "08:27" (HH:mm). Nếu không có, để null.
-2. BỎ QUA HOÀN TOÀN các watermark chữ mờ in chéo trên ảnh (Ví dụ: "26479 - Đào Bá Linh",...).
-3. Tuyệt đối không tự ý nhân thêm một triệu (1,000,000). Giữ nguyên giá trị thập phân đã hiển thị.
+   Ví dụ: "Chụp lúc 21:01 19/11/2026" HOẶC "Cập nhật lúc: 08:27:00 16/11/2026"
+   -> Trích xuất: reportDate = "2026-11-19" (YYYY-MM-DD), reportTime = "21:01" (HH:mm). Nếu không có, để null.
+2. Kiểm tra xem ảnh là REALTIME hay LŨY KẾ:
+   - Nếu tiêu đề có chữ "Realtime" HOẶC cột con là "TARGET NGÀY" -> isRealtime = true, targetType = "DAILY".
+   - Nếu tiêu đề là "Lũy kế" HOẶC cột con là "TARGET THÁNG" / "TARGET" (không có chữ ngày) -> isRealtime = false, targetType = "MONTHLY".
+3. BỎ QUA HOÀN TOÀN các watermark chữ mờ in chéo trên ảnh (Ví dụ: "26479 - Đào Bá Linh",...).
+4. Tuyệt đối không tự ý nhân thêm một triệu (1,000,000). Giữ nguyên giá trị thập phân đã hiển thị.
 
 Định dạng JSON trả về duy nhất (không kèm markdown giải thích):
 {
   "reportDate": "YYYY-MM-DD",
   "reportTime": "HH:mm",
+  "isRealtime": true,
+  "targetType": "DAILY",
   "programs": [
     {
       "programName": "T11 - Laptop",
@@ -397,9 +403,9 @@ THÔNG TIN NGÀY GIỜ & QUY TẮC BẮT BUỘC:
       "stores": [
         {
           "storeRawName": "TGD_BRV_VTA - 290 Trương Công Định",
-          "actual": 254.45,
-          "target": 928.27,
-          "completionRate": 27.41
+          "actual": 23.60,
+          "target": 30.94,
+          "completionRate": 76.28
         }
       ]
     },
@@ -409,9 +415,9 @@ THÔNG TIN NGÀY GIỜ & QUY TẮC BẮT BUỘC:
       "stores": [
         {
           "storeRawName": "AAR_BRV_VTA - 290 Trương Công Định",
-          "actual": 7494.92,
-          "target": 10887.00,
-          "completionRate": 68.84
+          "actual": 247.19,
+          "target": 362.90,
+          "completionRate": 68.11
         }
       ]
     }
@@ -422,6 +428,8 @@ THÔNG TIN NGÀY GIỜ & QUY TẮC BẮT BUỘC:
     return {
         reportDate: parsed?.reportDate || undefined,
         reportTime: parsed?.reportTime || undefined,
+        isRealtime: typeof parsed?.isRealtime === 'boolean' ? parsed.isRealtime : (parsed?.targetType === 'DAILY'),
+        targetType: parsed?.targetType === 'DAILY' ? 'DAILY' : (parsed?.targetType === 'MONTHLY' ? 'MONTHLY' : undefined),
         programs: Array.isArray(parsed?.programs) ? parsed.programs : []
     };
 }
@@ -711,6 +719,8 @@ export async function extractAndMergeAllImages(
     const errors: string[] = [];
     let detectedReportDate = '';
     let detectedReportTime = '';
+    let isDetectedRealtime = false;
+    let detectedTargetType: 'DAILY' | 'MONTHLY' | undefined = undefined;
 
     const storeMap: Record<string, StoreReportingData> = {};
     const knownStores = files.knownStores || [];
@@ -925,6 +935,8 @@ export async function extractAndMergeAllImages(
             if (!emuRes) return;
             if (!detectedReportDate && emuRes.reportDate) detectedReportDate = emuRes.reportDate;
             if (!detectedReportTime && emuRes.reportTime) detectedReportTime = emuRes.reportTime;
+            if (emuRes.isRealtime) isDetectedRealtime = true;
+            if (emuRes.targetType) detectedTargetType = emuRes.targetType;
 
             (emuRes.programs || []).forEach(prog => {
                 const pName = prog.programName.trim();
@@ -935,8 +947,6 @@ export async function extractAndMergeAllImages(
 
                     const act = cleanBiNumber(stRow.actual);
                     const tg = cleanBiNumber(stRow.target);
-                    // Bỏ qua nếu ST không có target và không có số liệu thực hiện phát sinh (cả 2 đều = 0 hoặc "-")
-                    if (act === 0 && tg === 0) return;
 
                     const store = getOrCreateStore(stRow.storeRawName);
                     const pct = (stRow.completionRate !== undefined && stRow.completionRate !== null && !isNaN(Number(stRow.completionRate)))
@@ -948,7 +958,9 @@ export async function extractAndMergeAllImages(
                         unit: pUnit,
                         actual: act,
                         target: tg,
-                        completionRate: pct
+                        completionRate: pct,
+                        targetType: emuRes.targetType || (emuRes.isRealtime ? 'DAILY' : 'MONTHLY'),
+                        isRealtime: Boolean(emuRes.isRealtime)
                     };
                 });
             });
@@ -961,6 +973,8 @@ export async function extractAndMergeAllImages(
         success: Object.keys(storeMap).length > 0,
         reportDate: detectedReportDate,
         reportTime: detectedReportTime,
+        isRealtime: isDetectedRealtime,
+        emulationTargetType: detectedTargetType,
         stores: Object.values(storeMap),
         errors: errors.length > 0 ? errors : undefined
     };

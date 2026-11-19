@@ -17,6 +17,7 @@ import {
     isStoreMatch
 } from "../../core/lib/formatters";
 import ReportDataFreshnessBar from "../../shared/components/report/ReportDataFreshnessBar";
+import CloudDataSyncStatusBanner from "../../shared/components/report/CloudDataSyncStatusBanner";
 import ReportActionButtons from "../../shared/components/report/ReportActionButtons";
 import type { AssessmentTemplate } from "../../shared/components/report/ReportAssessmentModal";
 import {
@@ -41,7 +42,9 @@ import {
     Filter,
     FileText,
     Copy,
-    Lock
+    Lock,
+    Camera,
+    Target
 } from "lucide-react";
 import { useAuth } from "../../shared/contexts/AuthContext";
 
@@ -658,47 +661,120 @@ export default function MonthlyReportPage() {
                 </div>
             )}
 
-            {/* THANH ĐIỀU KHIỂN ĐÃ TÁCH THÀNH 2 HÀNG ĐỘC LẬP */}
-            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
-                {/* TIÊU ĐỀ BÁO CÁO */}
-                <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3">
-                    <div className="flex items-center gap-2.5">
-                        <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-700 font-bold shrink-0">
-                            <BarChart3 className="w-5 h-5" aria-hidden="true" />
-                        </div>
-                        <div>
-                            <h1 className="text-base font-black text-slate-800 uppercase tracking-wide">
-                                Lũy Kế Doanh Thu &amp; Thi Đua Tháng {selectedMonth}/{selectedYear}
+            {/* TẦNG 1: BANNER BÁO CÁO TRẠNG THÁI LƯU TRỮ CLOUD (RULE 8) */}
+            <div data-html2canvas-ignore="true" data-export-ignore="true">
+                <CloudDataSyncStatusBanner
+                    compact={true}
+                    storageType="cloud"
+                    syncStatus={loading ? 'syncing' : records.length > 0 ? 'synced' : 'unsynced'}
+                    tableReady={true}
+                    tableName="daily_business_records"
+                    lastSyncTime={records[0]?.updatedAt}
+                    onSyncNow={loadData}
+                />
+            </div>
+
+            {/* TẦNG 2: CHI TIẾT PHIÊN DỮ LIỆU & ĐỘ MỚI CLOUD */}
+            <ReportDataFreshnessBar
+                latestDataDate={currentRecord?.reportDate || (availableDates.length > 0 ? availableDates[0] : null)}
+                expectedDate={getYesterdayDateString()}
+                lastUpdatedAt={currentRecord?.updatedAt}
+                lastUpdatedBy={currentRecord?.updatedBy}
+                storeName={selectedStore === 'all' ? 'Toàn cụm ST phụ trách' : selectedStore}
+                actionUrl="/cap-nhat-ocr"
+                actionLabel="Cập nhật số liệu LK"
+                canUpdate={!currentUser?.is_guest && (isAdmin || ['ADMIN', 'QUAN_LY', 'TRUONG_CA'].includes(currentUser?.role || ''))}
+                compact={true}
+            />
+
+            {/* TẦNG 3: KHỐI TIÊU ĐỀ BÁO CÁO */}
+            <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-700 font-bold shrink-0">
+                        <BarChart3 className="w-5 h-5" aria-hidden="true" />
+                    </div>
+                    <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 tracking-tight">
+                                Báo Cáo Doanh Thu &amp; Thi Đua Tháng {selectedMonth}/{selectedYear}
                             </h1>
-                            <p className="text-xs text-slate-600 mt-0.5 flex items-center gap-1.5 flex-wrap">
-                                <span>Trạng thái:</span>
-                                {currentRecord ? (
-                                    <span className="text-emerald-800 font-bold bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded text-[10px]">
-                                        Bản ghi ngày {formatDate(currentRecord.reportDate)}
-                                    </span>
-                                ) : (
-                                    <span className="text-amber-800 font-bold bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded text-[10px]">
-                                        Chưa có dữ liệu
-                                    </span>
-                                )}
-                            </p>
+                            <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border bg-amber-100 text-amber-900 border-amber-300">
+                                Lũy Kế Tháng
+                            </span>
                         </div>
+                        <p className="text-xs text-slate-600 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                            <span>Trạng thái số liệu:</span>
+                            {currentRecord ? (
+                                <span className="text-emerald-800 font-bold bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded text-[10px]">
+                                    Bản ghi ngày {formatDate(currentRecord.reportDate)}
+                                </span>
+                            ) : (
+                                <span className="text-amber-800 font-bold bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded text-[10px]">
+                                    Chưa có dữ liệu
+                                </span>
+                            )}
+                        </p>
                     </div>
                 </div>
 
-                {/* HÀNG 1: BỘ LỌC ST / CỤM (BẮT BUỘC ĐẦU TIÊN & NẰM RIÊNG LẺ 1 DÒNG) */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2.5 border-b border-slate-100">
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2.5 w-full sm:w-auto">
-                        <label
-                            htmlFor="monthly-store-select"
-                            className="text-xs font-black text-slate-700 uppercase tracking-wider shrink-0 flex items-center gap-1.5"
-                        >
-                            <Store className="w-4 h-4 text-amber-700" aria-hidden="true" />
-                            <span>ST / Cụm:</span>
-                        </label>
-                        <div className={`flex items-center gap-1.5 px-3 py-1.5 min-h-[38px] rounded-xl border text-xs font-bold transition-all w-full sm:w-auto sm:min-w-[280px] ${isLockedToSingleStore
+                <div className="flex items-center gap-2 self-end sm:self-auto">
+                    <button
+                        type="button"
+                        aria-label="Tải lại số liệu"
+                        onClick={loadData}
+                        disabled={loading}
+                        className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 border border-slate-300 disabled:opacity-50"
+                        title="Tải lại số liệu từ Cloud"
+                    >
+                        <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-amber-700' : ''}`} aria-hidden="true" />
+                        <span>Tải Lại</span>
+                    </button>
+                </div>
+            </div>
+
+            {/* TẦNG 4: THANH ĐIỀU KHIỂN & BỘ LỌC CHUẨN RULE 10 (2 DÒNG ĐỘC LẬP) */}
+            <div className="bg-slate-50/90 border border-slate-200/90 rounded-2xl p-3.5 sm:p-4 space-y-3">
+                {/* DÒNG 1: BỘ LỌC ST / CỤM (BẮT BUỘC ĐẦU TIÊN & NẰM RIÊNG LẺ 1 DÒNG) */}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                    <div className="flex-1">
+                        <div className="flex items-center justify-between mb-1.5 flex-wrap gap-1.5">
+                            <label
+                                htmlFor="monthly-store-select"
+                                className="text-[11px] font-bold text-slate-700 uppercase flex items-center gap-1.5"
+                            >
+                                <Store className="w-3.5 h-3.5 text-amber-700" aria-hidden="true" />
+                                <span>ST / Cụm</span>
+                            </label>
+                            {/* Nút hành động trực tiếp theo ST */}
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                                {!currentUser?.is_guest && (isAdmin || ['ADMIN', 'QUAN_LY', 'TRUONG_CA'].includes(currentUser?.role || '')) && (
+                                    <>
+                                        <button
+                                            type="button"
+                                            onClick={() => navigate('/cap-nhat-ocr')}
+                                            className="text-[11px] font-bold text-blue-800 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 border border-blue-300 px-2.5 py-1.5 min-h-[32px] rounded-lg flex items-center gap-1.5 transition cursor-pointer"
+                                            title="Cập nhật số liệu lũy kế qua AI OCR hoặc nạp thủ công"
+                                        >
+                                            <Camera className="w-3.5 h-3.5 text-blue-700 shrink-0" aria-hidden="true" />
+                                            <span>Nạp Số Liệu LK</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => navigate('/cau-hinh-st')}
+                                            className="text-[11px] font-bold text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-100 border border-slate-300 px-2.5 py-1.5 min-h-[32px] rounded-lg flex items-center gap-1.5 transition cursor-pointer"
+                                            title="Cấu hình chỉ tiêu và tham số ST"
+                                        >
+                                            <Target className="w-3.5 h-3.5 text-amber-600 shrink-0" aria-hidden="true" />
+                                            <span>Cấu Hình ST</span>
+                                        </button>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className={`flex items-center gap-1.5 px-3 py-1.5 min-h-[38px] rounded-xl border text-xs font-bold transition-all w-full ${isLockedToSingleStore
                             ? 'bg-amber-50/90 border-amber-300 text-amber-900 shadow-sm'
-                            : 'bg-slate-50 border-slate-300 text-slate-800 hover:border-amber-400'
+                            : 'bg-white border-slate-300 text-slate-800 hover:border-amber-400'
                             }`}>
                             {isLockedToSingleStore && (
                                 <Lock className="w-3.5 h-3.5 text-amber-700 shrink-0" aria-hidden="true" />
@@ -739,73 +815,77 @@ export default function MonthlyReportPage() {
                     </div>
                 </div>
 
-                {/* HÀNG 2: TIÊU CHÍ THỜI GIAN & TẢI SỐ LIỆU */}
-                <div className="flex items-center justify-between gap-2 flex-wrap">
+                {/* DÒNG 2: TIÊU CHÍ THỜI GIAN, HIỂN THỊ & CÔNG CỤ XUẤT ẢNH */}
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pt-2 border-t border-slate-200/80">
+                    {/* Nhóm tiêu chí thời gian & lọc */}
                     <div className="flex items-center gap-2 flex-wrap">
-                        <label htmlFor="monthly-month-select" className="text-xs font-bold text-slate-600">
-                            Kỳ báo cáo:
-                        </label>
-                        <select
-                            id="monthly-month-select"
-                            name="month"
-                            aria-label="Chọn tháng báo cáo"
-                            value={selectedMonth}
-                            onChange={(e) => setSelectedMonth(Number(e.target.value))}
-                            className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 min-h-[36px] text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer"
-                        >
-                            {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
-                                <option key={m} value={m}>Tháng {m}/{selectedYear}</option>
-                            ))}
-                        </select>
+                        <div className="flex items-center gap-1.5">
+                            <label htmlFor="monthly-month-select" className="text-xs font-bold text-slate-600 whitespace-nowrap">
+                                Kỳ tháng:
+                            </label>
+                            <select
+                                id="monthly-month-select"
+                                name="month"
+                                aria-label="Chọn tháng báo cáo"
+                                value={selectedMonth}
+                                onChange={(e) => setSelectedMonth(Number(e.target.value))}
+                                className="bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 min-h-[36px] text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer shadow-2xs"
+                            >
+                                {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                                    <option key={m} value={m}>Tháng {m}/{selectedYear}</option>
+                                ))}
+                            </select>
+                        </div>
 
-                        <select
-                            id="monthly-date-select"
-                            name="reportDate"
-                            aria-label="Chọn ngày chốt số liệu"
-                            value={selectedDate}
-                            onChange={(e) => setSelectedDate(e.target.value)}
-                            disabled={availableDates.length === 0}
-                            className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 min-h-[36px] text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer disabled:opacity-50"
-                        >
-                            <option value="latest">Mới nhất ({availableDates[0] ? formatDate(availableDates[0]) : 'Chưa có'})</option>
-                            {availableDates.map(d => (
-                                <option key={d} value={d}>Ngày {formatDate(d)}</option>
-                            ))}
-                        </select>
+                        <div className="flex items-center gap-1.5">
+                            <label htmlFor="monthly-date-select" className="text-xs font-bold text-slate-600 whitespace-nowrap">
+                                Ngày chốt:
+                            </label>
+                            <select
+                                id="monthly-date-select"
+                                name="reportDate"
+                                aria-label="Chọn ngày chốt số liệu"
+                                value={selectedDate}
+                                onChange={(e) => setSelectedDate(e.target.value)}
+                                disabled={availableDates.length === 0}
+                                className="bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 min-h-[36px] text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer disabled:opacity-50 shadow-2xs"
+                            >
+                                <option value="latest">Mới nhất ({availableDates[0] ? formatDate(availableDates[0]) : 'Chưa có'})</option>
+                                {availableDates.map(d => (
+                                    <option key={d} value={d}>Ngày {formatDate(d)}</option>
+                                ))}
+                            </select>
+                        </div>
 
                         <button
                             type="button"
                             aria-label="Tải lại số liệu"
                             onClick={loadData}
                             disabled={loading}
-                            className="p-2 min-h-[36px] min-w-[36px] flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition cursor-pointer disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                            className="p-2 min-h-[36px] min-w-[36px] flex items-center justify-center bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-xl transition cursor-pointer disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 shadow-2xs"
                             title="Tải lại số liệu"
                         >
-                            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
+                            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-amber-700' : ''}`} aria-hidden="true" />
                         </button>
                     </div>
-                </div>
 
-                {/* HÀNG 3: CÔNG CỤ XUẤT BÁO CÁO */}
-                <div className="flex items-center justify-between gap-2 flex-wrap">
-                    <div className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">
-                        Công cụ xuất báo cáo
-                    </div>
-
+                    {/* Nhóm công cụ xuất báo cáo */}
                     {currentRecord && (
-                        <ReportActionButtons
-                            onExportImage={handleSaveImage}
-                            onCopyImage={handleCopyImageClipboard}
-                            isExporting={isProcessingImg}
-                            isCopying={isCopyingImg}
-                            exportButtonLabel="TẢI ẢNH"
-                            copyImageButtonLabel="COPY ẢNH"
-                            hasAssessment={true}
-                            assessmentTemplates={monthlyAssessmentTemplates}
-                            onCopyText={handleCopyText}
-                            reportTitle={`Báo Cáo Doanh Thu Tháng ${selectedMonth}/${selectedYear} - ${selectedStore}`}
-                            periodLabel={`Tháng ${selectedMonth}/${selectedYear}`}
-                        />
+                        <div className="flex items-center gap-2 self-end lg:self-auto">
+                            <ReportActionButtons
+                                onExportImage={handleSaveImage}
+                                onCopyImage={handleCopyImageClipboard}
+                                isExporting={isProcessingImg}
+                                isCopying={isCopyingImg}
+                                exportButtonLabel="TẢI ẢNH"
+                                copyImageButtonLabel="COPY ẢNH"
+                                hasAssessment={true}
+                                assessmentTemplates={monthlyAssessmentTemplates}
+                                onCopyText={handleCopyText}
+                                reportTitle={`Báo Cáo Doanh Thu Tháng ${selectedMonth}/${selectedYear} - ${selectedStore}`}
+                                periodLabel={`Tháng ${selectedMonth}/${selectedYear}`}
+                            />
+                        </div>
                     )}
                 </div>
             </div>
@@ -854,18 +934,6 @@ export default function MonthlyReportPage() {
                         data-report-table="true"
                         className="space-y-4 bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-sm font-avo"
                     >
-                        {/* THANH TRẠNG THÁI CẬP NHẬT PHIÊN DỮ LIỆU */}
-                        <ReportDataFreshnessBar
-                            latestDataDate={currentRecord?.reportDate || (availableDates.length > 0 ? availableDates[0] : null)}
-                            expectedDate={getYesterdayDateString()}
-                            lastUpdatedAt={currentRecord?.updatedAt}
-                            lastUpdatedBy={currentRecord?.updatedBy}
-                            storeName={currentRecord?.storeName}
-                            actionUrl="/cap-nhat-ocr"
-                            actionLabel="Cập nhật số liệu LK"
-                            canUpdate={!currentUser?.is_guest && (isAdmin || ['ADMIN', 'QUAN_LY', 'TRUONG_CA'].includes(currentUser?.role || ''))}
-                        />
-
                         {/* 1. BANNER TIÊU ĐỀ BÁO CÁO */}
                         <div className="bg-gradient-to-r from-slate-900 to-slate-800 text-white p-4 sm:p-5 rounded-xl shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                             <div>

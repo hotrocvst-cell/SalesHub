@@ -24,6 +24,7 @@ import {
     parseEmployeeRoleAndDept
 } from '../../core/lib/storage';
 import { formatCapitalizeWords } from '../../core/lib/formatters';
+import { supabase } from '../../core/lib/supabase';
 import ApprovalModal from '../auth/components/ApprovalModal';
 import {
     Users,
@@ -57,7 +58,10 @@ import {
     Database,
     Code,
     CloudUpload,
-    Sparkles
+    Sparkles,
+    Smartphone,
+    Monitor,
+    LogOut
 } from 'lucide-react';
 
 export default function UserManagementPage() {
@@ -253,6 +257,28 @@ export default function UserManagementPage() {
             await loadData();
         } else {
             showMsg('error', res.error || 'Có lỗi khi cập nhật');
+        }
+    };
+
+    // Thu hồi phiên hoạt động (Đá người dùng ra khỏi tất cả thiết bị ngay lập tức)
+    const handleRevokeUserSessions = async (user: UserProfile) => {
+        if (!confirm(`Bạn có chắc muốn thu hồi tất cả phiên đăng nhập của "${user.full_name}"? Người dùng này sẽ bị đăng xuất ngay lập tức khỏi mọi thiết bị.`)) {
+            return;
+        }
+        try {
+            const { error } = await supabase
+                .from('user_profiles')
+                .update({
+                    active_sessions: {},
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', user.id);
+
+            if (error) throw error;
+            showMsg('success', `Đã thu hồi tất cả phiên thiết bị của ${user.full_name}`);
+            await loadData();
+        } catch (e: any) {
+            showMsg('error', `Không thể thu hồi phiên: ${e.message || String(e)}`);
         }
     };
 
@@ -631,7 +657,7 @@ export default function UserManagementPage() {
                                 <th className="py-3.5 px-3">Vai trò</th>
                                 <th className="py-3.5 px-3">ST công tác</th>
                                 <th className="py-3.5 px-3">Trạng thái</th>
-                                <th className="py-3.5 px-3">Bảo mật</th>
+                                <th className="py-3.5 px-3">Bảo mật &amp; Thiết bị</th>
                                 <th className="py-3.5 px-4 text-right">Thao tác Admin</th>
                             </tr>
                         </thead>
@@ -739,18 +765,56 @@ export default function UserManagementPage() {
                                             </span>
                                         </td>
 
-                                        {/* BẢO MẬT & MẬT KHẨU */}
+                                        {/* BẢO MẬT & THIẾT BỊ HOẠT ĐỘNG */}
                                         <td className="py-3 px-3">
-                                            <div className="flex items-center gap-1.5">
-                                                <span className="text-[11px] font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-                                                    {u.password ? '••••••••' : 'Chưa đặt MK'}
-                                                </span>
+                                            <div className="space-y-1">
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className="text-[10.5px] font-mono text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                                                        {u.password ? '••••••••' : 'Chưa đặt MK'}
+                                                    </span>
+                                                </div>
+                                                {/* Danh sách thiết bị phiên đang mở */}
+                                                <div className="flex flex-col gap-0.5 text-[9.5px]">
+                                                    {u.active_sessions?.mobile && (
+                                                        <div 
+                                                            className="inline-flex items-center gap-1 text-blue-700 bg-blue-50/80 px-1.5 py-0.5 rounded border border-blue-100 max-w-[150px] truncate"
+                                                            title={`📱 ${u.active_sessions.mobile.device_name || 'Di động'}`}
+                                                        >
+                                                            <Smartphone className="w-3 h-3 shrink-0 text-blue-600" />
+                                                            <span className="truncate">{u.active_sessions.mobile.device_name || 'Mobile'}</span>
+                                                        </div>
+                                                    )}
+                                                    {u.active_sessions?.desktop && (
+                                                        <div 
+                                                            className="inline-flex items-center gap-1 text-purple-700 bg-purple-50/80 px-1.5 py-0.5 rounded border border-purple-100 max-w-[150px] truncate"
+                                                            title={`💻 ${u.active_sessions.desktop.device_name || 'Máy tính'}`}
+                                                        >
+                                                            <Monitor className="w-3 h-3 shrink-0 text-purple-600" />
+                                                            <span className="truncate">{u.active_sessions.desktop.device_name || 'PC / Laptop'}</span>
+                                                        </div>
+                                                    )}
+                                                    {!u.active_sessions?.mobile && !u.active_sessions?.desktop && (
+                                                        <span className="text-slate-400 italic text-[10px]">Chưa có phiên</span>
+                                                    )}
+                                                </div>
                                             </div>
                                         </td>
 
                                         {/* THAO TÁC */}
                                         <td className="py-3 px-4 text-right">
                                             <div className="flex items-center justify-end gap-1.5">
+                                                {/* Nút Thu Hồi Thiết Bị (Nếu đang có phiên) */}
+                                                {(u.active_sessions?.mobile || u.active_sessions?.desktop) && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleRevokeUserSessions(u)}
+                                                        className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 transition cursor-pointer"
+                                                        title="Thu hồi phiên (Đăng xuất khỏi mọi thiết bị)"
+                                                    >
+                                                        <LogOut className="w-3.5 h-3.5" />
+                                                    </button>
+                                                )}
+
                                                 {/* Nút Phê Duyệt Nhanh (Nếu đang chờ duyệt hoặc chưa onboard) */}
                                                 {(u.status === 'PENDING_APPROVAL' || u.status === 'PENDING_ONBOARDING') && (
                                                     <button

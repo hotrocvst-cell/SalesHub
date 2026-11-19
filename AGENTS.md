@@ -37,7 +37,7 @@ Khi có bất kỳ xung đột nào về quy chuẩn, dữ liệu gợi ý hoặ
 3. **Giai đoạn triển khai (Sau khi Boss duyệt)**:
    - Chạy ngữ cảnh `impeccable` một lần đầu phiên: `.agent/skills/impeccable/scripts/impeccable.cmd context --target <đường-dẫn-file-chính>` (nếu launcher lỗi, đọc trực tiếp `PRODUCT.md`).
    - Đọc `.agent/skills/impeccable/reference/craft-floor.md` ngay trước khi sửa/viết file UI.
-   - Code theo đúng phân tách module (`250–300` dòng/file), kèm `CloudDataSyncStatusBanner` và phân quyền RBAC/Excel/SQL chuẩn.
+   - Code theo đúng phân tách module chuẩn Single Responsibility & High Cohesion, kèm `CloudDataSyncStatusBanner` và phân quyền RBAC/Excel/SQL chuẩn.
 4. **Giai đoạn hoàn thiện**: Rà soát nhanh theo `polish` / `audit` của `impeccable` và kiểm tra build (`npm run build` / `tsc`).
 
 ### B. Cải tiến, sửa lỗi hoặc tối ưu UI hiện có

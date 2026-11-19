@@ -41,7 +41,10 @@
 
 ## 3. NGUYÊN TẮC BẤT BIẾN HỆ THỐNG
 - **Chiến lược chi phí**: FREE-FIRST (100% Zero Paid Infra).
-- **Kiến trúc mã nguồn**: Chia để trị (Feature-Driven Modularization). Giới hạn độ dài file 250 - 300 dòng; nếu dài hơn phải tách component con hoặc custom hook.
+- **Kiến trúc mã nguồn - Nguyên tắc Gắn kết & Trách nhiệm (Single Responsibility & High Cohesion)**:
+  - Áp dụng phân tách module dựa trên trách nhiệm nghiệp vụ (Feature-Driven Modularization) thay vì đếm số dòng cơ học cứng nhắc.
+  - **Khi nào NÊN TÁCH**: Tách ra custom hook hoặc component độc lập khi một logic tính toán phức tạp có khả năng tái sử dụng (như hook dữ liệu, thuật toán nhịp độ), hoặc các thành phần có vòng đời độc lập (Modal, Drawer, Bảng xuất số liệu dùng chung).
+  - **Khi nào NÊN GIỮ CHUNG**: Giữ chung trong file trang chính các thành phần phụ thuộc chặt chẽ vào local state (như 4 tầng Header, bộ lọc phụ trợ, điều phối tab). Độ dài trang chính dao động từ 350 - 500+ dòng là hoàn toàn hợp lý, đảm bảo luồng dữ liệu rõ ràng, tránh phân mảnh quá mức (over-fragmentation) và tránh lạm dụng prop-drilling.
 - **Tầng bảo mật**: Frontend chỉ để hiển thị, Row Level Security (RLS) tại Supabase là chốt chặn bảo mật cuối cùng.
 
 ## 4. QUY TẮC BẮT BUỘC KHI TẠO TRANG/PHÂN HỆ MỚI (NEW PAGE & PERMISSION REGISTRATION RULE)
@@ -121,12 +124,15 @@
     2. Tài khoản người dùng có vai trò (`role`) nằm trong danh sách được cấp phép xuất dữ liệu (`allowed_excel_roles`, hoặc mặc định vai trò Quản trị viên `ADMIN` khi trang được mở khóa).
   - Sử dụng hook chuẩn `useExcelExportPermission(pagePath)` để kiểm soát hiển thị nút Excel trên từng giao diện báo cáo/danh mục.
 
-## 10. QUY CHUẨN BỐ CỤC BỘ LỌC BÁO CÁO (FILTER BAR CONVENTION - STORE/CLUSTER FIRST ON DEDICATED ROW)
-- **ƯU TIÊN BỘ LỌC ST / CỤM Ở VỊ TRÍ ĐẦU TIÊN & NẰM RIÊNG LẺ 1 DÒNG (DEDICATED FIRST ROW)**:
-  - Trên tất cả các trang báo cáo, phân hệ hoặc bảng điều khiển có thanh bộ lọc:
-    + Bộ lọc xem theo **ST / Cụm** (Store / Cluster) **BẮT BUỘC ĐẶT Ở VỊ TRÍ LỰA CHỌN ĐẦU TIÊN VÀ NẰM RIÊNG LẺ TRÊN 1 DÒNG ĐỘC LẬP (DÒNG ĐẦU TIÊN)**.
-    + Có thể kết hợp cùng dòng này với các nút hành động (Làm mới, Xuất ảnh, Xuất Excel nếu được cấp quyền) ở góc phải để tối ưu diện tích.
-    + Sau dòng ST / Cụm mới đến các tiêu chí bộ lọc khác (Từ ngày - Đến ngày, Lịch tuần, Kỳ tháng, Presets xem nhanh, Chế độ xem, Chỉ tiêu, Tìm kiếm,...).
+## 10. QUY CHUẨN BỐ CỤC BỘ LỌC BÁO CÁO & ĐẦU TRANG 4 TẦNG (STANDARDIZED 4-TIER REPORT HEADER & FILTER CONVENTION)
+- **CẤU TRÚC ĐẦU TRANG 4 TẦNG ĐỒNG BỘ TOÀN BỘ BÁO CÁO**:
+  - Mọi trang báo cáo kinh doanh (Báo Cáo Ngày Realtime, Báo Cáo Tháng Lũy Kế, Báo Cáo Doanh Thu Nhân Viên, Báo Cáo Cụm ST, v.v.) bắt buộc tuân thủ thứ tự 4 tầng từ trên xuống dưới (chi tiết tại `.agents/rules/report_header_layout_rules.md`):
+    1. **Tầng 1 - Trạng thái Cloud**: `CloudDataSyncStatusBanner` (`compact={true}`, bỏ qua khi xuất ảnh).
+    2. **Tầng 2 - Chi tiết phiên & Độ mới dữ liệu**: `RealtimeSessionBanner` (Realtime) hoặc `ReportDataFreshnessBar` (Lũy kế/Nhân viên).
+    3. **Tầng 3 - Tiêu đề báo cáo & Phân nhóm**: Tiêu đề H1, Sub-tabs segmented switcher (nếu có), Nút thao tác nhanh toàn cục.
+    4. **Tầng 4 - Thanh bộ lọc chuẩn Smartphone (2 dòng)**:
+       - **Dòng 1**: Bộ lọc xem theo **ST / Cụm** (Store / Cluster) **BẮT BUỘC ĐẶT Ở VỊ TRÍ LỰA CHỌN ĐẦU TIÊN VÀ NẰM RIÊNG LẺ TRÊN 1 DÒNG ĐỘC LẬP**, có thể kết hợp cùng các nút thao tác trực tiếp theo ST (Nạp số liệu, Sửa số liệu, Điểm danh ca, Cấu hình Target).
+       - **Dòng 2**: Các tiêu chí bộ lọc khác (Kỳ tháng, Ngày chốt, Lịch tuần Thứ Hai, Chế độ xem, Phạm vi xuất) kết hợp cụm nút hành động xuất báo cáo (`ReportActionButtons`).
   - **Mục đích**: Người dùng (Quản lý khu vực, Quản lý ST, Nhân viên) luôn chủ động xác định đúng phạm vi đơn vị (ST/cụm) mình đang phụ trách trước tiên, trực quan, không bị lẫn với các tiêu chí thời gian hay tùy chọn phức tạp.
 
 ## 11. QUY CHUẨN HIỂN THỊ CỘT NHÂN VIÊN TRONG BẢNG DỮ LIỆU (EMPLOYEE COLUMN STANDARD)

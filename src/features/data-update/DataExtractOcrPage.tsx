@@ -221,6 +221,7 @@ export default function DataExtractOcrPage() {
     const [storesData, setStoresData] = useState<StoreReportingData[]>([]);
     const [isSaving, setIsSaving] = useState<boolean>(false);
     const [isSaved, setIsSaved] = useState<boolean>(false);
+    const [isRealtimeDetected, setIsRealtimeDetected] = useState<boolean>(false);
     const [toastMessage, setToastMessage] = useState<string>('');
 
     // 7. Dữ liệu ST & danh mục từ Cloud & Kiểm tra trùng phiên
@@ -387,6 +388,9 @@ export default function DataExtractOcrPage() {
                 const info = [result.reportTime, result.reportDate ? formatDate(result.reportDate) : ''].filter(Boolean).join(' ngày ');
                 setScreenshotTimestamp(info);
             }
+
+            // Nhận diện xem ảnh nạp có phải là ảnh Realtime hay không
+            setIsRealtimeDetected(Boolean(result.isRealtime));
 
             setStoresData(result.stores);
             setIsSaved(false);
@@ -666,6 +670,35 @@ export default function DataExtractOcrPage() {
                     sqlDdl={DAILY_BUSINESS_RECORDS_SQL}
                     customMessage={isSaved ? 'Số liệu kinh doanh đã được lưu an toàn trên Supabase Cloud.' : undefined}
                 />
+
+                {/* 1b. Cảnh báo nhận diện ảnh Realtime trên trang Lũy Kế Tháng */}
+                {isRealtimeDetected && (
+                    <div className="p-4 bg-amber-50 border border-amber-300 rounded-2xl shadow-xs text-amber-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2">
+                        <div className="flex items-start gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0 border border-amber-300">
+                                <AlertTriangle className="w-5 h-5 text-amber-600" />
+                            </div>
+                            <div>
+                                <h3 className="text-sm font-black flex items-center gap-1.5 text-amber-950">
+                                    <span>⚠️ Phát hiện ảnh thi đua REALTIME trong ngày (cột TARGET NGÀY)</span>
+                                </h3>
+                                <p className="text-xs text-amber-800 font-medium mt-0.5 leading-relaxed">
+                                    Trang này dùng để lưu số liệu <strong>LŨY KẾ CẢ THÁNG</strong> (Target tháng).
+                                    Nếu bạn muốn cập nhật bảng Realtime theo dõi tiến độ trong ngày cho Quản lý &amp; Nhân viên, hãy nạp tại trang <strong>Báo Cáo Ngày Realtime</strong>.
+                                </p>
+                            </div>
+                        </div>
+
+                        <Link
+                            to="/bao-cao-ngay"
+                            className="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black transition-all shadow-xs flex items-center justify-center gap-2 shrink-0 cursor-pointer"
+                            title="Chuyển đến trang Báo Cáo Ngày Realtime để nạp số liệu thi đua trong ngày"
+                        >
+                            <span>Sang Báo Cáo Realtime</span>
+                            <ArrowRight className="w-4 h-4" />
+                        </Link>
+                    </div>
+                )}
 
                 {/* 1b. Banner gợi ý mở xem báo cáo tháng sau khi nạp / lưu thành công */}
                 {isSaved && storesData.length > 0 && (

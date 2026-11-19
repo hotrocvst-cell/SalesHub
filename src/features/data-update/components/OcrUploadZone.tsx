@@ -320,7 +320,7 @@ export default function OcrUploadZone({
                             <p className="text-[10.5px] text-purple-900 bg-purple-50/80 border border-purple-200 px-2 py-1 rounded-lg mt-1.5 font-medium leading-relaxed">
                                 {mode === 'STORE' ? (
                                     <>
-                                        <strong>Ảnh thi đua cụm:</strong> Hỗ trợ bảng ma trận cụm (Hàng: Chương trình · Cột: Các ST) hoặc bảng dọc Dark Mode.
+                                        <strong>Ảnh thi đua cụm:</strong> Hỗ trợ Ma trận Realtime (cột Target Ngày), Ma trận Lũy kế hoặc bảng dọc Dark Mode.
                                     </>
                                 ) : (
                                     <>

@@ -1,10 +1,11 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import html2canvas from 'html2canvas';
 import {
     formatValue,
     formatDate,
     getTodayDateString,
+    getYesterdayDateString,
     isStoreMatch,
     getShortStoreName,
     formatStoreDisplayName,
@@ -51,6 +52,7 @@ import {
     Lock,
     Camera,
     Database,
+    RefreshCw,
     X,
     Check
 } from 'lucide-react';
@@ -59,6 +61,7 @@ import { useUserStoreFilter } from '../../shared/hooks/useUserStoreFilter';
 import ReportActionButtons, { type AssessmentTemplate } from '../../shared/components/report/ReportActionButtons';
 import { calculate8KScale } from '../../shared/utils/exportImage';
 import CloudDataSyncStatusBanner from '../../shared/components/report/CloudDataSyncStatusBanner';
+import ReportDataFreshnessBar from '../../shared/components/report/ReportDataFreshnessBar';
 import DailyEmployeeRevenueOcrModal from './components/DailyEmployeeRevenueOcrModal';
 import {
     DAILY_EMPLOYEE_REVENUE_SESSIONS_SQL,
@@ -204,39 +207,37 @@ export default function DailyEmployeeRevenueReportPage() {
     }, [selectedStore]);
 
     // Tự động tải phiên dữ liệu nhân viên từ Supabase Cloud khi thay đổi ST hoặc ngày
-    useEffect(() => {
-        let isMounted = true;
-        const loadCloudSession = async () => {
-            if (!selectedStore) {
-                setCloudSession(null);
-                return;
+    const loadCloudSession = useCallback(async () => {
+        if (!selectedStore) {
+            setCloudSession(null);
+            return;
+        }
+        setIsLoadingCloud(true);
+        const res = await fetchDailyEmployeeSession(selectedStore, reportDate);
+        setIsLoadingCloud(false);
+        if (res.isTableMissing) {
+            setIsTableMissing(true);
+        } else {
+            setIsTableMissing(false);
+        }
+        if (res.success && res.data) {
+            setCloudSession(res.data);
+            // Nếu chưa dán dữ liệu thủ công, nạp bản ghi từ Cloud
+            if (!rawText.trim()) {
+                setCustomRecords(res.data.records);
             }
-            setIsLoadingCloud(true);
-            const res = await fetchDailyEmployeeSession(selectedStore, reportDate);
-            if (!isMounted) return;
-            setIsLoadingCloud(false);
-            if (res.isTableMissing) {
-                setIsTableMissing(true);
-            } else {
-                setIsTableMissing(false);
+        } else {
+            setCloudSession(null);
+            // Nếu không có trên cloud và cũng không dán thủ công
+            if (!rawText.trim()) {
+                setCustomRecords(null);
             }
-            if (res.success && res.data) {
-                setCloudSession(res.data);
-                // Nếu chưa dán dữ liệu thủ công, nạp bản ghi từ Cloud
-                if (!rawText.trim()) {
-                    setCustomRecords(res.data.records);
-                }
-            } else {
-                setCloudSession(null);
-                // Nếu không có trên cloud và cũng không dán thủ công
-                if (!rawText.trim()) {
-                    setCustomRecords(null);
-                }
-            }
-        };
-        loadCloudSession();
-        return () => { isMounted = false; };
+        }
     }, [selectedStore, reportDate, rawText]);
+
+    useEffect(() => {
+        loadCloudSession();
+    }, [loadCloudSession]);
 
     // Tự động nhận diện ST từ văn bản dán và khớp với dropdown
     useEffect(() => {
@@ -812,136 +813,171 @@ export default function DailyEmployeeRevenueReportPage() {
                 </div>
             )}
 
-            {/* Banner trạng thái lưu trữ Supabase Cloud (Rule 8) */}
+            {/* TẦNG 1: BANNER BÁO CÁO TRẠNG THÁI LƯU TRỮ CLOUD (RULE 8) */}
             <div data-html2canvas-ignore="true" data-export-ignore="true">
                 <CloudDataSyncStatusBanner
+                    compact={true}
                     storageType={cloudSession ? 'cloud' : 'local'}
                     syncStatus={cloudSession ? 'synced' : 'unsynced'}
                     tableReady={!isTableMissing}
                     tableName="daily_employee_revenue_sessions"
                     sqlDdl={isAdmin ? DAILY_EMPLOYEE_REVENUE_SESSIONS_SQL : undefined}
                     lastSyncTime={cloudSession?.updated_at || cloudSession?.session_time}
-                    customMessage={
-                        cloudSession
-                            ? `Phiên lưu: ${cloudSession.store_name} • Ngày: ${formatDate(cloudSession.report_date)} • Cập nhật: ${new Date(cloudSession.updated_at || cloudSession.session_time || '').toLocaleTimeString('vi-VN')}`
-                            : undefined
-                    }
+                    onSyncNow={loadCloudSession}
                 />
             </div>
 
-            {/* ========================================================= */}
-            {/* 1. KHU VỰC ĐIỀU KHIỂN & BỘ LỌC ST                   */}
-            {/* ========================================================= */}
-            <div className="bg-white rounded-3xl border border-slate-200 p-4 sm:p-5 shadow-sm space-y-4">
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                    {/* Tiêu đề & Chọn ST / Ngày */}
-                    <div className="space-y-1.5">
+            {/* TẦNG 2: CHI TIẾT PHIÊN DỮ LIỆU & ĐỘ MỚI CLOUD */}
+            <ReportDataFreshnessBar
+                latestDataDate={cloudSession?.report_date || reportDate}
+                expectedDate={getYesterdayDateString()}
+                sessionTitle={cloudSession?.screenshot_time_str ? `Phiên ${cloudSession.screenshot_time_str}` : (cloudSession?.session_time ? `Phiên ${new Date(cloudSession.session_time).toLocaleTimeString('vi-VN')}` : undefined)}
+                lastUpdatedAt={cloudSession?.updated_at || cloudSession?.session_time}
+                lastUpdatedBy={cloudSession?.updated_by}
+                storeName={selectedStore === 'all' ? 'Toàn Cụm ST' : selectedStore}
+                actionUrl="/cap-nhat-nv"
+                actionLabel="Cập nhật phiên NV"
+                canUpdate={!currentUser?.is_guest && (isAdmin || ['ADMIN', 'QUAN_LY', 'TRUONG_CA'].includes(currentUser?.role || ''))}
+                compact={true}
+            />
 
-                        <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-                            Báo Cáo Doanh Thu Nhân Viên
-                        </h1>
+            {/* TẦNG 3: KHỐI TIÊU ĐỀ BÁO CÁO */}
+            <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-blue-600/10 border border-blue-500/20 flex items-center justify-center text-blue-700 font-bold shrink-0">
+                        <Users className="w-5 h-5" aria-hidden="true" />
+                    </div>
+                    <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 tracking-tight">
+                                Báo Cáo Doanh Thu Nhân Viên
+                            </h1>
+                            <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border bg-blue-100 text-blue-900 border-blue-200">
+                                Theo Ca / Ngày
+                            </span>
+                        </div>
+                        <p className="text-xs text-slate-600 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                            <span>Kỳ số liệu:</span>
+                            <span className="text-blue-800 font-bold bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded text-[10px]">
+                                Ngày {formatDate(cloudSession?.report_date || reportDate)}
+                            </span>
+                            <span>• ST:</span>
+                            <span className="text-slate-800 font-bold">
+                                {formatStoreDisplayName(selectedStore)}
+                            </span>
+                        </p>
+                    </div>
+                </div>
 
-                        {/* 1. Chọn ST (Dòng độc lập đầu tiên - Rule 10 Convention) */}
-                        <div className="pt-1.5 pb-1">
-                            <div className={`w-full sm:w-auto inline-flex items-center gap-2 px-3.5 py-2 min-h-[38px] rounded-xl border text-xs font-bold transition-all ${isLockedToSingleStore
-                                ? 'bg-amber-50/90 border-amber-300 text-amber-900 shadow-sm'
-                                : 'bg-slate-50 border-slate-300 hover:border-emerald-500 text-slate-800 shadow-sm'
-                                }`}>
-                                {isLockedToSingleStore ? (
-                                    <Lock className="w-4 h-4 text-amber-700 shrink-0" aria-hidden="true" />
-                                ) : (
-                                    <Store className="w-4 h-4 text-emerald-700 shrink-0" aria-hidden="true" />
-                                )}
-                                <label htmlFor="daily-emp-store-select" className="text-slate-700 font-bold whitespace-nowrap shrink-0">
-                                    ST:
-                                </label>
-                                <select
-                                    id="daily-emp-store-select"
-                                    name="store"
-                                    value={selectedStore}
-                                    onChange={e => setSelectedStore(e.target.value)}
-                                    disabled={isLockedToSingleStore}
-                                    title={currentUser?.is_guest ? 'Tài khoản trải nghiệm sử dụng dữ liệu ST 10335 - AAR_BRV_VTA - 290 Trương Công Định' : (isLockedToSingleStore ? 'Tài khoản nhân viên được cố định theo ST đã đăng ký' : undefined)}
-                                    className={`bg-transparent font-black outline-none min-w-0 flex-1 sm:min-w-[260px] ${isLockedToSingleStore
-                                        ? 'cursor-not-allowed text-amber-900'
-                                        : 'cursor-pointer text-slate-900'
-                                        }`}
+                <div className="flex items-center gap-2 self-end sm:self-auto flex-wrap">
+                    {/* Nút mở Danh sách nhân sự đi làm trong ca */}
+                    <button
+                        type="button"
+                        aria-expanded={isRosterModalOpen}
+                        onClick={() => setIsRosterModalOpen(!isRosterModalOpen)}
+                        className={`px-3 py-1.5 min-h-[34px] rounded-xl text-xs font-bold transition flex items-center gap-1.5 border cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${isRosterModalOpen
+                            ? 'bg-blue-700 text-white border-blue-700 shadow-sm'
+                            : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-300'
+                            }`}
+                        title="Điểm danh và chọn thêm nhân viên đi làm nhưng chưa có biến động doanh thu"
+                    >
+                        <UserCheck className={`w-4 h-4 ${isRosterModalOpen ? 'text-white' : 'text-emerald-700'}`} aria-hidden="true" />
+                        <span>Điểm danh ca ({activeShiftSelectedCount}/{currentStoreEmployees.length})</span>
+                        {isRosterModalOpen ? <ChevronUp className="w-3.5 h-3.5" aria-hidden="true" /> : <ChevronDown className="w-3.5 h-3.5" aria-hidden="true" />}
+                    </button>
+                </div>
+            </div>
+
+            {/* TẦNG 4: THANH ĐIỀU KHIỂN & BỘ LỌC CHUẨN RULE 10 (2 DÒNG ĐỘC LẬP) */}
+            <div className="bg-slate-50/90 border border-slate-200/90 rounded-2xl p-3.5 sm:p-4 space-y-3">
+                {/* DÒNG 1: BỘ LỌC ST / CỤM (BẮT BUỘC ĐẦU TIÊN & NẰM RIÊNG LẺ 1 DÒNG) */}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                    <div className="flex-1">
+                        <div className="flex items-center justify-between mb-1.5 flex-wrap gap-1.5">
+                            <label htmlFor="daily-emp-store-select" className="text-[11px] font-bold text-slate-700 uppercase flex items-center gap-1.5">
+                                <Store className="w-3.5 h-3.5 text-blue-600" aria-hidden="true" />
+                                <span>ST / Cụm</span>
+                            </label>
+                            {/* Nút hành động trực tiếp theo ST: Nhập liệu OCR & Dán dữ liệu */}
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                                <button
+                                    type="button"
+                                    onClick={() => setIsOcrModalOpen(true)}
+                                    className="text-[11px] font-bold text-emerald-800 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 px-2.5 py-1.5 min-h-[32px] rounded-lg flex items-center gap-1.5 transition cursor-pointer"
+                                    title="Quét ảnh chụp màn hình BI Mobile bằng AI Gemini Vision (Hỗ trợ phím Ctrl+V và chọn nhiều ảnh)"
                                 >
-                                    {canViewAllStores && (
-                                        <option value="all">Toàn Cụm ST</option>
-                                    )}
-                                    {allowedStores.map(s => (
-                                        <option key={s.id || s.name} value={s.name}>
-                                            {formatStoreDisplayName(s.name)}
-                                        </option>
-                                    ))}
-                                </select>
-                                {isLockedToSingleStore && (
-                                    <span className="text-[10px] bg-amber-200/80 text-amber-900 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider shrink-0">
-                                        {currentUser?.is_guest ? 'Trải nghiệm' : 'Đã khóa'}
-                                    </span>
-                                )}
+                                    <Camera className="w-3.5 h-3.5 text-emerald-700 shrink-0" aria-hidden="true" />
+                                    <span>Nạp Ảnh OCR</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    aria-expanded={isInputExpanded}
+                                    onClick={() => setIsInputExpanded(!isInputExpanded)}
+                                    className="text-[11px] font-bold text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-100 border border-slate-300 px-2.5 py-1.5 min-h-[32px] rounded-lg flex items-center gap-1.5 transition cursor-pointer"
+                                    title="Dán dữ liệu báo cáo dạng văn bản"
+                                >
+                                    <SlidersHorizontal className="w-3.5 h-3.5 text-slate-600" aria-hidden="true" />
+                                    <span>{isInputExpanded ? 'Đóng Ô Dán' : 'Dán Dữ Liệu'}</span>
+                                    {isInputExpanded ? <ChevronUp className="w-3 h-3" aria-hidden="true" /> : <ChevronDown className="w-3 h-3" aria-hidden="true" />}
+                                </button>
                             </div>
                         </div>
 
-                        {/* 2. Tiêu chí bổ trợ: Điểm danh ca (Dòng 2) */}
-                        <div className="flex items-center gap-3 pt-1 flex-wrap">
-                            {/* Nút mở Danh sách nhân sự đi làm trong ca */}
-                            <button
-                                type="button"
-                                aria-expanded={isRosterModalOpen}
-                                onClick={() => setIsRosterModalOpen(!isRosterModalOpen)}
-                                className={`px-3 py-1.5 min-h-[34px] rounded-xl text-xs font-bold transition flex items-center gap-1.5 border cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${isRosterModalOpen
-                                    ? 'bg-blue-700 text-white border-blue-700 shadow-sm'
-                                    : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-300'
+                        <div className={`flex items-center gap-1.5 px-3 py-1.5 min-h-[38px] rounded-xl border text-xs font-bold transition-all w-full ${isLockedToSingleStore
+                            ? 'bg-amber-50/90 border-amber-300 text-amber-900 shadow-sm'
+                            : 'bg-white border-slate-300 text-slate-800 hover:border-blue-400'
+                            }`}>
+                            {isLockedToSingleStore ? (
+                                <Lock className="w-3.5 h-3.5 text-amber-700 shrink-0" aria-hidden="true" />
+                            ) : (
+                                <Store className="w-3.5 h-3.5 text-blue-600 shrink-0" aria-hidden="true" />
+                            )}
+                            <select
+                                id="daily-emp-store-select"
+                                name="store"
+                                value={selectedStore}
+                                onChange={e => setSelectedStore(e.target.value)}
+                                disabled={isLockedToSingleStore}
+                                title={currentUser?.is_guest ? 'Tài khoản trải nghiệm sử dụng dữ liệu ST 10335 - AAR_BRV_VTA - 290 Trương Công Định' : (isLockedToSingleStore ? 'Tài khoản nhân viên được cố định theo ST đã đăng ký' : undefined)}
+                                className={`bg-transparent font-bold outline-none w-full ${isLockedToSingleStore
+                                    ? 'cursor-not-allowed text-amber-900'
+                                    : 'cursor-pointer text-slate-800'
                                     }`}
-                                title="Điểm danh và chọn thêm nhân viên đi làm nhưng chưa có biến động doanh thu"
                             >
-                                <UserCheck className={`w-4 h-4 ${isRosterModalOpen ? 'text-white' : 'text-emerald-700'}`} aria-hidden="true" />
-                                <span>Điểm danh ca ({activeShiftSelectedCount}/{currentStoreEmployees.length})</span>
-                                {isRosterModalOpen ? <ChevronUp className="w-3.5 h-3.5" aria-hidden="true" /> : <ChevronDown className="w-3.5 h-3.5" aria-hidden="true" />}
-                            </button>
+                                {canViewAllStores && (
+                                    <option value="all">Toàn Cụm ST</option>
+                                )}
+                                {allowedStores.map(s => (
+                                    <option key={s.id || s.name} value={s.name}>
+                                        {formatStoreDisplayName(s.name)}
+                                    </option>
+                                ))}
+                            </select>
+                            {isLockedToSingleStore && (
+                                <span className="text-[10px] bg-amber-200/80 text-amber-900 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider shrink-0">
+                                    {currentUser?.is_guest ? 'Trải nghiệm' : 'Đã khóa'}
+                                </span>
+                            )}
                         </div>
                     </div>
+                </div>
 
-                    {/* Bộ công cụ xuất ảnh & tác vụ */}
-                    <div className="flex flex-wrap items-center gap-2.5">
-                        {/* 0. Nút Quét OCR Báo Cáo BI */}
-                        <button
-                            type="button"
-                            onClick={() => setIsOcrModalOpen(true)}
-                            className="px-3.5 py-2 min-h-[36px] bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
-                            title="Quét ảnh chụp màn hình BI Mobile bằng AI Gemini Vision (Hỗ trợ phím Ctrl+V và chọn nhiều ảnh)"
-                        >
-                            <Camera className="w-4 h-4 shrink-0" aria-hidden="true" />
-                            <span>Nhập liệu</span>
-                        </button>
-
-                        {/* 1. Nút Mở Ô Dán Báo Cáo */}
-                        <button
-                            type="button"
-                            aria-expanded={isInputExpanded}
-                            onClick={() => setIsInputExpanded(!isInputExpanded)}
-                            className="px-3.5 py-2 min-h-[36px] bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 border border-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
-                        >
-                            <SlidersHorizontal className="w-4 h-4 text-slate-700" aria-hidden="true" />
-                            <span>{isInputExpanded ? 'Đóng Ô Dán' : 'Dán Dữ Liệu Mới'}</span>
-                            {isInputExpanded ? <ChevronUp className="w-3.5 h-3.5" aria-hidden="true" /> : <ChevronDown className="w-3.5 h-3.5" aria-hidden="true" />}
-                        </button>
-
-                        {/* 2. Chọn phạm vi xuất ảnh */}
+                {/* DÒNG 2: TIÊU CHÍ PHẠM VI XUẤT, TẢI LẠI & CỤM ACTION BUTTONS */}
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pt-2 border-t border-slate-200/80">
+                    <div className="flex items-center gap-2 flex-wrap">
+                        {/* Chọn phạm vi xuất ảnh */}
                         <div
                             role="group"
                             aria-label="Phạm vi xuất ảnh"
-                            className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bold flex-wrap gap-0.5"
+                            className="flex items-center bg-white p-1 rounded-xl border border-slate-200 text-xs font-bold flex-wrap gap-0.5 shadow-2xs"
                         >
                             <span className="text-slate-600 px-1.5 text-[11px]">Phạm vi:</span>
                             <button
                                 type="button"
                                 aria-pressed={exportScope === 'ALL'}
                                 onClick={() => setExportScope('ALL')}
-                                className={`px-2.5 py-1.5 min-h-[32px] rounded-lg transition cursor-pointer text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${exportScope === 'ALL'
-                                    ? 'bg-white text-emerald-800 shadow-sm font-extrabold'
+                                className={`px-2.5 py-1 min-h-[30px] rounded-lg transition cursor-pointer text-xs ${exportScope === 'ALL'
+                                    ? 'bg-blue-600 text-white shadow-2xs font-extrabold'
                                     : 'text-slate-700 hover:text-slate-900'
                                     }`}
                                 title="Xuất toàn bộ Bảng kèm Tóm tắt"
@@ -952,8 +988,8 @@ export default function DailyEmployeeRevenueReportPage() {
                                 type="button"
                                 aria-pressed={exportScope === 'TABLE_ONLY'}
                                 onClick={() => setExportScope('TABLE_ONLY')}
-                                className={`px-2.5 py-1.5 min-h-[32px] rounded-lg transition cursor-pointer text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${exportScope === 'TABLE_ONLY'
-                                    ? 'bg-white text-emerald-800 shadow-sm font-extrabold'
+                                className={`px-2.5 py-1 min-h-[30px] rounded-lg transition cursor-pointer text-xs ${exportScope === 'TABLE_ONLY'
+                                    ? 'bg-blue-600 text-white shadow-2xs font-extrabold'
                                     : 'text-slate-700 hover:text-slate-900'
                                     }`}
                                 title="Chỉ xuất phần Bảng chi tiết"
@@ -964,8 +1000,8 @@ export default function DailyEmployeeRevenueReportPage() {
                                 type="button"
                                 aria-pressed={exportScope === 'SUMMARY_ONLY'}
                                 onClick={() => setExportScope('SUMMARY_ONLY')}
-                                className={`px-2.5 py-1.5 min-h-[32px] rounded-lg transition cursor-pointer text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${exportScope === 'SUMMARY_ONLY'
-                                    ? 'bg-white text-emerald-800 shadow-sm font-extrabold'
+                                className={`px-2.5 py-1 min-h-[30px] rounded-lg transition cursor-pointer text-xs ${exportScope === 'SUMMARY_ONLY'
+                                    ? 'bg-blue-600 text-white shadow-2xs font-extrabold'
                                     : 'text-slate-700 hover:text-slate-900'
                                     }`}
                                 title="Chỉ xuất phần Tóm tắt & Nhắc nhở"
@@ -974,7 +1010,20 @@ export default function DailyEmployeeRevenueReportPage() {
                             </button>
                         </div>
 
-                        {/* Cụm button chuẩn dùng chung: Nhận xét 3 mẫu, Tải ảnh, Copy ảnh, Copy Text */}
+                        {/* Nút Làm Mới */}
+                        <button
+                            type="button"
+                            aria-label="Tải lại số liệu"
+                            onClick={() => loadCloudSession()}
+                            className="p-2 min-h-[36px] min-w-[36px] flex items-center justify-center bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-xl transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 shadow-2xs"
+                            title="Tải lại số liệu phiên từ Cloud"
+                        >
+                            <RefreshCw className="w-4 h-4 text-blue-700" aria-hidden="true" />
+                        </button>
+                    </div>
+
+                    {/* Cụm Action Buttons: Nhận xét 3 mẫu, Tải ảnh, Copy ảnh, Copy Text */}
+                    <div className="flex items-center gap-2 self-end lg:self-auto">
                         <ReportActionButtons
                             onExportImage={handleDownloadImage}
                             onCopyImage={handleCopyImageClipboard}

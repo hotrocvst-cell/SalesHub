@@ -1,38 +1,33 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import html2canvas from 'html2canvas';
 import { calculate8KScale, buildReportImageFileName } from '../../shared/utils/exportImage';
-import {
-    fetchMonthlyRecordsForChart,
-    type BusinessDayRecord
-} from '../../core/lib/storage';
-import { formatValue, getShortStoreName, formatDate, isStoreMatch } from '../../core/lib/formatters';
-import { GUEST_DEMO_STORE, isDemoDateAllowed } from '../../core/lib/guestDemoStoreService';
+import { formatValue, getShortStoreName, formatDate } from '../../core/lib/formatters';
+import { GUEST_DEMO_STORE } from '../../core/lib/guestDemoStoreService';
 import { useAuth } from '../../shared/contexts/AuthContext';
 import {
     TrendingUp,
     Store,
     RefreshCw,
-    Coins,
-    Target,
-    Camera,
+    Lock,
+    BarChart2,
+    Building2,
+    Calendar,
     Layers,
-    ArrowUpRight,
-    Lock
+    Target
 } from 'lucide-react';
+import CloudDataSyncStatusBanner from '../../shared/components/report/CloudDataSyncStatusBanner';
+import ReportDataFreshnessBar from '../../shared/components/report/ReportDataFreshnessBar';
 import ReportActionButtons from '../../shared/components/report/ReportActionButtons';
 
-interface DailyAggregatedData {
-    reportDate: string;
-    dayLabel: string;
-    revenueActual: number;
-    revenueTarget: number;
-    revenueInstallment: number;
-    dailyPace: number;
-    completionRate: number;
-    storesCount: number;
-}
+import { useRevenueTrendData } from './hooks/useRevenueTrendData';
+import RevenueTrendKpiCards from './components/RevenueTrendKpiCards';
+import RevenueTrendChart from './components/RevenueTrendChart';
+import RevenueTrendDailyTable from './components/RevenueTrendDailyTable';
+import RevenueTrendStoreComparisonTable from './components/RevenueTrendStoreComparisonTable';
 
 export default function RevenueTrendPage() {
+    const navigate = useNavigate();
     const chartRef = useRef<HTMLDivElement | null>(null);
     const { currentUser, isAdmin, canAccessStore } = useAuth();
     const isGuest = Boolean(currentUser?.is_guest);
@@ -42,6 +37,8 @@ export default function RevenueTrendPage() {
     const [selectedMonth, setSelectedMonth] = useState<number>(() => isGuest ? 10 : today.getMonth() + 1);
     const [selectedYear, setSelectedYear] = useState<number>(() => isGuest ? 2026 : today.getFullYear());
     const [selectedStore, setSelectedStore] = useState<string>(() => isGuest ? getShortStoreName(GUEST_DEMO_STORE) : 'Tổng');
+    const [activeTab, setActiveTab] = useState<'overview' | 'stores'>('overview');
+    const [isCapturing, setIsCapturing] = useState<boolean>(false);
 
     // Cố định tháng 10/2026 cho tài khoản trải nghiệm
     useEffect(() => {
@@ -51,48 +48,23 @@ export default function RevenueTrendPage() {
         }
     }, [isGuest, selectedMonth, selectedYear]);
 
-    const [rawRecords, setRawRecords] = useState<BusinessDayRecord[]>([]);
-    const [loading, setLoading] = useState<boolean>(true);
-    const [isCapturing, setIsCapturing] = useState<boolean>(false);
-
-    // 1. TẢI DỮ LIỆU TỪ SUPABASE
-    const loadData = async () => {
-        setLoading(true);
-        const res = await fetchMonthlyRecordsForChart(selectedMonth, selectedYear);
-        if (res.success && res.data) {
-            setRawRecords(res.data);
-        } else {
-            setRawRecords([]);
-        }
-        setLoading(false);
-    };
-
-    useEffect(() => {
-        loadData();
-    }, [selectedMonth, selectedYear]);
-
-    // 2. DANH SÁCH ST ĐỘC LẬP (LOẠI BỎ BẢN GHI TỔNG VÀ LỌC THEO PHÂN QUYỀN USER)
-    const storeList = useMemo(() => {
-        if (isGuest) {
-            return [getShortStoreName(GUEST_DEMO_STORE)];
-        }
-        const set = new Set<string>();
-        rawRecords.forEach(r => {
-            const sName = getShortStoreName(r.storeName);
-            if (sName && sName !== 'Tổng' && !/^(tổng|tong)/i.test(r.storeName)) {
-                if (isAdmin || canAccessStore(r.storeName) || canAccessStore(sName)) {
-                    set.add(sName);
-                }
-            }
-        });
-        const list = Array.from(set).sort();
-        if (list.length > 0) return list;
-
-        const accessible = currentUser?.accessible_stores && currentUser.accessible_stores.length > 0
-            ? currentUser.accessible_stores
-            : (currentUser?.store_name ? [currentUser.store_name] : []);
-        return Array.from(new Set(accessible.map(s => getShortStoreName(s))));
-    }, [rawRecords, isGuest, isAdmin, canAccessStore, currentUser]);
+    // Sử dụng custom hook quản lý dữ liệu và thuật toán nhịp độ
+    const {
+        rawRecords,
+        loading,
+        storeList,
+        timelineData,
+        metrics,
+        storePaceRankings,
+        loadData
+    } = useRevenueTrendData(
+        selectedMonth,
+        selectedYear,
+        selectedStore,
+        currentUser,
+        isAdmin,
+        canAccessStore
+    );
 
     const isLockedToSingleStore = (!isAdmin && isStaff) || isGuest || storeList.length === 1;
     const canViewAllStores = !isGuest && (isAdmin || (!isStaff && storeList.length > 1));
@@ -119,170 +91,6 @@ export default function RevenueTrendPage() {
         }
     }, [isGuest, isLockedToSingleStore, storeList, selectedStore, canViewAllStores]);
 
-    // 3. TẬP HỢP SỐ LIỆU VÀ TÍNH TOÁN NHỊP PHÁT SINH CHUẨN XÁC
-    const timelineData = useMemo<DailyAggregatedData[]>(() => {
-        if (rawRecords.length === 0) return [];
-
-        // Lọc và chuẩn hóa bản ghi: nếu cùng 1 shop có nhiều bản ghi trong cùng 1 ngày, lấy bản ghi có doanh thu mới nhất/cao nhất
-        const cleanedRecords: BusinessDayRecord[] = [];
-        const storeDateMap = new Map<string, BusinessDayRecord>();
-
-        rawRecords.forEach(r => {
-            if (!r.reportDate) return;
-            const sName = getShortStoreName(r.storeName);
-
-            // Chốt chặn phân quyền theo ST phụ trách
-            if (isGuest) {
-                if (!isStoreMatch(r.storeName, GUEST_DEMO_STORE) && !isStoreMatch(r.storeName, '838679')) return;
-                if (!isDemoDateAllowed(r.reportDate)) return;
-            } else if (!isAdmin) {
-                if (!canAccessStore(r.storeName) && !canAccessStore(sName)) return;
-            }
-
-            const key = `${r.reportDate}_${sName}`;
-            const existing = storeDateMap.get(key);
-            if (!existing || (Number(r.revenueActual) || 0) > (Number(existing.revenueActual) || 0)) {
-                storeDateMap.set(key, r);
-            }
-        });
-
-        storeDateMap.forEach(r => cleanedRecords.push(r));
-
-        // Nhóm bản ghi theo từng ST riêng biệt để tính nhịp từng shop trước
-        const recordsByStore: Record<string, BusinessDayRecord[]> = {};
-        cleanedRecords.forEach(r => {
-            const sName = getShortStoreName(r.storeName);
-            if (!recordsByStore[sName]) recordsByStore[sName] = [];
-            recordsByStore[sName].push(r);
-        });
-
-        // Map lưu nhịp phát sinh theo từng shop từng ngày: key = `${date}_${sName}` => dailyPace
-        const paceByStoreDate = new Map<string, number>();
-
-        Object.entries(recordsByStore).forEach(([sName, sRecords]) => {
-            // Sắp xếp ngày tăng dần
-            sRecords.sort((a, b) => new Date(a.reportDate).getTime() - new Date(b.reportDate).getTime());
-
-            sRecords.forEach((rec, idx) => {
-                const curRev = Number(rec.revenueActual) || 0;
-                let pace = 0;
-
-                if (idx === 0) {
-                    const dayNum = new Date(rec.reportDate).getDate();
-                    const passed = Number(rec.passedDays) || dayNum || 1;
-                    if (dayNum === 1 || passed <= 1) {
-                        pace = curRev;
-                    } else {
-                        // Nếu ngày đầu ghi nhận đã là giữa tháng, tính nhịp bình quân ngày đã qua
-                        pace = Math.round(curRev / passed);
-                    }
-                } else {
-                    const prevRev = Number(sRecords[idx - 1].revenueActual) || 0;
-                    const prevDate = new Date(sRecords[idx - 1].reportDate);
-                    const curDate = new Date(rec.reportDate);
-                    const diffDays = Math.max(1, Math.round((curDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24)));
-
-                    const diffRev = Math.max(0, curRev - prevRev);
-                    // Nếu ngày liên tiếp thì lấy nguyên số chênh lệch, nếu cách nhiều ngày thì chia đều theo ngày
-                    pace = diffDays === 1 ? diffRev : Math.round(diffRev / diffDays);
-                }
-
-                paceByStoreDate.set(`${rec.reportDate}_${sName}`, pace);
-            });
-        });
-
-        // Nhóm theo ngày để tổng hợp lên bảng / biểu đồ
-        const groupedByDate: Record<string, BusinessDayRecord[]> = {};
-        cleanedRecords.forEach(r => {
-            if (!groupedByDate[r.reportDate]) groupedByDate[r.reportDate] = [];
-            groupedByDate[r.reportDate].push(r);
-        });
-
-        const dates = Object.keys(groupedByDate).sort().filter(d => {
-            if (isGuest) return isDemoDateAllowed(d);
-            return true;
-        });
-        const dailyResult: DailyAggregatedData[] = [];
-
-        dates.forEach(date => {
-            const recordsInDate = groupedByDate[date];
-
-            if (selectedStore === 'Tổng') {
-                // Lọc bỏ dòng mang tên Tổng nếu có sẵn và chỉ tính các ST thuộc quyền phụ trách
-                const memberStores = recordsInDate.filter(r => {
-                    const sName = getShortStoreName(r.storeName);
-                    if (sName === 'Tổng' || /^(tổng|tong)/i.test(r.storeName)) return false;
-                    return isAdmin || canAccessStore(r.storeName) || canAccessStore(sName);
-                });
-                const targetRecords = memberStores.length > 0 ? memberStores : recordsInDate.filter(r => {
-                    const sName = getShortStoreName(r.storeName);
-                    if (sName === 'Tổng' || /^(tổng|tong)/i.test(r.storeName)) return false;
-                    return isAdmin || canAccessStore(r.storeName) || canAccessStore(sName);
-                });
-
-                const totalActual = targetRecords.reduce((sum, r) => sum + (Number(r.revenueActual) || 0), 0);
-                const totalTarget = targetRecords.reduce((sum, r) => sum + (Number(r.revenueTarget) || 0), 0);
-                const totalInstallment = targetRecords.reduce((sum, r) => sum + (Number(r.revenueInstallment) || 0), 0);
-                const completionRate = totalTarget > 0 ? (totalActual / totalTarget * 100) : 0;
-
-                // Tổng nhịp cụm = tổng nhịp của từng shop thành viên trong ngày đó
-                const totalPace = targetRecords.reduce((sum, r) => {
-                    const sName = getShortStoreName(r.storeName);
-                    return sum + (paceByStoreDate.get(`${date}_${sName}`) || 0);
-                }, 0);
-
-                dailyResult.push({
-                    reportDate: date,
-                    dayLabel: `Ngày ${formatDate(date, 'dd/mm')}`,
-                    revenueActual: totalActual,
-                    revenueTarget: totalTarget,
-                    revenueInstallment: totalInstallment,
-                    dailyPace: totalPace,
-                    completionRate,
-                    storesCount: targetRecords.length
-                });
-            } else {
-                // Xem riêng 1 ST
-                const shopRecord = recordsInDate.find(r => 
-                    getShortStoreName(r.storeName) === selectedStore || 
-                    isStoreMatch(r.storeName, selectedStore) ||
-                    (isGuest && (isStoreMatch(r.storeName, GUEST_DEMO_STORE) || isStoreMatch(r.storeName, '838679')))
-                );
-                if (shopRecord) {
-                    const actual = Number(shopRecord.revenueActual) || 0;
-                    const target = Number(shopRecord.revenueTarget) || 0;
-                    const installment = Number(shopRecord.revenueInstallment) || 0;
-                    const completionRate = target > 0 ? (actual / target * 100) : 0;
-                    const pace = paceByStoreDate.get(`${date}_${getShortStoreName(shopRecord.storeName)}`) || paceByStoreDate.get(`${date}_${selectedStore}`) || 0;
-
-                    dailyResult.push({
-                        reportDate: date,
-                        dayLabel: `Ngày ${formatDate(date, 'dd/mm')}`,
-                        revenueActual: actual,
-                        revenueTarget: target,
-                        revenueInstallment: installment,
-                        dailyPace: pace,
-                        completionRate,
-                        storesCount: 1
-                    });
-                }
-            }
-        });
-
-        return dailyResult;
-    }, [rawRecords, selectedStore]);
-
-    // BẢN GHI MỚI NHẤT TRONG TIMELINE
-    const latestData = useMemo(() => {
-        if (timelineData.length === 0) return null;
-        return timelineData[timelineData.length - 1];
-    }, [timelineData]);
-
-    // Giá trị nhịp ngày cao nhất để chuẩn hóa thanh biểu đồ
-    const maxPace = useMemo(() => {
-        return Math.max(...timelineData.map(d => d.dailyPace), 1);
-    }, [timelineData]);
-
     // CHỤP BÁO CÁO CHUẨN 8K VỚI AUTO-SAFETY CLAMP
     const handleCapture = async () => {
         if (!chartRef.current) return;
@@ -296,7 +104,11 @@ export default function RevenueTrendPage() {
                 scale: scale,
                 backgroundColor: '#ffffff',
                 useCORS: true,
-                logging: false
+                logging: false,
+                ignoreElements: (el) =>
+                    el.getAttribute('data-html2canvas-ignore') === 'true' ||
+                    el.getAttribute('data-export-ignore') === 'true' ||
+                    el.getAttribute('data-freshness-bar') === 'true'
             });
             const a = document.createElement('a');
             a.href = canvas.toDataURL('image/png', 1.0);
@@ -325,7 +137,11 @@ export default function RevenueTrendPage() {
                 scale: scale,
                 backgroundColor: '#ffffff',
                 useCORS: true,
-                logging: false
+                logging: false,
+                ignoreElements: (el) =>
+                    el.getAttribute('data-html2canvas-ignore') === 'true' ||
+                    el.getAttribute('data-export-ignore') === 'true' ||
+                    el.getAttribute('data-freshness-bar') === 'true'
             });
             canvas.toBlob(async blob => {
                 if (blob && navigator.clipboard && window.ClipboardItem) {
@@ -340,31 +156,98 @@ export default function RevenueTrendPage() {
     };
 
     return (
-        <div className="p-4 sm:p-6 space-y-4 max-w-full mx-auto w-full">
-            {/* THANH ĐIỀU KHIỂN & BỘ LỌC */}
-            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3.5">
-                <div className="flex items-center gap-2.5 border-b border-slate-100 pb-3">
-                    <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-600 flex items-center justify-center font-bold">
+        <div className="p-3.5 sm:p-5 md:p-6 space-y-3.5 max-w-full mx-auto w-full">
+            {/* TẦNG 1: BANNER TRẠNG THÁI CLOUD */}
+            <CloudDataSyncStatusBanner
+                compact={true}
+                storageType="cloud"
+                syncStatus={loading ? 'syncing' : rawRecords.length > 0 ? 'synced' : 'unsynced'}
+                tableReady={true}
+                tableName="daily_business_records"
+            />
+
+            {/* TẦNG 2: THANH ĐỘ MỚI DỮ LIỆU & PHIÊN CHỐT SỐ */}
+            <ReportDataFreshnessBar
+                latestDataDate={metrics.latestDate}
+                sessionTitle={
+                    metrics.latestDate
+                        ? `Nhịp lũy kế T${selectedMonth}/${selectedYear} • Mốc ngày ${formatDate(metrics.latestDate)} (${timelineData.length} ngày ghi nhận)`
+                        : `Chưa có phiên dữ liệu tháng ${selectedMonth}/${selectedYear}`
+                }
+                storeName={selectedStore === 'Tổng' ? 'Toàn Cụm ST' : selectedStore}
+                compact={true}
+            />
+
+            {/* TẦNG 3: CARD TIÊU ĐỀ H1 & CHUYỂN ĐỔI CHẾ ĐỘ XEM */}
+            <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-blue-700 text-white flex items-center justify-center font-bold shadow-xs shrink-0">
                         <TrendingUp className="w-5 h-5" />
                     </div>
                     <div>
-                        <h1 className="text-base font-black text-slate-800 uppercase tracking-wide">
-                            Nhịp Doanh Thu & Diễn Biến Tăng Trưởng
-                        </h1>
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <h1 className="text-base sm:text-lg font-black text-slate-800 uppercase tracking-wide">
+                                Nhịp Doanh Thu & Tốc Độ Về Đích
+                            </h1>
+                            <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200">
+                                T{selectedMonth}/{selectedYear}
+                            </span>
+                            <span
+                                title="Mục tiêu kỳ vọng (vượt trội) được đồng bộ từ Báo Cáo Cụm ST"
+                                className="text-xs font-mono font-black px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1 shadow-2xs"
+                            >
+                                🎯 Kỳ Vọng: {metrics.targetRate}%
+                            </span>
+                        </div>
                         <p className="text-xs text-slate-500 mt-0.5">
-                            Theo dõi nhịp thực thu từng ngày, cộng dồn tổng thể cụm và tiến độ chỉ tiêu tháng {selectedMonth}/{selectedYear}
+                            Phân tích nhịp thực thu từng ngày theo mục tiêu kỳ vọng {metrics.targetRate}%, kiểm soát tốc độ run-rate cần đạt và dự báo về đích
                         </p>
                     </div>
                 </div>
 
-                {/* HÀNG 1: BỘ LỌC ST / CỤM (BẮT BUỘC ĐẦU TIÊN & NẰM RIÊNG LẺ 1 DÒNG) */}
+                {/* Sub-tabs chuyển chế độ xem */}
+                {selectedStore === 'Tổng' && (
+                    <div className="inline-flex rounded-xl bg-slate-100 p-1 text-xs font-bold shrink-0 self-start md:self-auto">
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab('overview')}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
+                                activeTab === 'overview'
+                                    ? 'bg-white text-blue-700 shadow-2xs font-black'
+                                    : 'text-slate-600 hover:text-slate-900'
+                            }`}
+                        >
+                            <BarChart2 className="w-3.5 h-3.5" />
+                            <span>Tổng Quan & Biểu Đồ</span>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab('stores')}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
+                                activeTab === 'stores'
+                                    ? 'bg-white text-blue-700 shadow-2xs font-black'
+                                    : 'text-slate-600 hover:text-slate-900'
+                            }`}
+                        >
+                            <Building2 className="w-3.5 h-3.5" />
+                            <span>So Sánh Các ST ({storePaceRankings.length})</span>
+                        </button>
+                    </div>
+                )}
+            </div>
+
+            {/* TẦNG 4: THANH BỘ LỌC 2 DÒNG CHUẨN SMARTPHONE */}
+            <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/90 shadow-2xs space-y-3">
+                {/* DÒNG 1: BỘ LỌC ST / CỤM (BẮT BUỘC ĐẦU TIÊN & NẰM RIÊNG LẺ 1 DÒNG) */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2.5 border-b border-slate-100">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-xs font-black text-slate-600 uppercase tracking-wider shrink-0 flex items-center gap-1.5">
-                            <Store className="w-4 h-4 text-indigo-600" />
+                            <Store className="w-4 h-4 text-blue-700" />
                             ST / Cụm:
                         </span>
-                        <div className={`flex items-center gap-1.5 border px-3 py-1.5 rounded-xl min-w-[200px] sm:min-w-[280px] ${isLockedToSingleStore ? 'bg-amber-50/90 border-amber-200 text-amber-900 shadow-2xs' : 'bg-slate-50 border-slate-300'}`}>
+                        <div className={`flex items-center gap-1.5 border px-3 py-1.5 rounded-xl min-w-[200px] sm:min-w-[280px] ${
+                            isLockedToSingleStore ? 'bg-amber-50/90 border-amber-200 text-amber-900 shadow-2xs' : 'bg-slate-50 border-slate-300'
+                        }`}>
                             {isLockedToSingleStore ? (
                                 <Lock className="w-4 h-4 text-amber-600 shrink-0" />
                             ) : (
@@ -372,7 +255,12 @@ export default function RevenueTrendPage() {
                             )}
                             <select
                                 value={selectedStore}
-                                onChange={(e) => setSelectedStore(e.target.value)}
+                                onChange={(e) => {
+                                    setSelectedStore(e.target.value);
+                                    if (e.target.value !== 'Tổng') {
+                                        setActiveTab('overview');
+                                    }
+                                }}
                                 disabled={isLockedToSingleStore}
                                 title={isLockedToSingleStore ? (isGuest ? 'Tài khoản trải nghiệm sử dụng dữ liệu ST 838679 - Demo Store' : 'Tài khoản nhân viên được cố định theo ST đã đăng ký') : undefined}
                                 className={`bg-transparent outline-none font-bold text-xs w-full ${isLockedToSingleStore ? 'cursor-not-allowed text-amber-900 font-black' : 'cursor-pointer text-slate-700'}`}
@@ -396,16 +284,29 @@ export default function RevenueTrendPage() {
                             )}
                         </div>
                     </div>
+
+                    {/* Nút tác nghiệp theo ST / Cụm: Điều hướng sang trang Báo Cáo Cụm để xem / sửa cấu hình nhịp kỳ vọng */}
+                    <button
+                        type="button"
+                        onClick={() => navigate('/bao-cao-cum-sieu-thi')}
+                        className="px-2.5 py-1.5 rounded-xl border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs shrink-0 self-start sm:self-auto"
+                        title="Chuyển đến trang Báo Cáo Cụm ST để cấu hình mục tiêu kỳ vọng & tỷ lệ nhịp vượt trội"
+                    >
+                        <Target className="w-3.5 h-3.5 text-amber-700" />
+                        <span>Cấu hình nhịp tại Báo Cáo Cụm ({metrics.targetRate}%)</span>
+                    </button>
                 </div>
 
-                {/* HÀNG 2: TIÊU CHÍ THỜI GIAN & HÀNH ĐỘNG */}
+                {/* DÒNG 2: TIÊU CHÍ THỜI GIAN & CỤM NÚT HÀNH ĐỘNG XUẤT */}
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                     <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-xs font-bold text-slate-500">Kỳ báo cáo:</span>
+                        <span className="text-xs font-bold text-slate-500 flex items-center gap-1">
+                            <Calendar className="w-3.5 h-3.5" /> Kỳ tháng:
+                        </span>
                         <select
                             value={selectedMonth}
                             onChange={(e) => setSelectedMonth(Number(e.target.value))}
-                            className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                            className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
                         >
                             {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
                                 <option key={m} value={m}>Tháng {m}/{selectedYear}</option>
@@ -437,155 +338,55 @@ export default function RevenueTrendPage() {
                 </div>
             </div>
 
-            {/* KHU VỰC HIỂN THỊ DỮ LIỆU */}
+            {/* KHU VỰC NỘI DUNG DASHBOARD */}
             {loading ? (
                 <div className="bg-white p-16 rounded-3xl border border-slate-200 text-center space-y-3">
-                    <RefreshCw className="w-8 h-8 animate-spin mx-auto text-indigo-500" />
-                    <p className="text-xs font-bold text-slate-500">Đang tổng hợp số liệu diễn biến tháng...</p>
+                    <RefreshCw className="w-8 h-8 animate-spin mx-auto text-blue-600" />
+                    <p className="text-xs font-bold text-slate-500">Đang tổng hợp số liệu nhịp độ tháng {selectedMonth}/{selectedYear}...</p>
                 </div>
             ) : timelineData.length === 0 ? (
                 <div className="bg-white p-12 text-center rounded-3xl border border-slate-200 space-y-2">
                     <Layers className="w-10 h-10 text-slate-300 mx-auto" />
                     <h3 className="font-bold text-sm text-slate-700">Chưa có bản ghi nào cho tháng {selectedMonth}/{selectedYear}</h3>
-                    <p className="text-xs text-slate-400">Vui lòng kiểm tra lại bảng daily_business_records hoặc nhập dữ liệu mới.</p>
+                    <p className="text-xs text-slate-400">Vui lòng kiểm tra lại bảng daily_business_records hoặc nạp dữ liệu mới.</p>
                 </div>
             ) : (
-                <div ref={chartRef} data-report-table="true" className="space-y-4 bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-sm font-avo">
-                    {/* 3 CARD CHỈ SỐ LŨY KẾ CỦA MỐC GẦN NHẤT */}
-                    {latestData && (
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-                                <div className="flex items-center justify-between text-slate-400 mb-1">
-                                    <span className="text-[10px] font-bold uppercase tracking-wider">
-                                        {selectedStore === 'Tổng' ? 'Lũy Kế Cụm' : 'Lũy Kế DTQĐ'}
-                                    </span>
-                                    <Coins className="w-4 h-4 text-emerald-600" />
-                                </div>
-                                <p className="text-xl font-black font-mono text-emerald-700">
-                                    {formatValue(latestData.revenueActual)}
-                                </p>
-                                <p className="text-[11px] text-slate-400 mt-1">
-                                    Tính đến ngày {formatDate(latestData.reportDate)} ({latestData.storesCount} ST)
-                                </p>
-                            </div>
+                <div ref={chartRef} data-report-table="true" className="space-y-4 bg-white p-3.5 sm:p-5 rounded-2xl border border-slate-200 shadow-2xs font-avo">
+                    {/* KHỐI 4 THẺ KPI NHỊP ĐỘ THÔNG MINH */}
+                    <RevenueTrendKpiCards metrics={metrics} selectedStore={selectedStore} />
 
-                            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-                                <div className="flex items-center justify-between text-slate-400 mb-1">
-                                    <span className="text-[10px] font-bold uppercase tracking-wider">
-                                        {selectedStore === 'Tổng' ? 'TARGET CỤM' : 'TARGET'}
-                                    </span>
-                                    <Target className="w-4 h-4 text-indigo-600" />
-                                </div>
-                                <p className="text-xl font-black font-mono text-slate-800">
-                                    {formatValue(latestData.revenueTarget)}
-                                </p>
-                                <p className="text-[11px] text-slate-400 mt-1">
-                                    Tiến độ hoàn thành: <b className="font-mono text-indigo-600">{latestData.completionRate.toFixed(1)}%</b>
-                                </p>
-                            </div>
+                    {/* KHỐI BIỂU ĐỒ NHỊP ĐỘ TRỰC QUAN CÓ ĐƯỜNG BENCHMARK */}
+                    <RevenueTrendChart
+                        timelineData={timelineData}
+                        metrics={metrics}
+                        selectedStore={selectedStore}
+                    />
 
-                            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-                                <div className="flex items-center justify-between text-slate-400 mb-1">
-                                    <span className="text-[10px] font-bold uppercase tracking-wider">DTQĐ Ngày Gần Nhất</span>
-                                    <ArrowUpRight className="w-4 h-4 text-amber-600" />
-                                </div>
-                                <p className="text-xl font-black font-mono text-amber-600">
-                                    {formatValue(latestData.dailyPace)}
-                                </p>
-                                <p className="text-[11px] text-slate-400 mt-1">
-                                    Tính riêng ngày {formatDate(latestData.reportDate)}
-                                </p>
-                            </div>
+                    {/* KHỐI BẢNG CHI TIẾT THEO CHẾ ĐỘ TAB */}
+                    {activeTab === 'overview' ? (
+                        <div className="space-y-4">
+                            <RevenueTrendDailyTable
+                                timelineData={timelineData}
+                                metrics={metrics}
+                                selectedStore={selectedStore}
+                            />
+
+                            {/* Bảng so sánh phụ trợ khi xem cụm */}
+                            {selectedStore === 'Tổng' && storePaceRankings.length > 0 && (
+                                <RevenueTrendStoreComparisonTable
+                                    storePaceRankings={storePaceRankings}
+                                    metrics={metrics}
+                                    onSelectStore={(s) => setSelectedStore(s)}
+                                />
+                            )}
                         </div>
+                    ) : (
+                        <RevenueTrendStoreComparisonTable
+                            storePaceRankings={storePaceRankings}
+                            metrics={metrics}
+                            onSelectStore={(s) => setSelectedStore(s)}
+                        />
                     )}
-
-                    {/* BIỂU ĐỒ CỘT MINI DIỄN BIẾN NHỊP NGÀY */}
-                    <div className="bg-slate-50/70 p-4 sm:p-5 rounded-xl border border-slate-200/80 shadow-xs space-y-3">
-                        <div className="flex items-center justify-between border-b border-slate-200 pb-2">
-                            <h3 className="font-black text-xs sm:text-sm text-slate-800 uppercase tracking-wide flex items-center gap-2">
-                                <TrendingUp className="w-4 h-4 text-indigo-600" />
-                                <span>Biểu Đồ Nhịp DTQĐ Hàng Ngày</span>
-                            </h3>
-                            <span className="text-[11px] font-mono font-bold text-slate-500">
-                                {timelineData.length} ngày ghi nhận
-                            </span>
-                        </div>
-
-                        {/* Container vẽ cột */}
-                        <div className="h-44 flex items-end gap-1.5 sm:gap-2 pt-6 pb-2 overflow-x-auto no-scrollbar">
-                            {timelineData.map((d) => {
-                                const heightPercent = Math.max(8, Math.round((d.dailyPace / maxPace) * 100));
-                                return (
-                                    <div key={d.reportDate} className="flex-1 min-w-[28px] flex flex-col items-center gap-1 group relative">
-                                        {/* Tooltip khi hover */}
-                                        <div className="absolute -top-10 opacity-0 group-hover:opacity-100 transition pointer-events-none bg-slate-900 text-white text-[9px] px-2 py-1 rounded shadow-md z-20 whitespace-nowrap font-mono">
-                                            {formatDate(d.reportDate)}: {formatValue(d.dailyPace)}
-                                        </div>
-
-                                        <div className="w-full bg-slate-200/70 rounded-t-md flex items-end h-32 overflow-hidden">
-                                            <div
-                                                className="w-full bg-gradient-to-t from-indigo-600 to-indigo-400 rounded-t-md transition-all group-hover:from-emerald-500 group-hover:to-emerald-400"
-                                                style={{ height: `${heightPercent}%` }}
-                                            />
-                                        </div>
-                                        <span className="text-[9px] font-mono text-slate-500 font-bold truncate">
-                                            {formatDate(d.reportDate, 'dd/mm')}
-                                        </span>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
-
-                    {/* BẢNG CHI TIẾT TỪNG NGÀY */}
-                    <div data-report-table="true" className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs font-avo">
-                        <div className="p-3.5 bg-slate-50 border-b border-slate-200">
-                            <h3 className="font-black text-xs uppercase text-slate-700 tracking-wider">
-                                Thống Kê Chi Tiết, Theo Ngày : <span className="text-indigo-600 font-black">{selectedStore === 'Tổng' ? 'Cụm' : selectedStore}</span>
-                            </h3>
-                        </div>
-                        <div className="overflow-x-auto no-scrollbar">
-                            <table className="w-full text-xs text-left font-avo report-table">
-                                <thead className="bg-slate-100 text-slate-600 uppercase text-[10px] font-black border-b border-slate-200">
-                                    <tr>
-                                        <th className="py-2.5 px-3">Ngày Báo Cáo</th>
-                                        <th className="py-2.5 px-3 text-right">Lũy Kế DTQĐ</th>
-                                        <th className="py-2.5 px-3 text-right text-indigo-700">DT Ngày</th>
-                                        <th className="py-2.5 px-3 text-right">TARGET</th>
-                                        <th className="py-2.5 px-3 text-right">% Hoàn Thành</th>
-                                        <th className="py-2.5 px-3 text-right">DT Trả Chậm</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
-                                    {timelineData.map((d) => (
-                                        <tr key={d.reportDate} className="hover:bg-slate-50 transition">
-                                            <td className="py-2.5 px-3 font-semibold text-slate-800">
-                                                {d.dayLabel} ({formatDate(d.reportDate)})
-                                            </td>
-                                            <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-600">
-                                                {formatValue(d.revenueActual)}
-                                            </td>
-                                            <td className="py-2.5 px-3 text-right font-mono font-bold text-indigo-600">
-                                                +{formatValue(d.dailyPace)}
-                                            </td>
-                                            <td className="py-2.5 px-3 text-right font-mono text-slate-600">
-                                                {formatValue(d.revenueTarget)}
-                                            </td>
-                                            <td className="py-2.5 px-3 text-right font-mono">
-                                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${d.completionRate >= 100 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-600'
-                                                    }`}>
-                                                    {d.completionRate.toFixed(1)}%
-                                                </span>
-                                            </td>
-                                            <td className="py-2.5 px-3 text-right font-mono text-purple-600">
-                                                {formatValue(d.revenueInstallment)}
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
                 </div>
             )}
         </div>

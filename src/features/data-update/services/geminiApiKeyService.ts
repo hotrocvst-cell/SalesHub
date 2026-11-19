@@ -253,19 +253,25 @@ export async function testAllGeminiApiKeys(rawKeys: string): Promise<KeyTestDeta
 }
 
 export const STANDARD_GEMINI_MODELS = [
-    'gemini-3.5-flash',
-    'gemini-3.5-flash-lite',
     'gemini-flash-lite-latest',
-    'gemini-3.8-flash'
+    'gemini-3-flash-preview',
+    'gemini-flash-latest',
+    'gemini-3.8-flash',
+    'gemini-3.5-flash',
+    'gemini-3.5-flash-lite'
 ];
 
 /**
- * Xóa cache model nếu lưu phải model cũ đã bị Google ngừng hỗ trợ (404)
+ * Xóa cache model nếu lưu phải model cũ đã bị Google ngừng hỗ trợ (404) hoặc không tối ưu
  */
 export function sanitizeCachedGeminiModel(): string | null {
     try {
         const cached = localStorage.getItem('SALESHUB_ACTIVE_GEMINI_MODEL');
-        if (cached && !STANDARD_GEMINI_MODELS.includes(cached)) {
+        if (cached && (
+            !STANDARD_GEMINI_MODELS.includes(cached) ||
+            cached.includes('2.5') ||
+            cached.includes('1.5')
+        )) {
             localStorage.removeItem('SALESHUB_ACTIVE_GEMINI_MODEL');
             return null;
         }

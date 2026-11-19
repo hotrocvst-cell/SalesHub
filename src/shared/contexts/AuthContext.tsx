@@ -12,6 +12,18 @@ import {
     createUserProfile,
     submitOnboardingRequest
 } from '../../core/lib/authService';
+import {
+    type DeviceClass,
+    type UserActiveSessions,
+    type SessionDeviceInfo,
+    detectDeviceClass,
+    getLocalSessionId,
+    clearLocalSession,
+    registerDeviceSession,
+    evaluateSessionStatus,
+    terminateRemoteSession
+} from '../../core/lib/deviceSessionService';
+import { SessionKickOutModal } from '../../features/auth/components/SessionKickOutModal';
 
 export type { UserRole, UserAccountStatus };
 
@@ -39,6 +51,7 @@ export interface CurrentUser {
     rejection_reason?: string;
     is_guest?: boolean;
     guest_expires_at?: string;
+    active_sessions?: UserActiveSessions;
 }
 
 interface AuthContextType {
@@ -54,6 +67,14 @@ interface AuthContextType {
     isGuest: boolean;
     accessibleStores: string[];
     canAccessStore: (storeName: string) => boolean;
+    // Kiểm soát đa thiết bị & phiên hoạt động
+    currentDeviceClass: DeviceClass;
+    currentSessionId: string | null;
+    activeSessions?: UserActiveSessions;
+    isKickedOut: boolean;
+    kickOutReason: string | null;
+    terminateOtherDeviceSession: (targetClass: DeviceClass) => Promise<boolean>;
+    dismissKickOut: () => void;
     // Kiểm thử / Mô phỏng dành riêng cho Admin
     isImpersonating: boolean;
     impersonationState: ImpersonationState;
@@ -130,7 +151,8 @@ function profileToCurrentUser(profile: UserProfile, authUserId?: string, actualR
         phone: profile.phone,
         rejection_reason: profile.rejection_reason,
         is_guest: profile.is_guest,
-        guest_expires_at: profile.guest_expires_at
+        guest_expires_at: profile.guest_expires_at,
+        active_sessions: profile.active_sessions
     };
 }
 
@@ -195,6 +217,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         return true;
     });
+
+    // Quản lý đa thiết bị & phiên hoạt động
+    const currentDeviceClass = useMemo(() => detectDeviceClass(), []);
+    const [currentSessionId, setCurrentSessionId] = useState<string | null>(() => getLocalSessionId());
+    const [activeSessions, setActiveSessions] = useState<UserActiveSessions | undefined>(() => rawUser.active_sessions);
+    const [isKickedOut, setIsKickedOut] = useState<boolean>(false);
+    const [kickOutInfo, setKickOutInfo] = useState<{ conflictingSession?: SessionDeviceInfo; reason?: string } | null>(null);
+
+    // Hàm đồng bộ đăng ký phiên làm việc hiện tại lên Cloud Supabase
+    const syncDeviceSession = useCallback(async (userId: string, role: UserRole, email?: string) => {
+        try {
+            const res = await registerDeviceSession({
+                userId,
+                role,
+                userEmail: email
+            });
+            setCurrentSessionId(res.sessionId);
+            setActiveSessions(res.activeSessions);
+            return res;
+        } catch (e) {
+            console.warn('Lỗi đồng bộ phiên thiết bị:', e);
+            return null;
+        }
+    }, []);
 
     // Quyền Admin thực tế (dựa trên tài khoản đăng nhập gốc)
     const isAuthenticated = Boolean(rawUser && rawUser.email && rawUser.id);
@@ -333,6 +379,181 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         };
     }, []);
 
+    // 1. Kiểm tra session ngay khi khởi chạy hoặc khi rawUser thay đổi
+    useEffect(() => {
+        if (!rawUser?.id || !rawUser?.email || rawUser.is_guest) return;
+
+        let isMounted = true;
+        async function verifyCurrentSession() {
+            try {
+                const { data } = await supabase
+                    .from('user_profiles')
+                    .select('active_sessions, role')
+                    .eq('id', rawUser.id)
+                    .maybeSingle();
+
+                if (!isMounted || !data) return;
+
+                let parsedSessions: UserActiveSessions | undefined = undefined;
+                if (data.active_sessions) {
+                    parsedSessions = typeof data.active_sessions === 'object'
+                        ? data.active_sessions
+                        : JSON.parse(data.active_sessions);
+                    setActiveSessions(parsedSessions);
+                }
+
+                const localSid = getLocalSessionId();
+                if (localSid && parsedSessions) {
+                    const check = evaluateSessionStatus({
+                        localSessionId: localSid,
+                        currentDeviceClass,
+                        userRole: rawUser.role,
+                        activeSessions: parsedSessions
+                    });
+
+                    if (!check.isValid) {
+                        setKickOutInfo({
+                            conflictingSession: check.conflictingSession,
+                            reason: check.reason
+                        });
+                        setIsKickedOut(true);
+                        clearLocalSession();
+                        localStorage.removeItem(STORAGE_ACTIVE_USER_KEY);
+                        localStorage.removeItem(STORAGE_LEGACY_KEY);
+                        setRawUser(ANONYMOUS_USER);
+                        return;
+                    }
+                } else if (!localSid && rawUser.id) {
+                    // Chưa có session_id ở local (vừa vào hoặc mới nâng cấp) -> Đăng ký phiên mới
+                    await syncDeviceSession(rawUser.id, rawUser.role, rawUser.email);
+                }
+            } catch (e) {
+                console.warn('Lỗi xác thực phiên hoạt động:', e);
+            }
+        }
+
+        verifyCurrentSession();
+
+        return () => {
+            isMounted = false;
+        };
+    }, [rawUser?.id, rawUser?.email, currentDeviceClass, syncDeviceSession]);
+
+    // 2. Lắng nghe thay đổi phiên thời gian thực (Supabase Realtime)
+    useEffect(() => {
+        if (!rawUser?.id || !rawUser?.email || rawUser.is_guest) return;
+
+        const channel = supabase
+            .channel(`user-session-${rawUser.id}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: 'UPDATE',
+                    schema: 'public',
+                    table: 'user_profiles',
+                    filter: `id=eq.${rawUser.id}`
+                },
+                (payload) => {
+                    const newProfile = payload.new as any;
+                    if (!newProfile) return;
+
+                    let parsedSessions: UserActiveSessions | undefined = undefined;
+                    if (newProfile.active_sessions) {
+                        try {
+                            parsedSessions = typeof newProfile.active_sessions === 'object'
+                                ? newProfile.active_sessions
+                                : JSON.parse(newProfile.active_sessions);
+                        } catch {
+                            parsedSessions = undefined;
+                        }
+                    }
+
+                    setActiveSessions(parsedSessions);
+
+                    const localSid = getLocalSessionId();
+                    if (localSid && parsedSessions) {
+                        const check = evaluateSessionStatus({
+                            localSessionId: localSid,
+                            currentDeviceClass,
+                            userRole: rawUser.role,
+                            activeSessions: parsedSessions
+                        });
+
+                        if (!check.isValid) {
+                            setKickOutInfo({
+                                conflictingSession: check.conflictingSession,
+                                reason: check.reason
+                            });
+                            setIsKickedOut(true);
+                            clearLocalSession();
+                            localStorage.removeItem(STORAGE_ACTIVE_USER_KEY);
+                            localStorage.removeItem(STORAGE_LEGACY_KEY);
+                            setRawUser(ANONYMOUS_USER);
+                        }
+                    }
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [rawUser?.id, rawUser?.email, rawUser?.role, currentDeviceClass]);
+
+    // 3. Kiểm tra lại phiên khi người dùng quay lại tab trình duyệt (visibilitychange)
+    useEffect(() => {
+        if (!rawUser?.id || !rawUser?.email || rawUser.is_guest) return;
+
+        const handleVisibilityChange = async () => {
+            if (document.visibilityState === 'visible') {
+                try {
+                    const { data } = await supabase
+                        .from('user_profiles')
+                        .select('active_sessions, role')
+                        .eq('id', rawUser.id)
+                        .maybeSingle();
+
+                    if (data?.active_sessions) {
+                        const parsedSessions: UserActiveSessions = typeof data.active_sessions === 'object'
+                            ? data.active_sessions
+                            : JSON.parse(data.active_sessions);
+
+                        setActiveSessions(parsedSessions);
+
+                        const localSid = getLocalSessionId();
+                        if (localSid && parsedSessions) {
+                            const check = evaluateSessionStatus({
+                                localSessionId: localSid,
+                                currentDeviceClass,
+                                userRole: rawUser.role,
+                                activeSessions: parsedSessions
+                            });
+
+                            if (!check.isValid) {
+                                setKickOutInfo({
+                                    conflictingSession: check.conflictingSession,
+                                    reason: check.reason
+                                });
+                                setIsKickedOut(true);
+                                clearLocalSession();
+                                localStorage.removeItem(STORAGE_ACTIVE_USER_KEY);
+                                localStorage.removeItem(STORAGE_LEGACY_KEY);
+                                setRawUser(ANONYMOUS_USER);
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Lỗi kiểm tra session khi active tab:', e);
+                }
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => {
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
+    }, [rawUser?.id, rawUser?.email, rawUser?.role, currentDeviceClass]);
+
     const isGuest = Boolean(currentUser?.is_guest);
     const isAdmin = isAuthenticated && !isGuest && (currentUser.role === 'ADMIN');
     const canConfigure = isAuthenticated && !isGuest && (currentUser.role === 'ADMIN' || currentUser.role === 'QUAN_LY' || currentUser.role === 'TRUONG_CA');
@@ -418,6 +639,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                         }
 
                         setRawUser(profileToCurrentUser(profile, data.user.id));
+                        await syncDeviceSession(profile.id, profile.role, profile.email);
+                        setIsKickedOut(false);
+                        setKickOutInfo(null);
                         setIsLoading(false);
                         return { success: true };
                     }
@@ -455,6 +679,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 }
 
                 setRawUser(profileToCurrentUser(profile));
+                await syncDeviceSession(profile.id, profile.role, profile.email);
+                setIsKickedOut(false);
+                setKickOutInfo(null);
                 setIsLoading(false);
                 return { success: true };
             }
@@ -593,6 +820,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 phone: profile.phone
             });
 
+            await syncDeviceSession(profile.id, chosenRole, profile.email);
+            setIsKickedOut(false);
+            setKickOutInfo(null);
             setIsLoading(false);
             return { success: true };
         } catch (err: any) {
@@ -724,14 +954,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } catch {
             // Ignore
         }
+        clearLocalSession();
         localStorage.removeItem(STORAGE_ACTIVE_USER_KEY);
         localStorage.removeItem(STORAGE_LEGACY_KEY);
         localStorage.removeItem(STORAGE_IMPERSONATION_KEY);
         setImpersonationState({ isActive: false });
         setRawUser(ANONYMOUS_USER);
+        setIsKickedOut(false);
+        setKickOutInfo(null);
         // Tự động load chuyển hướng ngay về trang đăng nhập
         window.location.replace('/dang-nhap');
     };
+
+    // Đăng xuất từ xa khỏi loại thiết bị còn lại (dành cho Admin / Quản lý / Trưởng ca)
+    const terminateOtherDeviceSession = useCallback(async (targetClass: DeviceClass): Promise<boolean> => {
+        if (!rawUser?.id) return false;
+        const ok = await terminateRemoteSession({
+            userId: rawUser.id,
+            targetDeviceClass: targetClass
+        });
+        if (ok) {
+            setActiveSessions(prev => {
+                if (!prev) return prev;
+                const next = { ...prev };
+                if (targetClass === 'MOBILE') delete next.mobile;
+                else delete next.desktop;
+                return next;
+            });
+        }
+        return ok;
+    }, [rawUser?.id]);
+
+    const handleReLogin = useCallback(() => {
+        setIsKickedOut(false);
+        setKickOutInfo(null);
+        window.location.replace('/dang-nhap');
+    }, []);
+
+    const handleChangePassword = useCallback(() => {
+        setIsKickedOut(false);
+        setKickOutInfo(null);
+        window.location.replace('/dat-lai-mat-khau');
+    }, []);
 
     return (
         <AuthContext.Provider
@@ -748,6 +1012,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 isGuest,
                 accessibleStores,
                 canAccessStore,
+                currentDeviceClass,
+                currentSessionId,
+                activeSessions,
+                isKickedOut,
+                kickOutReason: kickOutInfo?.reason || null,
+                terminateOtherDeviceSession,
+                dismissKickOut: () => setIsKickedOut(false),
                 isImpersonating,
                 impersonationState,
                 setImpersonation,
@@ -767,6 +1038,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }}
         >
             {children}
+            <SessionKickOutModal
+                isOpen={isKickedOut}
+                conflictingSession={kickOutInfo?.conflictingSession}
+                reason={kickOutInfo?.reason}
+                accountName={rawUser?.full_name || rawUser?.email}
+                onReLogin={handleReLogin}
+                onChangePassword={handleChangePassword}
+            />
         </AuthContext.Provider>
     );
 }

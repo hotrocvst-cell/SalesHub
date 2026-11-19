@@ -1,6 +1,6 @@
 import { supabase } from '../../../core/lib/supabase';
 import type { CampaignDictItem } from '../../../core/lib/storage';
-import { getCampaignLabel, getShortStoreName, formatDate, cleanBiNumber } from '../../../core/lib/formatters';
+import { getCampaignLabel, getShortStoreName, formatDate, cleanBiNumber, isStoreMatch } from '../../../core/lib/formatters';
 import type { StoreReportingData, EmulationOcrItem, StoreMobileEmulationCardItem } from '../../data-update/types/ocrTypes';
 import type { CampaignItem, RevenueItem } from '../utils/dailyReportParsers';
 
@@ -309,30 +309,48 @@ export async function saveSingleStoreEmulationSession(
 
 /**
  * Chuyển đổi dữ liệu StoreReportingData[] (từ OCR / Nhập tay) thành RealtimeStoreSessionRecord[]
+ * Tự động bảo lưu doanh thu đã có của ST nếu đợt nạp mới chỉ có ảnh thi đua
  */
 export function convertStoreReportingDataToSessions(
     storesData: StoreReportingData[],
     screenshotTimeStr: string = '',
     campaignDict: CampaignDictItem[] = [],
-    userName: string = 'ADMIN'
+    userName: string = 'ADMIN',
+    existingSessions?: RealtimeStoreSessionRecord[]
 ): RealtimeStoreSessionRecord[] {
     const nowIso = new Date().toISOString();
+    const fallbackSessions = existingSessions || getCachedRealtimeSessions();
 
     return storesData.map(s => {
-        const revItem: RevenueItem = {
-            store: s.storeRawName,
-            shortName: s.storeShortName || getShortStoreName(s.storeRawName),
-            sl: Number(s.quantityQd || 0),
-            rev: Number(s.revenueQd || 0),
-            rawRev: Number(s.revenueQd || 0),
-            target: Number(s.targetQd || 0),
-            pct: s.completionRateQd !== undefined && s.completionRateQd !== null
-                ? Number(s.completionRateQd)
-                : (s.targetQd > 0 ? (s.revenueQd / s.targetQd) * 100 : 0),
-            pctTraGop: Number(s.installmentRate || 0),
-            dtTraGop: Number(s.installmentQd || 0),
-            isNewFormat: true
-        };
+        // Tìm phiên đã lưu trước đó của ST này (nếu có) để bảo lưu doanh thu nếu phiên mới chỉ nạp thi đua
+        const existingRecord = fallbackSessions.find(
+            e => e.store_name === s.storeRawName ||
+                 getShortStoreName(e.store_name) === getShortStoreName(s.storeRawName) ||
+                 isStoreMatch(e.store_name, s.storeRawName)
+        );
+
+        const hasNewRevenue = (Number(s.revenueQd || 0) > 0 || Number(s.targetQd || 0) > 0 || Number(s.installmentQd || 0) > 0);
+        let revItem: RevenueItem;
+
+        if (!hasNewRevenue && existingRecord?.revenue_data && (Number(existingRecord.revenue_data.rev || 0) > 0 || Number(existingRecord.revenue_data.target || 0) > 0)) {
+            // Bảo lưu nguyên vẹn doanh thu đã có
+            revItem = { ...(existingRecord.revenue_data as RevenueItem) };
+        } else {
+            revItem = {
+                store: s.storeRawName,
+                shortName: s.storeShortName || getShortStoreName(s.storeRawName),
+                sl: Number(s.quantityQd || 0),
+                rev: Number(s.revenueQd || 0),
+                rawRev: Number(s.revenueQd || 0),
+                target: Number(s.targetQd || 0),
+                pct: s.completionRateQd !== undefined && s.completionRateQd !== null
+                    ? Number(s.completionRateQd)
+                    : (s.targetQd > 0 ? (s.revenueQd / s.targetQd) * 100 : 0),
+                pctTraGop: Number(s.installmentRate || 0),
+                dtTraGop: Number(s.installmentQd || 0),
+                isNewFormat: true
+            };
+        }
 
         const emulationList: CampaignItem[] = Object.values(s.emulations || {}).map((emu: EmulationOcrItem) => {
             const progName = emu.programName || '';
