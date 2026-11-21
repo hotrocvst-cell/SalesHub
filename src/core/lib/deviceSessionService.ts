@@ -291,7 +291,13 @@ export function evaluateSessionStatus(params: {
     conflictingSession?: SessionDeviceInfo;
     reason?: string;
 } {
-    const { localSessionId, currentDeviceClass, activeSessions } = params;
+    const { localSessionId, currentDeviceClass, activeSessions, userRole } = params;
+
+    // 1. Quản trị viên (ADMIN): Miễn trừ kiểm soát xung đột phiên đơn để phục vụ kiểm thử, phát triển
+    // và vận hành song song trên nhiều thiết bị / trình duyệt ẩn danh (Incognito)
+    if (userRole === 'ADMIN') {
+        return { isValid: true };
+    }
 
     // Nếu chưa có localSessionId hoặc chưa cấu hình active_sessions trên DB (chưa chạy migration SQL)
     if (!localSessionId || !activeSessions || typeof activeSessions !== 'object') {

@@ -392,13 +392,18 @@ function saveLocalNotifications(notifs: SystemNotification[]) {
 // ==========================================
 export async function getUserProfile(userIdOrEmail: string): Promise<UserProfile | null> {
     const key = userIdOrEmail.trim().toLowerCase();
+    const isKeywordAdmin = key === 'admin';
 
     // 1. Thử lấy từ Supabase
     try {
+        const orClause = isKeywordAdmin
+            ? `id.eq.${userIdOrEmail},email.ilike.${key},employee_id.ilike.${key},email.ilike.admin@saleshub.vn,employee_id.ilike.ADMIN01`
+            : `id.eq.${userIdOrEmail},email.ilike.${key},employee_id.ilike.${key}`;
+
         const { data, error } = await supabase
             .from('user_profiles')
             .select('*')
-            .or(`id.eq.${userIdOrEmail},email.ilike.${key},employee_id.ilike.${key}`)
+            .or(orClause)
             .limit(1);
 
         if (!error && data && data.length > 0) {
@@ -413,9 +418,18 @@ export async function getUserProfile(userIdOrEmail: string): Promise<UserProfile
     const found = locals.find(u =>
         u.id === userIdOrEmail ||
         u.email.toLowerCase() === key ||
-        u.employee_id.toLowerCase() === key
+        u.employee_id.toLowerCase() === key ||
+        (isKeywordAdmin && (u.email.toLowerCase() === 'admin@saleshub.vn' || u.employee_id.toUpperCase() === 'ADMIN01'))
     );
-    return found || null;
+    if (found) return found;
+
+    // 3. Fallback sang DEMO_USERS nếu gõ "admin"
+    if (isKeywordAdmin) {
+        const demoAdmin = DEMO_USERS.find(d => d.role === 'ADMIN');
+        if (demoAdmin) return demoAdmin;
+    }
+
+    return null;
 }
 
 // ==========================================

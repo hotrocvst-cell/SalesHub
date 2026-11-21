@@ -1,7 +1,11 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import html2canvas from 'html2canvas';
-import { calculate8KScale, buildReportImageFileName } from '../../shared/utils/exportImage';
+import {
+    generateStandardReportCanvas,
+    downloadReportCanvas,
+    copyReportCanvasToClipboard,
+    buildReportImageFileName
+} from '../../shared/utils/exportImage';
 import { formatValue, getShortStoreName, formatDate } from '../../core/lib/formatters';
 import { GUEST_DEMO_STORE } from '../../core/lib/guestDemoStoreService';
 import { useAuth } from '../../shared/contexts/AuthContext';
@@ -91,33 +95,100 @@ export default function RevenueTrendPage() {
         }
     }, [isGuest, isLockedToSingleStore, storeList, selectedStore, canViewAllStores]);
 
-    // CHỤP BÁO CÁO CHUẨN 8K VỚI AUTO-SAFETY CLAMP
+    // CHỤP BÁO CÁO CHUẨN 8K VỚI AUTO-SAFETY CLAMP (KHUNG XUẤT 960px KHÔNG CẮT CỘT MOBILE)
     const handleCapture = async () => {
-        if (!chartRef.current) return;
+        if (!chartRef.current || isCapturing) return;
         setIsCapturing(true);
         try {
-            if (document.fonts?.ready) {
-                await document.fonts.ready;
-            }
-            const scale = calculate8KScale(chartRef.current);
-            const canvas = await html2canvas(chartRef.current, {
-                scale: scale,
-                backgroundColor: '#ffffff',
-                useCORS: true,
-                logging: false,
-                ignoreElements: (el) =>
-                    el.getAttribute('data-html2canvas-ignore') === 'true' ||
-                    el.getAttribute('data-export-ignore') === 'true' ||
-                    el.getAttribute('data-freshness-bar') === 'true'
-            });
-            const a = document.createElement('a');
-            a.href = canvas.toDataURL('image/png', 1.0);
-            a.download = buildReportImageFileName(
+            const fileName = buildReportImageFileName(
                 'Nhip_Doanh_Thu',
                 selectedStore,
                 `T${selectedMonth}_${selectedYear}`
             );
-            a.click();
+            const canvas = await generateStandardReportCanvas(chartRef.current, {
+                targetWidth: 960,
+                containerSelector: '[data-report-container="true"]',
+                onCustomClone: (_doc, clonedReport) => {
+                    // 1. Cố định kích thước & bố cục vùng biểu đồ nhịp để không bị co lùn
+                    clonedReport.querySelectorAll<HTMLElement>('[data-chart-scroll-container="true"]').forEach(el => {
+                        el.style.overflow = 'visible';
+                        el.style.overflowX = 'visible';
+                        el.style.overflowY = 'visible';
+                        el.style.width = '100%';
+                        el.style.minWidth = '100%';
+                        el.style.height = '270px';
+                        el.style.minHeight = '270px';
+                        el.style.maxHeight = '270px';
+                        el.style.paddingTop = '16px';
+                        el.style.paddingBottom = '8px';
+                        el.style.display = 'flex';
+                        el.style.alignItems = 'flex-end';
+                        el.style.boxSizing = 'border-box';
+                        el.style.position = 'relative';
+                    });
+
+                    // 2. Vùng vạch tham chiếu khớp hoàn hảo 100% với bar track
+                    clonedReport.querySelectorAll<HTMLElement>('[data-reference-overlay="true"]').forEach(overlay => {
+                        overlay.style.position = 'absolute';
+                        overlay.style.left = '0';
+                        overlay.style.right = '0';
+                        overlay.style.bottom = '46px';
+                        overlay.style.height = '176px';
+                        overlay.style.width = '100%';
+                        overlay.style.display = 'block';
+                    });
+
+                    // 3. Định hình từng cột ngày dàn đều 100% chiều cao
+                    clonedReport.querySelectorAll<HTMLElement>('[data-chart-bar="true"]').forEach(bar => {
+                        bar.style.minWidth = '0';
+                        bar.style.flex = '1 1 0%';
+                        bar.style.width = 'auto';
+                        bar.style.height = '100%';
+                        bar.style.minHeight = '100%';
+                        bar.style.maxHeight = '100%';
+                        bar.style.display = 'flex';
+                        bar.style.flexDirection = 'column';
+                        bar.style.justifyContent = 'flex-end';
+                        bar.style.alignItems = 'center';
+                        bar.style.overflow = 'visible';
+                    });
+
+                    // 4. Khóa chiều cao thanh bar track 176px
+                    clonedReport.querySelectorAll<HTMLElement>('[data-bar-track="true"]').forEach(track => {
+                        track.style.height = '176px';
+                        track.style.minHeight = '176px';
+                        track.style.maxHeight = '176px';
+                        track.style.width = '100%';
+                        track.style.display = 'flex';
+                        track.style.alignItems = 'flex-end';
+                    });
+
+                    // 5. Tắt animation nhấp nháy để html2canvas render icon ngọn lửa sắc nét
+                    clonedReport.querySelectorAll<HTMLElement>('.animate-pulse').forEach(el => {
+                        el.style.animation = 'none';
+                        el.style.opacity = '1';
+                    });
+
+                    // 6. Cố định 4 thẻ KPI dàn 4 cột đẹp mắt
+                    const kpiGrid = clonedReport.querySelector('[data-kpi-grid="true"]') as HTMLElement;
+                    if (kpiGrid) {
+                        kpiGrid.style.display = 'grid';
+                        kpiGrid.style.gridTemplateColumns = 'repeat(4, minmax(0, 1fr))';
+                        kpiGrid.style.gap = '10px';
+                    }
+
+                    // 7. Bảng chi tiết mở rộng 100%
+                    clonedReport.querySelectorAll<HTMLElement>('table').forEach(table => {
+                        table.style.width = '100%';
+                        table.style.minWidth = '100%';
+                        table.style.tableLayout = 'auto';
+                    });
+                }
+            });
+
+            if (canvas) {
+                downloadReportCanvas(canvas, fileName);
+            }
         } catch (err) {
             console.error('Lỗi chụp ảnh:', err);
         } finally {
@@ -126,28 +197,93 @@ export default function RevenueTrendPage() {
     };
 
     const handleCopyImage = async () => {
-        if (!chartRef.current) return;
+        if (!chartRef.current || isCapturing) return;
         setIsCapturing(true);
         try {
-            if (document.fonts?.ready) {
-                await document.fonts.ready;
-            }
-            const scale = calculate8KScale(chartRef.current);
-            const canvas = await html2canvas(chartRef.current, {
-                scale: scale,
-                backgroundColor: '#ffffff',
-                useCORS: true,
-                logging: false,
-                ignoreElements: (el) =>
-                    el.getAttribute('data-html2canvas-ignore') === 'true' ||
-                    el.getAttribute('data-export-ignore') === 'true' ||
-                    el.getAttribute('data-freshness-bar') === 'true'
-            });
-            canvas.toBlob(async blob => {
-                if (blob && navigator.clipboard && window.ClipboardItem) {
-                    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+            const canvas = await generateStandardReportCanvas(chartRef.current, {
+                targetWidth: 960,
+                containerSelector: '[data-report-container="true"]',
+                onCustomClone: (_doc, clonedReport) => {
+                    // 1. Cố định kích thước & bố cục vùng biểu đồ nhịp để không bị co lùn
+                    clonedReport.querySelectorAll<HTMLElement>('[data-chart-scroll-container="true"]').forEach(el => {
+                        el.style.overflow = 'visible';
+                        el.style.overflowX = 'visible';
+                        el.style.overflowY = 'visible';
+                        el.style.width = '100%';
+                        el.style.minWidth = '100%';
+                        el.style.height = '270px';
+                        el.style.minHeight = '270px';
+                        el.style.maxHeight = '270px';
+                        el.style.paddingTop = '16px';
+                        el.style.paddingBottom = '8px';
+                        el.style.display = 'flex';
+                        el.style.alignItems = 'flex-end';
+                        el.style.boxSizing = 'border-box';
+                        el.style.position = 'relative';
+                    });
+
+                    // 2. Vùng vạch tham chiếu khớp hoàn hảo 100% với bar track
+                    clonedReport.querySelectorAll<HTMLElement>('[data-reference-overlay="true"]').forEach(overlay => {
+                        overlay.style.position = 'absolute';
+                        overlay.style.left = '0';
+                        overlay.style.right = '0';
+                        overlay.style.bottom = '46px';
+                        overlay.style.height = '176px';
+                        overlay.style.width = '100%';
+                        overlay.style.display = 'block';
+                    });
+
+                    // 3. Định hình từng cột ngày dàn đều 100% chiều cao
+                    clonedReport.querySelectorAll<HTMLElement>('[data-chart-bar="true"]').forEach(bar => {
+                        bar.style.minWidth = '0';
+                        bar.style.flex = '1 1 0%';
+                        bar.style.width = 'auto';
+                        bar.style.height = '100%';
+                        bar.style.minHeight = '100%';
+                        bar.style.maxHeight = '100%';
+                        bar.style.display = 'flex';
+                        bar.style.flexDirection = 'column';
+                        bar.style.justifyContent = 'flex-end';
+                        bar.style.alignItems = 'center';
+                        bar.style.overflow = 'visible';
+                    });
+
+                    // 4. Khóa chiều cao thanh bar track 176px
+                    clonedReport.querySelectorAll<HTMLElement>('[data-bar-track="true"]').forEach(track => {
+                        track.style.height = '176px';
+                        track.style.minHeight = '176px';
+                        track.style.maxHeight = '176px';
+                        track.style.width = '100%';
+                        track.style.display = 'flex';
+                        track.style.alignItems = 'flex-end';
+                    });
+
+                    // 5. Tắt animation nhấp nháy để html2canvas render icon ngọn lửa sắc nét
+                    clonedReport.querySelectorAll<HTMLElement>('.animate-pulse').forEach(el => {
+                        el.style.animation = 'none';
+                        el.style.opacity = '1';
+                    });
+
+                    // 6. Cố định 4 thẻ KPI dàn 4 cột đẹp mắt
+                    const kpiGrid = clonedReport.querySelector('[data-kpi-grid="true"]') as HTMLElement;
+                    if (kpiGrid) {
+                        kpiGrid.style.display = 'grid';
+                        kpiGrid.style.gridTemplateColumns = 'repeat(4, minmax(0, 1fr))';
+                        kpiGrid.style.gap = '10px';
+                    }
+
+                    // 7. Bảng chi tiết mở rộng 100%
+                    clonedReport.querySelectorAll<HTMLElement>('table').forEach(table => {
+                        table.style.width = '100%';
+                        table.style.minWidth = '100%';
+                        table.style.tableLayout = 'auto';
+                    });
                 }
-            }, 'image/png', 1.0);
+            });
+
+            if (canvas) {
+                await copyReportCanvasToClipboard(canvas);
+            }
         } catch (err) {
             console.error('Lỗi copy ảnh:', err);
         } finally {
@@ -351,7 +487,7 @@ export default function RevenueTrendPage() {
                     <p className="text-xs text-slate-400">Vui lòng kiểm tra lại bảng daily_business_records hoặc nạp dữ liệu mới.</p>
                 </div>
             ) : (
-                <div ref={chartRef} data-report-table="true" className="space-y-4 bg-white p-3.5 sm:p-5 rounded-2xl border border-slate-200 shadow-2xs font-avo">
+                <div ref={chartRef} data-report-container="true" data-report-table="true" className="space-y-4 bg-white p-3.5 sm:p-5 rounded-2xl border border-slate-200 shadow-2xs font-avo">
                     {/* KHỐI 4 THẺ KPI NHỊP ĐỘ THÔNG MINH */}
                     <RevenueTrendKpiCards metrics={metrics} selectedStore={selectedStore} />
 

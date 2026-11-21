@@ -1,133 +1,170 @@
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
-    generateStandardReportCanvas,
-    downloadReportCanvas,
-    copyReportCanvasToClipboard,
-    buildReportImageFileName
-} from "../../shared/utils/exportImage";
-import { useNavigate } from "react-router-dom";
-import {
-    formatValue,
-    getShortStoreName,
-    getCampaignLabel,
     formatDate,
+    getShortStoreName,
     getYesterdayDateString,
-    calculateRemainingTarget,
-    formatRemainingTarget,
     isStoreMatch
-} from "../../core/lib/formatters";
-import ReportDataFreshnessBar from "../../shared/components/report/ReportDataFreshnessBar";
-import CloudDataSyncStatusBanner from "../../shared/components/report/CloudDataSyncStatusBanner";
-import ReportActionButtons from "../../shared/components/report/ReportActionButtons";
-import type { AssessmentTemplate } from "../../shared/components/report/ReportAssessmentModal";
+} from '../../core/lib/formatters';
 import {
     fetchBusinessRecords,
     fetchCampaignDictionary,
     type BusinessDayRecord,
     type CampaignDictItem
-} from "../../core/lib/storage";
+} from '../../core/lib/storage';
 import {
     GUEST_DEMO_STORE,
+    isGuestDemoStore,
     isDemoDateAllowed
-} from "../../core/lib/guestDemoStoreService";
+} from '../../core/lib/guestDemoStoreService';
+import { useAuth } from '../../shared/contexts/AuthContext';
+import {
+    fetchClusterTargetConfigPackage,
+    fetchClusterAssessment
+} from '../cluster-report/services/clusterTargetService';
+import type {
+    ClusterTargetConfigItem,
+    ClusterAssessmentData
+} from '../cluster-report/types';
+import CloudDataSyncStatusBanner from '../../shared/components/report/CloudDataSyncStatusBanner';
+import ReportDataFreshnessBar from '../../shared/components/report/ReportDataFreshnessBar';
+import ReportActionButtons from '../../shared/components/report/ReportActionButtons';
+import type { AssessmentTemplate } from '../../shared/components/report/ReportAssessmentModal';
+
+import MonthlyEmulationTab from './tabs/MonthlyEmulationTab';
+import ClusterHealthTab, { getCompactStoreName } from './tabs/ClusterHealthTab';
+import RevenueTrendTab from './tabs/RevenueTrendTab';
+
 import {
     BarChart3,
     Store,
-    RefreshCw,
     TrendingUp,
-    AlertCircle,
-    Trophy,
-    ArrowRight,
-    ArrowUpDown,
-    Filter,
-    FileText,
-    Copy,
+    RefreshCw,
     Lock,
     Camera,
-    Target
-} from "lucide-react";
-import { useAuth } from "../../shared/contexts/AuthContext";
+    Target,
+    Calendar,
+    Layers,
+    Check
+} from 'lucide-react';
 
-interface EmulationRowItem {
-    id: string;
-    storeName: string;
-    rawKey: string;
-    label: string;
-    target: number;
-    actual: number;
-    pctHT: number;
-    pctDK: number;
-    remaining: number;
-}
+export type MonthlyHubTab = 'thidua' | 'suc-khoe' | 'nhip';
 
 export default function MonthlyReportPage() {
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
     const { currentUser, isAdmin, canAccessStore } = useAuth();
-    // Ref chỉ bọc khu vực Summary + Bảng thi đua để xuất ảnh
-    const reportRef = useRef<HTMLDivElement | null>(null);
+    const isGuest = Boolean(currentUser?.is_guest);
+    const isStaff = currentUser?.role === 'NHAN_VIEN';
 
+    // 1. Quản lý Tab từ URL query: ?tab=thidua | ?tab=suc-khoe | ?tab=nhip
+    const tabParam = searchParams.get('tab');
+    const initialTab: MonthlyHubTab = useMemo(() => {
+        if (tabParam === 'suc-khoe' || tabParam === 'cum') return 'suc-khoe';
+        if (tabParam === 'nhip' || tabParam === 'trend') return 'nhip';
+        return 'thidua';
+    }, [tabParam]);
+
+    const [activeTab, setActiveTab] = useState<MonthlyHubTab>(initialTab);
+
+    // Đồng bộ lại activeTab khi URL thay đổi
+    useEffect(() => {
+        if (tabParam === 'suc-khoe' || tabParam === 'cum') {
+            if (activeTab !== 'suc-khoe') setActiveTab('suc-khoe');
+        } else if (tabParam === 'nhip' || tabParam === 'trend') {
+            if (activeTab !== 'nhip') setActiveTab('nhip');
+        } else if (!tabParam || tabParam === 'thidua') {
+            if (activeTab !== 'thidua') setActiveTab('thidua');
+        }
+    }, [tabParam]);
+
+    const handleTabChange = (newTab: MonthlyHubTab) => {
+        setActiveTab(newTab);
+        setSearchParams(prev => {
+            const next = new URLSearchParams(prev);
+            next.set('tab', newTab);
+            return next;
+        }, { replace: true });
+    };
+
+    // 2. Bộ lọc thời gian & phạm vi ST
     const today = new Date();
-    const [selectedMonth, setSelectedMonth] = useState<number>(today.getMonth() + 1);
-    const [selectedYear, setSelectedYear] = useState<number>(today.getFullYear());
-    const [selectedStore, setSelectedStore] = useState<string>("all");
-    const [selectedDate, setSelectedDate] = useState<string>("latest");
+    const [selectedMonth, setSelectedMonth] = useState<number>(() => isGuest ? 10 : today.getMonth() + 1);
+    const [selectedYear, setSelectedYear] = useState<number>(() => isGuest ? 2026 : today.getFullYear());
+    const [selectedStore, setSelectedStore] = useState<string>('all');
+    const [selectedDate, setSelectedDate] = useState<string>('latest');
 
-    // Bộ lọc, sắp xếp và chế độ tóm tắt
-    const [sortOrder, setSortOrder] = useState<string>("pct-desc");
-    const [statusFilter, setStatusFilter] = useState<string>("all");
-    const [summaryMode, setSummaryMode] = useState<number>(1);
+    // Cố định tháng 10/2026 cho tài khoản trải nghiệm
+    useEffect(() => {
+        if (isGuest) {
+            if (selectedMonth !== 10) setSelectedMonth(10);
+            if (selectedYear !== 2026) setSelectedYear(2026);
+        }
+    }, [isGuest, selectedMonth, selectedYear]);
 
+    // 3. Dữ liệu tập trung
     const [records, setRecords] = useState<BusinessDayRecord[]>([]);
     const [campaigns, setCampaigns] = useState<CampaignDictItem[]>([]);
+    const [targetConfigs, setTargetConfigs] = useState<ClusterTargetConfigItem[]>([]);
+    const [globalPaceRate, setGlobalPaceRate] = useState<number>(100);
+    const [assessmentData, setAssessmentData] = useState<ClusterAssessmentData | null>(null);
+
     const [loading, setLoading] = useState<boolean>(true);
-    const [isProcessingImg, setIsProcessingImg] = useState<boolean>(false);
-    const [isCopyingImg, setIsCopyingImg] = useState<boolean>(false);
-    const [toastMessage, setToastMessage] = useState<string | null>(null);
+    const [isExporting, setIsExporting] = useState<boolean>(false);
+    const [isCopying, setIsCopying] = useState<boolean>(false);
+    const [toastState, setToastState] = useState<{ message: string; tone: 'success' | 'error' } | null>(null);
     const toastTimerRef = useRef<number | null>(null);
 
-    const showToast = (msg: string) => {
-        setToastMessage(msg);
-        if (toastTimerRef.current) {
-            window.clearTimeout(toastTimerRef.current);
-        }
-        toastTimerRef.current = window.setTimeout(() => setToastMessage(null), 2500);
+    const showToast = (message: string, tone: 'success' | 'error' = 'success') => {
+        setToastState({ message, tone });
+        if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+        toastTimerRef.current = window.setTimeout(() => setToastState(null), 3000);
     };
 
     useEffect(() => {
         return () => {
-            if (toastTimerRef.current) {
-                window.clearTimeout(toastTimerRef.current);
-            }
+            if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
         };
     }, []);
 
-    // 1. TẢI DỮ LIỆU TỪ SUPABASE
-    const loadData = async () => {
+    // 4. Tải toàn bộ dữ liệu kỳ tháng song song
+    const loadAllMonthlyData = async () => {
         setLoading(true);
-        const [recordRes, campRes] = await Promise.all([
-            fetchBusinessRecords(selectedMonth, selectedYear),
-            fetchCampaignDictionary()
-        ]);
+        try {
+            const [recordsRes, campRes, targetPkg, assessment] = await Promise.all([
+                fetchBusinessRecords(selectedMonth, selectedYear),
+                fetchCampaignDictionary(),
+                fetchClusterTargetConfigPackage(selectedMonth, selectedYear),
+                fetchClusterAssessment(selectedMonth, selectedYear)
+            ]);
 
-        if (recordRes.success && recordRes.data) {
-            setRecords(recordRes.data);
-        } else {
-            setRecords([]);
+            if (recordsRes.success && recordsRes.data) {
+                setRecords(recordsRes.data);
+            } else {
+                setRecords([]);
+            }
+
+            if (campRes.success && campRes.data) {
+                setCampaigns(campRes.data);
+            }
+
+            setTargetConfigs(targetPkg.items || []);
+            setGlobalPaceRate(targetPkg.globalPaceRate || 100);
+            setAssessmentData(assessment);
+        } catch (err: any) {
+            console.error('Lỗi nạp dữ liệu trung tâm báo cáo tháng:', err);
+            showToast('Lỗi khi đồng bộ dữ liệu từ Cloud!', 'error');
+        } finally {
+            setLoading(false);
         }
-
-        if (campRes.success && campRes.data) {
-            setCampaigns(campRes.data);
-        }
-
-        setLoading(false);
     };
 
     useEffect(() => {
-        loadData();
-        setSelectedDate("latest");
+        loadAllMonthlyData();
+        setSelectedDate('latest');
     }, [selectedMonth, selectedYear]);
 
-    // 2. DANH SÁCH ST THÀNH VIÊN ĐỘC LẬP
+    // 5. Danh sách ST phân quyền
     const allStoreList = useMemo(() => {
         const s = new Set<string>();
         records.forEach(r => {
@@ -139,23 +176,10 @@ export default function MonthlyReportPage() {
         return Array.from(s).sort();
     }, [records]);
 
-    const isGuest = Boolean(currentUser?.is_guest);
-    const isStaff = currentUser?.role === 'NHAN_VIEN';
-
-    // Cố định tháng 10/2026 cho tài khoản trải nghiệm
-    useEffect(() => {
-        if (isGuest) {
-            if (selectedMonth !== 10) setSelectedMonth(10);
-            if (selectedYear !== 2026) setSelectedYear(2026);
-        }
-    }, [isGuest, selectedMonth, selectedYear]);
-
-    // Lọc ST theo phân quyền tài khoản (Nhân viên chỉ xem shop mình, Quản lý/Trưởng ca xem các shop được phân quyền)
     const storeList = useMemo(() => {
-        if (isGuest) {
-            return [getShortStoreName(GUEST_DEMO_STORE)];
-        }
+        if (isGuest) return [getShortStoreName(GUEST_DEMO_STORE)];
         if (isAdmin) return allStoreList;
+
         const matched = allStoreList.filter(sName => {
             if (canAccessStore(sName)) return true;
             const originalRecord = records.find(r => getShortStoreName(r.storeName) === sName);
@@ -164,51 +188,40 @@ export default function MonthlyReportPage() {
         });
         if (matched.length > 0) return matched;
 
-        // Fallback nếu records tháng chưa có dữ liệu nhưng tài khoản có accessible_stores / store_name
         const accessible = currentUser?.accessible_stores && currentUser.accessible_stores.length > 0
             ? currentUser.accessible_stores
             : (currentUser?.store_name ? [currentUser.store_name] : []);
         return Array.from(new Set(accessible.map(s => getShortStoreName(s))));
     }, [allStoreList, isAdmin, canAccessStore, records, currentUser, isGuest]);
 
-    // CHỈ KHÓA TÀI KHOẢN NHÂN VIÊN VÀ TÀI KHOẢN TRẢI NGHIỆM. QUẢN LÝ (QL) VÀ TRƯỞNG CA (TC) LUÔN ĐƯỢC MỞ KHÓA
     const isLockedToSingleStore = (!isAdmin && isStaff) || isGuest;
     const canViewAllStores = !isGuest && (isAdmin || (!isStaff && storeList.length > 1));
 
-    // Tự động điều chỉnh ST được chọn cho nhân viên hoặc quản lý hoặc tài khoản trải nghiệm
     useEffect(() => {
         if (isAdmin) return;
-
         if (isGuest) {
             const guestShort = getShortStoreName(GUEST_DEMO_STORE);
-            if (selectedStore !== guestShort) {
-                setSelectedStore(guestShort);
-            }
+            if (selectedStore !== guestShort) setSelectedStore(guestShort);
             return;
         }
 
         if (currentUser?.role === 'NHAN_VIEN') {
             const myStore = storeList[0] || (currentUser.store_name ? getShortStoreName(currentUser.store_name) : '');
-            if (myStore && selectedStore !== myStore) {
-                setSelectedStore(myStore);
-            }
+            if (myStore && selectedStore !== myStore) setSelectedStore(myStore);
             return;
         }
 
-        // Quản lý hoặc Trưởng ca:
-        // Nếu chỉ phụ trách 1 shop và đang chọn 'all' mà không xem được all -> chọn shop đó
         if (storeList.length === 1 && selectedStore === 'all' && !canViewAllStores) {
             setSelectedStore(storeList[0]);
             return;
         }
 
-        // Nếu shop đang chọn không nằm trong danh sách được phép
         if (selectedStore !== 'all' && !storeList.includes(selectedStore) && storeList.length > 0) {
             setSelectedStore(canViewAllStores ? 'all' : storeList[0]);
         }
     }, [currentUser, isAdmin, isGuest, storeList, selectedStore, canViewAllStores]);
 
-    // 3. DANH SÁCH NGÀY BÁO CÁO CÓ SỐ LIỆU PHÙ HỢP THEO PHẠM VI ST ĐANG XEM
+    // 6. Danh sách ngày báo cáo
     const availableDates = useMemo(() => {
         let storeRecords = records;
         if (isGuest) {
@@ -221,7 +234,6 @@ export default function MonthlyReportPage() {
         return Array.from(new Set(storeRecords.map(r => r.reportDate))).filter(Boolean).sort().reverse();
     }, [records, selectedStore, isGuest, isAdmin, canAccessStore]);
 
-    // 4. MỐC NGÀY ĐANG ĐƯỢC CHỌN ĐỂ XEM
     const activeReportDate = useMemo(() => {
         if (availableDates.length === 0) return '';
         if (selectedDate === 'latest' || !selectedDate || !availableDates.includes(selectedDate)) {
@@ -230,17 +242,15 @@ export default function MonthlyReportPage() {
         return selectedDate;
     }, [availableDates, selectedDate]);
 
-    // 5. CÁC BẢN GHI TRONG MỐC NGÀY ĐƯỢC CHỌN
+    // 7. Bản ghi tổng quan cho Tab Thi Đua
     const recordsInActiveDay = useMemo(() => {
         if (!activeReportDate) return [];
         return records.filter(r => r.reportDate === activeReportDate);
     }, [records, activeReportDate]);
 
-    // 6. TÍNH TOÁN BẢN GHI TỔNG QUAN (CARD KPI)
     const currentRecord = useMemo<BusinessDayRecord | null>(() => {
         if (!activeReportDate || recordsInActiveDay.length === 0) return null;
-
-        const isAll = selectedStore === "all" || selectedStore === "Tổng";
+        const isAll = selectedStore === 'all' || selectedStore === 'Tổng';
 
         if (isAll) {
             const memberStores = recordsInActiveDay.filter(r => {
@@ -258,7 +268,6 @@ export default function MonthlyReportPage() {
             const totalActual = targetList.reduce((sum, r) => sum + (Number(r.revenueActual) || 0), 0);
             const totalTarget = targetList.reduce((sum, r) => sum + (Number(r.revenueTarget) || 0), 0);
             const totalInstallment = targetList.reduce((sum, r) => sum + (Number(r.revenueInstallment) || 0), 0);
-
             const passedDays = targetList[0]?.passedDays || new Date(activeReportDate).getDate();
             const totalDays = targetList[0]?.totalDays || 30;
 
@@ -295,369 +304,56 @@ export default function MonthlyReportPage() {
             };
         }
 
-        const singleStore = recordsInActiveDay.find(r => 
-            getShortStoreName(r.storeName) === selectedStore || 
+        const singleStore = recordsInActiveDay.find(r =>
+            getShortStoreName(r.storeName) === selectedStore ||
             isStoreMatch(r.storeName, selectedStore) ||
             (isGuest && (isStoreMatch(r.storeName, GUEST_DEMO_STORE) || isStoreMatch(r.storeName, '838679')))
         );
         return singleStore || null;
     }, [recordsInActiveDay, activeReportDate, selectedStore, selectedMonth, selectedYear, isAdmin, canAccessStore, isGuest]);
 
-    // 7. BÓC TÁCH DANH SÁCH THI ĐUA (HIỂN THỊ ĐẦY ĐỦ TÊN ST KHI XEM CỤM)
-    const emulationRowList = useMemo<EmulationRowItem[]>(() => {
-        if (!activeReportDate || recordsInActiveDay.length === 0) return [];
+    // 8. Đăng ký & điều phối xuất ảnh độc lập theo từng Tab
+    const tabExportHandlersRef = useRef<Record<MonthlyHubTab, ((action: 'DOWNLOAD' | 'COPY') => Promise<void>) | null>>({
+        thidua: null,
+        'suc-khoe': null,
+        nhip: null
+    });
 
-        const isAll = selectedStore === "all" || selectedStore === "Tổng";
-        const rows: EmulationRowItem[] = [];
+    const [activeAssessmentTemplates, setActiveAssessmentTemplates] = useState<AssessmentTemplate[]>([]);
 
-        if (isAll) {
-            const memberStores = recordsInActiveDay.filter(r => {
-                const sName = getShortStoreName(r.storeName);
-                if (sName === 'Tổng' || /^(tổng|tong)/i.test(r.storeName)) return false;
-                if (isAdmin) return true;
-                return canAccessStore(r.storeName) || canAccessStore(sName);
-            });
-            const targetRecords = memberStores.length > 0 ? memberStores : recordsInActiveDay.filter(r => {
-                const sName = getShortStoreName(r.storeName);
-                if (sName === 'Tổng' || /^(tổng|tong)/i.test(r.storeName)) return false;
-                return isAdmin || canAccessStore(r.storeName) || canAccessStore(sName);
-            });
+    const handleExportAction = async (action: 'DOWNLOAD' | 'COPY') => {
+        const handler = tabExportHandlersRef.current[activeTab];
+        if (handler) {
+            if (action === 'DOWNLOAD') setIsExporting(true);
+            else setIsCopying(true);
 
-            targetRecords.forEach(r => {
-                const sName = getShortStoreName(r.storeName);
-                if (r.emulationSummary) {
-                    Object.entries(r.emulationSummary).forEach(([rawKey, val]) => {
-                        const target = Number(val.target) || 0;
-                        if (target > 0) {
-                            const actual = Number(val.actual) || 0;
-                            const pctDK = typeof val.pctDK === 'number' ? val.pctDK : (target > 0 ? (actual / target * 100) : 0);
-                            const pctHT = target > 0 ? (actual / target * 100) : (typeof val.pctHT === 'number' ? val.pctHT : 0);
-                            const remaining = calculateRemainingTarget(target, actual, 1);
-                            rows.push({
-                                id: `${sName}-${rawKey}`,
-                                storeName: sName,
-                                rawKey,
-                                label: getCampaignLabel(rawKey, campaigns),
-                                target,
-                                actual,
-                                pctHT,
-                                pctDK,
-                                remaining
-                            });
-                        }
-                    });
-                }
-            });
+            try {
+                await handler(action);
+            } finally {
+                setIsExporting(false);
+                setIsCopying(false);
+            }
         } else {
-            const shop = recordsInActiveDay.find(r => 
-                getShortStoreName(r.storeName) === selectedStore || 
-                isStoreMatch(r.storeName, selectedStore) ||
-                (isGuest && (isStoreMatch(r.storeName, GUEST_DEMO_STORE) || isStoreMatch(r.storeName, '838679')))
-            );
-            if (shop?.emulationSummary) {
-                const sName = getShortStoreName(shop.storeName);
-                Object.entries(shop.emulationSummary).forEach(([rawKey, val]) => {
-                    const target = Number(val.target) || 0;
-                    if (target > 0) {
-                        const actual = Number(val.actual) || 0;
-                        const pctDK = typeof val.pctDK === 'number' ? val.pctDK : (target > 0 ? (actual / target * 100) : 0);
-                        const pctHT = target > 0 ? (actual / target * 100) : (typeof val.pctHT === 'number' ? val.pctHT : 0);
-                        const remaining = calculateRemainingTarget(target, actual, 1);
-                        rows.push({
-                            id: `${sName}-${rawKey}`,
-                            storeName: sName,
-                            rawKey,
-                            label: getCampaignLabel(rawKey, campaigns),
-                            target,
-                            actual,
-                            pctHT,
-                            pctDK,
-                            remaining
-                        });
-                    }
-                });
-            }
-        }
-
-        let filtered = rows;
-        if (statusFilter === "passed") {
-            filtered = filtered.filter(item => item.pctDK >= 100);
-        } else if (statusFilter === "failed") {
-            filtered = filtered.filter(item => item.pctDK < 100);
-        }
-
-        filtered.sort((a, b) => {
-            if (sortOrder === "pct-desc") return b.pctDK - a.pctDK;
-            if (sortOrder === "pct-asc") return a.pctDK - b.pctDK;
-            if (sortOrder === "pctHT-desc") return b.pctHT - a.pctHT;
-            if (sortOrder === "pctHT-asc") return a.pctHT - b.pctHT;
-            if (sortOrder === "remaining-desc") return b.remaining - a.remaining;
-            if (sortOrder === "remaining-asc") return a.remaining - b.remaining;
-            if (sortOrder === "store-asc") return a.storeName.localeCompare(b.storeName);
-            if (sortOrder === "name-asc") return a.label.localeCompare(b.label);
-            return 0;
-        });
-
-        return filtered;
-    }, [recordsInActiveDay, activeReportDate, selectedStore, campaigns, statusFilter, sortOrder, isAdmin, canAccessStore, isGuest]);
-
-    // 8. TÍNH TOÁN SỐ MỤC THI ĐUA ĐẠT / CHƯA ĐẠT CHO SUMMARY
-    const emulationStats = useMemo(() => {
-        const total = emulationRowList.length;
-        const passed = emulationRowList.filter(d => d.pctDK >= 100).length;
-        const passRate = total > 0 ? (passed / total * 100).toFixed(1) : "0.0";
-        return { total, passed, passRate };
-    }, [emulationRowList]);
-
-    // 9. TÍNH TOÁN BẢNG NHỊP DOANH THU THEO TỪNG NGÀY (DAILY PACE)
-    const dailyPaceData = useMemo(() => {
-        if (records.length === 0) return [];
-
-        const groupedByDate: Record<string, BusinessDayRecord[]> = {};
-        records.forEach(r => {
-            if (!r.reportDate) return;
-            if (!groupedByDate[r.reportDate]) groupedByDate[r.reportDate] = [];
-            groupedByDate[r.reportDate].push(r);
-        });
-
-        const dates = Object.keys(groupedByDate).sort();
-
-        const paceList = dates
-            .filter(d => {
-                if (isGuest) return isDemoDateAllowed(d);
-                if (selectedStore !== 'all') {
-                    return groupedByDate[d]?.some(r => 
-                        getShortStoreName(r.storeName) === selectedStore || 
-                        isStoreMatch(r.storeName, selectedStore)
-                    );
-                }
-                return true;
-            })
-            .map(d => {
-                const dayRecords = groupedByDate[d] || [];
-                if (selectedStore === "all" || selectedStore === "Tổng") {
-                    const memberStores = dayRecords.filter(r => {
-                        const sName = getShortStoreName(r.storeName);
-                        if (sName === 'Tổng' || /^(tổng|tong)/i.test(r.storeName)) return false;
-                        return isAdmin || canAccessStore(r.storeName) || canAccessStore(sName);
-                    });
-                    const targets = memberStores.length > 0 ? memberStores : dayRecords.filter(r => {
-                        const sName = getShortStoreName(r.storeName);
-                        if (sName === 'Tổng' || /^(tổng|tong)/i.test(r.storeName)) return false;
-                        return isAdmin || canAccessStore(r.storeName) || canAccessStore(sName);
-                    });
-                    const totalActual = targets.reduce((sum, r) => sum + (Number(r.revenueActual) || 0), 0);
-
-                    return {
-                        date: d,
-                        dayLabel: `Ngày ${new Date(d).getDate()}`,
-                        cumulativeRevenue: totalActual,
-                        dailyPace: 0
-                    };
-                } else {
-                    const shop = dayRecords.find(r => 
-                        getShortStoreName(r.storeName) === selectedStore || 
-                        isStoreMatch(r.storeName, selectedStore) ||
-                        (isGuest && (isStoreMatch(r.storeName, GUEST_DEMO_STORE) || isStoreMatch(r.storeName, '838679')))
-                    );
-                    return {
-                        date: d,
-                        dayLabel: `Ngày ${new Date(d).getDate()}`,
-                        cumulativeRevenue: shop ? (Number(shop.revenueActual) || 0) : 0,
-                        dailyPace: 0
-                    };
-                }
-            });
-
-        for (let i = 0; i < paceList.length; i++) {
-            if (i === 0) {
-                paceList[i].dailyPace = paceList[i].cumulativeRevenue;
-            } else {
-                paceList[i].dailyPace = Math.max(0, paceList[i].cumulativeRevenue - paceList[i - 1].cumulativeRevenue);
-            }
-        }
-
-        return paceList;
-    }, [records, selectedStore, isAdmin, canAccessStore]);
-
-    // 10. CẤU HÌNH 3 MẪU NHẬN XÉT & TÓM TẮT MỤC TIÊU TẠO SẴN CHO BÁO CÁO THÁNG
-    const monthlyAssessmentTemplates = useMemo<AssessmentTemplate[]>(() => {
-        if (!currentRecord) return [];
-
-        const getSummaryForMode = (mode: number) => {
-            const isAll = selectedStore === "all" || selectedStore === "Tổng";
-            const dispStore = isAll ? (isAdmin ? 'TỔNG TOÀN CỤM' : 'TỔNG CỤM PHỤ TRÁCH') : selectedStore;
-            let txt = `📢 [${dispStore}]\n- NGÀY ${formatDate(currentRecord.reportDate)}`;
-
-            txt += `\n\n💰 Lũy kế DTQĐ: ${formatValue(currentRecord.revenueActual)} (DKHT: ${(currentRecord.forecastCompletionRate || 0).toFixed(1)}%)`;
-            if (currentRecord.revenueActual < currentRecord.revenueTarget) {
-                txt += `\n- Còn lại: ${formatRemainingTarget(currentRecord.revenueTarget - currentRecord.revenueActual)}`;
-            }
-            if ((currentRecord.installmentRate || 0) > 0) {
-                txt += `\n- DT trả góp: ${formatValue(currentRecord.revenueInstallment)} (${(currentRecord.installmentRate || 0).toFixed(1)}%)`;
-            }
-
-            if (emulationRowList.length > 0) {
-                const targeted = emulationRowList;
-                const passed = targeted.filter(d => d.pctDK >= 100);
-                const passRate = targeted.length > 0 ? (passed.length / targeted.length * 100).toFixed(1) : '0';
-                txt += `\n\n🎯 THI ĐUA: DK Đạt ${passed.length}/${targeted.length} NH (${passRate}%)`;
-
-                const fails = targeted.filter(d => d.pctDK < 100);
-
-                if (fails.length === 0) {
-                    txt += `\n\n🎉 Xuất sắc! Đã hoàn thành tất cả các chỉ tiêu!`;
-                } else {
-                    const groupNear = fails.filter(d => d.pctDK >= 80);
-                    const groupSpeed = fails.filter(d => d.pctDK >= 50 && d.pctDK < 80);
-                    const groupAlert = fails.filter(d => d.pctDK < 50);
-
-                    if (mode === 1) {
-                        txt += `\n\n📊 TỔNG HỢP DK CHƯA ĐẠT (${fails.length} NH):`;
-                        if (groupNear.length > 0) txt += `\n- ⚡ CẬN ĐÍCH (>80%): ${groupNear.length} NH`;
-                        if (groupSpeed.length > 0) txt += `\n- 🔥 CẦN TĂNG TỐC (50% - 80%): ${groupSpeed.length} NH`;
-                        if (groupAlert.length > 0) txt += `\n- ⚠️ NGUY HIỂM (<50%): ${groupAlert.length} NH`;
-                    } else if (mode === 2) {
-                        txt += `\n\n📊 CHI TIẾT DK CHƯA ĐẠT (${fails.length} NH):`;
-                        if (groupNear.length > 0) {
-                            txt += `\n\n⚡ CẬN ĐÍCH (>80%): ${groupNear.length} NH`;
-                            groupNear.forEach(d => {
-                                const prefix = isAll ? `[${d.storeName}] ` : '';
-                                txt += `\n- ${prefix}${d.label}: thiếu ${formatValue(Math.max(0, d.target - d.actual))} (${d.pctDK.toFixed(1)}%)`;
-                            });
-                        }
-                        if (groupSpeed.length > 0) {
-                            txt += `\n\n🔥 CẦN TĂNG TỐC (50% - 80%): ${groupSpeed.length} NH`;
-                            groupSpeed.forEach(d => {
-                                const prefix = isAll ? `[${d.storeName}] ` : '';
-                                txt += `\n- ${prefix}${d.label}: thiếu ${formatValue(Math.max(0, d.target - d.actual))} (${d.pctDK.toFixed(1)}%)`;
-                            });
-                        }
-                        if (groupAlert.length > 0) {
-                            txt += `\n\n⚠️ NGUY HIỂM (<50%): ${groupAlert.length} NH`;
-                            groupAlert.forEach(d => {
-                                const prefix = isAll ? `[${d.storeName}] ` : '';
-                                txt += `\n- ${prefix}${d.label}: thiếu ${formatValue(Math.max(0, d.target - d.actual))} (${d.pctDK.toFixed(1)}%)`;
-                            });
-                        }
-                    } else {
-                        txt += `\n\n⚠️ CHI TIẾT DK CHƯA ĐẠT (${fails.length} NH):`;
-                        fails.forEach(d => {
-                            const prefix = isAll ? `[${d.storeName}] ` : '';
-                            txt += `\n- ${prefix}${d.label}: thiếu ${formatValue(Math.max(0, d.target - d.actual))} (${d.pctDK.toFixed(1)}%)`;
-                        });
-                    }
-                }
-            }
-
-            return txt;
-        };
-
-        return [
-            { id: 1, title: 'Mẫu 1: Tổng quát', badge: 'Súc tích', content: getSummaryForMode(1), description: 'Tóm tắt chỉ số và phân loại số lượng ngành hàng chưa đạt' },
-            { id: 2, title: 'Mẫu 2: Chi tiết 3 nhóm', badge: 'Phân loại', content: getSummaryForMode(2), description: 'Phân loại chi tiết ngành hàng cận đích, tăng tốc và nguy hiểm' },
-            { id: 3, title: 'Mẫu 3: Chi tiết toàn bộ', badge: 'Hành động', content: getSummaryForMode(3), description: 'Chi tiết toàn bộ danh sách ngành hàng cần bổ sung' }
-        ];
-    }, [currentRecord, emulationRowList, selectedStore, isAdmin]);
-
-    const summaryText = useMemo(() => {
-        return monthlyAssessmentTemplates.find(t => t.id === summaryMode)?.content
-            || monthlyAssessmentTemplates[0]?.content
-            || '';
-    }, [monthlyAssessmentTemplates, summaryMode]);
-
-    const handleCopyText = () => {
-        if (!summaryText) {
-            showToast('Chưa có nội dung tóm tắt để sao chép!');
-            return;
-        }
-        navigator.clipboard.writeText(summaryText);
-        showToast('Đã copy nội dung nhận xét vào clipboard!');
-    };
-
-    // HÀM TẠO ẢNH 8K SIÊU NÉT (VỚI AUTO-SAFETY CLAMP) - ĐỘC LẬP HOÀN TOÀN VỚI THIẾT BỊ NGƯỜI DÙNG
-    const generate8KCanvas = async () => {
-        if (!reportRef.current) return null;
-        const targetWidth = isAllMode ? 880 : 820;
-        const hasInstallmentRate = (currentRecord?.installmentRate || 0) > 0;
-        return await generateStandardReportCanvas(reportRef.current, {
-            targetWidth,
-            kpiColumns: hasInstallmentRate ? 6 : 5,
-            containerSelector: '[data-report-table="true"]',
-            onCustomClone: (_doc, clonedReport) => {
-                // Đảm bảo banner tiêu đề và bảng hiển thị dạng hàng ngang đối xứng trong ảnh xuất
-                clonedReport.querySelectorAll<HTMLElement>('.flex-col').forEach(el => {
-                    el.style.flexDirection = 'row';
-                    el.style.alignItems = 'center';
-                    el.style.justifyContent = 'space-between';
-                });
-            }
-        });
-    };
-
-    // LƯU ẢNH CHẤT LƯỢNG 8K
-    const handleSaveImage = async () => {
-        if (!reportRef.current || isProcessingImg || isCopyingImg) return;
-        setIsProcessingImg(true);
-
-        try {
-            const canvas = await generate8KCanvas();
-            if (!canvas) throw new Error("Không thể khởi tạo canvas");
-
-            const fileName = buildReportImageFileName(
-                'Bao_Cao_Thang',
-                selectedStore,
-                `T${selectedMonth}_${selectedYear}`
-            );
-            const success = await downloadReportCanvas(canvas, fileName);
-            if (success) {
-                showToast('Đã tải file ảnh 8K thành công!');
-            } else {
-                throw new Error("Không thể tạo file ảnh");
-            }
-        } catch (err) {
-            console.error("Lỗi khi lưu ảnh:", err);
-            showToast('Có lỗi xảy ra khi tạo file ảnh!');
-        } finally {
-            setIsProcessingImg(false);
+            showToast('Chức năng xuất ảnh cho tab này đang sẵn sàng...', 'error');
         }
     };
 
-    // COPY ẢNH VÀO CLIPBOARD ĐỘ NÉT CAO 8K
-    const handleCopyImageClipboard = async () => {
-        if (!reportRef.current || isProcessingImg || isCopyingImg) return;
-        setIsCopyingImg(true);
-
-        try {
-            const canvas = await generate8KCanvas();
-            if (!canvas) throw new Error("Không thể khởi tạo canvas");
-
-            const success = await copyReportCanvasToClipboard(canvas);
-            if (success) {
-                showToast('Đã copy ảnh 8K vào clipboard! (Ctrl + V để dán)');
-            } else {
-                showToast('Trình duyệt chặn copy ảnh, vui lòng dùng "TẢI ẢNH"!');
-            }
-        } catch (err) {
-            console.error("Lỗi khi copy ảnh:", err);
-            showToast('Có lỗi khi copy ảnh vào clipboard!');
-        } finally {
-            setIsCopyingImg(false);
-        }
-    };
-
-    const isAllMode = selectedStore === "all" || selectedStore === "Tổng";
+    const isAllMode = selectedStore === 'all' || selectedStore === 'Tổng';
 
     return (
-        <div className="p-4 sm:p-6 space-y-4 max-w-full mx-auto w-full">
-            {/* Toast thông báo */}
-            {toastMessage && (
+        <div className="p-3 sm:p-5 space-y-3.5 max-w-full mx-auto w-full">
+            {/* Toast Thông Báo */}
+            {toastState && (
                 <div
                     role="status"
                     aria-live="polite"
-                    className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-5 py-2.5 rounded-full text-xs sm:text-sm font-bold shadow-xl z-50 border border-slate-700"
+                    className={`fixed bottom-6 left-1/2 -translate-x-1/2 px-5 py-2.5 rounded-full text-xs sm:text-sm font-bold shadow-xl z-50 flex items-center gap-2 border ${toastState.tone === 'error'
+                        ? 'bg-rose-950 text-white border-rose-500'
+                        : 'bg-slate-900 text-white border-slate-700'
+                        }`}
                 >
-                    {toastMessage}
+                    <Check className={`w-4 h-4 ${toastState.tone === 'error' ? 'text-rose-400' : 'text-emerald-400'}`} aria-hidden="true" />
+                    <span>{toastState.message}</span>
                 </div>
             )}
 
@@ -670,89 +366,140 @@ export default function MonthlyReportPage() {
                     tableReady={true}
                     tableName="daily_business_records"
                     lastSyncTime={records[0]?.updatedAt}
-                    onSyncNow={loadData}
+                    onSyncNow={loadAllMonthlyData}
                 />
             </div>
 
             {/* TẦNG 2: CHI TIẾT PHIÊN DỮ LIỆU & ĐỘ MỚI CLOUD */}
             <ReportDataFreshnessBar
-                latestDataDate={currentRecord?.reportDate || (availableDates.length > 0 ? availableDates[0] : null)}
+                latestDataDate={activeReportDate || (availableDates.length > 0 ? availableDates[0] : null)}
                 expectedDate={getYesterdayDateString()}
-                lastUpdatedAt={currentRecord?.updatedAt}
-                lastUpdatedBy={currentRecord?.updatedBy}
+                lastUpdatedAt={records[0]?.updatedAt}
+                lastUpdatedBy={records[0]?.updatedBy}
                 storeName={selectedStore === 'all' ? 'Toàn cụm ST phụ trách' : selectedStore}
                 actionUrl="/cap-nhat-ocr"
                 actionLabel="Cập nhật số liệu LK"
-                canUpdate={!currentUser?.is_guest && (isAdmin || ['ADMIN', 'QUAN_LY', 'TRUONG_CA'].includes(currentUser?.role || ''))}
+                canUpdate={!isGuest && (isAdmin || ['ADMIN', 'QUAN_LY', 'TRUONG_CA'].includes(currentUser?.role || ''))}
                 compact={true}
             />
 
-            {/* TẦNG 3: KHỐI TIÊU ĐỀ BÁO CÁO */}
-            <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-700 font-bold shrink-0">
-                        <BarChart3 className="w-5 h-5" aria-hidden="true" />
-                    </div>
-                    <div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                            <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 tracking-tight">
-                                Báo Cáo Doanh Thu &amp; Thi Đua Tháng {selectedMonth}/{selectedYear}
-                            </h1>
-                            <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border bg-amber-100 text-amber-900 border-amber-300">
-                                Lũy Kế Tháng
-                            </span>
+            {/* TẦNG 3: TIÊU ĐỀ BÁO CÁO & SUB-TABS SEGMENTED CHUYỂN ĐỔI 3 CHẾ ĐỘ */}
+            <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-700 font-bold shrink-0">
+                            <Layers className="w-5 h-5" aria-hidden="true" />
                         </div>
-                        <p className="text-xs text-slate-600 mt-0.5 flex items-center gap-1.5 flex-wrap">
-                            <span>Trạng thái số liệu:</span>
-                            {currentRecord ? (
-                                <span className="text-emerald-800 font-bold bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded text-[10px]">
-                                    Bản ghi ngày {formatDate(currentRecord.reportDate)}
+                        <div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <h1 className="text-base sm:text-lg font-extrabold text-slate-900 tracking-tight">
+                                    BC Lũy Kế (Tổng Hợp)
+                                </h1>
+                                <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border bg-amber-100 text-amber-900 border-amber-300">
+                                    Kỳ T{selectedMonth}/{selectedYear}
                                 </span>
-                            ) : (
-                                <span className="text-amber-800 font-bold bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded text-[10px]">
-                                    Chưa có dữ liệu
-                                </span>
-                            )}
-                        </p>
+                            </div>
+                            <p className="text-xs text-slate-500 mt-0.5">
+                                Trung tâm phân tích lũy kế: Tiến độ thi đua, Sức khỏe cụm ST và Nhịp bán hàng theo ngày
+                            </p>
+                        </div>
                     </div>
-                </div>
 
-                <div className="flex items-center gap-2 self-end sm:self-auto">
                     <button
                         type="button"
                         aria-label="Tải lại số liệu"
-                        onClick={loadData}
+                        onClick={loadAllMonthlyData}
                         disabled={loading}
-                        className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 border border-slate-300 disabled:opacity-50"
+                        className="self-end sm:self-auto px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 border border-slate-300 disabled:opacity-50"
                         title="Tải lại số liệu từ Cloud"
                     >
                         <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-amber-700' : ''}`} aria-hidden="true" />
                         <span>Tải Lại</span>
                     </button>
                 </div>
+
+                {/* THANH SEGMENTED SUB-TABS: DOANH THU & THI ĐUA ➔ SỨC KHỎE VƯỢT TRỘI ➔ NHỊP DOANH THU */}
+                <div
+                    role="tablist"
+                    aria-label="Chế độ xem báo cáo lũy kế"
+                    className="grid grid-cols-3 p-1 rounded-xl bg-slate-100/90 border border-slate-200 text-xs font-bold gap-1"
+                >
+                    {/* Tab 1: Doanh thu & Thi Đua */}
+                    <button
+                        type="button"
+                        role="tab"
+                        aria-selected={activeTab === 'thidua'}
+                        onClick={() => handleTabChange('thidua')}
+                        className={`flex items-center justify-center gap-1.5 py-2 px-2 sm:px-3 rounded-lg transition-all cursor-pointer text-center ${activeTab === 'thidua'
+                            ? 'bg-white text-slate-900 shadow-xs font-black'
+                            : 'text-slate-600 hover:text-slate-900'
+                            }`}
+                    >
+                        <BarChart3 className="w-4 h-4 text-amber-600 shrink-0" aria-hidden="true" />
+                        <span className="truncate">Doanh thu &amp; Thi Đua</span>
+                        <span className="hidden sm:inline text-[9.5px] px-1.5 py-0.2 rounded-full bg-amber-50 text-amber-900 border border-amber-200">
+                            24 Ngành
+                        </span>
+                    </button>
+
+                    {/* Tab 2: Sức khỏe Vượt trội */}
+                    <button
+                        type="button"
+                        role="tab"
+                        aria-selected={activeTab === 'suc-khoe'}
+                        onClick={() => handleTabChange('suc-khoe')}
+                        className={`flex items-center justify-center gap-1.5 py-2 px-2 sm:px-3 rounded-lg transition-all cursor-pointer text-center ${activeTab === 'suc-khoe'
+                            ? 'bg-white text-slate-900 shadow-xs font-black'
+                            : 'text-slate-600 hover:text-slate-900'
+                            }`}
+                    >
+                        <Store className="w-4 h-4 text-blue-600 shrink-0" aria-hidden="true" />
+                        <span className="truncate">Sức khỏe Vượt trội</span>
+                        <span className="hidden sm:inline text-[9.5px] px-1.5 py-0.2 rounded-full bg-blue-50 text-blue-800 border border-blue-200">
+                            Cụm ST
+                        </span>
+                    </button>
+
+                    {/* Tab 3: Nhịp Doanh Thu */}
+                    <button
+                        type="button"
+                        role="tab"
+                        aria-selected={activeTab === 'nhip'}
+                        onClick={() => handleTabChange('nhip')}
+                        className={`flex items-center justify-center gap-1.5 py-2 px-2 sm:px-3 rounded-lg transition-all cursor-pointer text-center ${activeTab === 'nhip'
+                            ? 'bg-white text-slate-900 shadow-xs font-black'
+                            : 'text-slate-600 hover:text-slate-900'
+                            }`}
+                    >
+                        <TrendingUp className="w-4 h-4 text-emerald-600 shrink-0" aria-hidden="true" />
+                        <span className="truncate">Nhịp Doanh Thu</span>
+                        <span className="hidden sm:inline text-[9.5px] px-1.5 py-0.2 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
+                            31 Ngày
+                        </span>
+                    </button>
+                </div>
             </div>
 
             {/* TẦNG 4: THANH ĐIỀU KHIỂN & BỘ LỌC CHUẨN RULE 10 (2 DÒNG ĐỘC LẬP) */}
-            <div className="bg-slate-50/90 border border-slate-200/90 rounded-2xl p-3.5 sm:p-4 space-y-3">
+            <div className="bg-slate-50/90 border border-slate-200/90 rounded-2xl p-3 sm:p-3.5 space-y-2.5">
                 {/* DÒNG 1: BỘ LỌC ST / CỤM (BẮT BUỘC ĐẦU TIÊN & NẰM RIÊNG LẺ 1 DÒNG) */}
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
                     <div className="flex-1">
-                        <div className="flex items-center justify-between mb-1.5 flex-wrap gap-1.5">
+                        <div className="flex items-center justify-between mb-1 flex-wrap gap-1.5">
                             <label
-                                htmlFor="monthly-store-select"
+                                htmlFor="hub-store-select"
                                 className="text-[11px] font-bold text-slate-700 uppercase flex items-center gap-1.5"
                             >
                                 <Store className="w-3.5 h-3.5 text-amber-700" aria-hidden="true" />
                                 <span>ST / Cụm</span>
                             </label>
-                            {/* Nút hành động trực tiếp theo ST */}
                             <div className="flex items-center gap-1.5 flex-wrap">
-                                {!currentUser?.is_guest && (isAdmin || ['ADMIN', 'QUAN_LY', 'TRUONG_CA'].includes(currentUser?.role || '')) && (
+                                {!isGuest && (isAdmin || ['ADMIN', 'QUAN_LY', 'TRUONG_CA'].includes(currentUser?.role || '')) && (
                                     <>
                                         <button
                                             type="button"
                                             onClick={() => navigate('/cap-nhat-ocr')}
-                                            className="text-[11px] font-bold text-blue-800 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 border border-blue-300 px-2.5 py-1.5 min-h-[32px] rounded-lg flex items-center gap-1.5 transition cursor-pointer"
+                                            className="text-[11px] font-bold text-blue-800 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 border border-blue-300 px-2.5 py-1 min-h-[30px] rounded-lg flex items-center gap-1.5 transition cursor-pointer"
                                             title="Cập nhật số liệu lũy kế qua AI OCR hoặc nạp thủ công"
                                         >
                                             <Camera className="w-3.5 h-3.5 text-blue-700 shrink-0" aria-hidden="true" />
@@ -761,7 +508,7 @@ export default function MonthlyReportPage() {
                                         <button
                                             type="button"
                                             onClick={() => navigate('/cau-hinh-st')}
-                                            className="text-[11px] font-bold text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-100 border border-slate-300 px-2.5 py-1.5 min-h-[32px] rounded-lg flex items-center gap-1.5 transition cursor-pointer"
+                                            className="text-[11px] font-bold text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-100 border border-slate-300 px-2.5 py-1 min-h-[30px] rounded-lg flex items-center gap-1.5 transition cursor-pointer"
                                             title="Cấu hình chỉ tiêu và tham số ST"
                                         >
                                             <Target className="w-3.5 h-3.5 text-amber-600 shrink-0" aria-hidden="true" />
@@ -772,7 +519,7 @@ export default function MonthlyReportPage() {
                             </div>
                         </div>
 
-                        <div className={`flex items-center gap-1.5 px-3 py-1.5 min-h-[38px] rounded-xl border text-xs font-bold transition-all w-full ${isLockedToSingleStore
+                        <div className={`flex items-center gap-1.5 px-3 py-1.5 min-h-[36px] rounded-xl border text-xs font-bold transition-all w-full ${isLockedToSingleStore
                             ? 'bg-amber-50/90 border-amber-300 text-amber-900 shadow-sm'
                             : 'bg-white border-slate-300 text-slate-800 hover:border-amber-400'
                             }`}>
@@ -780,19 +527,15 @@ export default function MonthlyReportPage() {
                                 <Lock className="w-3.5 h-3.5 text-amber-700 shrink-0" aria-hidden="true" />
                             )}
                             <select
-                                id="monthly-store-select"
+                                id="hub-store-select"
                                 name="store"
                                 value={selectedStore}
                                 onChange={(e) => {
                                     setSelectedStore(e.target.value);
-                                    setSelectedDate("latest");
+                                    setSelectedDate('latest');
                                 }}
                                 disabled={isLockedToSingleStore}
-                                title={isLockedToSingleStore ? 'Tài khoản nhân viên được cố định theo ST đã đăng ký' : undefined}
-                                className={`bg-transparent outline-none font-bold w-full ${isLockedToSingleStore
-                                    ? 'cursor-not-allowed text-amber-900 font-black'
-                                    : 'cursor-pointer text-slate-800'
-                                    }`}
+                                className={`bg-transparent outline-none font-bold w-full ${isLockedToSingleStore ? 'cursor-not-allowed text-amber-900 font-black' : 'cursor-pointer text-slate-800'}`}
                             >
                                 {canViewAllStores && (
                                     <option value="all">
@@ -815,21 +558,21 @@ export default function MonthlyReportPage() {
                     </div>
                 </div>
 
-                {/* DÒNG 2: TIÊU CHÍ THỜI GIAN, HIỂN THỊ & CÔNG CỤ XUẤT ẢNH */}
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pt-2 border-t border-slate-200/80">
-                    {/* Nhóm tiêu chí thời gian & lọc */}
-                    <div className="flex items-center gap-2 flex-wrap">
+                {/* DÒNG 2: TIÊU CHÍ THỜI GIAN, NGÀY CHỐT & CỤM NÚT XUẤT ẢNH BÁO CÁO */}
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 pt-2 border-t border-slate-200/80">
+                    <div className="flex items-center gap-2 flex-wrap text-xs">
+                        {/* Kỳ tháng */}
                         <div className="flex items-center gap-1.5">
-                            <label htmlFor="monthly-month-select" className="text-xs font-bold text-slate-600 whitespace-nowrap">
+                            <label htmlFor="hub-month-select" className="font-bold text-slate-600 whitespace-nowrap">
                                 Kỳ tháng:
                             </label>
                             <select
-                                id="monthly-month-select"
+                                id="hub-month-select"
                                 name="month"
                                 aria-label="Chọn tháng báo cáo"
                                 value={selectedMonth}
                                 onChange={(e) => setSelectedMonth(Number(e.target.value))}
-                                className="bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 min-h-[36px] text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer shadow-2xs"
+                                className="bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 min-h-[34px] font-bold text-slate-800 outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer shadow-2xs"
                             >
                                 {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
                                     <option key={m} value={m}>Tháng {m}/{selectedYear}</option>
@@ -837,481 +580,115 @@ export default function MonthlyReportPage() {
                             </select>
                         </div>
 
-                        <div className="flex items-center gap-1.5">
-                            <label htmlFor="monthly-date-select" className="text-xs font-bold text-slate-600 whitespace-nowrap">
-                                Ngày chốt:
-                            </label>
-                            <select
-                                id="monthly-date-select"
-                                name="reportDate"
-                                aria-label="Chọn ngày chốt số liệu"
-                                value={selectedDate}
-                                onChange={(e) => setSelectedDate(e.target.value)}
-                                disabled={availableDates.length === 0}
-                                className="bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 min-h-[36px] text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer disabled:opacity-50 shadow-2xs"
-                            >
-                                <option value="latest">Mới nhất ({availableDates[0] ? formatDate(availableDates[0]) : 'Chưa có'})</option>
-                                {availableDates.map(d => (
-                                    <option key={d} value={d}>Ngày {formatDate(d)}</option>
-                                ))}
-                            </select>
-                        </div>
-
-                        <button
-                            type="button"
-                            aria-label="Tải lại số liệu"
-                            onClick={loadData}
-                            disabled={loading}
-                            className="p-2 min-h-[36px] min-w-[36px] flex items-center justify-center bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-xl transition cursor-pointer disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 shadow-2xs"
-                            title="Tải lại số liệu"
-                        >
-                            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-amber-700' : ''}`} aria-hidden="true" />
-                        </button>
+                        {/* Ngày chốt số */}
+                        {activeTab !== 'nhip' && availableDates.length > 0 && (
+                            <div className="flex items-center gap-1.5">
+                                <label htmlFor="hub-date-select" className="font-bold text-slate-600 whitespace-nowrap">
+                                    Ngày chốt:
+                                </label>
+                                <select
+                                    id="hub-date-select"
+                                    name="reportDate"
+                                    aria-label="Chọn ngày chốt số liệu"
+                                    value={selectedDate}
+                                    onChange={(e) => setSelectedDate(e.target.value)}
+                                    className="bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 min-h-[34px] font-bold text-slate-800 outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer shadow-2xs"
+                                >
+                                    <option value="latest">Mới nhất ({availableDates[0] ? formatDate(availableDates[0]) : 'Chưa có'})</option>
+                                    {availableDates.map(d => (
+                                        <option key={d} value={d}>Ngày {formatDate(d)}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
                     </div>
 
-                    {/* Nhóm công cụ xuất báo cáo */}
-                    {currentRecord && (
-                        <div className="flex items-center gap-2 self-end lg:self-auto">
-                            <ReportActionButtons
-                                onExportImage={handleSaveImage}
-                                onCopyImage={handleCopyImageClipboard}
-                                isExporting={isProcessingImg}
-                                isCopying={isCopyingImg}
-                                exportButtonLabel="TẢI ẢNH"
-                                copyImageButtonLabel="COPY ẢNH"
-                                hasAssessment={true}
-                                assessmentTemplates={monthlyAssessmentTemplates}
-                                onCopyText={handleCopyText}
-                                reportTitle={`Báo Cáo Doanh Thu Tháng ${selectedMonth}/${selectedYear} - ${selectedStore}`}
-                                periodLabel={`Tháng ${selectedMonth}/${selectedYear}`}
-                            />
-                        </div>
-                    )}
+                    {/* CỤM NÚT THAO TÁC XUẤT ẢNH & NHẬN XÉT CỦA TAB HIỆN TẠI */}
+                    <div className="flex items-center gap-2 self-end lg:self-auto">
+                        <ReportActionButtons
+                            onExportImage={() => handleExportAction('DOWNLOAD')}
+                            onCopyImage={() => handleExportAction('COPY')}
+                            isExporting={isExporting}
+                            isCopying={isCopying}
+                            exportButtonLabel="TẢI ẢNH"
+                            copyImageButtonLabel="COPY ẢNH"
+                            hasAssessment={activeTab !== 'nhip'}
+                            assessmentTemplates={activeAssessmentTemplates}
+                            reportTitle={`Báo Cáo Lũy Kế T${selectedMonth}/${selectedYear} - ${selectedStore}`}
+                            periodLabel={`Tháng ${selectedMonth}/${selectedYear}`}
+                        />
+                    </div>
                 </div>
             </div>
 
-            {/* KHU VỰC HIỂN THỊ */}
+            {/* KHU VỰC HIỂN THỊ NỘI DUNG TỪNG TAB */}
             {loading ? (
                 <div className="bg-white p-16 rounded-3xl border border-slate-200 text-center space-y-3 shadow-sm">
                     <RefreshCw className="w-8 h-8 animate-spin mx-auto text-amber-600" aria-hidden="true" />
-                    <p className="text-xs font-bold text-slate-600">Đang tổng hợp số liệu từ Cloud...</p>
-                </div>
-            ) : !currentRecord ? (
-                <div className="bg-white p-12 sm:p-16 rounded-3xl border border-slate-200 text-center space-y-4 shadow-sm">
-                    <div className="w-14 h-14 bg-amber-50 text-amber-700 rounded-2xl flex items-center justify-center mx-auto border border-amber-200">
-                        <AlertCircle className="w-7 h-7" aria-hidden="true" />
-                    </div>
-                    <div className="max-w-md mx-auto space-y-1.5">
-                        <h3 className="text-base font-black text-slate-800 uppercase tracking-wide">
-                            Chưa có dữ liệu kinh doanh
-                        </h3>
-                        <p className="text-xs text-slate-600 leading-relaxed">
-                            Tháng <b>{selectedMonth}/{selectedYear}</b> {selectedStore !== 'all' ? `của ST ${selectedStore}` : ''} chưa được ghi nhận bản ghi thực tế nào trên hệ thống.
-                        </p>
-                        <p className="text-xs font-bold text-blue-700 pt-1">
-                            Vui lòng nhập dữ liệu doanh thu / thi đua từ màn hình Cập Nhật để xem báo cáo.
-                        </p>
-                    </div>
-                    <div className="pt-2">
-                        <button
-                            type="button"
-                            onClick={() => navigate('/cap-nhat-ocr')}
-                            className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl text-xs font-black uppercase tracking-wider inline-flex items-center gap-2 shadow-sm transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                        >
-                            <span>Đi Đến Màn Hình Cập Nhật</span>
-                            <ArrowRight className="w-4 h-4" aria-hidden="true" />
-                        </button>
-                    </div>
+                    <p className="text-xs font-bold text-slate-600">Đang tổng hợp số liệu kỳ tháng từ Cloud...</p>
                 </div>
             ) : (
-                <div className="space-y-4">
-                    {/* ==============================================================
-              VÙNG CHỤP ẢNH BÁO CÁO (CHỈ CHỨA BANNER + SUMMARY + BẢNG THI ĐUA)
-              ============================================================== */}
-                    <div
-                        ref={reportRef}
-                        data-capture-target="true"
-                        data-report-table="true"
-                        className="space-y-4 bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-sm font-avo"
-                    >
-                        {/* 1. BANNER TIÊU ĐỀ BÁO CÁO */}
-                        <div className="bg-gradient-to-r from-slate-900 to-slate-800 text-white p-4 sm:p-5 rounded-xl shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                            <div>
-                                <div className="flex items-center gap-2">
-                                    <Store className="w-5 h-5 text-amber-400 shrink-0" aria-hidden="true" />
-                                    <h2 className="font-black text-sm sm:text-base tracking-wide uppercase">
-                                        {currentRecord.storeName}
-                                    </h2>
-                                </div>
-                                <p className="text-xs text-slate-300 mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1">
-                                    <span>Số liệu ngày: <b className="text-amber-300 font-mono tabular-nums">{formatDate(currentRecord.reportDate)}</b></span>
-                                    <span className="hidden sm:inline text-slate-500" aria-hidden="true">•</span>
-                                    <span>Tiến độ ngày: <b className="text-white font-mono tabular-nums">{currentRecord.passedDays}/{currentRecord.totalDays} ngày</b></span>
-                                </p>
-                            </div>
+                <div className="mt-2">
+                    {/* TAB 1: DOANH THU & THI ĐUA */}
+                    {activeTab === 'thidua' && (
+                        <MonthlyEmulationTab
+                            records={records}
+                            campaigns={campaigns}
+                            currentRecord={currentRecord}
+                            selectedMonth={selectedMonth}
+                            selectedYear={selectedYear}
+                            selectedStore={selectedStore}
+                            activeReportDate={activeReportDate}
+                            isAllMode={isAllMode}
+                            isAdmin={isAdmin}
+                            isGuest={isGuest}
+                            canAccessStore={canAccessStore}
+                            showToast={showToast}
+                            onRegisterExportHandler={(handler) => {
+                                tabExportHandlersRef.current.thidua = handler;
+                            }}
+                            onUpdateAssessmentTemplates={setActiveAssessmentTemplates}
+                        />
+                    )}
 
-                            <div className="flex items-center gap-2">
-                                <span className="bg-white/10 px-3 py-1.5 rounded-xl text-xs font-bold border border-white/15 font-mono tabular-nums text-emerald-300">
-                                    Dự kiến HT: {(currentRecord.forecastCompletionRate || 0).toFixed(1)}%
-                                </span>
-                            </div>
-                        </div>
+                    {/* TAB 2: SỨC KHỎE VƯỢT TRỘI */}
+                    {activeTab === 'suc-khoe' && (
+                        <ClusterHealthTab
+                            records={records}
+                            targetConfigs={targetConfigs}
+                            globalPaceRate={globalPaceRate}
+                            assessmentData={assessmentData}
+                            selectedMonth={selectedMonth}
+                            selectedYear={selectedYear}
+                            selectedStore={selectedStore}
+                            effectiveDate={activeReportDate}
+                            availableDates={availableDates}
+                            isAdmin={isAdmin}
+                            isGuest={isGuest}
+                            canAccessStore={canAccessStore}
+                            showToast={showToast}
+                            onRefreshData={loadAllMonthlyData}
+                            onRegisterExportHandler={(handler) => {
+                                tabExportHandlersRef.current['suc-khoe'] = handler;
+                            }}
+                            onUpdateAssessmentTemplates={setActiveAssessmentTemplates}
+                        />
+                    )}
 
-                        {/* 2. CHUẨN HÓA CARD SUMMARY KPI */}
-                        {(() => {
-                            const hasInstallmentRate = (currentRecord.installmentRate || 0) > 0;
-                            return (
-                                <div data-kpi-grid="true" className={`grid grid-cols-2 sm:grid-cols-3 ${hasInstallmentRate ? 'lg:grid-cols-6' : 'lg:grid-cols-5'} gap-2.5`}>
-                                    {/* Card 1: DOANH THU QĐ */}
-                                    <div className="bg-amber-50/80 border border-amber-200 rounded-xl p-3 shadow-sm text-center">
-                                        <span className="text-[10px] font-bold text-amber-900 uppercase tracking-wider block">DTQĐ</span>
-                                        <span className="text-base sm:text-lg font-black text-slate-900 font-mono tabular-nums mt-0.5 block">
-                                            {formatValue(currentRecord.revenueActual || 0)}
-                                        </span>
-                                    </div>
-
-                                    {/* Card 2: MỤC TIÊU */}
-                                    <div className="bg-rose-50/80 border border-rose-200 rounded-xl p-3 shadow-sm text-center">
-                                        <span className="text-[10px] font-bold text-rose-800 uppercase tracking-wider block">TARGET</span>
-                                        <span className="text-base sm:text-lg font-black text-slate-900 font-mono tabular-nums mt-0.5 block">
-                                            {formatValue(currentRecord.revenueTarget || 0)}
-                                        </span>
-                                    </div>
-
-                                    {/* Card 3: %DKHT DT */}
-                                    <div className="bg-sky-50/80 border border-sky-200 rounded-xl p-3 shadow-sm text-center">
-                                        <span className="text-[10px] font-bold text-sky-900 uppercase tracking-wider block">%DKHT DT</span>
-                                        <span className={`text-base sm:text-lg font-black font-mono tabular-nums mt-0.5 block ${(currentRecord.forecastCompletionRate || 0) >= 100 ? 'text-emerald-700' : 'text-amber-700'
-                                            }`}>
-                                            {(currentRecord.forecastCompletionRate || 0).toFixed(1)}%
-                                        </span>
-                                    </div>
-
-                                    {/* Card 4: % TRẢ GÓP (CHỈ HIỂN THỊ KHI CÓ % TRẢ GÓP) */}
-                                    {hasInstallmentRate && (
-                                        <div className="bg-purple-50/80 border border-purple-200 rounded-xl p-3 shadow-sm text-center">
-                                            <span className="text-[10px] font-bold text-purple-800 uppercase tracking-wider block">% TRẢ CHẬM</span>
-                                            <span className="text-base sm:text-lg font-black text-purple-800 font-mono tabular-nums mt-0.5 block">
-                                                {(currentRecord.installmentRate || 0).toFixed(1)}%
-                                            </span>
-                                        </div>
-                                    )}
-
-                                    {/* Card 5: THI ĐUA ĐẠT */}
-                                    <div className="bg-slate-100/90 border border-slate-300 rounded-xl p-3 shadow-sm text-center">
-                                        <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wider block">THI ĐUA</span>
-                                        <span className="text-base sm:text-lg font-black text-slate-900 font-mono tabular-nums mt-0.5 block">
-                                            {emulationStats.passed}/{emulationStats.total}
-                                        </span>
-                                    </div>
-
-                                    {/* Card 6: %HT THI ĐUA */}
-                                    <div className="bg-emerald-50/80 border border-emerald-200 rounded-xl p-3 shadow-sm text-center">
-                                        <span className="text-[10px] font-bold text-emerald-900 uppercase tracking-wider block">%THI ĐUA</span>
-                                        <span className="text-base sm:text-lg font-black text-emerald-700 font-mono tabular-nums mt-0.5 block">
-                                            {emulationStats.passRate}%
-                                        </span>
-                                    </div>
-                                </div>
-                            );
-                        })()}
-
-                        {/* 3. BẢNG KẾT QUẢ THI ĐUA (NÂNG CẤP TIÊU ĐỀ NỔI BẬT & CÓ CỜ IGNORE BỘ LỌC KHI CHỤP ẢNH) */}
-                        <div className="rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-                            {/* KHỐI TIÊU ĐỀ BẢNG NỔI BẬT */}
-                            <div className="p-3.5 bg-gradient-to-r from-blue-700 to-blue-900 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
-                                <div className="flex items-center gap-2.5">
-                                    <div className="w-8 h-8 rounded-lg bg-amber-400/20 border border-amber-300/40 flex items-center justify-center text-amber-300 shadow-inner shrink-0">
-                                        <Trophy className="w-4 h-4 fill-amber-300" aria-hidden="true" />
-                                    </div>
-                                    <div>
-                                        <h3 className="font-extrabold text-sm sm:text-base tracking-wide uppercase flex items-center gap-1.5">
-                                            <span>Bảng Thi Đua Chi Tiết {isAllMode ? '(Toàn Cụm)' : ''}</span>
-                                        </h3>
-                                        <p className="text-[11px] text-blue-100 font-medium mt-0.5">
-                                            Lũy kế tính đến hết ngày {formatDate(currentRecord.reportDate)}
-                                        </p>
-                                    </div>
-                                </div>
-
-                                <div className="flex items-center gap-2">
-                                    <span className="text-xs font-black uppercase bg-amber-400 text-slate-950 px-3 py-1 rounded-lg shadow-sm border border-amber-300 tabular-nums">
-                                        {emulationRowList.length} NH THI ĐUA
-                                    </span>
-                                </div>
-                            </div>
-
-                            {/* KHỐI BỘ LỌC TRẠNG THÁI & SẮP XẾP - TỰ ĐỘNG BỊ LOẠI BỎ TRONG ẢNH CHỤP */}
-                            <div
-                                data-html2canvas-ignore="true"
-                                className="p-3 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2.5 text-xs"
-                            >
-                                <div className="flex items-center gap-1.5 text-slate-600 font-bold uppercase text-[11px]">
-                                    <Filter className="w-3.5 h-3.5 text-blue-600" aria-hidden="true" />
-                                    <span>Bộ lọc bảng:</span>
-                                </div>
-
-                                <div className="flex items-center gap-2 flex-wrap">
-                                    <div className="flex items-center gap-1.5 bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 min-h-[34px] shadow-sm">
-                                        <Filter className="w-3.5 h-3.5 text-slate-500 shrink-0" aria-hidden="true" />
-                                        <select
-                                            id="monthly-status-filter"
-                                            name="statusFilter"
-                                            aria-label="Lọc theo trạng thái thi đua"
-                                            value={statusFilter}
-                                            onChange={(e) => setStatusFilter(e.target.value)}
-                                            className="bg-transparent font-bold text-slate-800 outline-none cursor-pointer text-xs"
-                                        >
-                                            <option value="all">Tất cả trạng thái</option>
-                                            <option value="passed">Chỉ mục ĐẠT (≥100%)</option>
-                                            <option value="failed">Chỉ mục CHƯA ĐẠT (&lt;100%)</option>
-                                        </select>
-                                    </div>
-
-                                    <div className="flex items-center gap-1.5 bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 min-h-[34px] shadow-sm">
-                                        <ArrowUpDown className="w-3.5 h-3.5 text-slate-500 shrink-0" aria-hidden="true" />
-                                        <select
-                                            id="monthly-sort-order"
-                                            name="sortOrder"
-                                            aria-label="Sắp xếp bảng thi đua"
-                                            value={sortOrder}
-                                            onChange={(e) => setSortOrder(e.target.value)}
-                                            className="bg-transparent font-bold text-slate-800 outline-none cursor-pointer text-xs"
-                                        >
-                                            <option value="pct-desc">% Tiến độ DK giảm dần</option>
-                                            <option value="pct-asc">% Tiến độ DK tăng dần</option>
-                                            <option value="pctHT-desc">% Hoàn thành (%HT) giảm dần</option>
-                                            <option value="pctHT-asc">% Hoàn thành (%HT) tăng dần</option>
-                                            <option value="remaining-desc">Mục tiêu còn lại giảm dần</option>
-                                            <option value="remaining-asc">Mục tiêu còn lại tăng dần</option>
-                                            {isAllMode && <option value="store-asc">Sắp xếp theo ST</option>}
-                                            <option value="name-asc">Sắp xếp theo Tên Thi Đua</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Gợi ý cuộn ngang trên mobile */}
-                            <div
-                                data-html2canvas-ignore="true"
-                                className="px-3 py-1.5 bg-slate-100/80 border-b border-slate-200 text-[10px] font-semibold text-slate-600 md:hidden"
-                            >
-                                Vuốt ngang trên bảng để xem đầy đủ cột %HT, %DKHT và Còn lại
-                            </div>
-
-                            {/* BẢNG SỐ LIỆU CHI TIẾT */}
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-xs text-left font-avo report-table border-collapse">
-                                    <thead className="bg-slate-800 text-white uppercase text-[10px] font-black border-b border-slate-700">
-                                        <tr>
-                                            <th className="py-2 px-1.5 text-center w-9 whitespace-nowrap">#</th>
-                                            {isAllMode && (
-                                                <th className="py-2 px-2 text-left whitespace-nowrap">ST</th>
-                                            )}
-                                            <th className="py-2 px-2 sm:px-2.5 text-left">Thi đua</th>
-                                            <th className="py-2 px-1.5 sm:px-2 text-right whitespace-nowrap">Target</th>
-                                            <th className="py-2 px-1.5 sm:px-2 text-right whitespace-nowrap">Lũy Kế</th>
-                                            <th className="py-2 px-1.5 text-center whitespace-nowrap" title="% Hoàn thành hiện tại: (Lũy kế / Target) * 100">%HT</th>
-                                            <th className="py-2 px-1.5 text-center whitespace-nowrap" title="% Dự kiến hoàn thành cuối tháng theo nhịp bán">%DKHT</th>
-                                            <th className="py-2 px-1.5 sm:px-2 text-right whitespace-nowrap" title="Mục tiêu thi đua còn lại: Target - Lũy kế">Còn lại</th>
-                                            <th className="py-2 px-1.5 text-center w-12 whitespace-nowrap">Đánh giá</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
-                                        {emulationRowList.length === 0 ? (
-                                            <tr>
-                                                <td colSpan={isAllMode ? 9 : 8} className="py-8 text-center text-slate-600">
-                                                    Không tìm thấy mục thi đua nào khớp với điều kiện lọc trong ngày {formatDate(currentRecord.reportDate)}.
-                                                </td>
-                                            </tr>
-                                        ) : (
-                                            emulationRowList.map((row, idx) => {
-                                                const isPass = row.pctDK >= 100;
-                                                return (
-                                                    <tr key={row.id} className={isPass ? 'bg-[#f0fdf4] text-emerald-950' : 'bg-[#fff1f2] text-rose-950'}>
-                                                        <td className="py-1.5 px-1.5 text-center text-slate-700 font-bold tabular-nums whitespace-nowrap">
-                                                            {idx + 1}
-                                                        </td>
-                                                        {isAllMode && (
-                                                            <td className="py-1.5 px-2 font-bold text-slate-800 whitespace-nowrap text-left">
-                                                                {row.storeName}
-                                                            </td>
-                                                        )}
-                                                        <td className="py-1.5 px-2 sm:px-2.5 font-bold text-slate-900 text-left">
-                                                            {row.label}
-                                                        </td>
-                                                        <td className="py-1.5 px-1.5 sm:px-2 text-right font-mono tabular-nums font-bold whitespace-nowrap">
-                                                            {formatValue(row.target)}
-                                                        </td>
-                                                        <td className="py-1.5 px-1.5 sm:px-2 text-right font-mono tabular-nums font-bold text-blue-700 whitespace-nowrap">
-                                                            {formatValue(row.actual)}
-                                                        </td>
-                                                        <td className="py-1.5 px-1.5 text-center font-mono tabular-nums font-bold whitespace-nowrap">
-                                                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${row.pctHT >= 100
-                                                                ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
-                                                                : 'bg-slate-100 text-slate-800 border border-slate-300'
-                                                                }`}>
-                                                                {row.pctHT.toFixed(0)}%
-                                                            </span>
-                                                        </td>
-                                                        <td className="py-1.5 px-1.5 text-center font-mono tabular-nums font-bold whitespace-nowrap">
-                                                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${isPass ? 'bg-emerald-100 text-emerald-900 border border-emerald-300' : 'bg-rose-100 text-rose-900 border border-rose-300'
-                                                                }`}>
-                                                                {row.pctDK.toFixed(0)}%
-                                                            </span>
-                                                        </td>
-                                                        <td className={`py-1.5 px-1.5 sm:px-2 text-right font-mono tabular-nums font-bold whitespace-nowrap ${row.remaining === 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
-                                                            {formatRemainingTarget(row.remaining, false)}
-                                                        </td>
-                                                        <td className="py-1.5 px-1.5 text-center whitespace-nowrap align-middle">
-                                                            {isPass ? (
-                                                                <span
-                                                                    aria-label="Đạt"
-                                                                    className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-emerald-700 text-white text-[11px] font-bold"
-                                                                >
-                                                                    ✓
-                                                                </span>
-                                                            ) : (
-                                                                <span
-                                                                    aria-label="Chưa đạt"
-                                                                    className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-rose-700 text-white text-[11px] font-bold"
-                                                                >
-                                                                    ✕
-                                                                </span>
-                                                            )}
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            })
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* ==============================================================
-              CÁC KHỐI BÊN DƯỚI (KHÔNG NẰM TRONG HÌNH CHỤP BÁO CÁO)
-              ============================================================== */}
-
-                    {/* KHỐI THEO DÕI NHỊP DOANH THU (PACE TỪNG NGÀY) */}
-                    <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
-                            <div>
-                                <h3 className="font-black text-xs sm:text-sm text-slate-800 uppercase tracking-wide flex items-center gap-2">
-                                    <TrendingUp className="w-4 h-4 text-blue-600" aria-hidden="true" />
-                                    <span>Biến Động Nhịp Doanh Thu ({isAllMode ? 'Toàn Cụm' : selectedStore})</span>
-                                </h3>
-                                <p className="text-[11px] text-slate-600 mt-0.5">
-                                    Doanh số phát sinh thực tế từng ngày
-                                </p>
-                            </div>
-
-                            {dailyPaceData.length > 0 && (
-                                <div className="bg-blue-50 border border-blue-200 px-3 py-1 rounded-xl text-xs font-bold text-blue-800 self-start sm:self-auto">
-                                    Nhịp ngày {dailyPaceData[dailyPaceData.length - 1]?.date}:{' '}
-                                    <span className="font-mono tabular-nums text-blue-950 font-black">
-                                        {formatValue(dailyPaceData[dailyPaceData.length - 1]?.dailyPace || 0)}
-                                    </span>
-                                </div>
-                            )}
-                        </div>
-
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-xs text-left min-w-[460px]">
-                                <thead className="bg-slate-50 text-slate-600 uppercase text-[10px] font-black border-y border-slate-200">
-                                    <tr>
-                                        <th className="py-2.5 px-3">Ngày Ghi Nhận</th>
-                                        <th className="py-2.5 px-3 text-right">Lũy Kế Hệ Thống</th>
-                                        <th className="py-2.5 px-3 text-right text-blue-700">Nhịp Ngày (Thực Thu)</th>
-                                        <th className="py-2.5 px-3 text-center">Trạng Thái</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
-                                    {dailyPaceData.map((row, idx) => (
-                                        <tr key={`${row.date || 'date'}-${idx}`} className="hover:bg-slate-50 transition">
-                                            <td className="py-2 px-3 font-semibold text-slate-800">
-                                                {row.dayLabel} ({row.date})
-                                            </td>
-                                            <td className="py-2 px-3 text-right font-mono tabular-nums text-slate-700">
-                                                {formatValue(row.cumulativeRevenue)}
-                                            </td>
-                                            <td className="py-2 px-3 text-right font-mono tabular-nums font-bold text-blue-700">
-                                                {formatValue(row.dailyPace)}
-                                            </td>
-                                            <td className="py-2 px-3 text-center">
-                                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${row.dailyPace > 0 ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-slate-100 text-slate-600 border border-slate-200'
-                                                    }`}>
-                                                    {row.dailyPace > 0 ? 'Có phát sinh' : 'Chưa ghi nhận'}
-                                                </span>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    {/* MODULE NHẬN XÉT & TÓM TẮT MỤC TIÊU */}
-                    {summaryText && currentRecord && (
-                        <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-sm space-y-3">
-                            <div className="flex flex-wrap items-center justify-between gap-2.5">
-                                <div className="flex flex-wrap items-center gap-2">
-                                    <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-                                        <FileText className="w-4 h-4 text-blue-600" aria-hidden="true" />
-                                        <span>Nhận Xét &amp; Tóm Tắt Mục Tiêu</span>
-                                    </span>
-
-                                    {/* Bộ 3 nút chuyển chế độ tóm tắt */}
-                                    <div
-                                        role="tablist"
-                                        aria-label="Chế độ tóm tắt mục tiêu tháng"
-                                        className="inline-flex p-0.5 bg-slate-100 rounded-lg text-[11px] font-bold border border-slate-200 flex-wrap gap-0.5"
-                                    >
-                                        <button
-                                            type="button"
-                                            role="tab"
-                                            aria-selected={summaryMode === 1}
-                                            onClick={() => setSummaryMode(1)}
-                                            className={`px-2.5 py-1.5 min-h-[32px] rounded-md transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${summaryMode === 1 ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-700 hover:text-slate-900'}`}
-                                        >
-                                            1. Tổng quát
-                                        </button>
-                                        <button
-                                            type="button"
-                                            role="tab"
-                                            aria-selected={summaryMode === 2}
-                                            onClick={() => setSummaryMode(2)}
-                                            className={`px-2.5 py-1.5 min-h-[32px] rounded-md transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${summaryMode === 2 ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-700 hover:text-slate-900'}`}
-                                        >
-                                            2. Chi tiết 3 nhóm
-                                        </button>
-                                        <button
-                                            type="button"
-                                            role="tab"
-                                            aria-selected={summaryMode === 3}
-                                            onClick={() => setSummaryMode(3)}
-                                            className={`px-2.5 py-1.5 min-h-[32px] rounded-md transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${summaryMode === 3 ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-700 hover:text-slate-900'}`}
-                                        >
-                                            3. Chi tiết toàn bộ
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <button
-                                    type="button"
-                                    onClick={handleCopyText}
-                                    className="px-3 py-1.5 min-h-[34px] rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-bold transition cursor-pointer inline-flex items-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                                >
-                                    <Copy className="w-3.5 h-3.5" aria-hidden="true" />
-                                    <span>Sao chép nội dung</span>
-                                </button>
-                            </div>
-
-                            <pre className="font-mono text-xs p-4 bg-slate-50 border border-slate-200 rounded-xl whitespace-pre-wrap leading-relaxed text-slate-800 max-h-64 overflow-y-auto">
-                                {summaryText}
-                            </pre>
-                        </div>
+                    {/* TAB 3: NHỊP DOANH THU */}
+                    {activeTab === 'nhip' && (
+                        <RevenueTrendTab
+                            selectedMonth={selectedMonth}
+                            selectedYear={selectedYear}
+                            selectedStore={selectedStore}
+                            currentUser={currentUser}
+                            isAdmin={isAdmin}
+                            canAccessStore={canAccessStore}
+                            showToast={showToast}
+                            onRegisterExportHandler={(handler) => {
+                                tabExportHandlersRef.current.nhip = handler;
+                            }}
+                        />
                     )}
                 </div>
             )}

@@ -94,14 +94,10 @@ export default function App() {
                                     </ProtectedRoute>
                                 } />
 
-                                {/* Phân hệ Báo Cáo Cụm ST */}
-                                <Route path="/bao-cao-cum-sieu-thi" element={
-                                    <ProtectedRoute path="/bao-cao-cum-sieu-thi">
-                                        <ClusterReportPage />
-                                    </ProtectedRoute>
-                                } />
+                                {/* Phân hệ Báo Cáo Cụm ST -> Tự động chuyển hướng sang Tab Sức khỏe Vượt trội */}
+                                <Route path="/bao-cao-cum-sieu-thi" element={<Navigate to="/bc-thang/tong-quan?tab=suc-khoe" replace />} />
 
-                                {/* Phân hệ BC Tháng */}
+                                {/* Phân hệ BC Lũy Kế (Tổng Hợp) */}
                                 <Route path="/bc-thang" element={<Navigate to="/bc-thang/tong-quan" replace />} />
                                 <Route path="/bc-thang/tong-quan" element={
                                     <ProtectedRoute path="/bc-thang/tong-quan">
@@ -329,11 +325,8 @@ export default function App() {
                                     </ProtectedRoute>
                                 } />
 
-                                <Route path="/nhip-doanh-thu" element={
-                                    <ProtectedRoute path="/nhip-doanh-thu">
-                                        <RevenueTrendPage />
-                                    </ProtectedRoute>
-                                } />
+                                {/* Nhịp Doanh Thu -> Tự động chuyển hướng sang Tab Nhịp Doanh Thu */}
+                                <Route path="/nhip-doanh-thu" element={<Navigate to="/bc-thang/tong-quan?tab=nhip" replace />} />
 
                                 {/* Trung Tâm Xuất Báo Cáo ST */}
                                 <Route path="/trung-tam-xuat-anh-bao-cao" element={

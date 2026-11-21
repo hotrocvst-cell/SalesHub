@@ -58,6 +58,7 @@ export interface EmployeeOcrParsedItem {
     employeeId: string;
     fullName: string;
     revenueQd: number;         // Doanh thu QĐ (triệu đồng)
+    straightQd?: number;       // DT Trả thẳng QĐ (triệu đồng)
     installmentQd: number;     // DT Trả góp QĐ (triệu đồng)
     installmentRate: number;   // % Tỷ trọng trả góp (%)
     workHours?: number;        // Giờ công tại ST làm việc (h)
@@ -624,18 +625,68 @@ export async function extractAndMergeEmployeeImages(
             const hasRevQd = e.revenueQd !== null && e.revenueQd !== undefined && e.revenueQd !== '';
             const rawInstQd = e.installmentQd ?? e.dtTraGopQd;
             const hasInstQd = rawInstQd !== null && rawInstQd !== undefined && rawInstQd !== '';
+            const rawStraight = e.straightQd ?? e.dtTraThangQd;
+            const hasStraight = rawStraight !== null && rawStraight !== undefined && rawStraight !== '';
+            const hasLoan = e.loanQd !== null && e.loanQd !== undefined && e.loanQd !== '';
+            const hasRet = e.returnQd !== null && e.returnQd !== undefined && e.returnQd !== '';
 
-            const revQdVal = hasRevQd ? cleanBiNumber(e.revenueQd) : null;
-            const instQdVal = hasInstQd ? cleanBiNumber(rawInstQd) : null;
+            let revQdVal = hasRevQd ? cleanBiNumber(e.revenueQd) : null;
+            let instQdVal = hasInstQd ? cleanBiNumber(rawInstQd) : null;
+            const straightVal = hasStraight ? cleanBiNumber(rawStraight) : null;
+            const loanVal = hasLoan ? cleanBiNumber(e.loanQd) : null;
+            const retVal = hasRet ? cleanBiNumber(e.returnQd) : null;
+
+            // 1. PHÁT HIỆN & SỬA LỖI AI COPY NHẦM DOANH THU QĐ SANG DT TRẢ GÓP QĐ:
+            if (revQdVal !== null && instQdVal !== null && revQdVal > 0 && instQdVal === revQdVal) {
+                if (straightVal !== null && straightVal > 0) {
+                    instQdVal = Math.max(0, revQdVal - straightVal - (loanVal || 0) + (retVal || 0));
+                } else if (straightVal === null) {
+                    instQdVal = null;
+                }
+            }
+
+            // 2. TỰ ĐỘNG SUY LUẬN KHI ẢNH NỬA TRÁI (BỊ CẮT MẤT CỘT TRẢ GÓP Ở MÉP PHẢI):
+            if (instQdVal === null && revQdVal !== null && straightVal !== null && revQdVal >= straightVal) {
+                instQdVal = Math.max(0, revQdVal - straightVal - (loanVal || 0) + (retVal || 0));
+            }
+
+            // 3. TỰ ĐỘNG CỘNG LẠI DTQĐ KHI ẢNH NỬA PHẢI (CHỈ CÓ TRẢ THẲNG VÀ TRẢ GÓP):
+            if (revQdVal === null && straightVal !== null && instQdVal !== null) {
+                revQdVal = straightVal + instQdVal + (loanVal || 0) - (retVal || 0);
+            }
 
             if (employeeMap.has(empId)) {
                 const existing = employeeMap.get(empId)!;
-                if (revQdVal !== null && (revQdVal > 0 || existing.revenueQd === 0)) {
-                    existing.revenueQd = revQdVal;
+                if (straightVal !== null && (straightVal > 0 || !existing.straightQd)) {
+                    existing.straightQd = straightVal;
                 }
-                if (instQdVal !== null && (instQdVal > 0 || existing.installmentQd === 0)) {
-                    existing.installmentQd = instQdVal;
+
+                // Cập nhật DTQĐ: Tránh bị đè bởi giá trị nhỏ hơn từ cột con
+                if (revQdVal !== null) {
+                    const isSuspiciousSub = existing.revenueQd > 0 && revQdVal < existing.revenueQd &&
+                        (revQdVal === existing.installmentQd || (existing.straightQd && revQdVal === existing.straightQd));
+                    if (!isSuspiciousSub) {
+                        if (revQdVal > 0 || existing.revenueQd === 0) {
+                            existing.revenueQd = revQdVal;
+                        }
+                    }
                 }
+
+                // Cập nhật DT Trả Góp QĐ
+                if (instQdVal !== null) {
+                    if (existing.revenueQd > 0 && instQdVal === existing.revenueQd && existing.straightQd && existing.straightQd > 0) {
+                        instQdVal = Math.max(0, existing.revenueQd - existing.straightQd);
+                    }
+                    if (instQdVal > 0 || existing.installmentQd === 0) {
+                        existing.installmentQd = instQdVal;
+                    }
+                }
+
+                // Tự động đối chiếu nếu existing vẫn chưa có Trả Góp mà đã có DTQĐ và Trả Thẳng
+                if (existing.installmentQd === 0 && existing.revenueQd > 0 && existing.straightQd && existing.straightQd > 0) {
+                    existing.installmentQd = Math.max(0, existing.revenueQd - existing.straightQd);
+                }
+
                 if (name && (name.length > existing.fullName.length || existing.fullName.includes('...')) && !name.includes('...')) {
                     existing.fullName = name;
                 }
@@ -644,6 +695,7 @@ export async function extractAndMergeEmployeeImages(
                     employeeId: empId,
                     fullName: name,
                     revenueQd: revQdVal ?? 0,
+                    straightQd: straightVal ?? undefined,
                     installmentQd: instQdVal ?? 0,
                     installmentRate: 0,
                     workHours: 0,

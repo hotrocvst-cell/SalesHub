@@ -12,14 +12,14 @@ interface RevenueTrendDailyTableProps {
 export default function RevenueTrendDailyTable({ timelineData, metrics, selectedStore }: RevenueTrendDailyTableProps) {
     if (timelineData.length === 0) return null;
 
-    const isCluster = selectedStore === 'Tổng';
+    const isCluster = selectedStore === 'Tổng' || selectedStore === 'all' || /^(tổng|tong|toàn cụm)/i.test(selectedStore);
 
     return (
         <div data-report-table="true" className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-2xs font-avo">
             <div className="p-3.5 sm:p-4 bg-slate-50/90 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
                     <h3 className="font-black text-xs sm:text-sm uppercase text-slate-800 tracking-wider flex items-center gap-2 flex-wrap">
-                        <span>Diễn Biến Nhịp Doanh Thu Chi Tiết Theo Ngày</span>
+                        <span>Nhịp Doanh Thu Chi Tiết Theo Ngày</span>
                         <span className="text-blue-700 font-black">
                             ({isCluster ? 'Toàn Cụm' : selectedStore})
                         </span>
@@ -27,12 +27,9 @@ export default function RevenueTrendDailyTable({ timelineData, metrics, selected
                             Mốc kỳ vọng: {metrics.targetRate}%
                         </span>
                     </h3>
-                    <p className="text-[11px] text-slate-500 font-sans mt-0.5">
-                        Thống kê nhịp tăng trưởng, biến động phát sinh và đánh giá theo mục tiêu kỳ vọng {metrics.targetRate}%
-                    </p>
                 </div>
                 <div className="text-[11px] font-mono text-slate-500 font-bold self-start sm:self-auto">
-                    Tổng cộng: <span className="text-blue-700">{timelineData.length}</span> ngày ghi nhận
+                    Tổng: <span className="text-blue-700">{timelineData.length}</span> ngày ghi nhận
                 </div>
             </div>
 
@@ -53,8 +50,8 @@ export default function RevenueTrendDailyTable({ timelineData, metrics, selected
                     <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
                         {timelineData.map((d) => {
                             const isPeak = metrics.peakDay && metrics.peakDay.date === d.reportDate;
-                            const isAboveExpected = metrics.requiredDailyPace > 0 && d.dailyPace >= metrics.requiredDailyPace;
-                            const isAboveBase = metrics.requiredBaseDailyPace > 0 && d.dailyPace >= metrics.requiredBaseDailyPace;
+                            const isAboveExpected = metrics.plannedExpectedDailyPace > 0 && d.dailyPace >= metrics.plannedExpectedDailyPace;
+                            const isAboveBase = metrics.plannedBaseDailyPace > 0 && d.dailyPace >= metrics.plannedBaseDailyPace;
 
                             return (
                                 <tr
@@ -141,7 +138,7 @@ export default function RevenueTrendDailyTable({ timelineData, metrics, selected
 
                                     {/* CỘT ĐÁNH GIÁ NHỊP */}
                                     <td className="py-2 px-2.5 text-center">
-                                        {metrics.requiredDailyPace <= 0 ? (
+                                        {metrics.plannedExpectedDailyPace <= 0 ? (
                                             <span className="text-[10px] text-slate-400 font-bold">Bình thường</span>
                                         ) : isAboveExpected ? (
                                             <span className="text-[9.5px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-300">
@@ -149,11 +146,11 @@ export default function RevenueTrendDailyTable({ timelineData, metrics, selected
                                             </span>
                                         ) : isAboveBase ? (
                                             <span className="text-[9.5px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-800 border border-blue-200">
-                                                ⚡ Đạt mốc 100%
+                                                ⚡ Đạt chuẩn 100%
                                             </span>
                                         ) : (
                                             <span className="text-[9.5px] font-bold px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
-                                                ⚠️ Hụt cơ sở (&lt;100%)
+                                                ⚠️ Hụt chuẩn (&lt;100%)
                                             </span>
                                         )}
                                     </td>

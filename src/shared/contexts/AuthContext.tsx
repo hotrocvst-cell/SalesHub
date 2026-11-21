@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react';
 import { type EmployeeItem, parseEmployeeRoleAndDept } from '../../core/lib/storage';
 import { supabase } from '../../core/lib/supabase';
 import { isStoreMatch } from '../../core/lib/formatters';
@@ -224,6 +224,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [activeSessions, setActiveSessions] = useState<UserActiveSessions | undefined>(() => rawUser.active_sessions);
     const [isKickedOut, setIsKickedOut] = useState<boolean>(false);
     const [kickOutInfo, setKickOutInfo] = useState<{ conflictingSession?: SessionDeviceInfo; reason?: string } | null>(null);
+    const isLoggingInRef = useRef<boolean>(false);
 
     // Hàm đồng bộ đăng ký phiên làm việc hiện tại lên Cloud Supabase
     const syncDeviceSession = useCallback(async (userId: string, role: UserRole, email?: string) => {
@@ -385,6 +386,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         let isMounted = true;
         async function verifyCurrentSession() {
+            // Nếu đang trong tiến trình đăng nhập / đăng ký mới, tạm hoãn kiểm tra để tránh race-condition
+            if (isLoggingInRef.current) return;
             try {
                 const { data } = await supabase
                     .from('user_profiles')
@@ -616,6 +619,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // 1. Đăng nhập bằng Email / Mã nhân viên + Mật khẩu
     const login = async (emailOrEmployeeId: string, password?: string): Promise<{ success: boolean; error?: string }> => {
         setIsLoading(true);
+        isLoggingInRef.current = true;
         try {
             const cleanKey = emailOrEmployeeId.trim().toLowerCase();
 
@@ -638,8 +642,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                             });
                         }
 
-                        setRawUser(profileToCurrentUser(profile, data.user.id));
+                        // Đồng bộ session lên Cloud TRƯỚC để DB lưu session_id mới, tránh race-condition với useEffect
                         await syncDeviceSession(profile.id, profile.role, profile.email);
+                        setRawUser(profileToCurrentUser(profile, data.user.id));
                         setIsKickedOut(false);
                         setKickOutInfo(null);
                         setIsLoading(false);
@@ -678,8 +683,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     }
                 }
 
-                setRawUser(profileToCurrentUser(profile));
+                // Đồng bộ session lên Cloud TRƯỚC để DB lưu session_id mới, tránh race-condition với useEffect
                 await syncDeviceSession(profile.id, profile.role, profile.email);
+                setRawUser(profileToCurrentUser(profile));
                 setIsKickedOut(false);
                 setKickOutInfo(null);
                 setIsLoading(false);
@@ -694,6 +700,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } catch (err: any) {
             setIsLoading(false);
             return { success: false, error: err.message || String(err) };
+        } finally {
+            setTimeout(() => {
+                isLoggingInRef.current = false;
+            }, 600);
         }
     };
 
@@ -806,6 +816,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 });
             }
 
+            // Đồng bộ phiên lên Cloud TRƯỚC để DB lưu session_id mới
+            await syncDeviceSession(profile.id, chosenRole, profile.email);
+
             setRawUser({
                 id: profile.id,
                 auth_user_id: profile.auth_user_id,
@@ -820,7 +833,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 phone: profile.phone
             });
 
-            await syncDeviceSession(profile.id, chosenRole, profile.email);
             setIsKickedOut(false);
             setKickOutInfo(null);
             setIsLoading(false);
@@ -828,6 +840,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } catch (err: any) {
             setIsLoading(false);
             return { success: false, error: err.message || String(err) };
+        } finally {
+            setTimeout(() => {
+                isLoggingInRef.current = false;
+            }, 600);
         }
     };
 

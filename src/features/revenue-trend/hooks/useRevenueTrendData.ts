@@ -37,6 +37,8 @@ export interface StorePaceItem {
     expectedCompletionRate: number; // % HT target kỳ vọng
     latestPace: number;
     avgDailyPace: number;
+    plannedDailyPace: number; // Kế hoạch bình quân ngày chuẩn 100%
+    plannedExpectedDailyPace: number; // Kế hoạch bình quân ngày chuẩn kỳ vọng
     requiredDailyPace: number; // Nhịp cần chạy / ngày để đạt mốc kỳ vọng
     requiredBaseDailyPace: number; // Nhịp cần chạy / ngày để đạt mốc gốc
     remainingRevenue: number;
@@ -59,12 +61,17 @@ export interface RevenueTrendMetrics {
     completionRate: number; // % Hoàn thành so với Target gốc
     installmentRate: number;
     currentAvgPace: number;
-    requiredDailyPace: number; // Nhịp cần đạt mỗi ngày để đạt mốc kỳ vọng (ví dụ 119%)
-    requiredBaseDailyPace: number; // Nhịp cần đạt mỗi ngày để đạt mốc gốc 100%
+    // MỐC KẾ HOẠCH BÌNH QUÂN NGÀY CỦA THÁNG (CHUẨN ĐO LƯỜNG TỪNG NGÀY TRÊN BIỂU ĐỒ & BẢNG)
+    plannedBaseDailyPace: number; // Target gốc / totalDays
+    plannedExpectedDailyPace: number; // Target kỳ vọng / totalDays
+    // MỐC NHỊP CẦN ĐẠT MỖI NGÀY CÒN LẠI (ÁP LỰC CHẠY CHO CÁC NGÀY TỚI)
+    requiredDailyPace: number; // (expectedTarget - totalActual) / remainingDays
+    requiredBaseDailyPace: number; // (totalTarget - totalActual) / remainingDays
     latestDailyPace: number;
     latestPaceDiff: number;
-    paceGap: number; // Chênh lệch so với nhịp kỳ vọng
-    basePaceGap: number; // Chênh lệch so với nhịp gốc 100%
+    paceGap: number; // So với kế hoạch ngày kỳ vọng (latestDailyPace - plannedExpectedDailyPace)
+    basePaceGap: number; // So với kế hoạch ngày gốc (latestDailyPace - plannedBaseDailyPace)
+    requiredPaceGap: number; // So với nhịp cần chạy còn lại (latestDailyPace - requiredDailyPace)
     paceHealth: 'leading' | 'on_track' | 'lagging' | 'completed';
     projectedRevenue: number;
     projectedCompletionRate: number;
@@ -124,9 +131,11 @@ export function useRevenueTrendData(
         loadData();
     }, [selectedMonth, selectedYear]);
 
+    const isClusterScope = selectedStore === 'Tổng' || selectedStore === 'all' || /^(tổng|tong|toàn cụm)/i.test(selectedStore);
+
     // Tỷ lệ kỳ vọng (vượt trội) áp dụng cho phạm vi đang xem
     const effectiveTargetRate = useMemo<number>(() => {
-        if (selectedStore === 'Tổng') {
+        if (isClusterScope) {
             return targetPkg.globalPaceRate || 100;
         }
         const cfg = targetPkg.items.find(it =>
@@ -134,7 +143,7 @@ export function useRevenueTrendData(
             isStoreMatch(it.storeName, selectedStore)
         );
         return (cfg?.targetRate && cfg.targetRate > 0) ? cfg.targetRate : (targetPkg.globalPaceRate || 100);
-    }, [selectedStore, targetPkg]);
+    }, [selectedStore, targetPkg, isClusterScope]);
 
     // Danh sách ST có quyền xem
     const storeList = useMemo<string[]>(() => {
@@ -171,7 +180,8 @@ export function useRevenueTrendData(
                 if (!isStoreMatch(r.storeName, GUEST_DEMO_STORE) && !isStoreMatch(r.storeName, '838679')) return;
                 if (!isDemoDateAllowed(r.reportDate)) return;
             } else if (!isAdmin) {
-                if (!canAccessStore(r.storeName) && !canAccessStore(sName)) return;
+                const isTong = sName === 'Tổng' || /^(tổng|tong)/i.test(r.storeName);
+                if (!isTong && !canAccessStore(r.storeName) && !canAccessStore(sName)) return;
             }
 
             const key = `${r.reportDate}_${sName}`;
@@ -270,16 +280,21 @@ export function useRevenueTrendData(
             const dayOfWeekLabel = dayOfWeekNames[dayOfWeek];
             const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
 
-            if (selectedStore === 'Tổng') {
-                const memberStores = recordsInDate.filter(r => {
+            if (isClusterScope) {
+                let memberStores = recordsInDate.filter(r => {
                     const sName = getShortStoreName(r.storeName);
                     if (sName === 'Tổng' || /^(tổng|tong)/i.test(r.storeName)) return false;
                     return isAdmin || canAccessStore(r.storeName) || canAccessStore(sName);
                 });
+                if (memberStores.length === 0) {
+                    memberStores = recordsInDate.filter(r => {
+                        const sName = getShortStoreName(r.storeName);
+                        return sName !== 'Tổng' && !/^(tổng|tong)/i.test(r.storeName);
+                    });
+                }
                 const targetRecords = memberStores.length > 0 ? memberStores : recordsInDate.filter(r => {
                     const sName = getShortStoreName(r.storeName);
-                    if (sName === 'Tổng' || /^(tổng|tong)/i.test(r.storeName)) return false;
-                    return true;
+                    return sName === 'Tổng' || /^(tổng|tong)/i.test(r.storeName);
                 });
 
                 const totalActual = targetRecords.reduce((sum, r) => sum + (Number(r.revenueActual) || 0), 0);
@@ -381,12 +396,15 @@ export function useRevenueTrendData(
                 completionRate: 0,
                 installmentRate: 0,
                 currentAvgPace: 0,
+                plannedBaseDailyPace: 0,
+                plannedExpectedDailyPace: 0,
                 requiredDailyPace: 0,
                 requiredBaseDailyPace: 0,
                 latestDailyPace: 0,
                 latestPaceDiff: 0,
                 paceGap: 0,
                 basePaceGap: 0,
+                requiredPaceGap: 0,
                 paceHealth: 'on_track',
                 projectedRevenue: 0,
                 projectedCompletionRate: 0,
@@ -412,34 +430,42 @@ export function useRevenueTrendData(
 
         const currentAvgPace = passedDays > 0 ? Math.round((totalActual / passedDays) * 10) / 10 : 0;
 
-        // Nhịp cần đạt theo mốc gốc (100%)
+        // 1. MỐC KẾ HOẠCH BÌNH QUÂN NGÀY CỦA THÁNG (CHUẨN SO SÁNH TỪNG NGÀY BẤT BIẾN)
+        const plannedBaseDailyPace = totalDaysInMonth > 0 ? Math.round((totalTarget / totalDaysInMonth) * 10) / 10 : 0;
+        const plannedExpectedDailyPace = totalDaysInMonth > 0 ? Math.round((expectedTarget / totalDaysInMonth) * 10) / 10 : 0;
+
+        // 2. MỐC NHỊP CẦN ĐẠT MỖI NGÀY CÒN LẠI (ÁP LỰC CHẠY CHO CÁC NGÀY TỚI)
         const remainingBaseGap = Math.max(0, totalTarget - totalActual);
         const requiredBaseDailyPace = remainingDays > 0 ? Math.round((remainingBaseGap / remainingDays) * 10) / 10 : 0;
 
-        // Nhịp cần đạt theo mốc kỳ vọng vượt trội (ví dụ 119%)
         const remainingExpectedGap = Math.max(0, expectedTarget - totalActual);
         const requiredDailyPace = remainingDays > 0 ? Math.round((remainingExpectedGap / remainingDays) * 10) / 10 : 0;
 
         const latestDailyPace = latest.dailyPace;
         const latestPaceDiff = latest.paceDiff;
-        const paceGap = Math.round((latestDailyPace - requiredDailyPace) * 10) / 10;
-        const basePaceGap = Math.round((latestDailyPace - requiredBaseDailyPace) * 10) / 10;
+        // Chênh lệch so với Kế hoạch ngày chuẩn của tháng:
+        const paceGap = Math.round((latestDailyPace - plannedExpectedDailyPace) * 10) / 10;
+        const basePaceGap = Math.round((latestDailyPace - plannedBaseDailyPace) * 10) / 10;
+        // Chênh lệch so với Nhịp cần chạy mỗi ngày còn lại:
+        const requiredPaceGap = Math.round((latestDailyPace - requiredDailyPace) * 10) / 10;
 
-        // ĐÁNH GIÁ TRẠNG THÁI SỨC KHỎE NHỊP ĐỘ DỰA TRÊN CẢ NHỊP BÌNH QUÂN ĐÃ QUA & CHÊNH LỆCH NHỊP
+        // ĐÁNH GIÁ TRẠNG THÁI SỨC KHỎE TIẾN ĐỘ DỰA TRÊN TỐC ĐỘ BÌNH QUÂN ĐÃ QUA (currentAvgPace) SO VỚI NHỊP CẦN CHẠY CÒN LẠI (requiredDailyPace)
         let paceHealth: 'leading' | 'on_track' | 'lagging' | 'completed' = 'on_track';
 
-        if (remainingDays === 0 || totalActual >= expectedTarget) {
-            paceHealth = totalActual >= expectedTarget ? 'completed' : (totalActual >= totalTarget ? 'leading' : 'lagging');
+        if (totalActual >= expectedTarget) {
+            paceHealth = 'completed';
+        } else if (remainingDays === 0) {
+            paceHealth = totalActual >= totalTarget ? 'leading' : 'lagging';
         } else if (requiredDailyPace <= 0) {
             paceHealth = 'completed';
-        } else if (latestDailyPace >= requiredDailyPace) {
-            // Ngày gần nhất vượt mốc nhịp kỳ vọng (ví dụ 119%)
+        } else if (currentAvgPace >= requiredDailyPace) {
+            // Tốc độ bình quân thực tế đã qua >= Nhịp cần đạt mỗi ngày còn lại để đạt mốc kỳ vọng
             paceHealth = 'leading';
-        } else if (latestDailyPace >= requiredBaseDailyPace) {
-            // Ngày gần nhất đạt mốc nhịp cơ sở 100%, nhưng chưa đạt mốc vượt trội 119%
+        } else if (currentAvgPace >= requiredBaseDailyPace) {
+            // Tốc độ bình quân thực tế >= Nhịp cần đạt mỗi ngày còn lại để đạt mốc cơ sở 100%
             paceHealth = 'on_track';
         } else {
-            // Ngày gần nhất dưới mốc nhịp cơ sở 100% -> cảnh báo hụt nhịp
+            // Tốc độ bình quân thực tế không đủ gánh nhịp cần đạt 100% còn lại -> cảnh báo hụt nhịp
             paceHealth = 'lagging';
         }
 
@@ -492,12 +518,15 @@ export function useRevenueTrendData(
             completionRate,
             installmentRate,
             currentAvgPace,
+            plannedBaseDailyPace,
+            plannedExpectedDailyPace,
             requiredDailyPace,
             requiredBaseDailyPace,
             latestDailyPace,
             latestPaceDiff,
             paceGap,
             basePaceGap,
+            requiredPaceGap,
             paceHealth,
             projectedRevenue,
             projectedCompletionRate,
@@ -505,20 +534,20 @@ export function useRevenueTrendData(
             lowDay: low,
             weekendAvgPace,
             weekdayAvgPace,
-            maxDailyPace: Math.max(maxPace, requiredDailyPace, requiredBaseDailyPace, 1)
+            maxDailyPace: Math.max(maxPace, plannedExpectedDailyPace, plannedBaseDailyPace, requiredDailyPace, 1)
         };
     }, [timelineData, totalDaysInMonth, effectiveTargetRate]);
 
-    // Chuẩn hóa paceStatus cho từng ngày trong timelineData theo 2 mốc
+    // Chuẩn hóa paceStatus cho từng ngày trong timelineData theo MỐC KẾ HOẠCH BÌNH QUÂN NGÀY CỦA THÁNG
     const normalizedTimeline = useMemo<DailyTrendPoint[]>(() => {
-        const reqExp = metrics.requiredDailyPace;
-        const reqBase = metrics.requiredBaseDailyPace;
+        const plannedExp = metrics.plannedExpectedDailyPace;
+        const plannedBase = metrics.plannedBaseDailyPace;
 
         return timelineData.map(p => {
             let status: 'above_expected' | 'above_base' | 'below_base' = 'above_base';
-            if (p.dailyPace >= reqExp) {
+            if (plannedExp > 0 && p.dailyPace >= plannedExp) {
                 status = 'above_expected';
-            } else if (p.dailyPace >= reqBase) {
+            } else if (plannedBase > 0 && p.dailyPace >= plannedBase) {
                 status = 'above_base';
             } else {
                 status = 'below_base';
@@ -528,7 +557,7 @@ export function useRevenueTrendData(
                 paceStatus: status
             };
         });
-    }, [timelineData, metrics.requiredDailyPace, metrics.requiredBaseDailyPace]);
+    }, [timelineData, metrics.plannedExpectedDailyPace, metrics.plannedBaseDailyPace]);
 
     // Bảng xếp hạng nhịp các ST khi xem Tổng Cụm (kèm theo targetRate của từng ST)
     const storePaceRankings = useMemo<StorePaceItem[]>(() => {
@@ -560,6 +589,9 @@ export function useRevenueTrendData(
             const latestPace = paceByStoreDate.get(`${latestRecord.reportDate}_${sName}`) || 0;
             const avgDailyPace = passedDays > 0 ? Math.round((actual / passedDays) * 10) / 10 : 0;
 
+            const plannedDailyPace = totalDaysInMonth > 0 ? Math.round((target / totalDaysInMonth) * 10) / 10 : 0;
+            const plannedExpectedDailyPace = totalDaysInMonth > 0 ? Math.round((storeExpectedTarget / totalDaysInMonth) * 10) / 10 : 0;
+
             const remainingExpectedRevenue = Math.max(0, storeExpectedTarget - actual);
             const requiredDailyPace = remainingDays > 0 ? Math.round((remainingExpectedRevenue / remainingDays) * 10) / 10 : 0;
 
@@ -567,11 +599,15 @@ export function useRevenueTrendData(
             const requiredBaseDailyPace = remainingDays > 0 ? Math.round((remainingBaseRevenue / remainingDays) * 10) / 10 : 0;
 
             let status: 'leading' | 'on_track' | 'lagging' = 'on_track';
-            if (remainingDays === 0 || actual >= storeExpectedTarget) {
+            if (actual >= storeExpectedTarget) {
                 status = 'leading';
-            } else if (latestPace >= requiredDailyPace) {
+            } else if (remainingDays === 0) {
+                status = actual >= target ? 'leading' : 'lagging';
+            } else if (avgDailyPace >= requiredDailyPace) {
+                // Nhịp bình quân thực tế của ST >= Nhịp cần chạy mỗi ngày còn lại
                 status = 'leading';
-            } else if (latestPace >= requiredBaseDailyPace) {
+            } else if (avgDailyPace >= requiredBaseDailyPace) {
+                // Nhịp bình quân thực tế >= Nhịp cần chạy mốc 100%
                 status = 'on_track';
             } else {
                 status = 'lagging';
@@ -587,6 +623,8 @@ export function useRevenueTrendData(
                 expectedCompletionRate,
                 latestPace,
                 avgDailyPace,
+                plannedDailyPace,
+                plannedExpectedDailyPace,
                 requiredDailyPace,
                 requiredBaseDailyPace,
                 remainingRevenue: remainingExpectedRevenue,
@@ -598,7 +636,7 @@ export function useRevenueTrendData(
 
         // Xếp hạng ưu tiên theo % Hoàn thành mục tiêu kỳ vọng giảm dần
         return list.sort((a, b) => b.expectedCompletionRate - a.expectedCompletionRate);
-    }, [storeList, metrics.latestDate, metrics.passedDays, metrics.remainingDays, recordsByStore, paceByStoreDate, targetPkg]);
+    }, [storeList, metrics.latestDate, metrics.passedDays, metrics.remainingDays, recordsByStore, paceByStoreDate, targetPkg, totalDaysInMonth]);
 
     return {
         rawRecords,

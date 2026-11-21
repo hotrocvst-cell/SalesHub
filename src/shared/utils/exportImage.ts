@@ -161,7 +161,9 @@ export async function generateStandardReportCanvas(
                     el.style.overflowX = 'visible';
                     el.style.overflowY = 'visible';
                     el.style.maxHeight = 'none';
-                    el.style.height = 'auto';
+                    if (!el.getAttribute('data-chart-scroll-container') && !el.getAttribute('data-preserve-height') && !el.hasAttribute('data-chart-scroll-container')) {
+                        el.style.height = 'auto';
+                    }
                     el.style.width = '100%';
                     el.scrollLeft = 0;
                 });

@@ -84,12 +84,6 @@ export const NAVIGATION_GROUPS: NavGroup[] = [
         bgClass: 'bg-blue-100 text-blue-700',
         items: [
             {
-                name: 'BC Cụm ST',
-                path: '/bao-cao-cum-sieu-thi',
-                icon: Store,
-                badge: '💎 9 Cột'
-            },
-            {
                 name: 'BC Ngày (Realtime)',
                 path: '/bc-ngay/tong-quan',
                 icon: Zap,
@@ -102,14 +96,10 @@ export const NAVIGATION_GROUPS: NavGroup[] = [
                 badge: '⚡ Mới'
             },
             {
-                name: 'BC Tháng (Lũy kế)',
+                name: 'BC Lũy Kế (Tổng Hợp)',
                 path: '/bc-thang/tong-quan',
-                icon: CalendarDays
-            },
-            {
-                name: 'Nhịp Doanh Thu',
-                path: '/nhip-doanh-thu',
-                icon: TrendingUp
+                icon: CalendarDays,
+                badge: '🔥 3-in-1'
             },
             {
                 name: 'Xuất Báo Cáo ST',

@@ -9,7 +9,8 @@ import {
     Flame,
     Info,
     CheckCircle2,
-    AlertTriangle
+    AlertTriangle,
+    Activity
 } from 'lucide-react';
 import { formatValue, formatDate } from '../../../core/lib/formatters';
 import type { DailyTrendPoint, RevenueTrendMetrics } from '../hooks/useRevenueTrendData';
@@ -26,12 +27,12 @@ export default function RevenueTrendChart({ timelineData, metrics, selectedStore
 
     if (timelineData.length === 0) return null;
 
-    const maxPace = Math.max(metrics.maxDailyPace, metrics.requiredDailyPace, metrics.requiredBaseDailyPace, metrics.currentAvgPace, 1);
+    const maxPace = Math.max(metrics.maxDailyPace, metrics.plannedExpectedDailyPace, metrics.plannedBaseDailyPace, metrics.currentAvgPace, 1);
     const maxCumulative = Math.max(metrics.expectedTarget, metrics.totalTarget, metrics.totalActual, 1);
 
-    // Vị trí % của các đường tham chiếu
-    const expectedLinePercent = Math.min(100, Math.max(0, Math.round((metrics.requiredDailyPace / maxPace) * 100)));
-    const baseLinePercent = Math.min(100, Math.max(0, Math.round((metrics.requiredBaseDailyPace / maxPace) * 100)));
+    // Vị trí % của các đường tham chiếu theo Kế hoạch bình quân ngày chuẩn
+    const expectedLinePercent = Math.min(100, Math.max(0, Math.round((metrics.plannedExpectedDailyPace / maxPace) * 100)));
+    const baseLinePercent = Math.min(100, Math.max(0, Math.round((metrics.plannedBaseDailyPace / maxPace) * 100)));
 
     const handleModeChange = (mode: 'daily' | 'cumulative') => {
         setChartMode(mode);
@@ -52,7 +53,7 @@ export default function RevenueTrendChart({ timelineData, metrics, selectedStore
                                 {chartMode === 'daily' ? 'Biểu Đồ Nhịp Doanh Thu Hàng Ngày' : 'Biểu Đồ Tích Lũy Tiến Độ Tháng'}
                             </span>
                             <span className="text-blue-700 font-black">
-                                ({selectedStore === 'Tổng' ? 'Toàn Cụm' : selectedStore})
+                                ({(selectedStore === 'Tổng' || selectedStore === 'all' || /^(tổng|tong|toàn cụm)/i.test(selectedStore)) ? 'Toàn Cụm' : selectedStore})
                             </span>
                             <span className="text-[10px] bg-amber-100 text-amber-900 border border-amber-300 font-black px-1.5 py-0.5 rounded">
                                 Kỳ vọng: {metrics.targetRate}%
@@ -60,7 +61,7 @@ export default function RevenueTrendChart({ timelineData, metrics, selectedStore
                         </h3>
                         <p className="text-[11px] text-slate-500">
                             {chartMode === 'daily'
-                                ? `Đối chiếu nhịp thực thu từng ngày với vạch mục tiêu kỳ vọng ${formatValue(metrics.requiredDailyPace)}/ngày và mốc cơ sở ${formatValue(metrics.requiredBaseDailyPace)}/ngày`
+                                ? `Nhịp doanh thu từng ngày với vạch kỳ vọng ${formatValue(metrics.plannedExpectedDailyPace)}/ngày và mốc chuẩn ${formatValue(metrics.plannedBaseDailyPace)}/ngày`
                                 : `Đường tăng trưởng doanh thu so với mốc kỳ vọng ${formatValue(metrics.expectedTarget)} (${metrics.targetRate}%)`
                             }
                         </p>
@@ -106,11 +107,11 @@ export default function RevenueTrendChart({ timelineData, metrics, selectedStore
                             </div>
                             <div className="flex items-center gap-1.5">
                                 <span className="w-2.5 h-2.5 rounded-sm bg-blue-600 inline-block" />
-                                <span>Đạt cơ sở (100%)</span>
+                                <span>Đạt chuẩn (100%)</span>
                             </div>
                             <div className="flex items-center gap-1.5">
                                 <span className="w-2.5 h-2.5 rounded-sm bg-rose-500 inline-block" />
-                                <span>Hụt cơ sở (&lt;100%)</span>
+                                <span>Hụt chuẩn (&lt;100%)</span>
                             </div>
                             <div className="flex items-center gap-1.5">
                                 <span className="w-2.5 h-2.5 rounded-full border border-amber-400 bg-amber-100 text-amber-700 text-[8px] px-1 font-mono font-black">
@@ -139,16 +140,16 @@ export default function RevenueTrendChart({ timelineData, metrics, selectedStore
 
                 {chartMode === 'daily' && (
                     <div className="flex items-center gap-3 flex-wrap font-mono">
-                        {metrics.requiredDailyPace > 0 && (
+                        {metrics.plannedExpectedDailyPace > 0 && (
                             <div className="flex items-center gap-1 text-amber-800">
                                 <span className="w-4 h-0.5 bg-amber-500 inline-block" />
-                                <span>Vạch {metrics.targetRate}%: {formatValue(metrics.requiredDailyPace)}/ngày</span>
+                                <span>Kế hoạch {metrics.targetRate}%: {formatValue(metrics.plannedExpectedDailyPace)}/ngày</span>
                             </div>
                         )}
-                        {metrics.requiredBaseDailyPace > 0 && (
+                        {metrics.plannedBaseDailyPace > 0 && (
                             <div className="flex items-center gap-1 text-blue-700">
                                 <span className="w-4 h-0.5 border-b border-dashed border-blue-500 inline-block" />
-                                <span>Vạch 100%: {formatValue(metrics.requiredBaseDailyPace)}/ngày</span>
+                                <span>Kế hoạch 100%: {formatValue(metrics.plannedBaseDailyPace)}/ngày</span>
                             </div>
                         )}
                     </div>
@@ -159,7 +160,7 @@ export default function RevenueTrendChart({ timelineData, metrics, selectedStore
             <div className={`p-2.5 sm:p-3 rounded-xl border transition-all duration-200 flex items-center justify-between gap-3 flex-wrap text-xs ${
                 activePoint
                     ? 'bg-blue-50/90 border-blue-200 shadow-xs'
-                    : 'bg-slate-100/70 border-slate-200/80 text-slate-500'
+                    : 'bg-slate-50 border-slate-200/90 text-slate-700'
             }`}>
                 {activePoint ? (
                     <>
@@ -173,19 +174,19 @@ export default function RevenueTrendChart({ timelineData, metrics, selectedStore
                                     ★ Cuối tuần
                                 </span>
                             )}
-                            {/* Chip đánh giá nhịp */}
+                            {/* Chip đánh giá nhịp theo Kế hoạch ngày chuẩn của tháng */}
                             {chartMode === 'daily' ? (
-                                activePoint.dailyPace >= metrics.requiredDailyPace ? (
+                                activePoint.dailyPace >= metrics.plannedExpectedDailyPace ? (
                                     <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 font-black text-[10px] inline-flex items-center gap-1">
-                                        <Sparkles className="w-3 h-3 text-emerald-600" /> Vượt kỳ vọng (+{formatValue(activePoint.dailyPace - metrics.requiredDailyPace)})
+                                        <Sparkles className="w-3 h-3 text-emerald-600" /> Vượt kỳ vọng (+{formatValue(activePoint.dailyPace - metrics.plannedExpectedDailyPace)})
                                     </span>
-                                ) : activePoint.dailyPace >= metrics.requiredBaseDailyPace ? (
+                                ) : activePoint.dailyPace >= metrics.plannedBaseDailyPace ? (
                                     <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-300 font-black text-[10px] inline-flex items-center gap-1">
-                                        <CheckCircle2 className="w-3 h-3 text-blue-600" /> Đạt cơ sở
+                                        <CheckCircle2 className="w-3 h-3 text-blue-600" /> Đạt chuẩn 100%
                                     </span>
                                 ) : (
                                     <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-300 font-black text-[10px] inline-flex items-center gap-1">
-                                        <AlertTriangle className="w-3 h-3 text-rose-600" /> Hụt cơ sở ({formatValue(activePoint.dailyPace - metrics.requiredBaseDailyPace)})
+                                        <AlertTriangle className="w-3 h-3 text-rose-600" /> Hụt chuẩn ({formatValue(activePoint.dailyPace - metrics.plannedBaseDailyPace)})
                                     </span>
                                 )
                             ) : (
@@ -213,55 +214,100 @@ export default function RevenueTrendChart({ timelineData, metrics, selectedStore
                         </div>
                     </>
                 ) : (
-                    <div className="flex items-center justify-between w-full text-[11px]">
-                        <div className="flex items-center gap-1.5 text-slate-500">
-                            <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-                            <span>Rê chuột hoặc chạm vào từng cột để xem chi tiết nhịp doanh thu &amp; tỷ lệ lũy kế</span>
+                    <div className="flex items-center justify-between w-full text-[11px] gap-2 flex-wrap">
+                        <div className="flex items-center gap-2 flex-wrap text-slate-700">
+                            <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                                <Activity className="w-3.5 h-3.5 text-blue-600" />
+                                <span>Nhịp bình quân thực thu:</span>
+                            </span>
+                            <span className="font-mono font-black text-emerald-700 text-xs">
+                                +{formatValue(metrics.currentAvgPace)}/ngày
+                            </span>
+                            {/* Chip trạng thái tiến độ nhịp bình quân so với kế hoạch chuẩn */}
+                            {metrics.plannedBaseDailyPace > 0 && (
+                                metrics.currentAvgPace >= metrics.plannedExpectedDailyPace ? (
+                                    <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-[9.5px] inline-flex items-center gap-1">
+                                        <Sparkles className="w-3 h-3 text-emerald-600" /> Vượt kỳ vọng ({metrics.targetRate}%)
+                                    </span>
+                                ) : metrics.currentAvgPace >= metrics.plannedBaseDailyPace ? (
+                                    <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-300 font-bold text-[9.5px] inline-flex items-center gap-1">
+                                        <CheckCircle2 className="w-3 h-3 text-blue-600" /> Giữ vững chuẩn 100%
+                                    </span>
+                                ) : (
+                                    <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-300 font-bold text-[9.5px] inline-flex items-center gap-1">
+                                        <AlertTriangle className="w-3 h-3 text-rose-600" /> Cần bứt phá thêm
+                                    </span>
+                                )
+                            )}
+                            {/* Hướng dẫn thao tác: chỉ hiển thị trên màn hình thao tác trực tiếp, tự động ẩn 100% khi xuất ảnh báo cáo */}
+                            <span
+                                data-html2canvas-ignore="true"
+                                data-export-ignore="true"
+                                className="text-[10px] text-slate-400 font-normal italic hidden lg:inline"
+                            >
+                                • Chạm/rê chuột vào cột để soi chi tiết ngày
+                            </span>
                         </div>
-                        {metrics.peakDay && (
-                            <div className="flex items-center gap-1 font-mono text-amber-800 font-bold hidden sm:flex">
-                                <Flame className="w-3.5 h-3.5 text-amber-500" />
-                                <span>Đỉnh điểm: {formatDate(metrics.peakDay.date, 'dd/mm')} (+{formatValue(metrics.peakDay.pace)})</span>
+
+                        <div className="flex items-center gap-3 sm:gap-4 font-mono text-[11px] font-bold text-slate-600">
+                            <div>
+                                <span className="text-slate-400 font-sans font-normal text-[10px] mr-1">Tích lũy:</span>
+                                <span>{timelineData.length}/{metrics.totalDays} ngày</span>
                             </div>
-                        )}
+                            {metrics.peakDay && (
+                                <div className="text-amber-900 flex items-center gap-1">
+                                    <Flame className="w-3.5 h-3.5 text-rose-500" />
+                                    <span className="text-slate-400 font-sans font-normal text-[10px]">Đỉnh tháng:</span>
+                                    <span>{formatDate(metrics.peakDay.date, 'dd/mm')} (+{formatValue(metrics.peakDay.pace)})</span>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 )}
             </div>
 
             {/* KHU VỰC VẼ BIỂU ĐỒ */}
             {chartMode === 'daily' ? (
-                <div className="relative pt-2 pb-1">
-                    {/* Đường tham chiếu: Nhịp kỳ vọng vượt trội */}
-                    {metrics.requiredDailyPace > 0 && expectedLinePercent > 0 && expectedLinePercent <= 100 && (
-                        <div
-                            className="absolute left-0 right-0 z-10 pointer-events-none flex items-center"
-                            style={{ bottom: `calc(${expectedLinePercent * 0.62}% + 38px)` }}
-                        >
-                            <div className="w-full border-b-2 border-dashed border-amber-500 opacity-80" />
-                            <span className="absolute right-1 -top-4 font-mono font-black text-[9px] bg-amber-500 text-slate-950 px-1.5 py-0.5 rounded shadow-xs">
-                                Kỳ vọng {metrics.targetRate}%: {formatValue(metrics.requiredDailyPace)}
-                            </span>
-                        </div>
-                    )}
-
-                    {/* Đường tham chiếu: Nhịp cơ sở 100% */}
-                    {metrics.requiredBaseDailyPace > 0 && baseLinePercent > 0 && baseLinePercent <= 100 && (
-                        <div
-                            className="absolute left-0 right-0 z-10 pointer-events-none flex items-center"
-                            style={{ bottom: `calc(${baseLinePercent * 0.62}% + 38px)` }}
-                        >
-                            <div className="w-full border-b border-dashed border-blue-400 opacity-60" />
-                            <span className="absolute left-1 -top-4 font-mono font-bold text-[8.5px] bg-blue-50 text-blue-700 border border-blue-200 px-1 rounded">
-                                Gốc 100%: {formatValue(metrics.requiredBaseDailyPace)}
-                            </span>
-                        </div>
-                    )}
-
-                    {/* Các cột dữ liệu - Tăng padding top để tooltip nổi bên trong container, không bị cắt viền */}
+                <div className="relative pt-1 pb-1">
+                    {/* Các cột dữ liệu - Tự động co giãn theo màn hình hoặc mở rộng mượt mà */}
                     <div 
-                        className="h-64 sm:h-72 flex items-end gap-1 sm:gap-2 overflow-x-auto no-scrollbar px-2 pt-16 sm:pt-20 pb-2 relative"
+                        data-chart-scroll-container="true"
+                        className="h-64 sm:h-72 flex items-end gap-1 sm:gap-1.5 md:gap-2 overflow-x-auto no-scrollbar px-1.5 sm:px-2 pt-3 sm:pt-4 pb-2 relative"
                         onMouseLeave={() => setActivePoint(null)}
                     >
+                        {/* VÙNG VẠCH THAM CHIẾU: KHỚP 100% VỚI CHIỀU CAO VÀ VỊ TRÍ CỦA BAR TRACK */}
+                        <div 
+                            data-reference-overlay="true"
+                            className="absolute left-0 right-0 pointer-events-none z-10 px-1.5 sm:px-2"
+                            style={{ bottom: '46px', height: '176px' }}
+                        >
+                            {/* Đường tham chiếu: Nhịp kế hoạch kỳ vọng vượt trội */}
+                            {metrics.plannedExpectedDailyPace > 0 && expectedLinePercent > 0 && expectedLinePercent <= 100 && (
+                                <div
+                                    className="absolute left-1.5 right-1.5 flex items-center"
+                                    style={{ bottom: `${expectedLinePercent}%` }}
+                                >
+                                    <div className="w-full border-b-2 border-dashed border-amber-500 opacity-80" />
+                                    <span className="absolute right-0 -top-3.5 font-mono font-black text-[9px] bg-amber-500 text-slate-950 px-1.5 py-0.5 rounded shadow-xs whitespace-nowrap">
+                                        Kỳ vọng {metrics.targetRate}%: {formatValue(metrics.plannedExpectedDailyPace)}
+                                    </span>
+                                </div>
+                            )}
+
+                            {/* Đường tham chiếu: Nhịp kế hoạch chuẩn 100% */}
+                            {metrics.plannedBaseDailyPace > 0 && baseLinePercent > 0 && baseLinePercent <= 100 && (
+                                <div
+                                    className="absolute left-1.5 right-1.5 flex items-center"
+                                    style={{ bottom: `${baseLinePercent}%` }}
+                                >
+                                    <div className="w-full border-b border-dashed border-blue-400 opacity-70" />
+                                    <span className="absolute left-0 -top-3.5 font-mono font-bold text-[8.5px] bg-blue-50 text-blue-700 border border-blue-200 px-1 rounded whitespace-nowrap">
+                                        Gốc 100%: {formatValue(metrics.plannedBaseDailyPace)}
+                                    </span>
+                                </div>
+                            )}
+                        </div>
+
                         {timelineData.map((d, index) => {
                             const heightPercent = Math.max(6, Math.min(100, Math.round((d.dailyPace / maxPace) * 100)));
                             const isPeak = metrics.peakDay && metrics.peakDay.date === d.reportDate;
@@ -270,68 +316,40 @@ export default function RevenueTrendChart({ timelineData, metrics, selectedStore
                             let barColor = 'bg-blue-600';
                             let barTextColor = 'text-blue-700';
 
-                            if (metrics.requiredDailyPace > 0 && d.dailyPace >= metrics.requiredDailyPace) {
+                            if (metrics.plannedExpectedDailyPace > 0 && d.dailyPace >= metrics.plannedExpectedDailyPace) {
                                 barColor = 'bg-emerald-600';
                                 barTextColor = 'text-emerald-700';
-                            } else if (metrics.requiredBaseDailyPace > 0 && d.dailyPace >= metrics.requiredBaseDailyPace) {
+                            } else if (metrics.plannedBaseDailyPace > 0 && d.dailyPace >= metrics.plannedBaseDailyPace) {
                                 barColor = 'bg-blue-600';
                                 barTextColor = 'text-blue-700';
-                            } else if (metrics.requiredBaseDailyPace > 0) {
+                            } else if (metrics.plannedBaseDailyPace > 0) {
                                 barColor = 'bg-rose-500';
                                 barTextColor = 'text-rose-600';
                             }
 
-                            // Căn chỉnh vị trí tooltip thông minh để không tràn viền trái/phải
-                            const tooltipAlignClass = index < 3
-                                ? 'left-0'
-                                : index >= timelineData.length - 3
-                                    ? 'right-0'
-                                    : 'left-1/2 -translate-x-1/2';
-
                             return (
                                 <div
                                     key={d.reportDate}
-                                    className="flex-1 min-w-[34px] sm:min-w-[42px] flex flex-col items-center gap-1 group relative h-full justify-end cursor-pointer"
+                                    data-chart-bar="true"
+                                    className="flex-1 min-w-[28px] sm:min-w-[34px] md:min-w-[40px] flex flex-col items-center gap-1 group relative h-full justify-end cursor-pointer transition-transform"
                                     onMouseEnter={() => setActivePoint(d)}
                                     onClick={() => setActivePoint(d)}
                                 >
-                                    {/* Tooltip hover: Đặt ở top-1 bên trong vùng padding-top, đảm bảo không bao giờ bị cắt viền */}
-                                    <div 
-                                        className={`absolute top-1 ${tooltipAlignClass} opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none bg-slate-950/95 text-white text-[9.5px] p-2 rounded-xl shadow-2xl z-40 whitespace-nowrap font-mono flex flex-col gap-0.5 border border-slate-700 backdrop-blur-xs ${
-                                            isCurrentActive ? '!opacity-100 ring-2 ring-blue-400' : ''
-                                        }`}
-                                    >
-                                        <div className="font-bold flex items-center justify-between gap-2 border-b border-slate-700/80 pb-0.5">
-                                            <span>{d.dayLabel} ({d.dayOfWeekLabel})</span>
-                                            {d.isWeekend && <span className="text-amber-300 font-black text-[8.5px]">★ Cuối tuần</span>}
-                                        </div>
-                                        <div className="text-emerald-300 font-bold flex items-center justify-between gap-2">
-                                            <span>Doanh thu ngày:</span>
-                                            <span>+{formatValue(d.dailyPace)}</span>
-                                        </div>
-                                        <div className="text-slate-300 text-[8.5px] flex items-center justify-between gap-2">
-                                            <span>Lũy kế:</span>
-                                            <span>{formatValue(d.revenueActual)} ({d.completionRate.toFixed(1)}%)</span>
-                                        </div>
-                                        {d.dailyInstallment > 0 && (
-                                            <div className="text-sky-300 text-[8.5px] flex items-center justify-between gap-2">
-                                                <span>Trả chậm:</span>
-                                                <span>{formatValue(d.dailyInstallment)} ({d.installmentRate.toFixed(0)}%)</span>
-                                            </div>
-                                        )}
-                                    </div>
-
                                     {/* Badge số trên đỉnh cột */}
-                                    <div className={`font-mono text-[9px] font-bold ${barTextColor} mb-0.5 truncate transition-transform ${isCurrentActive ? 'scale-110 font-black' : ''}`}>
-                                        {d.dailyPace > 0 ? `+${formatValue(d.dailyPace)}` : '0'}
+                                    <div className={`font-mono text-[8px] sm:text-[9px] font-bold ${barTextColor} mb-0.5 whitespace-nowrap text-center leading-none transition-transform ${isCurrentActive ? 'scale-115 font-black text-blue-800' : ''}`}>
+                                        {d.dailyPace > 0 ? (d.dailyPace >= 100 ? `+${d.dailyPace.toFixed(0)}` : `+${formatValue(d.dailyPace)}`) : '0'}
                                     </div>
 
-                                    {/* Thanh Bar */}
-                                    <div className={`w-full rounded-t-lg flex items-end overflow-hidden transition-all ${
-                                        isCurrentActive ? 'ring-2 ring-blue-500 shadow-md' : ''
-                                    } ${
-                                        d.isWeekend ? 'bg-amber-100/70 ring-1 ring-amber-300/60' : 'bg-slate-200/70'
-                                    }`} style={{ height: '62%' }}>
+                                    {/* Thanh Bar Track - Chiều cao cố định 176px tương thích 100% vạch tham chiếu */}
+                                    <div
+                                        data-bar-track="true"
+                                        className={`w-full rounded-t-lg flex items-end overflow-hidden transition-all ${
+                                            isCurrentActive ? 'ring-2 ring-blue-500 shadow-md brightness-105' : ''
+                                        } ${
+                                            d.isWeekend ? 'bg-amber-100/70 ring-1 ring-amber-300/60' : 'bg-slate-200/70'
+                                        }`}
+                                        style={{ height: '176px' }}
+                                    >
                                         <div
                                             className={`w-full ${barColor} rounded-t-lg transition-all relative flex flex-col justify-start items-center pt-1 group-hover:brightness-110`}
                                             style={{ height: `${heightPercent}%` }}
@@ -343,13 +361,13 @@ export default function RevenueTrendChart({ timelineData, metrics, selectedStore
                                     </div>
 
                                     {/* Nhãn trục X: Ngày & Thứ */}
-                                    <div className="flex flex-col items-center mt-1">
-                                        <span className={`text-[9.5px] font-mono font-bold truncate ${
+                                    <div className="flex flex-col items-center mt-1 h-9 justify-center">
+                                        <span className={`text-[8px] sm:text-[9px] font-mono font-bold whitespace-nowrap text-center tracking-tighter leading-tight ${
                                             d.isWeekend ? 'text-amber-800 font-black' : 'text-slate-700'
                                         } ${isCurrentActive ? 'text-blue-700 underline font-black' : ''}`}>
                                             {formatDate(d.reportDate, 'dd/mm')}
                                         </span>
-                                        <span className={`text-[8.5px] uppercase font-bold ${
+                                        <span className={`text-[7.5px] sm:text-[8px] uppercase font-bold whitespace-nowrap text-center tracking-tighter leading-tight ${
                                             d.isWeekend ? 'text-amber-600 font-black' : 'text-slate-400'
                                         }`}>
                                             {d.isWeekend ? 'T7/CN' : d.dayOfWeekLabel.replace('Thứ ', 'T')}
@@ -362,9 +380,10 @@ export default function RevenueTrendChart({ timelineData, metrics, selectedStore
                 </div>
             ) : (
                 /* CHẾ ĐỘ LŨY KẾ TỊNH TIẾN */
-                <div className="relative pt-2 pb-1">
+                <div className="relative pt-1 pb-1">
                     <div 
-                        className="h-64 sm:h-72 flex items-end gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar px-2 pt-16 sm:pt-20 pb-2 relative"
+                        data-chart-scroll-container="true"
+                        className="h-64 sm:h-72 flex items-end gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar px-1.5 sm:px-2 pt-3 sm:pt-4 pb-2 relative"
                         onMouseLeave={() => setActivePoint(null)}
                     >
                         {timelineData.map((d, index) => {
@@ -373,50 +392,25 @@ export default function RevenueTrendChart({ timelineData, metrics, selectedStore
                             const expectedTargetPercent = Math.min(100, Math.max(5, Math.round((metrics.expectedTarget / maxCumulative) * 100)));
                             const isCurrentActive = activePoint?.reportDate === d.reportDate;
 
-                            const tooltipAlignClass = index < 3
-                                ? 'left-0'
-                                : index >= timelineData.length - 3
-                                    ? 'right-0'
-                                    : 'left-1/2 -translate-x-1/2';
-
                             return (
                                 <div
                                     key={d.reportDate}
-                                    className="flex-1 min-w-[34px] sm:min-w-[42px] flex flex-col items-center gap-1 group relative h-full justify-end cursor-pointer"
+                                    data-chart-bar="true"
+                                    className="flex-1 min-w-[28px] sm:min-w-[34px] md:min-w-[40px] flex flex-col items-center gap-1 group relative h-full justify-end cursor-pointer transition-transform"
                                     onMouseEnter={() => setActivePoint(d)}
                                     onClick={() => setActivePoint(d)}
                                 >
-                                    {/* Tooltip hover chế độ lũy kế */}
-                                    <div 
-                                        className={`absolute top-1 ${tooltipAlignClass} opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none bg-slate-950/95 text-white text-[9.5px] p-2 rounded-xl shadow-2xl z-40 whitespace-nowrap font-mono flex flex-col gap-0.5 border border-slate-700 backdrop-blur-xs ${
-                                            isCurrentActive ? '!opacity-100 ring-2 ring-blue-400' : ''
-                                        }`}
-                                    >
-                                        <div className="font-bold flex items-center justify-between gap-2 border-b border-slate-700/80 pb-0.5">
-                                            <span>{d.dayLabel} ({d.dayOfWeekLabel})</span>
-                                            <span className="text-blue-300 font-black">{d.completionRate.toFixed(1)}%</span>
-                                        </div>
-                                        <div className="text-emerald-300 font-bold flex items-center justify-between gap-2">
-                                            <span>Lũy kế thực thu:</span>
-                                            <span>{formatValue(d.revenueActual)}</span>
-                                        </div>
-                                        <div className="text-amber-300 text-[8.5px] flex items-center justify-between gap-2">
-                                            <span>Mục tiêu {metrics.targetRate}%:</span>
-                                            <span>{formatValue(metrics.expectedTarget)}</span>
-                                        </div>
-                                        <div className="text-slate-300 text-[8.5px] flex items-center justify-between gap-2">
-                                            <span>Target gốc 100%:</span>
-                                            <span>{formatValue(metrics.totalTarget)}</span>
-                                        </div>
-                                    </div>
-
-                                    <div className={`font-mono text-[9px] font-bold text-slate-600 mb-0.5 truncate ${isCurrentActive ? 'text-blue-700 font-black scale-110' : ''}`}>
+                                    <div className={`font-mono text-[8px] sm:text-[9px] font-bold text-slate-600 mb-0.5 whitespace-nowrap text-center leading-none ${isCurrentActive ? 'text-blue-700 font-black scale-115' : ''}`}>
                                         {d.completionRate.toFixed(0)}%
                                     </div>
 
-                                    <div className={`w-full bg-slate-200/70 rounded-t-lg flex items-end justify-center relative overflow-hidden transition-all ${
-                                        isCurrentActive ? 'ring-2 ring-blue-500 shadow-md' : ''
-                                    }`} style={{ height: '62%' }}>
+                                    <div
+                                        data-bar-track="true"
+                                        className={`w-full bg-slate-200/70 rounded-t-lg flex items-end justify-center relative overflow-hidden transition-all ${
+                                            isCurrentActive ? 'ring-2 ring-blue-500 shadow-md brightness-105' : ''
+                                        }`}
+                                        style={{ height: '176px' }}
+                                    >
                                         {/* Cột lũy kế */}
                                         <div
                                             className="w-full bg-blue-700 rounded-t-lg transition-all group-hover:brightness-110"
@@ -434,11 +428,11 @@ export default function RevenueTrendChart({ timelineData, metrics, selectedStore
                                         />
                                     </div>
 
-                                    <div className="flex flex-col items-center mt-1">
-                                        <span className={`text-[9.5px] font-mono font-bold text-slate-700 ${isCurrentActive ? 'text-blue-700 underline font-black' : ''}`}>
+                                    <div className="flex flex-col items-center mt-1 h-9 justify-center">
+                                        <span className={`text-[8px] sm:text-[9px] font-mono font-bold whitespace-nowrap text-center tracking-tighter leading-tight text-slate-700 ${isCurrentActive ? 'text-blue-700 underline font-black' : ''}`}>
                                             {formatDate(d.reportDate, 'dd/mm')}
                                         </span>
-                                        <span className="text-[8.5px] font-mono text-emerald-600 font-bold">
+                                        <span className="text-[7.5px] sm:text-[8px] font-mono text-emerald-600 font-bold whitespace-nowrap text-center tracking-tighter leading-tight">
                                             {formatValue(d.revenueActual)}
                                         </span>
                                     </div>

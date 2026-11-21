@@ -227,6 +227,7 @@ export async function extractDailyEmployeeRevenueImagesBatch(
         quantity: number;
         revenueQd: number;
         installmentQd: number;
+        straightQd?: number;
         installmentRate: number;
         loanQd: number;
         returnQd: number;
@@ -288,24 +289,72 @@ export async function extractDailyEmployeeRevenueImagesBatch(
                     const hasRevQd = r.revenueQd !== null && r.revenueQd !== undefined && r.revenueQd !== '';
                     const rawInstQd = r.installmentQd ?? r.dtTraGopQd;
                     const hasInstQd = rawInstQd !== null && rawInstQd !== undefined && rawInstQd !== '';
+                    const rawStraight = r.straightQd ?? r.dtTraThangQd;
+                    const hasStraight = rawStraight !== null && rawStraight !== undefined && rawStraight !== '';
                     const hasQty = r.quantity !== null && r.quantity !== undefined && r.quantity !== '';
                     const hasLoan = r.loanQd !== null && r.loanQd !== undefined && r.loanQd !== '';
                     const hasRet = r.returnQd !== null && r.returnQd !== undefined && r.returnQd !== '';
 
-                    const qdVal = hasRevQd ? cleanBiNumber(r.revenueQd) : null;
-                    const instVal = hasInstQd ? cleanBiNumber(rawInstQd) : null;
+                    let qdVal = hasRevQd ? cleanBiNumber(r.revenueQd) : null;
+                    let instVal = hasInstQd ? cleanBiNumber(rawInstQd) : null;
+                    const straightVal = hasStraight ? cleanBiNumber(rawStraight) : null;
                     const qtyVal = hasQty ? cleanBiNumber(r.quantity) : null;
                     const loanVal = hasLoan ? cleanBiNumber(r.loanQd) : null;
                     const retVal = hasRet ? cleanBiNumber(r.returnQd) : null;
 
+                    // 1. PHÁT HIỆN & SỬA LỖI AI COPY NHẦM DOANH THU QĐ SANG DT TRẢ GÓP QĐ:
+                    if (qdVal !== null && instVal !== null && qdVal > 0 && instVal === qdVal) {
+                        if (straightVal !== null && straightVal > 0) {
+                            // Khi có DT Trả Thẳng > 0 thì Trả Góp chắc chắn KHÔNG THỂ bằng Tổng DTQĐ!
+                            instVal = Math.max(0, qdVal - straightVal - (loanVal || 0) + (retVal || 0));
+                        } else if (straightVal === null) {
+                            // Cột Trả Góp bị cắt số ở mép phải nên AI copy nhầm từ DTQĐ -> Hủy bỏ gán nhầm
+                            instVal = null;
+                        }
+                    }
+
+                    // 2. TỰ ĐỘNG SUY LUẬN KHI ẢNH NỬA TRÁI (BỊ CẮT MẤT CỘT TRẢ GÓP Ở MÉP PHẢI):
+                    if (instVal === null && qdVal !== null && straightVal !== null && qdVal >= straightVal) {
+                        instVal = Math.max(0, qdVal - straightVal - (loanVal || 0) + (retVal || 0));
+                    }
+
+                    // 3. TỰ ĐỘNG CỘNG LẠI DTQĐ KHI ẢNH NỬA PHẢI (CHỈ CÓ TRẢ THẲNG VÀ TRẢ GÓP, THIẾU DTQĐ):
+                    if (qdVal === null && straightVal !== null && instVal !== null) {
+                        qdVal = straightVal + instVal + (loanVal || 0) - (retVal || 0);
+                    }
+
                     const existing = empMap.get(empId);
                     if (existing) {
-                        if (qdVal !== null && (qdVal !== 0 || existing.revenueQd === 0)) {
-                            existing.revenueQd = qdVal;
+                        if (straightVal !== null && (straightVal > 0 || !existing.straightQd)) {
+                            existing.straightQd = straightVal;
                         }
-                        if (instVal !== null && (instVal !== 0 || existing.installmentQd === 0)) {
-                            existing.installmentQd = instVal;
+
+                        // Cập nhật DTQĐ: KHÔNG ghi đè nếu số mới nhỏ hơn nhiều (nghi ngờ là nhầm cột con trả góp)
+                        if (qdVal !== null) {
+                            const isSuspiciousSubColumn = existing.revenueQd > 0 && qdVal < existing.revenueQd &&
+                                (qdVal === existing.installmentQd || (existing.straightQd && qdVal === existing.straightQd));
+                            if (!isSuspiciousSubColumn) {
+                                if (qdVal > 0 || existing.revenueQd === 0) {
+                                    existing.revenueQd = qdVal;
+                                }
+                            }
                         }
+
+                        // Cập nhật DT Trả Góp QĐ
+                        if (instVal !== null) {
+                            if (existing.revenueQd > 0 && instVal === existing.revenueQd && existing.straightQd && existing.straightQd > 0) {
+                                instVal = Math.max(0, existing.revenueQd - existing.straightQd - (loanVal || existing.loanQd || 0) + (retVal || existing.returnQd || 0));
+                            }
+                            if (instVal > 0 || existing.installmentQd === 0) {
+                                existing.installmentQd = instVal;
+                            }
+                        }
+
+                        // Tự động đối chiếu nếu existing vẫn chưa có Trả Góp mà đã có DTQĐ và Trả Thẳng
+                        if (existing.installmentQd === 0 && existing.revenueQd > 0 && existing.straightQd && existing.straightQd > 0) {
+                            existing.installmentQd = Math.max(0, existing.revenueQd - existing.straightQd - existing.loanQd + existing.returnQd);
+                        }
+
                         if (qtyVal !== null && (qtyVal !== 0 || existing.quantity === 0)) {
                             existing.quantity = qtyVal;
                         }
@@ -325,6 +374,7 @@ export async function extractDailyEmployeeRevenueImagesBatch(
                             fullName: officialName,
                             quantity: qtyVal ?? 0,
                             revenueQd: qdVal ?? 0,
+                            straightQd: straightVal ?? undefined,
                             installmentQd: instVal ?? 0,
                             installmentRate: 0,
                             loanQd: loanVal ?? 0,

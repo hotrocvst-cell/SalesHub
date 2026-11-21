@@ -317,7 +317,7 @@ export default function EmployeeRankingSummaryPage() {
                 sess.records.forEach(r => {
                     const k = (r.employee_id || '').trim();
                     if (k && !map[k]) {
-                        map[k] = r;
+                        map[k] = { ...r, report_date: sess.report_date, session_id: sess.id };
                     }
                 });
             }
@@ -390,13 +390,26 @@ export default function EmployeeRankingSummaryPage() {
             let rawActual = Number(sessRecord?.revenue_actual) || 0;
             let rawQd = Number(sessRecord?.revenue_qd) || 0;
 
+            // Xác định số ngày đã trôi qua gắn liền với phiên của nhân viên (chính xác kể cả khi xem toàn cụm)
+            let empPassedDays = passedDays;
+            if (sessRecord?.report_date) {
+                const parts = sessRecord.report_date.split('-');
+                if (parts.length === 3) {
+                    const d = parseInt(parts[2], 10);
+                    if (!isNaN(d) && d > 0) {
+                        empPassedDays = Math.min(d, safeTotal);
+                    }
+                }
+            }
+            const safeEmpPassed = Math.max(1, empPassedDays);
+
             // Quy đổi sang triệu đồng nếu số liệu là VNĐ nguyên bản (> 100,000)
             const revenueActual = rawActual >= 100_000 ? Math.round(rawActual / 1_000_000) : rawActual;
             const revenueQd = rawQd >= 100_000 ? Math.round(rawQd / 1_000_000) : rawQd;
             const revenueTarget = revenueTargets[empId] || 0;
 
             const completionRate = revenueTarget > 0 ? (revenueQd / revenueTarget) * 100 : 0;
-            const forecastRevenueQd = (revenueQd / safePassed) * safeTotal;
+            const forecastRevenueQd = (revenueQd / safeEmpPassed) * safeTotal;
             const forecastRate = revenueTarget > 0 ? (forecastRevenueQd / revenueTarget) * 100 : 0;
 
             // Dữ liệu thi đua của nhân viên: Tự động tra cứu cấu hình theo đúng ST của NV & Tháng/Năm
@@ -473,11 +486,11 @@ export default function EmployeeRankingSummaryPage() {
                         : getCampaignPoints(cKey || rawKey, scoreCfg);
                     totalPoints += pts;
 
-                    // Tính %DKHT nhóm thi đua với số lượng thực tế sau cấn trừ
-                    const forecastCampVal = (effectiveActual / safePassed) * safeTotal;
-                    const campForecastRate = (forecastCampVal / tVal) * 100;
+                    // Tính %DKHT nhóm thi đua với số lượng thực tế sau cấn trừ (làm tròn số nguyên chuẩn như trang Chi Tiết NV)
+                    const forecastCampVal = (effectiveActual / safeEmpPassed) * safeTotal;
+                    const campForecastRate = Math.round((forecastCampVal / tVal) * 100);
 
-                    if (campForecastRate >= 100) {
+                    if (campForecastRate >= 100 || effectiveActual >= tVal) {
                         achievedCount++;
                         achievedPoints += pts;
                     }

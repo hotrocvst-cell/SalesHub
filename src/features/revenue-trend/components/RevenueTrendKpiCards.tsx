@@ -18,10 +18,10 @@ interface RevenueTrendKpiCardsProps {
 }
 
 export default function RevenueTrendKpiCards({ metrics, selectedStore }: RevenueTrendKpiCardsProps) {
-    const isCluster = selectedStore === 'Tổng';
+    const isCluster = selectedStore === 'Tổng' || selectedStore === 'all' || /^(tổng|tong|toàn cụm)/i.test(selectedStore);
 
     return (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div data-kpi-grid="true" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             {/* THẺ 1: LŨY KẾ & MỤC TIÊU KỲ VỌNG */}
             <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/90 shadow-2xs relative overflow-hidden flex flex-col justify-between">
                 <div className="flex items-center justify-between text-slate-400 mb-1.5">
@@ -115,21 +115,31 @@ export default function RevenueTrendKpiCards({ metrics, selectedStore }: Revenue
 
                     <div className="mt-2 space-y-1 text-[10.5px]">
                         <div className="flex items-center justify-between">
-                            <span className="text-slate-500">So nhịp kỳ vọng ({metrics.targetRate}%):</span>
+                            <span className="text-slate-500">So KH ngày kỳ vọng ({metrics.targetRate}%):</span>
                             <span className={`font-mono font-bold ${
                                 metrics.paceGap >= 0 ? 'text-emerald-700' : 'text-rose-600'
                             }`}>
                                 {metrics.paceGap >= 0 ? `+${formatValue(metrics.paceGap)} (Đạt)` : `${formatValue(metrics.paceGap)} (Thiếu)`}
                             </span>
                         </div>
-                        <div className="flex items-center justify-between text-slate-400 text-[10px]">
-                            <span>So nhịp gốc (100%):</span>
+                        <div className="flex items-center justify-between text-slate-500 text-[10px]">
+                            <span>So KH ngày chuẩn (100%):</span>
                             <span className={`font-mono font-bold ${
                                 metrics.basePaceGap >= 0 ? 'text-blue-700' : 'text-slate-500'
                             }`}>
                                 {metrics.basePaceGap >= 0 ? `+${formatValue(metrics.basePaceGap)}` : formatValue(metrics.basePaceGap)}
                             </span>
                         </div>
+                        {metrics.remainingDays > 0 && (
+                            <div className="flex items-center justify-between text-amber-800 text-[10px] font-medium pt-0.5 border-t border-slate-100">
+                                <span>So nhịp cần chạy ({metrics.remainingDays} ngày tới):</span>
+                                <span className={`font-mono font-bold ${
+                                    metrics.requiredPaceGap >= 0 ? 'text-emerald-700' : 'text-amber-800'
+                                }`}>
+                                    {metrics.requiredPaceGap >= 0 ? `+${formatValue(metrics.requiredPaceGap)}` : formatValue(metrics.requiredPaceGap)}
+                                </span>
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -158,14 +168,14 @@ export default function RevenueTrendKpiCards({ metrics, selectedStore }: Revenue
                             {formatValue(metrics.requiredDailyPace)}
                         </span>
                         <span className="text-[11px] font-bold text-amber-700/90">
-                            / ngày (đạt {metrics.targetRate}%)
+                            / ngày (mục tiêu {metrics.targetRate}%)
                         </span>
                     </div>
 
                     <div className="mt-2 space-y-1 text-[10.5px]">
-                        <div className="flex items-center justify-between text-slate-500">
+                        <div className="flex items-center justify-between text-slate-600">
                             <span>Mốc cơ sở (100%):</span>
-                            <span className="font-mono font-bold text-slate-700">
+                            <span className="font-mono font-bold text-slate-800">
                                 {formatValue(metrics.requiredBaseDailyPace)} / ngày
                             </span>
                         </div>
@@ -173,6 +183,12 @@ export default function RevenueTrendKpiCards({ metrics, selectedStore }: Revenue
                             <span>Bình quân đã qua:</span>
                             <span className="font-mono font-bold text-slate-600">
                                 {formatValue(metrics.currentAvgPace)} / ngày
+                            </span>
+                        </div>
+                        <div className="flex items-center justify-between text-slate-400 text-[10px]">
+                            <span>KH ngày chuẩn cả tháng:</span>
+                            <span className="font-mono font-medium text-slate-500">
+                                {formatValue(metrics.plannedBaseDailyPace)} / ngày
                             </span>
                         </div>
                     </div>
@@ -198,7 +214,7 @@ export default function RevenueTrendKpiCards({ metrics, selectedStore }: Revenue
                 </div>
 
                 <div>
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 flex-wrap">
                         {metrics.paceHealth === 'completed' && (
                             <span className="inline-flex items-center gap-1 text-[11px] font-black px-2 py-0.5 rounded-xl bg-emerald-100 text-emerald-800 border border-emerald-300">
                                 <Sparkles className="w-3.5 h-3.5" />
@@ -207,17 +223,17 @@ export default function RevenueTrendKpiCards({ metrics, selectedStore }: Revenue
                         )}
                         {metrics.paceHealth === 'leading' && (
                             <span className="inline-flex items-center gap-1 text-[11px] font-black px-2 py-0.5 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-300">
-                                🚀 VƯỢT NHỊP KỲ VỌNG ({metrics.targetRate}%)
+                                🚀 TIẾN ĐỘ VƯỢT NHỊP ({metrics.targetRate}%)
                             </span>
                         )}
                         {metrics.paceHealth === 'on_track' && (
                             <span className="inline-flex items-center gap-1 text-[11px] font-black px-2 py-0.5 rounded-xl bg-blue-50 text-blue-800 border border-blue-200">
-                                ⚡ ĐẠT NHỊP 100% (CẦN BỨT PHÁ)
+                                ⚡ TIẾN ĐỘ ĐẠT MỐC 100%
                             </span>
                         )}
                         {metrics.paceHealth === 'lagging' && (
                             <span className="inline-flex items-center gap-1 text-[11px] font-black px-2 py-0.5 rounded-xl bg-rose-50 text-rose-800 border border-rose-200">
-                                ⚠️ HỤT NHỊP CƠ SỞ (&lt;100%)
+                                ⚠️ HỤT NHỊP (CẦN TĂNG TỐC)
                             </span>
                         )}
                     </div>

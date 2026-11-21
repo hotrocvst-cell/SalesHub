@@ -89,20 +89,6 @@ const RAW_DEFAULT_PAGE_PERMISSIONS: SystemPagePermission[] = [
     },
     // BÁO CÁO KINH DOANH
     {
-        page_key: 'bc_cum_sieu_thi',
-        page_name: 'BC Cụm ST',
-        path: '/bao-cao-cum-sieu-thi',
-        group_title: 'BÁO CÁO KINH DOANH',
-        description: 'Báo cáo sức khỏe cụm ST, theo dõi lũy kế DTQĐ, target chuẩn, target vượt trội và trả chậm',
-        is_enabled: true,
-        allowed_roles: ['ADMIN', 'QUAN_LY', 'TRUONG_CA'],
-        order_index: 1,
-        badge_enabled: true,
-        badge_icon: '💎',
-        badge_text: '9 Cột',
-        badge_color: 'blue'
-    },
-    {
         page_key: 'bc_ngay',
         page_name: 'BC Ngày (Realtime)',
         path: '/bc-ngay/tong-quan',
@@ -132,17 +118,17 @@ const RAW_DEFAULT_PAGE_PERMISSIONS: SystemPagePermission[] = [
     },
     {
         page_key: 'bc_thang',
-        page_name: 'BC Tháng (Lũy kế)',
+        page_name: 'BC Lũy Kế (Tổng Hợp)',
         path: '/bc-thang/tong-quan',
         group_title: 'BÁO CÁO KINH DOANH',
-        description: 'Báo cáo tiến độ lũy kế tháng & dự kiến hoàn thành mục tiêu',
+        description: 'Báo cáo lũy kế tổng hợp: Doanh thu & Thi đua, Sức khỏe Cụm ST và Nhịp bán 31 ngày',
         is_enabled: true,
         allowed_roles: ['ADMIN', 'QUAN_LY', 'TRUONG_CA'],
         order_index: 2,
-        badge_enabled: false,
-        badge_icon: '',
-        badge_text: '',
-        badge_color: 'blue'
+        badge_enabled: true,
+        badge_icon: '🔥',
+        badge_text: '3-in-1',
+        badge_color: 'amber'
     },
     {
         page_key: 'hieu_qua_nv',
@@ -301,20 +287,6 @@ const RAW_DEFAULT_PAGE_PERMISSIONS: SystemPagePermission[] = [
         badge_text: 'Mới',
         badge_color: 'emerald',
         allow_excel_export: false
-    },
-    {
-        page_key: 'nhip_doanh_thu',
-        page_name: 'Nhịp Doanh Thu',
-        path: '/nhip-doanh-thu',
-        group_title: 'BÁO CÁO KINH DOANH',
-        description: 'Biểu đồ phân tích nhịp bán và xu hướng dòng tiền',
-        is_enabled: true,
-        allowed_roles: ['ADMIN', 'QUAN_LY', 'TRUONG_CA'],
-        order_index: 5,
-        badge_enabled: false,
-        badge_icon: '',
-        badge_text: '',
-        badge_color: 'blue'
     },
     // DỮ LIỆU & PHIÊN LÀM VIỆC
     {
@@ -784,14 +756,18 @@ export const DEPRECATED_SYSTEM_PATHS = new Set<string>([
     '/bc-realtime-con-lai',
     '/tien-ich-in-an',
     '/cap-nhat',
-    '/cap-nhat-luy-ke-nhan-vien'
+    '/cap-nhat-luy-ke-nhan-vien',
+    '/bao-cao-cum-sieu-thi',
+    '/nhip-doanh-thu'
 ]);
 
 export const DEPRECATED_SYSTEM_PAGE_KEYS = new Set<string>([
     'bc_realtime_con_lai',
     'tien_ich_in_an',
     'cap_nhat_so_lieu',
-    'cap_nhat_luy_ke_nv'
+    'cap_nhat_luy_ke_nv',
+    'bc_cum_sieu_thi',
+    'nhip_doanh_thu'
 ]);
 
 /**

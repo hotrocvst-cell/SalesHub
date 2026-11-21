@@ -71,41 +71,61 @@ export function buildRevenueQdOcrPrompt(options?: { includeDailyColumns?: boolea
     const includeDaily = Boolean(options?.includeDailyColumns);
 
     const metricsInstructions = includeDaily
-        ? `3. CHỈ trích xuất từng chỉ số dưới đây khi CỘT CỦA NÓ HIỂN THỊ ĐẦY ĐỦ SỐ LIỆU trong ảnh (dấu phẩy ',' là phân cách hàng nghìn, giữ nguyên số âm nếu có như -9):
-   - revenueQd: Giá trị thuộc đúng cột "DOANH THU QĐ" (hoặc tiêu đề bị che 1 phần như "...ANH THU QĐ"). Nếu cột không có hoặc bị che mất số, trả về null.
-   - installmentQd: Giá trị thuộc đúng cột "DT TRẢ GÓP QĐ". TUYỆT ĐỐI KHÔNG lấy nhầm cột "DT TRẢ THẲNG QĐ", "DT QĐ KHOẢN VAY", hay "DT NHẬP TRẢ QĐ". Nếu cột không có hoặc bị cắt mất chữ số ở mép phải, trả về null.
+        ? `3. HƯỚNG DẪN BÓC TÁCH TỪNG CỘT SỐ LIỆU (Dấu phẩy ',' là phân cách hàng nghìn, số âm giữ nguyên dấu trừ như -9):
+   - revenueQd: Giá trị thuộc đúng cột "DOANH THU QĐ" (Tổng doanh thu quy đổi).
+     + Nếu ảnh cuộn ngang sang phải mà KHÔNG có cột "DOANH THU QĐ" (chỉ thấy các cột "DT TRẢ THẲNG QĐ", "DT TRẢ GÓP QĐ"...), BẮT BUỘC TRẢ VỀ: null.
+     + TUYỆT ĐỐI KHÔNG lấy giá trị của cột "DT TRẢ GÓP QĐ" hoặc "DT TRẢ THẲNG QĐ" gán vào revenueQd!
+   - straightQd: Giá trị thuộc đúng cột "DT TRẢ THẲNG QĐ" (Doanh thu trả thẳng quy đổi). Nếu cột không hiển thị hoặc bị che mất chữ số, trả về null.
+   - installmentQd: Giá trị thuộc đúng cột "DT TRẢ GÓP QĐ" (Doanh thu trả góp quy đổi).
+     + CHỈ lấy số khi cột "DT TRẢ GÓP QĐ" hiển thị trọn vẹn chữ số bên dưới.
+     + Nếu cột bị cắt mất chữ số ở mép phải màn hình (chỉ thấy 1 phần chữ "DT T..." hoặc tiêu đề nhưng dưới không có số), BẮT BUỘC TRẢ VỀ: null.
+     + TUYỆT ĐỐI KHÔNG copy giá trị của cột "DOANH THU QĐ" hoặc "DT TRẢ THẲNG QĐ" gán vào installmentQd!
    - quantity: Giá trị thuộc đúng cột "SỐ LƯỢNG" (nếu cột hiển thị trong ảnh, ngược lại trả về null).
    - loanQd: Giá trị thuộc đúng cột "DT QĐ KHOẢN VAY" (nếu cột hiển thị đầy đủ trong ảnh, ngược lại trả về null).
    - returnQd: Giá trị thuộc đúng cột "DT NHẬP TRẢ QĐ" (nếu cột hiển thị đầy đủ trong ảnh, ngược lại trả về null).`
-        : `3. CHỈ trích xuất 2 chỉ số sau khi cột của nó HIỂN THỊ ĐẦY ĐỦ SỐ LIỆU trong ảnh (dấu phẩy ',' là phân cách hàng nghìn, giữ nguyên đơn vị triệu đồng):
-   - revenueQd: Giá trị thuộc đúng cột "DOANH THU QĐ" (hoặc tiêu đề bị che 1 phần như "...ANH THU QĐ"). TUYỆT ĐỐI KHÔNG lấy nhầm cột "SỐ LƯỢNG", "DT QĐ KHOẢN VAY", "DT TRẢ THẲNG QĐ", hay "DT NHẬP TRẢ QĐ". Nếu cột "DOANH THU QĐ" không có trong ảnh hoặc bị che mất số, trả về null.
-   - installmentQd: Giá trị thuộc đúng cột "DT TRẢ GÓP QĐ". TUYỆT ĐỐI KHÔNG lấy nhầm cột "DT TRẢ THẲNG QĐ", "DT QĐ KHOẢN VAY", hay "DT NHẬP TRẢ QĐ". Nếu cột "DT TRẢ GÓP QĐ" không có trong ảnh hoặc bị cắt mất chữ số ở mép phải (chỉ thấy 1 phần mép trái của cột), trả về null.`;
+        : `3. HƯỚNG DẪN BÓC TÁCH TỪNG CỘT SỐ LIỆU (Dấu phẩy ',' là phân cách hàng nghìn, đơn vị triệu đồng):
+   - revenueQd: Giá trị thuộc đúng cột "DOANH THU QĐ" (Tổng doanh thu quy đổi).
+     + Nếu ảnh cuộn ngang sang phải mà KHÔNG có cột "DOANH THU QĐ" (chỉ thấy các cột "DT TRẢ THẲNG QĐ", "DT TRẢ GÓP QĐ"...), BẮT BUỘC TRẢ VỀ: null.
+     + TUYỆT ĐỐI KHÔNG lấy giá trị của cột "DT TRẢ GÓP QĐ" hoặc "DT TRẢ THẲNG QĐ" gán vào revenueQd!
+   - straightQd: Giá trị thuộc đúng cột "DT TRẢ THẲNG QĐ" (Doanh thu trả thẳng quy đổi). Nếu cột không hiển thị hoặc bị che mất chữ số, trả về null.
+   - installmentQd: Giá trị thuộc đúng cột "DT TRẢ GÓP QĐ" (Doanh thu trả góp quy đổi).
+     + CHỈ lấy số khi cột "DT TRẢ GÓP QĐ" hiển thị trọn vẹn chữ số bên dưới.
+     + Nếu cột bị cắt mất chữ số ở mép phải màn hình (chỉ thấy 1 phần chữ "DT T..." hoặc tiêu đề nhưng dưới không có số), BẮT BUỘC TRẢ VỀ: null.
+     + TUYỆT ĐỐI KHÔNG copy giá trị của cột "DOANH THU QĐ" hoặc "DT TRẢ THẲNG QĐ" gán vào installmentQd!`;
 
     const jsonSchemaFields = includeDaily
         ? `      "employeeId": string,
       "fullName": string,
       "quantity": number | null,
       "revenueQd": number | null,
+      "straightQd": number | null,
       "installmentQd": number | null,
       "loanQd": number | null,
       "returnQd": number | null`
         : `      "employeeId": string,
       "fullName": string,
       "revenueQd": number | null,
+      "straightQd": number | null,
       "installmentQd": number | null`;
 
     return `
 Bạn là chuyên gia phân tích dữ liệu kinh doanh bán lẻ từ ảnh chụp màn hình ứng dụng BI ("Doanh thu hợp nhất" - chế độ Lưới theo nhân viên).
 
-CẤU TRÚC BẢNG TRÊN ẢNH:
-- Cột cố định bên trái: "NHÂN VIÊN / NGÀNH HÀNG BI / NHÓM HÀNG BI" chứa Họ tên nhân viên và dòng mã nhân viên bên dưới (ví dụ: "Vương Trà Mi" / "id: 245449", "Phan Đình Đức" / "id: 187590").
-- Các cột số liệu bên phải có thể xuất hiện tùy vị trí cuộn ngang:
-  "SỐ LƯỢNG" | "DOANH THU QĐ" (hoặc bị che một phần chữ đầu thành "...ANH THU QĐ") | "DT QĐ KHOẢN VAY" | "DT TRẢ THẲNG QĐ" | "DT TRẢ GÓP QĐ" | "DT NHẬP TRẢ QĐ".
+CẤU TRÚC BẢNG TRÊN ẢNH (Thứ tự các cột từ trái sang phải):
+1. Cột cố định bên trái: "NHÂN VIÊN / NGÀNH HÀNG BI / NHÓM HÀNG BI" chứa Họ tên nhân viên và dòng mã nhân viên bên dưới (ví dụ: "Nguyễn Thị Hồng Loan" / "id: 260732", "Vương Trà Mi" / "id: 245449").
+2. Các cột số liệu bên phải tùy thuộc vào vị trí cuộn ngang của người dùng:
+   [SỐ LƯỢNG] -> [DOANH THU QĐ] -> [DT QĐ KHOẢN VAY] -> [DT TRẢ THẲNG QĐ] -> [DT TRẢ GÓP QĐ] -> [DT NHẬP TRẢ QĐ] -> [% HIỆU QUẢ TRẢ GÓP].
+
+QUAN HỆ TOÁN HỌC CỐT LÕI (BẮT BUỘC GHI NHỚ ĐỂ KHÔNG NHẦM CỘT):
+- "DOANH THU QĐ" là TỔNG DOANH THU (DOANH THU QĐ = DT TRẢ THẲNG QĐ + DT TRẢ GÓP QĐ + Khoản Vay - Nhập Trả).
+- "DT TRẢ THẲNG QĐ" là phần doanh thu khách hàng trả tiền mặt/quẹt thẻ 100%.
+- "DT TRẢ GÓP QĐ" là phần doanh thu khách hàng mua trả chậm qua công ty tài chính.
+=> "DOANH THU QĐ" VÀ "DT TRẢ GÓP QĐ" LÀ 2 CỘT HOÀN TOÀN TÁCH BIỆT! Nếu DT Trả Thẳng > 0 thì DT Trả Góp chắc chắn KHÔNG THỂ bằng Doanh Thu QĐ.
 
 YÊU CẦU TRÍCH XUẤT BẮT BUỘC:
 1. BỎ QUA HOÀN TOÀN các chữ mờ watermark in chéo trên ảnh ("26479 - Đào Bá Linh",...), dòng "Tổng", và dòng "online - Online - 18001060".
 2. Nhận diện TẤT CẢ nhân viên xuất hiện trong ảnh qua:
-   - employeeId: Mã số sau chữ "id:" (ví dụ: "id: 245449" -> "245449").
+   - employeeId: Mã số sau chữ "id:" (ví dụ: "id: 260732" -> "260732", "id: 245449" -> "245449").
    - fullName: Họ và tên đầy đủ phía trên "id:" (ghép lại nếu tên xuống 2 dòng, ví dụ "Nguyễn Thị Diệu Trâm").
 ${metricsInstructions}
 4. THỜI GIAN CHỤP: Nếu thấy dòng "Cập nhật lúc: HH:mm:ss DD/MM/YYYY" ở phía trên ảnh, trích xuất vào "screenshotTimestamp".
